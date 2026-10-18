@@ -79,8 +79,8 @@ export function TestCaseRow({ testCase, result, isRunning, index }: TestCaseRowP
   const canExpand = hasDetails || (isHidden && !result);
 
   const label = isHidden
-    ? `Hidden Test ${index + 1}`
-    : testCase.label || `Test Case ${index + 1}`;
+    ? `Hidden test ${index + 1}`
+    : testCase.label || `Test case ${index + 1}`;
   const verdictLabel = result ? result.verdict.replace(/_/g, ' ') : null;
 
   return (
@@ -134,7 +134,7 @@ export function TestCaseRow({ testCase, result, isRunning, index }: TestCaseRowP
           <span
             title="Score for this test: how closely the output matched what was expected"
             style={{
-              color: result.passed ? SUCCESS_TEXT : colors.error,
+              color: result.passed ? SUCCESS_TEXT : result.score > 0 ? colors.warning : colors.error,
               fontSize: 11,
               fontWeight: 600,
               fontFamily: TYPOGRAPHY.fontMono,

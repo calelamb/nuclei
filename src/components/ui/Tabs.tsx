@@ -19,15 +19,20 @@ export interface TabsProps<T extends string> {
   onChange: (next: T) => void;
   'aria-label': string;
   className?: string;
+  /** Stable id prefix: each tab gets id `${idBase}-${value}` so a caller's tabpanel can aria-labelledby it. */
+  idBase?: string;
+  /** Id of the caller's tabpanel; sets aria-controls on every tab. */
+  panelId?: string;
 }
 
 /**
  * Tab strip (WAI-ARIA tabs, automatic activation). One tab stop; Left/Right
  * move and select, Home/End jump. Panels are the caller's (role="tabpanel").
  */
-export function Tabs<T extends string>({ value, options, onChange, 'aria-label': ariaLabel, className }: TabsProps<T>) {
+export function Tabs<T extends string>({ value, options, onChange, 'aria-label': ariaLabel, className, idBase, panelId }: TabsProps<T>) {
   const listRef = useRef<HTMLDivElement>(null);
-  const baseId = useId();
+  const generatedId = useId();
+  const baseId = idBase ?? generatedId;
   const enabled = options.filter((o) => !o.disabled);
   const [overflow, setOverflow] = useState<'none' | 'end' | 'start' | 'both'>('none');
 
@@ -86,6 +91,7 @@ export function Tabs<T extends string>({ value, options, onChange, 'aria-label':
             role="tab"
             id={`${baseId}-${o.value}`}
             aria-selected={selected}
+            aria-controls={panelId}
             data-value={o.value}
             disabled={o.disabled}
             tabIndex={selected ? 0 : -1}

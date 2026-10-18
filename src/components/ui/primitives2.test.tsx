@@ -141,3 +141,21 @@ describe('Tabs icon and count slots', () => {
     expect(screen.getByRole('tab', { name: 'Videos' })).toBeTruthy();
   });
 });
+
+describe('Tabs panel linkage', () => {
+  it('derives tab ids from idBase and points aria-controls at the panel', () => {
+    render(
+      <Tabs
+        aria-label="Result view"
+        value="a"
+        idBase="trun"
+        panelId="trun-panel"
+        onChange={() => undefined}
+        options={[{ value: 'a', label: 'One' }, { value: 'b', label: 'Two' }]}
+      />,
+    );
+    const tab = screen.getByRole('tab', { name: 'One' });
+    expect(tab.id).toBe('trun-a');
+    expect(tab.getAttribute('aria-controls')).toBe('trun-panel');
+  });
+});

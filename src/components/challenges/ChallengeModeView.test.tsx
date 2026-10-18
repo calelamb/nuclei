@@ -14,12 +14,12 @@ afterEach(() => {
 });
 
 describe('ChallengeModeView', () => {
-  it('offers Exit on the problem list and leaves challenge mode', () => {
+  it('offers Back on the problem list and leaves challenge mode', () => {
     const exitChallengeMode = vi.fn();
     useChallengeModeStore.setState({ activeProblem: null, exitChallengeMode });
     render(<ChallengeModeView />);
     expect(screen.getByText('browser')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Exit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     expect(exitChallengeMode).toHaveBeenCalled();
   });
 

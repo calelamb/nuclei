@@ -7,19 +7,11 @@ import { ProblemEditor } from './ProblemEditor';
 import { TestRunner } from './TestRunner';
 import { HintPanel } from './HintPanel';
 import { SubmissionHistory } from './SubmissionHistory';
-import { Badge } from '../ui';
+import { Badge, Tabs } from '../ui';
 import { DIFFICULTY_TONE } from './difficultyTone';
 import './challenges.css';
 
 type WorkspaceTab = 'description' | 'submissions' | 'hints';
-
-function WorkspaceTabButton({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
-  return (
-    <button type="button" role="tab" aria-selected={active} className="trun__tab" onClick={onClick}>
-      {label}
-    </button>
-  );
-}
 
 const DIVIDER_MIN = 28;
 const DIVIDER_MAX = 72;
@@ -98,17 +90,23 @@ export function ProblemWorkspace() {
             </>
           )}
           <span>{visibleTests.length} visible / {hiddenTests.length} hidden</span>
-          <span>{submissions.length} submissions</span>
+          <span>{submissions.length} {submissions.length === 1 ? 'submission' : 'submissions'}</span>
         </div>
       </div>
 
       <div className="pwork__split" style={{ flex: bottomExpanded ? 0.66 : 1 }}>
         <div className="pwork__left" style={{ width: `${dividerX}%` }}>
-          <div className="pwork__tabs" role="tablist" aria-label="Problem sections">
-            <WorkspaceTabButton active={tab === 'description'} label="Description" onClick={() => setTab('description')} />
-            <WorkspaceTabButton active={tab === 'submissions'} label={`Submissions (${submissions.length})`} onClick={() => setTab('submissions')} />
-            <WorkspaceTabButton active={tab === 'hints'} label={`Hints (${activeProblem.hints.length})`} onClick={() => setTab('hints')} />
-          </div>
+          <Tabs
+            className="pwork__tabs"
+            aria-label="Problem sections"
+            value={tab}
+            onChange={setTab}
+            options={[
+              { value: 'description', label: 'Description' },
+              { value: 'submissions', label: 'Submissions', count: submissions.length },
+              { value: 'hints', label: 'Hints', count: activeProblem.hints.length },
+            ]}
+          />
 
           <div className="pwork__pane" role="tabpanel">
             {tab === 'description' && <ProblemDescription challenge={activeProblem} />}
@@ -141,7 +139,7 @@ export function ProblemWorkspace() {
 
       <button type="button" className="pwork__toggle" aria-expanded={bottomExpanded} onClick={() => setBottomExpanded((open) => !open)}>
         {bottomExpanded ? <ChevronDown size={12} aria-hidden="true" /> : <ChevronRight size={12} aria-hidden="true" />}
-        Test Results
+        Results
       </button>
 
       {bottomExpanded && (

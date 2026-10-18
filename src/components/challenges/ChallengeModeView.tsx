@@ -19,12 +19,12 @@ export function ChallengeModeView() {
           icon={<ChevronLeft size={14} aria-hidden="true" />}
           onClick={activeProblem ? () => setActiveProblem(null) : exitChallengeMode}
         >
-          {activeProblem ? 'Back' : 'Exit'}
+          Back
         </Button>
 
         <span className="cmode__sep" aria-hidden="true" />
         <Trophy className="cmode__trophy" size={16} aria-hidden="true" />
-        <span className="cmode__title">Quantum Challenges</span>
+        <span className="cmode__title">Quantum challenges</span>
 
         {activeProblem && (
           <>

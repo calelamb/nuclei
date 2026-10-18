@@ -18,10 +18,10 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
     pending: { label: 'Pending', color: colors.textDim },
     running: { label: 'Running', color: colors.accentText },
     accepted: { label: 'Accepted', color: SUCCESS_TEXT },
-    wrong_answer: { label: 'Wrong Answer', color: colors.error },
-    runtime_error: { label: 'Runtime Error', color: colors.error },
-    compile_error: { label: 'Compile Error', color: colors.warning },
-    time_limit_exceeded: { label: 'Time Limit Exceeded', color: colors.warning },
+    wrong_answer: { label: 'Wrong answer', color: colors.error },
+    runtime_error: { label: 'Runtime error', color: colors.error },
+    compile_error: { label: 'Compile error', color: colors.warning },
+    time_limit_exceeded: { label: 'Time limit exceeded', color: colors.warning },
   };
   const statusMeta = STATUS_META[submission.status];
   const isAccepted = submission.status === 'accepted';

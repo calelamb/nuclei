@@ -36,7 +36,7 @@ describe('ProblemBrowser', () => {
 
   it('switches practice track with tab semantics', () => {
     render(<ProblemBrowser />);
-    const qkd = screen.getByRole('tab', { name: /QKD Protocols/ });
+    const qkd = screen.getByRole('tab', { name: /QKD protocols/ });
     fireEvent.click(qkd);
     expect(useChallengeModeStore.getState().practiceTab).toBe('qkd');
   });
