@@ -46,8 +46,10 @@ from kernel.discovery.evaluators._frontier_metrics import (
     algebra_verdict,
     dla_probe,
     ppe_gradient_map,
+    structure_problem,
     two_qubit_gates_per_layer,
 )
+from kernel.discovery.evaluators._frontier_structure import strip_trivial_prefix
 from kernel.discovery.evaluators._frontier_probe import (
     fit_beta,
     hardness_probe,
@@ -79,29 +81,33 @@ class _Run:
     def __init__(self, config: dict[str, Any], artifacts: list[dict[str, Any]], stage: str, cancel) -> None:
         self.config, self.stage = config, stage
         self.sizes = effective_sizes(config)
-        self.probe_n = config["dla_probe_qubits"]
+        self.probes: list[int] = list(config["dla_probe_qubits"])
         by_index = {a.get("call_index"): a.get("artifact") for a in artifacts}
-        self.artifacts = [by_index.get(i) for i in range(len(self.sizes) + 1)]
+        self.artifacts = [by_index.get(i) for i in range(len(self.sizes) + len(self.probes))]
         self.holders = [CircuitHolder() for _ in self.artifacts]
         self.cancel: Callable[[], bool] | None = cancel.is_set if cancel is not None else None
         self.max_frontier = frontier_cap(config, stage)
         self.points: dict[int, dict[str, Any]] = {}
-        self.dla: dict[str, Any] | None = None
+        self.dlas: list[dict[str, Any]] = []
 
     @property
     def expected(self) -> list[int]:
-        return [*self.sizes, self.probe_n]
+        return [*self.sizes, *self.probes]
 
     def circuit(self, n: int) -> ParamCircuit:
         circuit = self.holders[self.sizes.index(n)].circuit
         assert circuit is not None
         return circuit
 
-    @property
-    def probe_circuit(self) -> ParamCircuit:
-        circuit = self.holders[-1].circuit
+    def probe_circuit(self, index: int) -> ParamCircuit:
+        circuit = self.holders[len(self.sizes) + index].circuit
         assert circuit is not None
         return circuit
+
+    @property
+    def dla(self) -> dict[str, Any]:
+        """The DLA record at the largest probe size (the descriptor's source)."""
+        return self.dlas[-1]
 
     def observable(self, circuit: ParamCircuit, expected: int) -> PauliSum:
         """The observable on the circuit's own width (so a width bug is ``qubit_count``'s to report)."""
@@ -161,10 +167,23 @@ def _variance_check(run: _Run) -> CheckResult:
 
 
 def _algebra_check(run: _Run) -> CheckResult:
-    probe = dla_probe(run.probe_circuit, run.cancel)
-    run.dla = probe
-    ok, detail = algebra_verdict(run.probe_circuit, probe)
-    return (PASS if ok else FAIL), detail
+    """Per-size product test, cross-size consistency, then the DLA at every probe size."""
+    stripped = {n: strip_trivial_prefix(run.circuit(n)) for n in run.sizes}
+    probes = [strip_trivial_prefix(run.probe_circuit(i)) for i in range(len(run.probes))]
+    problem = structure_problem({**stripped, **dict(zip(run.probes, probes))}, run.config["n_layers"])
+    if problem:
+        return FAIL, problem
+    run.dlas = []
+    details = []
+    for index, item in enumerate(probes):
+        circuit = run.probe_circuit(index)
+        probe = dla_probe(circuit, run.cancel)
+        run.dlas.append(probe)
+        ok, detail = algebra_verdict(circuit, probe, item)
+        if not ok:
+            return FAIL, detail
+        details.append(detail)
+    return PASS, " ".join(details)
 
 
 def _exactness_check(run: _Run) -> CheckResult:
@@ -187,7 +206,7 @@ def _guardrails(run: _Run) -> list[Guardrail]:
             "parameter_budget", f"At most {run.config['max_parameters_per_qubit']} parameters per qubit",
             lambda: _budget_check(run)),
         Guardrail("nontrivial_variance", "Gradient variance is not trivially zero", lambda: _variance_check(run)),
-        Guardrail("nontrivial_algebra", "Dynamical Lie algebra larger than 2n", lambda: _algebra_check(run)),
+        Guardrail("nontrivial_algebra", "Dynamical Lie algebra above 4n^2, connected and consistent at every size", lambda: _algebra_check(run)),
         Guardrail("exactness", "Variance points are exact", lambda: _exactness_check(run)),
     ]
 
@@ -256,7 +275,7 @@ def _scored(
     }
     fitness = sum(terms.values())
     features = extract_features(largest, n_layers=config["n_layers"])
-    probe_features = extract_features(run.probe_circuit, n_layers=config["n_layers"])
+    probe_features = extract_features(run.probe_circuit(len(run.probes) - 1), n_layers=config["n_layers"])
     dla = run.dla
     assert dla is not None
     smallest = run.circuit(run.sizes[0])
@@ -275,7 +294,7 @@ def _scored(
             "stage": run.stage, "sizes": run.sizes, "n_layers": config["n_layers"],
             "observable": config["observable"], "max_frontier": run.max_frontier,
             "time_budget_s": est["time_budget_s"], "target_width": est["target_width"],
-            "dla_probe_qubits": run.probe_n, "weights": dict(weights),
+            "dla_probe_qubits": run.probes, "weights": dict(weights),
         },
         "honesty": HONESTY,
     }
@@ -312,7 +331,7 @@ SPEC = EvaluatorSpec(
         {"key": "estimation_hardness", "label": "Estimation hardness (log10 frontier)", "direction": "maximize"},
     ],
     descriptors=[
-        {"key": "log2_dla_dimension", "label": "log2 DLA dimension", "min": 0, "max": 8, "default_bins": 8},
+        {"key": "log2_dla_dimension", "label": "log2 DLA dimension", "min": 0, "max": 12, "default_bins": 8},
         {"key": "two_qubit_gates_per_layer", "label": "Two-qubit gates per layer", "min": 0, "max": 64, "default_bins": 8},
     ],
     config_schema=CONFIG_SCHEMA,

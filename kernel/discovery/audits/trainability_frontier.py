@@ -101,6 +101,7 @@ def _settings(config: dict[str, Any], evaluation: dict[str, Any]) -> dict[str, A
         "time_budget_s": recorded.get("time_budget_s", est["time_budget_s"]),
         "target_width": recorded.get("target_width", est["target_width"]),
         "weights": recorded.get("weights", config["weights"]),
+        "probes": recorded.get("dla_probe_qubits") or list(config["dla_probe_qubits"]),
     }
 
 
@@ -304,11 +305,11 @@ def audit(
     st = _settings(config, evaluation)
     cancel_fn = _cancel_fn(cancel)
     try:
-        circuits = _parse(artifacts, len(st["sizes"]) + 1)
+        circuits = _parse(artifacts, len(st["sizes"]) + len(st["probes"]))
     except IrError as exc:
         failed = _check("reparse", "Artifacts re-parse with the expected widths", "fail", f"{exc.code}: {exc.message}")
         return {"checks": [failed], "audit_fitness": None, "notes": []}
-    sized, probe = circuits[:-1], circuits[-1]
+    sized, probe = circuits[: len(st["sizes"])], circuits[-1]
     checks = [_reparse_check(sized, st)]
     if checks[0]["status"] == "fail":
         return {"checks": checks, "audit_fitness": None, "notes": []}

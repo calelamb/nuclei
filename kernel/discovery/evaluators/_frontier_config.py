@@ -28,13 +28,15 @@ MAX_QUBIT_SIZES = 6
 SCREEN_FRONTIER_DIVISOR = 10
 MIN_FRONTIER = 100
 DLA_PROBE_MAX = 8
+DLA_PROBE_MIN = 3
+MAX_DLA_PROBES = 3
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "qubits": [8, 16, 32, 64],
     "n_layers": 4,
     "observable": "preset:local_z",
     "estimation": {"target_width": 0.02, "max_frontier": 200000, "time_budget_s": 20},
-    "dla_probe_qubits": 4,
+    "dla_probe_qubits": [4, 5, 6],
     "max_parameters_per_qubit": 24,
     "weights": {"trainability": 1.0, "hardness": 0.5},
     "max_sizes": MAX_QUBIT_SIZES,
@@ -59,7 +61,10 @@ CONFIG_SCHEMA: dict[str, Any] = {
                 "time_budget_s": {"type": "number", "minimum": 0.05, "maximum": 120},
             },
         },
-        "dla_probe_qubits": {"type": "integer", "minimum": 2, "maximum": DLA_PROBE_MAX},
+        "dla_probe_qubits": {
+            "type": "array", "minItems": 2, "maxItems": MAX_DLA_PROBES,
+            "items": {"type": "integer", "minimum": DLA_PROBE_MIN, "maximum": DLA_PROBE_MAX},
+        },
         "max_parameters_per_qubit": {"type": "integer", "minimum": 1, "maximum": 64},
         "weights": {
             "type": "object", "additionalProperties": False,
@@ -84,7 +89,10 @@ def validate_extra(config: dict[str, Any]) -> str | None:
     sizes = config["qubits"]
     if any(b <= a for a, b in zip(sizes, sizes[1:])):
         return "qubits must be strictly ascending (the scaling fit and the hardness probe use the largest)"
-    for n in sorted({*sizes, config["dla_probe_qubits"]}):
+    probes = config["dla_probe_qubits"]
+    if any(b <= a for a, b in zip(probes, probes[1:])):
+        return "dla_probe_qubits must be strictly ascending (the algebra is checked at every probe size)"
+    for n in sorted({*sizes, *probes}):
         try:
             parse_observable(config["observable"], n)
         except ObservableError as exc:
@@ -98,8 +106,8 @@ def effective_sizes(config: dict[str, Any]) -> list[int]:
 
 
 def calls(config: dict[str, Any]) -> list[dict[str, Any]]:
-    """One ``build(n, n_layers)`` call per scored size, then one at ``dla_probe_qubits``."""
-    sizes = [*effective_sizes(config), config["dla_probe_qubits"]]
+    """One ``build(n, n_layers)`` call per scored size, then one per ``dla_probe_qubits`` entry."""
+    sizes = [*effective_sizes(config), *config["dla_probe_qubits"]]
     return [{"args": [n, config["n_layers"]], "kwargs": {}} for n in sizes]
 
 

@@ -5,13 +5,20 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from kernel.discovery.evaluators._frontier_structure import (
+    Stripped,
+    consistency_problem,
+    interaction_blocks,
+    signature,
+    strip_trivial_prefix,
+)
 from kernel.trainability.ir import ParamCircuit, ParamRef
 from kernel.trainability.lie import lie_algebra
 
 DEAD_VARIANCE = 1e-8
 DLA_MAX_DIMENSION = 4096
 DLA_TIME_BUDGET_S = 10.0
-ALGEBRA_FACTOR = 2
+ALGEBRA_CAP_FACTOR = 4  # threshold = 4 n^2
 
 
 def dla_probe(circuit: ParamCircuit, cancel=None) -> dict[str, Any]:
@@ -26,53 +33,71 @@ def dla_probe(circuit: ParamCircuit, cancel=None) -> dict[str, Any]:
         "probe_qubits": circuit.n_qubits, "status": result["status"], "dimension": result["dimension"],
         "dimension_lower_bound": bound, "classification": result["classification"],
         "log2_dimension": math.log2(max(dimension or 1, 1)),
-        "threshold": ALGEBRA_FACTOR * circuit.n_qubits,
+        "threshold": algebra_threshold(circuit.n_qubits),
     }
 
 
-def interaction_blocks(circuit: ParamCircuit) -> list[list[int]]:
-    """Connected components of the qubit graph whose edges are the multi-qubit gates.
+def algebra_threshold(n_qubits: int) -> int:
+    """The DLA dimension a probe must exceed: ``4 n^2``, the Lab's own g-sim feasibility cap.
 
-    More than one block means the circuit is a tensor product of independent sub-circuits:
-    its algebra is a direct sum and it is classically simulable block by block.
+    Known efficiently classically simulable families all sit below it at every n: product
+    circuits (su(2)^n, dimension 3n), free-fermion / matchgate circuits (n(2n-1) < 2n^2), and
+    anything else the Lab reports as ``g_sim_feasible`` (``kernel.trainability.lie``). A DLA at or
+    below ``4 n^2`` is polynomial, so the candidate is simulable in poly(dim g) time whenever the
+    observable lies in g; a counterexample hunt has no use for it. The old ``2n`` threshold let a
+    product circuit (3n) through.
     """
-    parent = list(range(circuit.n_qubits))
-
-    def find(q: int) -> int:
-        while parent[q] != q:
-            parent[q] = parent[parent[q]]
-            q = parent[q]
-        return q
-
-    for gate in circuit.gates:
-        for other in gate.qubits[1:]:
-            parent[find(other)] = find(gate.qubits[0])
-    groups: dict[int, list[int]] = {}
-    for q in range(circuit.n_qubits):
-        groups.setdefault(find(q), []).append(q)
-    return sorted(groups.values())
+    return ALGEBRA_CAP_FACTOR * n_qubits * n_qubits
 
 
-def algebra_verdict(circuit: ParamCircuit, probe: dict[str, Any]) -> tuple[bool, str]:
-    """``(ok, detail)`` for ``nontrivial_algebra``: dimension > 2n and no product structure."""
+def algebra_verdict(
+    circuit: ParamCircuit, probe: dict[str, Any], stripped: Stripped | None = None,
+) -> tuple[bool, str]:
+    """``(ok, detail)`` for one probe size: dimension above ``4n^2`` and no product structure."""
     n = circuit.n_qubits
     bound = probe["dimension_lower_bound"] or 0
     label = probe["classification"]["label"]
-    blocks = interaction_blocks(circuit)
+    limit = algebra_threshold(n)
     reached = "" if probe["status"] == "complete" else " (closure incomplete, lower bound)"
-    if bound <= ALGEBRA_FACTOR * n:
+    if bound <= limit:
         return False, (
-            f"At n={n} the dynamical Lie algebra has dimension {bound}{reached} <= 2n={2 * n} "
-            f"(classification: {label}); product and near-free ansatzes are trivially trainable "
-            "and trivially simulable."
+            f"At n={n} the dynamical Lie algebra has dimension {bound}{reached} <= 4n^2={limit} "
+            f"(classification: {label}); product, free-fermion and other polynomial-algebra ansatzes "
+            "are trivially trainable and classically simulable."
         )
+    blocks = interaction_blocks(stripped or strip_trivial_prefix(circuit))
     if len(blocks) > 1:
-        return False, (
-            f"At n={n} the entangling gates split the qubits into {len(blocks)} independent blocks, "
-            f"so the circuit is a tensor product (algebra dimension {bound}{reached}, classification: "
-            f"{label}); it is trivially simulable block by block."
+        return False, _blocks_detail(n, len(blocks), f"algebra dimension {bound}{reached}, classification: {label}")
+    return True, f"n={n}: DLA dimension {bound}{reached} > 4n^2={limit} (classification: {label})."
+
+
+def _blocks_detail(n: int, count: int, extra: str = "") -> str:
+    tail = f" ({extra})" if extra else ""
+    return (
+        f"At n={n} the entangling gates (after removing gates that act trivially on |0...0>) split the "
+        f"qubits into {count} independent blocks, so the circuit is a tensor product{tail}; "
+        "it is trivially simulable block by block."
+    )
+
+
+def structure_problem(
+    stripped: dict[int, Stripped], n_layers: int,
+) -> str | None:
+    """Per-size product test and cross-size consistency; ``None`` when every size is acceptable.
+
+    ``stripped`` maps each scored and probe size to its stripped circuit (see ``_frontier_structure``).
+    """
+    for n, item in sorted(stripped.items()):
+        blocks = interaction_blocks(item)
+        if len(blocks) > 1:
+            return _blocks_detail(n, len(blocks))
+    problem = consistency_problem([signature(item, n_layers) for _, item in sorted(stripped.items())])
+    if problem:
+        return (
+            f"The ansatz family is not structurally consistent across sizes {sorted(stripped)}: {problem}. "
+            "A build(n, L) that changes character with n cannot be certified from the sizes it was probed at."
         )
-    return True, f"DLA dimension {bound}{reached} > 2n={2 * n} (classification: {label})."
+    return None
 
 
 def two_qubit_gates_per_layer(features: dict[str, Any]) -> float:

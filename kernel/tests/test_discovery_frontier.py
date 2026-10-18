@@ -74,7 +74,7 @@ def test_registered_spec_contract():
     assert [d["key"] for d in SPEC.descriptors] == ["log2_dla_dimension", "two_qubit_gates_per_layer"]
     defaults = normalize_config(SPEC, {})
     assert defaults["qubits"] == [8, 16, 32, 64] and defaults["n_layers"] == 4
-    assert defaults["observable"] == "preset:local_z" and defaults["dla_probe_qubits"] == 4
+    assert defaults["observable"] == "preset:local_z" and defaults["dla_probe_qubits"] == [4, 5, 6]
     assert defaults["max_parameters_per_qubit"] == 24
     assert defaults["weights"] == {"trainability": 1.0, "hardness": 0.5}
     assert defaults["estimation"]["target_width"] == 0.02 and defaults["estimation"]["max_frontier"] == 200000
@@ -84,21 +84,22 @@ def test_registered_spec_contract():
     {"qubits": [8]}, {"qubits": [2, 8]}, {"qubits": [8, 200]}, {"qubits": [4, 6, 8, 10, 12, 14, 16]},
     {"qubits": [16, 8]}, {"qubits": [8, 8]}, {"n_layers": 0}, {"unknown": 1}, {"observable": "Q1"},
     {"observable": "Z40"}, {"estimation": {"max_frontier": 5}}, {"weights": {"speed": 1}},
-    {"dla_probe_qubits": 12},
+    {"dla_probe_qubits": 12}, {"dla_probe_qubits": [4]}, {"dla_probe_qubits": [5, 4]}, {"dla_probe_qubits": [4, 12]},
+    {"dla_probe_qubits": [4, 5, 6, 7]},
 ])
 def test_invalid_configs_are_rejected(bad):
     with pytest.raises(InvalidConfig):
         normalize_config(SPEC, bad)
 
 
-def test_calls_cover_every_size_plus_the_probe():
-    cfg = config({"dla_probe_qubits": 5})
-    assert SPEC.calls(cfg) == [{"args": [n, 3], "kwargs": {}} for n in [*SIZES, 5]]
+def test_calls_cover_every_size_plus_every_probe():
+    cfg = config({"dla_probe_qubits": [4, 5]})
+    assert SPEC.calls(cfg) == [{"args": [n, 3], "kwargs": {}} for n in [*SIZES, 4, 5]]
 
 
 def test_stages_screen_uses_two_sizes_and_a_tenth_of_the_frontier():
-    assert [c["args"][0] for c in SPEC.calls(config(stage="screen"))] == [4, 6, 4]
-    assert [c["args"][0] for c in SPEC.calls(config(stage="full"))] == [4, 6, 8, 10, 4]
+    assert [c["args"][0] for c in SPEC.calls(config(stage="screen"))] == [4, 6, 4, 5, 6]
+    assert [c["args"][0] for c in SPEC.calls(config(stage="full"))] == [4, 6, 8, 10, 4, 5, 6]
     full = run(seed_like, stage="full")
     screen = run(seed_like, stage="screen")
     assert full["metrics"]["settings"]["max_frontier"] == 200000
@@ -155,8 +156,78 @@ def disconnected_blocks(n, layers):
     return qc
 
 
+def small_algebra(n, layers):
+    """Connected, but RY + CZ generates a polynomial-dimension algebra (20 at n = 4)."""
+    return brick_ansatz(n, layers, axes="Y")
+
+
 def single_axis_product(n, layers):
     return brick_ansatz(n, layers, entangle=False, axes="Y")
+
+
+def rich_only_at_n4(n, layers):
+    """PH-H2 (a): the exact exploit, a rich ansatz when n == 4 and a product circuit otherwise."""
+    return brick_ansatz(n, layers, entangle=(n == 4))
+
+
+def cz_dressed_product(n, layers):
+    """PH-H2 (b): a product circuit behind a CZ chain that is a no-op on |0...0>."""
+    qc = QuantumCircuit(n)
+    for q in range(n - 1):
+        qc.cz(q, q + 1)
+    return qc.compose(brick_ansatz(n, layers, entangle=False))
+
+
+def x_cx_dressed_product(n, layers):
+    """The same trick with basis-state permutations (X, CX with a known control) and S / Z phases."""
+    qc = QuantumCircuit(n)
+    qc.x(0)
+    for q in range(n - 1):
+        qc.cx(q, q + 1)
+        qc.s(q)
+        qc.cz(q, q + 1)
+    return qc.compose(brick_ansatz(n, layers, entangle=False))
+
+
+def pattern_switch_with_n(n, layers):
+    """A brick below n = 8 but a CZ star above it, with the same bond count per layer."""
+    qc = QuantumCircuit(n)
+    theta = ParameterVector("t", 2 * n * layers)
+    k = 0
+    for _ in range(layers):
+        for q in range(n):
+            qc.ry(theta[k], q)
+            qc.rz(theta[k + 1], q)
+            k += 2
+        if n < 8:
+            for start in (0, 1):
+                for q in range(start, n - 1, 2):
+                    qc.cz(q, q + 1)
+        else:
+            for q in range(1, n):
+                qc.cz(0, q)
+    return qc
+
+
+def sparse_entanglers_at_large_n(n, layers):
+    """Connected everywhere, but the entangler density collapses to a single chain for n >= 8."""
+    qc = QuantumCircuit(n)
+    theta = ParameterVector("t", 2 * n * layers)
+    k = 0
+    for _ in range(layers):
+        for q in range(n):
+            qc.ry(theta[k], q)
+            qc.rz(theta[k + 1], q)
+            k += 2
+        if n < 8:
+            for start in (0, 1):
+                for q in range(start, n - 1, 2):
+                    qc.cz(q, q + 1)
+    if n >= 8:
+        qc.cz(0, 1)
+        for q in range(1, n - 1):
+            qc.cz(q, q + 1)
+    return qc
 
 
 CASES = [
@@ -168,7 +239,13 @@ CASES = [
     (identity_like, "nontrivial_variance"),
     (product_ansatz, "nontrivial_algebra"),
     (single_axis_product, "nontrivial_algebra"),
+    (small_algebra, "nontrivial_algebra"),
     (disconnected_blocks, "nontrivial_algebra"),
+    (rich_only_at_n4, "nontrivial_algebra"),
+    (cz_dressed_product, "nontrivial_algebra"),
+    (x_cx_dressed_product, "nontrivial_algebra"),
+    (pattern_switch_with_n, "nontrivial_algebra"),
+    (sparse_entanglers_at_large_n, "nontrivial_algebra"),
 ]
 
 
@@ -190,8 +267,8 @@ def test_rejection_details_name_the_cause():
     assert "Expected exactly 6 qubits" in run(wrong_width)["rejection"]["message"]
     assert "104 free parameters exceeds the budget of 96" in run(too_many_params)["rejection"]["message"]
     assert "identity-like" in run(identity_like)["rejection"]["message"]
-    message = run(single_axis_product)["rejection"]["message"]
-    assert "<= 2n=8" in message and "classification" in message
+    message = run(small_algebra)["rejection"]["message"]
+    assert "<= 4n^2=64" in message and "classification" in message
     assert "independent blocks" in run(product_ansatz)["rejection"]["message"]
 
 
@@ -235,8 +312,8 @@ def test_scored_shape(scored):
     assert [g["id"] for g in scored["guardrails"]] == IDS
     assert all(g["status"] == "pass" for g in scored["guardrails"])
     assert set(scored["descriptors"]) == {"log2_dla_dimension", "two_qubit_gates_per_layer"}
-    assert 0 <= scored["descriptors"]["log2_dla_dimension"] <= 8
-    assert scored["descriptors"]["two_qubit_gates_per_layer"] == pytest.approx(3.0)  # n=4 brick: 3 CZ per layer
+    assert 0 <= scored["descriptors"]["log2_dla_dimension"] <= 12
+    assert scored["descriptors"]["two_qubit_gates_per_layer"] == pytest.approx(5.0)  # largest probe n=6 brick: 5 CZ per layer
     assert scored["compute"] == {"backend": "numpy", "method": "pauli_propagation_exact"}
     m = scored["metrics"]
     assert m["honesty"] == HONESTY
@@ -282,7 +359,7 @@ def test_censored_probe_reports_the_cap_not_a_measurement():
 
 
 def test_local_observable_may_scale_polynomially_and_still_score():
-    result = run(lambda n, layers: brick_ansatz(n, 1), {"n_layers": 1})
+    result = run(lambda n, layers: brick_ansatz(n, 2), {"n_layers": 2})
     assert result["status"] == "scored"
     assert result["metrics"]["fit"]["trainability_term"] <= 0.0
 
