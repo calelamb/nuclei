@@ -92,7 +92,7 @@ describe('Guardrails tab for Red Queen runs', () => {
     seedPopulated({ run: rq });
     renderOn(<DiscoveryWorkbench />);
     openTab('Guardrails');
-    expect(screen.getAllByText(/file reads are being restricted/)[0].textContent).toMatch(/OS sandbox blocks network access and file writes/);
+    expect(screen.getAllByText(/denies file reads except an allow-list/)[0].textContent).toMatch(/blocks network access and file writes outside a private scratch directory/);
   });
 });
 
@@ -114,7 +114,7 @@ describe('wizard fixes', () => {
     const options = screen.getByTestId('red-queen-options');
     expect(options.textContent).toMatch(/instructed not to/);
     expect(options.textContent).not.toMatch(/forbidden/);
-    expect(options.textContent).toMatch(/file reads are being restricted/);
+    expect(options.textContent).toMatch(/denies file reads except an allow-list/);
     expect(options.querySelector('[data-tone="danger"], .lab-callout--danger')).toBeNull();
   });
 

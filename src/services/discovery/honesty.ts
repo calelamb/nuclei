@@ -10,15 +10,24 @@ export const FRONTIER_CONTEXT =
 
 /**
  * The single source of truth for what the candidate sandbox blocks. Update here
- * (and only here) when file-read restriction lands.
+ * (and only here) when the isolation behavior changes.
  */
-export const SANDBOX_HONESTY = 'The OS sandbox blocks network access and file writes; file reads are being restricted.';
+export const SANDBOX_HONESTY =
+  'Where an OS sandbox runs (macOS sandbox-exec; Linux bwrap, untested on Linux), it blocks network access and file writes outside a private scratch directory, and denies file reads except an allow-list (the Python interpreter and venv, the kernel code, system libraries and the scratch directory). File metadata (names, sizes) stays readable. Plain process isolation blocks nothing at the OS level. Each evaluation reports whether its reads were restricted.';
 
-/** Title for the Guardrails callout and anywhere the read caveat is surfaced. */
-export const SANDBOX_READS_TITLE = 'File reads are being restricted';
+/** Title for the Guardrails callout when every evaluation reported restricted reads. */
+export const SANDBOX_READS_TITLE = 'File reads are restricted to an allow-list';
 
-/** Caveat appended wherever SANDBOX_HONESTY is shown: reads are not yet blocked. */
-export const SANDBOX_READS_CAVEAT = 'Until that lands, a candidate can still read files the app can read.';
+/** Caveat appended wherever SANDBOX_HONESTY is shown. */
+export const SANDBOX_READS_CAVEAT =
+  'Restriction applies only to evaluations that report reads: restricted. Linux bwrap binds only the needed paths read-only and has not been tested on Linux.';
+
+/** Title for the Guardrails callout when any evaluation reported unrestricted (or no) read restriction. */
+export const SANDBOX_READS_UNRESTRICTED_TITLE = 'Some evaluations ran with unrestricted file reads';
+
+/** Caveat for runs where reads were unrestricted or unreported: never claim a restriction that was not reported. */
+export const SANDBOX_READS_UNRESTRICTED_CAVEAT =
+  'Those evaluations could read any file the app can read. Only evaluations that report reads: restricted had file reads limited to the allow-list.';
 
 /** One-paragraph explainer shown wherever Red Queen mode is offered or active. */
 export const RED_QUEEN_EXPLAINER =

@@ -310,7 +310,7 @@ describe('Guardrails tab', () => {
     expect(within(screen.getByRole('table', { name: 'Guardrail pass rates' })).getByText('Elementary gates only')).toBeTruthy();
     const isolation = screen.getByRole('list', { name: 'Isolation modes used' });
     expect(isolation.textContent).toContain('sandbox-exec');
-    expect(screen.getByText('File reads are being restricted')).toBeTruthy();
+    expect(screen.getByText('File reads are restricted to an allow-list')).toBeTruthy();
     const lane = screen.getByTestId('exploits-found-lane');
     expect(lane.getAttribute('data-state')).toBe('empty');
     expect(lane.textContent).toContain('Red Queen');

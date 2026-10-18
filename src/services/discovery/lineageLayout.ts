@@ -9,7 +9,7 @@ import type { CandidateRecord } from '../../types/discovery';
 import { numericId } from './candidateView';
 
 const LINEAGE_COL = 64;
-const LINEAGE_ROW = 22;
+export const LINEAGE_ROW = 22;
 const VIRTUAL_ROOT = '__lineage_root__';
 
 /** Leaf siblings shown per parent before the rest collapse into a "+N more" node. */

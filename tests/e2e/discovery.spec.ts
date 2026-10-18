@@ -28,9 +28,11 @@ const FRONTIER_EVALUATOR: DiscoveryEvaluatorInfo = {
   entry_signature: 'build(n_qubits: int, n_layers: int) -> QuantumCircuit',
   objectives: [
     { key: 'beta', label: 'beta', direction: 'minimize' },
-    { key: 'estimation_hardness', label: 'Estimation hardness', direction: 'maximize' },
+    { key: 'pp_exact_cost', label: 'Pauli-propagation exact cost (log10 strings)', direction: 'maximize' },
   ],
   descriptors: [
+    { key: 'dla_fill_fraction', label: 'DLA fill fraction', min: 0, max: 1, default_bins: 8 },
+    { key: 'light_cone_qubits', label: 'Observable light-cone width (qubits)', min: 0, max: 64, default_bins: 8 },
     { key: 'log2_dla_dimension', label: 'log2 DLA dimension', min: 0, max: 16, default_bins: 8 },
     { key: 'two_qubit_gates_per_layer', label: 'Two-qubit gates per layer', min: 0, max: 64, default_bins: 8 },
   ],
@@ -62,7 +64,7 @@ async function installStubKernel(page: Page): Promise<void> {
         send(serialized: string): void {
           const m = JSON.parse(serialized) as {
             type: string; run_id: string; candidate_id: string; program: string; count: number; seed: number; stage?: string;
-            job_id?: string; evaluator?: { kind: string };
+            job_id?: string; evaluator?: { kind: string }; evaluation?: { fitness: number | null };
           };
           const reply = (frame: unknown) =>
             setTimeout(() => this.emit('message', new MessageEvent('message', { data: JSON.stringify(frame) })), 0);
@@ -91,6 +93,8 @@ async function installStubKernel(page: Page): Promise<void> {
           if (m.type === 'discovery_audit') {
             // Red Queen stub: the audit rejects candidate c-0002 and agrees with every other score.
             const exploit = m.candidate_id === 'c-0002';
+            // The kernel echoes the fitness the evaluator gave; an exploit must score at least the honest seed (addendum section F).
+            const scored = m.evaluation?.fitness ?? 1.5;
             reply({ type: 'discovery_audit_accepted', run_id: m.run_id, candidate_id: m.candidate_id, queue_position: 0 });
             reply({
               type: 'discovery_audit_result',
@@ -98,9 +102,9 @@ async function installStubKernel(page: Page): Promise<void> {
               candidate_id: m.candidate_id,
               audit: {
                 verdict: exploit ? 'exploit' : 'consistent',
-                evaluator_fitness: 1.5,
-                audit_fitness: exploit ? 0.3 : 1.5,
-                gap: exploit ? 1.2 : 0,
+                evaluator_fitness: scored,
+                audit_fitness: exploit ? 0.3 : scored,
+                gap: exploit ? scored - 0.3 : 0,
                 checks: [
                   { id: 'reparse', label: 'Re-parse from scratch', status: 'pass', detail: null },
                   { id: 'determinism', label: 'Deterministic under a fresh seed', status: exploit ? 'fail' : 'pass', detail: exploit ? 'observable flipped under seed 99' : null },
@@ -127,9 +131,12 @@ async function installStubKernel(page: Page): Promise<void> {
                 candidate_id: m.candidate_id, run_id: m.run_id, status: 'scored', fitness: 1 + idx * 0.1,
                 objectives: {
                   beta: { value: beta, ci95: [beta - 0.02, beta + 0.03], direction: 'minimize', label: 'beta' },
-                  estimation_hardness: { value: 3 + (idx % 3), direction: 'maximize', label: 'Estimation hardness' },
+                  pp_exact_cost: { value: 3 + (idx % 3), direction: 'maximize', label: 'Pauli-propagation exact cost (log10 strings)' },
                 },
-                descriptors: { log2_dla_dimension: (idx * 3) % 16, two_qubit_gates_per_layer: (idx * 7) % 64 },
+                descriptors: {
+                  dla_fill_fraction: ((idx * 3) % 16) / 16, light_cone_qubits: (idx * 5) % 17,
+                  log2_dla_dimension: (idx * 3) % 16, two_qubit_gates_per_layer: (idx * 7) % 64,
+                },
                 metrics: {
                   features: {
                     n_qubits: 16, n_params: 32 + idx, parametric_gates: 32 + idx, params_per_qubit: 2, two_qubit_gates: 30,
@@ -141,7 +148,7 @@ async function installStubKernel(page: Page): Promise<void> {
                 guardrails: [], rejection: null, failure: null, stdout: '', stderr: '',
                 timings_ms: { sandbox: 5, score: 5, total: 10 },
                 evaluator: { kind: 'trainability_frontier', version: '1.0.0', fingerprint: 'ef56'.repeat(16) },
-                seed: m.seed, stage: m.stage ?? 'full', program_key: `f-${idx}-${m.program.length}`, cache_hit: false, isolation: 'sandbox-exec',
+                seed: m.seed, stage: m.stage ?? 'full', program_key: `f-${idx}-${m.program.length}`, cache_hit: false, isolation: 'sandbox-exec', isolation_detail: { reads: 'restricted' },
               },
             });
           }
@@ -178,6 +185,7 @@ async function installStubKernel(page: Page): Promise<void> {
                 program_key: `k-${n}-${m.program.length}`,
                 cache_hit: false,
                 isolation: 'sandbox-exec',
+                isolation_detail: { reads: 'restricted' },
               },
             });
           }
@@ -230,7 +238,7 @@ test('@discovery runs a search, inspects the results and confirms the champion',
 
   await lab.getByRole('tab', { name: /^Guardrails/ }).click();
   await expect(lab.getByTestId('exploits-found-lane')).toHaveAttribute('data-state', 'empty');
-  await expect(lab.getByText('File reads are being restricted', { exact: true })).toBeVisible();
+  await expect(lab.getByText('File reads are restricted to an allow-list', { exact: true })).toBeVisible();
 
   await lab.getByRole('tab', { name: /^Overview/ }).click();
   await lab.getByRole('button', { name: /Confirm on fresh seeds/ }).click();

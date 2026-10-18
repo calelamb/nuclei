@@ -108,12 +108,15 @@
           32
         ],
         "n_max_tested": 32,
+        "n_max_planned": 32,
         "counterexamples": "<any>",
         "evidence": "<any>",
         "resampling": {
           "attempts": 13,
           "accepted": 5,
-          "rejected": 8,
+          "rejected": 6,
+          "distinct": "<any>",
+          "duplicates": "<any>",
           "cap": 125
         },
         "seed": 11,

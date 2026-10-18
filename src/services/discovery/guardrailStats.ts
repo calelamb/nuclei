@@ -3,7 +3,7 @@
  * how often each guardrail passes, and which isolation mode actually ran.
  */
 
-import type { CandidateRecord, DiscoveryIsolation, GuardrailStatus } from '../../types/discovery';
+import type { CandidateRecord, DiscoveryIsolation, DiscoveryReads, GuardrailStatus } from '../../types/discovery';
 import { SANDBOX_HONESTY, SANDBOX_READS_CAVEAT } from './honesty';
 import { numericId, primaryEvaluation } from './candidateView';
 
@@ -68,27 +68,39 @@ export function guardrailPassRates(candidates: readonly CandidateRecord[]): Guar
   });
 }
 
-type IsolationUse = Array<{ mode: DiscoveryIsolation | 'unknown'; count: number }>;
+export type ReadsReport = DiscoveryReads | 'unreported';
+export type IsolationUse = Array<{ mode: DiscoveryIsolation | 'unknown'; reads: ReadsReport; count: number }>;
 
+/** Evaluations per isolation mode and reported read restriction. A missing report is never counted as restricted. */
 export function isolationUsed(candidates: readonly CandidateRecord[]): IsolationUse {
-  const counts = new Map<DiscoveryIsolation | 'unknown', number>();
+  const counts = new Map<string, { mode: DiscoveryIsolation | 'unknown'; reads: ReadsReport; count: number }>();
   for (const c of candidates) {
     const evaluation = c.evaluation;
     if (!evaluation) continue;
     const mode = evaluation.isolation ?? 'unknown';
-    counts.set(mode, (counts.get(mode) ?? 0) + 1);
+    const reads: ReadsReport = evaluation.isolation_detail?.reads ?? 'unreported';
+    const key = `${mode}/${reads}`;
+    const prior = counts.get(key);
+    counts.set(key, { mode, reads, count: (prior?.count ?? 0) + 1 });
   }
-  return [...counts].map(([mode, count]) => ({ mode, count })).sort((a, b) => b.count - a.count);
+  return [...counts.values()].sort((a, b) => b.count - a.count);
 }
 
-/** Honest statement of what each isolation mode does and does not block. */
-export function isolationNote(mode: DiscoveryIsolation | 'unknown'): string {
+/** True only when every counted evaluation reported restricted reads. */
+export function allReadsRestricted(use: IsolationUse): boolean {
+  return use.length > 0 && use.every((u) => u.reads === 'restricted');
+}
+
+/** Honest statement of what each isolation mode does and does not block, per the reads it reported. */
+export function isolationNote(mode: DiscoveryIsolation | 'unknown', reads: ReadsReport = 'unreported'): string {
   switch (mode) {
     case 'sandbox-exec':
     case 'bwrap':
-      return `${SANDBOX_HONESTY} ${SANDBOX_READS_CAVEAT}`;
+      if (reads === 'restricted') return `${SANDBOX_HONESTY} ${SANDBOX_READS_CAVEAT}`;
+      if (reads === 'unrestricted') return 'The OS sandbox blocked network access and file writes, but these evaluations reported unrestricted file reads: they could read any file the app can read.';
+      return 'The OS sandbox blocked network access and file writes. These evaluations did not report whether file reads were restricted, so do not assume they were.';
     case 'process':
-      return 'Process isolation: a separate subprocess with resource limits and a cooperative import blocker. There is no OS sandbox, so network access, file writes and file reads are all unblocked at the OS level, and the import blocker is defense in depth rather than a boundary.';
+      return 'Process isolation: a separate subprocess with resource limits and a cooperative import blocker. Nothing is blocked at the OS level: network access, file writes and file reads are all unblocked, and the import blocker is defense in depth rather than a boundary.';
     case 'unknown':
       return 'The kernel did not report an isolation mode for these evaluations.';
   }

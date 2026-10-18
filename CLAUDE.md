@@ -387,8 +387,12 @@ MAP-Elites archives, SEARCH/REPLACE edits inside `# EVOLVE-BLOCK-*`, ensemble mu
 (breadth `claude-haiku-5-5`, depth `claude-opus-5-5`, tiers in `services/discovery/models.ts`),
 cascade `screen→full→confirm`, champion re-evaluated on fresh seeds. Candidates run
 in a sandbox (`isolation.py`: `sandbox-exec` / `bwrap` / process); a **separate trusted
-scorer** computes every number. **Honest limit: network and writes are blocked, file
-reads are not; bwrap is untested on Linux.** Evaluators: `qec_memory`,
+scorer** computes every number. **Honest limit: `sandbox-exec` blocks network and
+writes outside a scratch dir and denies file reads except an allow-list (interpreter/venv,
+`kernel/`, system libs, scratch); file metadata stays readable. `bwrap` binds only needed paths
+read-only (untested on Linux); `process` isolation blocks nothing at the OS level. Every
+evaluation carries `isolation_detail.reads` (`restricted`/`unrestricted`); the UI never claims
+restricted unless it reports so.** Evaluators: `qec_memory`,
 `state_synthesis`, `vqe_ground_state`, `trainability_frontier` (Frontier: exact PPE
 scaling + estimation-hardness probe; its honesty text is in `services/discovery/honesty.ts`).
 **Red Queen** (`mutator.kind: red_queen`): evolves candidates the evaluator scores well

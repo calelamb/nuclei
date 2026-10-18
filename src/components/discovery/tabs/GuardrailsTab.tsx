@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ChartFrame, LabButton, LabCallout, LabCard, LabEmptyState, formatPct } from '../../lab';
-import { guardrailPassRates, isolationNote, isolationUsed, rejectionReasons, type GuardrailPassRate, type RejectionReason } from '../../../services/discovery/guardrailStats';
-import { SANDBOX_HONESTY, SANDBOX_READS_CAVEAT, SANDBOX_READS_TITLE } from '../../../services/discovery/honesty';
+import { allReadsRestricted, guardrailPassRates, isolationNote, isolationUsed, rejectionReasons, type GuardrailPassRate, type RejectionReason } from '../../../services/discovery/guardrailStats';
+import { SANDBOX_HONESTY, SANDBOX_READS_CAVEAT, SANDBOX_READS_TITLE, SANDBOX_READS_UNRESTRICTED_CAVEAT, SANDBOX_READS_UNRESTRICTED_TITLE } from '../../../services/discovery/honesty';
 import type { RunView } from '../../../services/discovery/runView';
 import { useCandidateList } from '../useCandidateList';
 import { exploitsOf, summarizeAudits } from '../../../services/discovery/redQueen';
@@ -83,6 +83,7 @@ export function GuardrailsTab({ view, onOpen }: { view: RunView; onOpen: (id: st
   const reasons = useMemo(() => rejectionReasons(list), [list]);
   const rates = useMemo(() => guardrailPassRates(list), [list]);
   const isolation = useMemo(() => isolationUsed(list), [list]);
+  const readsRestricted = allReadsRestricted(isolation);
   const runId = view.run.run_id;
   const spec = view.run.spec;
   // Derived from the candidates and the spec only: usage and status events do not recompute it.
@@ -122,16 +123,16 @@ export function GuardrailsTab({ view, onOpen }: { view: RunView; onOpen: (id: st
               <LabEmptyState compact title="No evaluations yet" body="The isolation mode is recorded with every evaluation." />
             ) : (
               <ul aria-label="Isolation modes used" style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 'var(--space-2)' }}>
-                {isolation.map(({ mode, count }) => (
-                  <li key={mode}>
-                    <strong className="lab-mono">{mode}</strong> <span className="lab-muted">· {count} evaluation{count === 1 ? '' : 's'}</span>
-                    <div className="lab-muted" style={{ fontSize: 12 }}>{isolationNote(mode)}</div>
+                {isolation.map(({ mode, reads, count }) => (
+                  <li key={`${mode}/${reads}`}>
+                    <strong className="lab-mono">{mode}</strong> <span className="lab-muted">· reads {reads} · {count} evaluation{count === 1 ? '' : 's'}</span>
+                    <div className="lab-muted" style={{ fontSize: 12 }}>{isolationNote(mode, reads)}</div>
                   </li>
                 ))}
               </ul>
             )}
-            <LabCallout tone="warning" title={SANDBOX_READS_TITLE}>
-              {SANDBOX_HONESTY} {SANDBOX_READS_CAVEAT} Candidates run in a separate subprocess. The trusted scorer never runs in the candidate's process.
+            <LabCallout tone="warning" title={readsRestricted ? SANDBOX_READS_TITLE : SANDBOX_READS_UNRESTRICTED_TITLE}>
+              {SANDBOX_HONESTY} {readsRestricted ? SANDBOX_READS_CAVEAT : SANDBOX_READS_UNRESTRICTED_CAVEAT} Candidates run in a separate subprocess. The trusted scorer never runs in the candidate's process.
             </LabCallout>
           </div>
         </LabCard>
