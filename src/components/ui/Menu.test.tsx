@@ -25,6 +25,25 @@ const basic = (onA = vi.fn(), onB = vi.fn()): MenuEntry[] => [
 ];
 
 describe('Menu', () => {
+  it('moves focus to the item under the pointer so only one row is highlighted', () => {
+    const trigger = setup(basic());
+    fireEvent.click(trigger);
+    const [alpha, beta] = screen.getAllByRole('menuitem');
+    expect(document.activeElement).toBe(alpha);
+    fireEvent.pointerMove(beta);
+    expect(document.activeElement).toBe(beta);
+    expect(screen.getByRole('menu').getAttribute('data-modality')).toBe('pointer');
+  });
+
+  it('flags keyboard modality (ring shown) only after keyboard use', () => {
+    const trigger = setup(basic());
+    fireEvent.click(trigger);
+    const menu = screen.getByRole('menu');
+    expect(menu.getAttribute('data-modality')).toBe('pointer');
+    fireEvent.keyDown(menu, { key: 'ArrowDown' });
+    expect(menu.getAttribute('data-modality')).toBe('keyboard');
+  });
+
   it('marks the trigger as a menu popup and reflects open state', () => {
     const trigger = setup(basic());
     expect(trigger.getAttribute('aria-haspopup')).toBe('menu');

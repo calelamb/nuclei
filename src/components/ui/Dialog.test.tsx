@@ -38,6 +38,27 @@ describe('Dialog', () => {
     expect(document.activeElement).toBe(opener);
   });
 
+  it('autofocuses the first body control, not the header close button', () => {
+    render(
+      <Dialog title="Shortcuts" trailing={<button aria-label="Close">x</button>} onClose={() => {}} footer={<button>Done</button>}>
+        <input aria-label="Filter" />
+      </Dialog>,
+    );
+    expect(document.activeElement).toBe(screen.getByLabelText('Filter'));
+  });
+
+  it('falls back to the footer, then to the panel itself, never the close button', () => {
+    const { unmount } = render(
+      <Dialog title="T" trailing={<button aria-label="Close">x</button>} onClose={() => {}} footer={<button>Done</button>}>
+        <p>Only text</p>
+      </Dialog>,
+    );
+    expect(document.activeElement).toBe(screen.getByText('Done'));
+    unmount();
+    render(<Dialog title="T" trailing={<button aria-label="Close">x</button>} onClose={() => {}}><p>Only text</p></Dialog>);
+    expect(document.activeElement).toBe(screen.getByRole('dialog'));
+  });
+
   it('traps Tab inside the dialog', () => {
     render(<Harness />);
     fireEvent.click(screen.getByText('Open dialog'));

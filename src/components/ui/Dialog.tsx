@@ -47,7 +47,7 @@ export function Dialog({
   const onCloseRef = useRef(onClose);
   useEffect(() => { onCloseRef.current = onClose; });
 
-  useFocusTrap(panelRef, { restoreFocus: true, autoFocus: true });
+  useFocusTrap(panelRef, { restoreFocus: true, autoFocus: true, autoFocusSkip: '.nuclei-dialog__header' });
 
   useEffect(() => {
     if (!initialFocus) return;

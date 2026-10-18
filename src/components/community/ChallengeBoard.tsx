@@ -1,9 +1,10 @@
-import { Badge, SegmentedControl, type BadgeTone } from '../ui';
+import { Badge, Button, EmptyState, SegmentedControl, Table, Tbody, Td, Th, Thead, Tr, type BadgeTone } from '../ui';
 import { useThemeStore } from '../../stores/themeStore';
 import { useChallengeStore } from '../../stores/challengeStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useDiracPanelStore } from '../../stores/diracPanelStore';
 import { Play, Lightbulb, Trophy } from 'lucide-react';
+import { ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
 const DIFFICULTY_TONE: Record<string, BadgeTone> = {
@@ -45,19 +46,12 @@ export function ChallengeBoard() {
 
   if (!displayed) {
     return (
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: '100%',
-          color: colors.textDim,
-          fontSize: 12,
-          fontFamily: TYPOGRAPHY.fontSans,
-        }}
+      <EmptyState
+        icon={<Trophy size={ICON_SIZE.lg} strokeWidth={ICON_STROKE} />}
+        title="No challenges yet"
       >
-        No challenges available
-      </div>
+        Weekly challenges show up here when they are published.
+      </EmptyState>
     );
   }
 
@@ -104,7 +98,7 @@ export function ChallengeBoard() {
           >
             {displayed.title}
           </span>
-          <Badge tone={DIFFICULTY_TONE[displayed.difficulty] ?? 'neutral'} style={{ textTransform: 'uppercase', flexShrink: 0 }}>{displayed.difficulty}</Badge>
+          <Badge tone={DIFFICULTY_TONE[displayed.difficulty] ?? 'neutral'} style={{ textTransform: 'capitalize', flexShrink: 0 }}>{displayed.difficulty}</Badge>
         </div>
 
         <p
@@ -140,164 +134,52 @@ export function ChallengeBoard() {
               fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
-            {displayed.submissions} submissions
+            {displayed.submissions} {displayed.submissions === 1 ? 'submission' : 'submissions'}
           </span>
         </div>
 
-        {/* Action buttons */}
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            onClick={handleStart}
-            style={{
-              flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 5,
-              padding: '7px 0',
-              borderRadius: 6,
-              border: 'none',
-              background: colors.accent,
-              color: colors.onAccent,
-              fontSize: 11,
-              fontWeight: 600,
-              fontFamily: TYPOGRAPHY.fontSans,
-              cursor: 'pointer',
-            }}
-          >
-            <Play size={12} />
-            Start Challenge
-          </button>
-          <button
-            onClick={handleHint}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 5,
-              padding: '7px 12px',
-              borderRadius: 6,
-              border: `1px solid ${colors.dirac}40`,
-              background: `${colors.dirac}12`,
-              color: colors.diracText,
-              fontSize: 11,
-              fontWeight: 600,
-              fontFamily: TYPOGRAPHY.fontSans,
-              cursor: 'pointer',
-            }}
-          >
-            <Lightbulb size={12} />
+        {/* Actions stack so the labels never wrap in the narrow rail */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <Button variant="primary" size="sm" icon={<Play size={ICON_SIZE.xs} aria-hidden="true" />} onClick={handleStart} style={{ width: '100%' }}>
+            Start challenge
+          </Button>
+          <Button variant="secondary" size="sm" icon={<Lightbulb size={ICON_SIZE.xs} aria-hidden="true" />} onClick={handleHint} style={{ width: '100%' }}>
             Ask Dirac
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* Leaderboard */}
       <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            marginBottom: 8,
-          }}
-        >
-          <Trophy size={12} style={{ color: colors.accentText }} />
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              letterSpacing: 0.5,
-              color: colors.textMuted,
-              fontFamily: TYPOGRAPHY.fontSans,
-            }}
-          >
-            Leaderboard
-          </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+          <Trophy size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} style={{ color: colors.accentText }} aria-hidden="true" />
+          <h3 className="nuclei-overline">Leaderboard</h3>
         </div>
 
-        <table
-          style={{
-            width: '100%',
-            borderCollapse: 'collapse',
-            fontSize: 11,
-            fontFamily: TYPOGRAPHY.fontSans,
-          }}
-        >
-          <thead>
-            <tr>
-              {['#', 'Name', 'Score'].map((h) => (
-                <th
-                  key={h}
-                  style={{
-                    textAlign: h === 'Score' ? 'right' : 'left',
-                    padding: '4px 6px',
-                    color: colors.textDim,
-                    fontWeight: 600,
-                    fontSize: 11,
-                    textTransform: 'uppercase',
-                    letterSpacing: 0.5,
-                    borderBottom: `1px solid ${colors.border}`,
-                  }}
-                >
-                  {h}
-                </th>
+        {leaderboard.length === 0 ? (
+          <p style={{ margin: 0, padding: 16, textAlign: 'center', fontSize: 12, color: colors.textMuted }}>
+            No submissions yet. Be the first.
+          </p>
+        ) : (
+          <Table label="Leaderboard" dense>
+            <Thead>
+              <Tr>
+                <Th plain>#</Th>
+                <Th plain>Name</Th>
+                <Th plain numeric>Score</Th>
+              </Tr>
+            </Thead>
+            <Tbody>
+              {leaderboard.map((entry) => (
+                <Tr key={entry.rank}>
+                  <Td numeric>{entry.rank}</Td>
+                  <Td text>{entry.displayName}</Td>
+                  <Td numeric>{entry.score}</Td>
+                </Tr>
               ))}
-            </tr>
-          </thead>
-          <tbody>
-            {leaderboard.map((entry) => (
-              <tr key={entry.rank}>
-                <td
-                  style={{
-                    padding: '5px 6px',
-                    color: entry.rank <= 3 ? colors.accentText : colors.textMuted,
-                    fontWeight: entry.rank <= 3 ? 700 : 400,
-                    borderBottom: `1px solid ${colors.border}`,
-                    width: 28,
-                  }}
-                >
-                  {entry.rank}
-                </td>
-                <td
-                  style={{
-                    padding: '5px 6px',
-                    color: colors.text,
-                    borderBottom: `1px solid ${colors.border}`,
-                  }}
-                >
-                  {entry.displayName}
-                </td>
-                <td
-                  style={{
-                    padding: '5px 6px',
-                    color: colors.textMuted,
-                    textAlign: 'right',
-                    borderBottom: `1px solid ${colors.border}`,
-                    fontVariantNumeric: 'tabular-nums',
-                  }}
-                >
-                  {entry.score}
-                </td>
-              </tr>
-            ))}
-            {leaderboard.length === 0 && (
-              <tr>
-                <td
-                  colSpan={3}
-                  style={{
-                    padding: 16,
-                    textAlign: 'center',
-                    color: colors.textDim,
-                  }}
-                >
-                  No submissions yet — be the first.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+            </Tbody>
+          </Table>
+        )}
       </div>
     </div>
   );

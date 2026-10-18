@@ -4,8 +4,9 @@
 .tracks__header { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-8); }
 .tracks__badge {
   display: grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0; border-radius: var(--radius-round);
-  background: color-mix(in srgb, var(--color-accent-quantum) 14%, transparent); color: var(--color-accent-quantum);
+  background: color-mix(in srgb, var(--color-accent-quantum) 14%, transparent); color: var(--color-accent-quantum-text);
 }
+.tracks__title:focus { outline: none; } /* programmatic landing target, not a control */
 .tracks__title { margin: 0; font-size: var(--font-size-title); font-weight: var(--font-weight-bold); line-height: var(--line-height-title); color: var(--color-text-primary); }
 .tracks__lede { margin: var(--space-0) 0 0; font-size: var(--font-size-body); color: var(--color-text-secondary); }
 
@@ -29,10 +30,6 @@
 .track-card__title { margin-bottom: var(--space-1); font-size: var(--font-size-heading); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
 .track-card__desc { margin-bottom: var(--space-2); font-size: var(--font-size-code); line-height: 1.45; color: var(--color-text-secondary); }
 .track-card__meta { display: flex; align-items: center; gap: var(--space-3); font-size: var(--font-size-caption); color: var(--color-text-secondary); }
-.track-card__level {
-  padding: 1px var(--space-2); border-radius: var(--radius-xs); font-weight: var(--font-weight-medium);
-  background: color-mix(in srgb, var(--color-accent-quantum) 12%, transparent); color: var(--color-text-primary);
-}
 .track-card__bar { flex: 1; max-width: 120px; height: 4px; border-radius: var(--radius-xs); background: var(--color-border-strong); overflow: hidden; }
 .track-card__bar-fill { height: 100%; background: var(--color-accent-quantum); transition: width var(--duration-slow) var(--ease-standard); }
 .track-card__chevron { flex-shrink: 0; color: var(--color-text-tertiary); transition: transform var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard); }
@@ -43,7 +40,8 @@
 .shelf__title { margin: 0; font-size: var(--font-size-title); font-weight: var(--font-weight-bold); color: var(--color-text-primary); }
 .shelf__sub { margin: var(--space-1) 0 0; font-size: var(--font-size-code); color: var(--color-text-secondary); }
 .shelf__count { font-size: var(--font-size-chrome-label); color: var(--color-text-secondary); white-space: nowrap; }
-.shelf__filter { margin-bottom: var(--space-4); overflow-x: auto; }
+.shelf__filter { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); margin-bottom: var(--space-4); }
+.shelf__sub { margin: 0; }
 .shelf__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--space-4); }
 
 .video-card {
@@ -67,8 +65,14 @@
 .video-card__desc { margin-top: var(--space-2); font-size: var(--font-size-caption); line-height: 1.4; color: var(--color-text-secondary); }
 
 .tracks__tabs { margin-bottom: var(--space-6); }
-.tracks__concepts, .tracks__capstones, .tracks__glossary { height: calc(100vh - 280px); min-height: 360px; }
-.tracks__capstones .lpath__caps { max-width: 640px; }
+/* Concepts and capstones flow at natural height so the page is the only scroller; the glossary keeps its own list scroll. */
+.tracks__glossary { height: calc(100vh - 280px); min-height: 360px; }
 .tracks__section > .shelf { margin-top: 0; }
 /* Warning badge text over its own tint is 4.2:1 in light; darken it inside the screens this lane owns. */
-.video-card__tags .nuclei-badge--warning { --badge-text: color-mix(in srgb, var(--color-warning) 72%, var(--color-text-primary)); }
+.video-card__tags .nuclei-badge--warning, .cap-card__meta .nuclei-badge--warning { --badge-text: color-mix(in srgb, var(--color-warning) 72%, var(--color-text-primary)); }
+
+.tracks__back { margin-bottom: var(--space-4); }
+
+/* Capstones use the same card grid as the video shelf so every chooser tab shares one card width. */
+.tracks__capstones .lpath__caps { overflow: visible; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--space-4); }
+.tracks__capstones .cap-card { margin-bottom: 0; padding: var(--space-4); }

@@ -2,38 +2,18 @@ import { useState } from 'react';
 import { CURATED_VIDEOS } from '../../data/videos/curatedLibrary';
 import type { CuratedVideo } from '../../data/videos/curatedLibrary';
 import { Play } from 'lucide-react';
-import { Badge } from '../ui';
+import { Badge, Select, Tabs, type TabOption } from '../ui';
+import { CREATOR_FILTERS, CREATOR_LABEL, DIFFICULTY_FILTERS, filterVideos, type CreatorFilter, type DifficultyFilter } from './videoFilters';
 import { VIDEO_LEVEL_TONE } from './levelTone';
 import { VideoThumb } from './VideoThumb';
 import { openExternal, buildYouTubeWatchUrl } from '../../lib/openExternal';
 import './learnSidebar.css';
 
-type CreatorFilter = 'all' | CuratedVideo['creator'];
-type DifficultyFilter = 'all' | CuratedVideo['difficulty'];
-
-const CREATOR_TABS: { key: CreatorFilter; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: '3blue1brown', label: '3B1B' },
-  { key: 'ibm-technology', label: 'IBM' },
-  { key: 'nvidia', label: 'NVIDIA' },
-  { key: 'qiskit', label: 'Qiskit' },
-];
-
-const DIFFICULTY_PILLS: { key: DifficultyFilter; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'prerequisite', label: 'Prerequisite' },
-  { key: 'beginner', label: 'Beginner' },
-  { key: 'intermediate', label: 'Intermediate' },
-  { key: 'advanced', label: 'Advanced' },
-];
-
-const CREATOR_LABELS: Record<CuratedVideo['creator'], string> = {
-  '3blue1brown': '3B1B',
-  'ibm-technology': 'IBM',
-  nvidia: 'NVIDIA',
-  qiskit: 'Qiskit',
-  other: 'Other',
-};
+const RAIL_CREATOR_TABS: ReadonlyArray<TabOption<CreatorFilter>> = CREATOR_FILTERS.map((f) => ({
+  value: f.value,
+  label: f.value === '3blue1brown' ? '3B1B' : f.label,
+  ariaLabel: f.value === '3blue1brown' ? CREATOR_LABEL['3blue1brown'] : undefined,
+}));
 
 function VideoRow({ video, onPlay }: { video: CuratedVideo; onPlay: (video: CuratedVideo) => void }) {
   return (
@@ -46,7 +26,7 @@ function VideoRow({ video, onPlay }: { video: CuratedVideo; onPlay: (video: Cura
       <div className="vrow__info">
         <div className="vrow__title">{video.title}</div>
         <div className="vrow__tags">
-          <span className="vrow__creator">{CREATOR_LABELS[video.creator]}</span>
+          <Badge>{CREATOR_LABEL[video.creator]}</Badge>
           <Badge tone={VIDEO_LEVEL_TONE[video.difficulty]} style={{ textTransform: 'capitalize' }}>{video.difficulty}</Badge>
         </div>
         <div className="vrow__desc">{video.description}</div>
@@ -63,42 +43,16 @@ export function VideoLibrary() {
     void openExternal(buildYouTubeWatchUrl(video.youtubeId));
   };
 
-  const filteredVideos = CURATED_VIDEOS.filter((v) => {
-    if (creatorFilter !== 'all' && v.creator !== creatorFilter) return false;
-    if (difficultyFilter !== 'all' && v.difficulty !== difficultyFilter) return false;
-    return true;
-  });
+  const filteredVideos = filterVideos(CURATED_VIDEOS, creatorFilter, difficultyFilter);
 
   return (
     <div className="vlib">
-      <div className="vlib__tabs" role="tablist" aria-label="Creator">
-        {CREATOR_TABS.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            role="tab"
-            aria-selected={creatorFilter === tab.key}
-            aria-label={tab.key === '3blue1brown' ? '3Blue1Brown' : undefined}
-            className="vlib__tab"
-            onClick={() => setCreatorFilter(tab.key)}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <Tabs className="vlib__tabs" aria-label="Creator" value={creatorFilter} options={RAIL_CREATOR_TABS} onChange={setCreatorFilter} />
 
-      <div className="vlib__levels" role="group" aria-label="Difficulty">
-        {DIFFICULTY_PILLS.map((pill) => (
-          <button
-            key={pill.key}
-            type="button"
-            className="gloss__cat"
-            aria-pressed={difficultyFilter === pill.key}
-            onClick={() => setDifficultyFilter(pill.key)}
-          >
-            {pill.label}
-          </button>
-        ))}
+      <div className="vlib__levels">
+        <Select size="sm" aria-label="Difficulty" value={difficultyFilter} onChange={(e) => setDifficultyFilter(e.target.value as DifficultyFilter)}>
+          {DIFFICULTY_FILTERS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+        </Select>
       </div>
 
       <div className="vlib__count" aria-live="polite">{filteredVideos.length} video{filteredVideos.length !== 1 ? 's' : ''}</div>

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Framework } from '../types/quantum';
+import { applyMotionPreference } from './motionPreference';
 
 /* ── Editor Settings ─────────────────────────────────── */
 export interface EditorSettings {
@@ -32,11 +33,17 @@ export interface KernelSettings {
 
 /* ── General Settings ────────────────────────────────── */
 export interface GeneralSettings {
+  /** Off collapses animations app-wide via <html data-reduced-motion> (see motionPreference.ts). */
   animationsEnabled: boolean;
+  /** Persisted for compatibility; no reader yet, so Settings does not render it. */
   showWelcomeOnStart: boolean;
+  /** Persisted for compatibility; no reader yet, so Settings does not render it. */
   autoSave: boolean;
+  /** Persisted for compatibility; the UI is English-only, so Settings does not render it. */
   language: 'en' | 'es' | 'zh' | 'ja';
+  /** Persisted for compatibility; nothing is collected, so Settings does not render it. */
   telemetryEnabled: boolean;
+  /** Persisted for compatibility; no reader yet, so Settings does not render it. */
   educatorMode: boolean;
   experimentalFeatures: boolean;
 }
@@ -141,6 +148,7 @@ function persistSettings(state: Pick<SettingsState, 'editor' | 'dirac' | 'kernel
 
 export const useSettingsStore = create<SettingsState>((set, get) => {
   const persisted = loadPersistedSettings();
+  applyMotionPreference({ ...DEFAULT_GENERAL, ...(persisted.general ?? {}) }.animationsEnabled);
 
   return {
     editor: { ...DEFAULT_EDITOR, ...(persisted.editor ?? {}) },
@@ -165,6 +173,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
     },
     updateGeneral: (patch) => {
       set((s) => ({ general: { ...s.general, ...patch } }));
+      applyMotionPreference(get().general.animationsEnabled);
       persistSettings(get());
     },
     updateAgentHardware: (patch) => {
@@ -179,6 +188,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
         general: DEFAULT_GENERAL,
         agentHardware: DEFAULT_AGENT_HARDWARE,
       });
+      applyMotionPreference(DEFAULT_GENERAL.animationsEnabled);
       localStorage.removeItem('nuclei-settings');
     },
   };

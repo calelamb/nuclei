@@ -3,7 +3,10 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { useThemeStore } from '../../stores/themeStore';
 
+import { Crosshair, CheckCircle2 } from 'lucide-react';
 import { Button } from '../ui';
+import { formatStateEquation } from './blochEquation';
+import { DARK_COLORS, ICON_SIZE, ICON_STROKE, LIGHT_COLORS, TYPOGRAPHY } from '../../styles/tokens';
 import './lessonBlocks.css';
 const AXIS_LENGTH = 1.3;
 const LERP_FACTOR = 0.12;
@@ -60,9 +63,47 @@ const PRESET_STATES: Array<{ label: string; theta: number; phi: number }> = [
 
 const ALL_GATES = ['H', 'X', 'Y', 'Z', 'S', 'T'];
 
+// --- Pole and axis labels ---
+
+/** Basis-state labels at the ends of the three axes, in three.js coordinates (three.js Y is Bloch Z). */
+const LABEL_REACH = 1.4;
+const AXIS_LABELS: ReadonlyArray<{ text: string; at: [number, number, number]; pole: boolean }> = [
+  { text: '|0\u27E9', at: [0, LABEL_REACH, 0], pole: true },
+  { text: '|1\u27E9', at: [0, -LABEL_REACH, 0], pole: true },
+  { text: '|+\u27E9', at: [LABEL_REACH, 0, 0], pole: false },
+  { text: '|\u2212\u27E9', at: [-LABEL_REACH, 0, 0], pole: false },
+  { text: '|+i\u27E9', at: [0, 0, LABEL_REACH], pole: false },
+  { text: '|\u2212i\u27E9', at: [0, 0, -LABEL_REACH], pole: false },
+];
+
+function makeLabelSprite(text: string, cssColor: string, haloColor: string): THREE.Sprite {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.fillStyle = cssColor;
+    ctx.font = `600 34px ${TYPOGRAPHY.fontSans}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    // A halo in the panel colour keeps labels legible where they cross the sphere.
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = haloColor;
+    ctx.strokeText(text, 64, 32);
+    ctx.fillText(text, 64, 32);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, sizeAttenuation: false }));
+  // Constant on-screen size: perspective must not make the near labels huge and the far ones tiny.
+  sprite.scale.set(0.2, 0.1, 1);
+  sprite.renderOrder = 10;
+  return sprite;
+}
+
 // --- Scene construction ---
 
-function createScene(bgColor: number, gridColor: number) {
+function createScene(bgColor: number, gridColor: number, labelColors: { pole: string; equator: string; halo: string }) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(bgColor);
 
@@ -130,6 +171,12 @@ function createScene(bgColor: number, gridColor: number) {
     scene.add(pos, neg);
   }
 
+  for (const { text, at, pole } of AXIS_LABELS) {
+    const sprite = makeLabelSprite(text, pole ? labelColors.pole : labelColors.equator, labelColors.halo);
+    sprite.position.set(...at);
+    scene.add(sprite);
+  }
+
   return { scene, sphereMesh };
 }
 
@@ -180,45 +227,6 @@ function pointArrowAt(arrow: THREE.Group, target: THREE.Vector3) {
   arrow.visible = true;
   arrow.scale.set(1, length, 1);
   arrow.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), target.clone().normalize());
-}
-
-// --- State equation formatter ---
-
-function formatStateEquation(theta: number, phi: number): string {
-  const cosHalf = Math.cos(theta / 2);
-  const sinHalf = Math.sin(theta / 2);
-
-  const formatNum = (n: number): string => {
-    const abs = Math.abs(n);
-    if (abs < 1e-6) return '0';
-    if (Math.abs(abs - 1) < 1e-6) return n < 0 ? '-1' : '1';
-    if (Math.abs(abs - Math.SQRT1_2) < 1e-4) return n < 0 ? '-0.707' : '0.707';
-    return n.toFixed(3);
-  };
-
-  const alpha = formatNum(cosHalf);
-  const betaReal = Math.cos(phi) * sinHalf;
-  const betaImag = Math.sin(phi) * sinHalf;
-
-  let betaStr: string;
-  const rAbs = Math.abs(betaReal);
-  const iAbs = Math.abs(betaImag);
-
-  if (rAbs < 1e-6 && iAbs < 1e-6) {
-    betaStr = '0';
-  } else if (iAbs < 1e-6) {
-    betaStr = formatNum(betaReal);
-  } else if (rAbs < 1e-6) {
-    const iVal = formatNum(betaImag);
-    betaStr = iVal === '1' ? 'i' : iVal === '-1' ? '-i' : `${iVal}i`;
-  } else {
-    const rStr = formatNum(betaReal);
-    const iVal = formatNum(Math.abs(betaImag));
-    const iStr = iVal === '1' ? 'i' : `${iVal}i`;
-    betaStr = betaImag >= 0 ? `${rStr}+${iStr}` : `${rStr}-${iStr}`;
-  }
-
-  return `${alpha}|0\u27E9 + ${betaStr}|1\u27E9`;
 }
 
 // --- Component ---
@@ -273,6 +281,8 @@ export function InteractiveBlochSphere({
     const isDark = useThemeStore.getState().mode === 'dark';
     const bgColor = isDark ? 0x0a1220 : 0xf1f5f9;
     const gridColor = isDark ? 0x1a2a42 : 0xc8d5e0;
+    const palette = isDark ? DARK_COLORS : LIGHT_COLORS;
+    const labelColors = { pole: palette.textPrimary, equator: palette.textSecondary, halo: `#${bgColor.toString(16).padStart(6, '0')}` };
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(w, h);
@@ -281,11 +291,11 @@ export function InteractiveBlochSphere({
     rendererRef.current = renderer;
 
     const camera = new THREE.PerspectiveCamera(40, w / h, 0.1, 100);
-    camera.position.set(2.2, 1.8, 2.2);
+    camera.position.set(2.8, 2.2, 2.8);
     camera.lookAt(0, 0, 0);
     cameraRef.current = camera;
 
-    const { scene, sphereMesh } = createScene(bgColor, gridColor);
+    const { scene, sphereMesh } = createScene(bgColor, gridColor, labelColors);
     sphereMeshRef.current = sphereMesh;
 
     // State arrow (teal)
@@ -447,7 +457,9 @@ export function InteractiveBlochSphere({
       <div className="bsphere__controls">
         {challenge && (
           <div className="bsphere__challenge" style={{ ['--challenge-color' as string]: challengeColor }}>
-            <span aria-hidden="true" style={{ fontSize: 16 }}>{isMatched ? '\u2705' : '\uD83C\uDFAF'}</span>
+            {isMatched
+              ? <CheckCircle2 size={ICON_SIZE.md} strokeWidth={ICON_STROKE} aria-hidden="true" />
+              : <Crosshair size={ICON_SIZE.md} strokeWidth={ICON_STROKE} aria-hidden="true" />}
             <div style={{ flex: 1 }}>
               <div className="bsphere__challenge-title">{isMatched ? 'Matched!' : challenge.description}</div>
               {!isMatched && challengeDistance !== null && (

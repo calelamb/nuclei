@@ -120,9 +120,7 @@ function buildStarterTemplate(
     ? 'Return the JSON-serializable value requested by the current challenge.'
     : 'Return a QuantumCircuit for the current challenge.';
 
-  return `${imports}
-
-def ${DEFAULT_ENTRYPOINT_NAME}(${signature}):
+  return `${imports ? `${imports}\n\n` : ''}def ${DEFAULT_ENTRYPOINT_NAME}(${signature}):
     """${returnHint}"""
 ${body}
 ${contractKind === 'returns_circuit' ? '    return qc\n' : ''}

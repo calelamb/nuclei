@@ -5,6 +5,14 @@ export interface TabOption<T extends string> {
   value: T;
   label: ReactNode;
   disabled?: boolean;
+  /** Optional leading icon (lucide at ICON_SIZE.sm); decorative, so give icon-only tabs a `title`. */
+  icon?: ReactNode;
+  /** Optional trailing count, rendered as quiet tabular text. */
+  count?: number;
+  /** Tooltip and accessible name override (required for an icon-only tab). */
+  title?: string;
+  /** Full accessible name when the visible label is an abbreviation ("3B1B" -> "3Blue1Brown"). */
+  ariaLabel?: string;
 }
 
 export interface TabsProps<T extends string> {
@@ -13,15 +21,20 @@ export interface TabsProps<T extends string> {
   onChange: (next: T) => void;
   'aria-label': string;
   className?: string;
+  /** Stable id prefix: each tab gets id `${idBase}-${value}` so a caller's tabpanel can aria-labelledby it. */
+  idBase?: string;
+  /** Id of the caller's tabpanel; sets aria-controls on every tab. */
+  panelId?: string;
 }
 
 /**
  * Tab strip (WAI-ARIA tabs, automatic activation). One tab stop; Left/Right
  * move and select, Home/End jump. Panels are the caller's (role="tabpanel").
  */
-export function Tabs<T extends string>({ value, options, onChange, 'aria-label': ariaLabel, className }: TabsProps<T>) {
+export function Tabs<T extends string>({ value, options, onChange, 'aria-label': ariaLabel, className, idBase, panelId }: TabsProps<T>) {
   const listRef = useRef<HTMLDivElement>(null);
-  const baseId = useId();
+  const generatedId = useId();
+  const baseId = idBase ?? generatedId;
   const enabled = options.filter((o) => !o.disabled);
   const [overflow, setOverflow] = useState<'none' | 'end' | 'start' | 'both'>('none');
 
@@ -80,13 +93,18 @@ export function Tabs<T extends string>({ value, options, onChange, 'aria-label':
             role="tab"
             id={`${baseId}-${o.value}`}
             aria-selected={selected}
+            aria-controls={panelId}
             data-value={o.value}
             disabled={o.disabled}
             tabIndex={selected ? 0 : -1}
             className="nuclei-tabs__tab"
+            title={o.title}
+            aria-label={o.ariaLabel ?? (o.title && !o.label ? o.title : undefined)}
             onClick={() => onChange(o.value)}
           >
+            {o.icon && <span className="nuclei-tabs__icon" aria-hidden="true">{o.icon}</span>}
             {o.label}
+            {o.count !== undefined && <span className="nuclei-tabs__count">{o.count}</span>}
           </button>
         );
       })}

@@ -20,11 +20,13 @@ const CATEGORY_LABELS: Record<string, string> = {
   gates: 'Gates',
   entanglement: 'Entanglement',
   algorithms: 'Algorithms',
-  'error-correction': 'Error Correction',
+  'error-correction': 'Error correction',
   hardware: 'Hardware',
 };
 
 const NODE_R = 18;
+/** Vertical pitch between nodes in a column; leaves room for the label under each node. */
+const ROW_PITCH = 68;
 /** Below this the labels stop being legible; the map scrolls sideways instead of shrinking further. */
 const MIN_MAP_WIDTH = 560;
 
@@ -45,10 +47,10 @@ function layoutNodes(): NodePosition[] {
   const positions: NodePosition[] = [];
   for (const [cat, nodes] of Object.entries(byCat)) {
     const x = CATEGORY_X[cat] ?? 80;
-    const totalHeight = (nodes.length - 1) * 55;
+    const totalHeight = (nodes.length - 1) * ROW_PITCH;
     const startY = Math.max(60, 200 - totalHeight / 2);
     nodes.forEach((node, i) => {
-      positions.push({ id: node.id, x, y: startY + i * 55, node });
+      positions.push({ id: node.id, x, y: startY + i * ROW_PITCH, node });
     });
   }
   return positions;
@@ -60,6 +62,7 @@ export function ConceptMap() {
   const conceptsMastered = useStudentStore((s) => s.model.conceptsMastered);
   const conceptsStruggling = useStudentStore((s) => s.model.conceptsStruggling);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [focusId, setFocusId] = useState<string | null>(null);
 
   const positions = useMemo(() => layoutNodes(), []);
   const posMap = useMemo(() => {
@@ -86,7 +89,7 @@ export function ConceptMap() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
       {/* Legend */}
       <div style={{ padding: '8px 12px', display: 'flex', gap: 14, alignItems: 'center', flexShrink: 0 }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, color: colors.textMuted }}>
@@ -95,7 +98,7 @@ export function ConceptMap() {
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, color: colors.textMuted }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: colors.accent, display: 'inline-block' }} />
-          In Progress
+          In progress
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, color: colors.textMuted }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: colors.textDim, opacity: 0.45, display: 'inline-block' }} />
@@ -104,7 +107,7 @@ export function ConceptMap() {
       </div>
 
       {/* SVG container with horizontal scroll */}
-      <div style={{ flex: 1, minHeight: 0, overflowX: 'auto', overflowY: 'auto' }}>
+      <div style={{ overflowX: 'auto' }}>
         <svg
           viewBox={`0 0 ${svgWidth} ${svgHeight}`}
           width="100%"
@@ -123,7 +126,6 @@ export function ConceptMap() {
               fontSize={11}
               fontFamily={TYPOGRAPHY.fontSans}
               fontWeight={600}
-              style={{ textTransform: 'uppercase', letterSpacing: '0.5px' }}
             >
               {CATEGORY_LABELS[cat]}
             </text>
@@ -134,6 +136,8 @@ export function ConceptMap() {
             const from = posMap[edge.from];
             const to = posMap[edge.to];
             if (!from || !to) return null;
+            const active = focusId ?? selectedId;
+            const touchesActive = active !== null && (edge.from === active || edge.to === active);
             return (
               <line
                 key={i}
@@ -141,9 +145,9 @@ export function ConceptMap() {
                 y1={from.y}
                 x2={to.x}
                 y2={to.y}
-                stroke={colors.borderStrong}
-                strokeWidth={1}
-                opacity={0.4}
+                stroke={touchesActive ? colors.textMuted : colors.borderStrong}
+                strokeWidth={touchesActive ? 1.5 : 1}
+                opacity={active === null ? 0.4 : touchesActive ? 0.9 : 0.08}
               />
             );
           })}
@@ -163,6 +167,10 @@ export function ConceptMap() {
                 aria-pressed={isSelected}
                 aria-label={pos.node.label}
                 style={{ cursor: 'pointer' }}
+                onMouseEnter={() => setFocusId(pos.id)}
+                onMouseLeave={() => setFocusId(null)}
+                onFocus={() => setFocusId(pos.id)}
+                onBlur={() => setFocusId(null)}
                 onClick={() => setSelectedId(isSelected ? null : pos.id)}
                 onKeyDown={activateOnKey(() => setSelectedId(isSelected ? null : pos.id))}
               >
@@ -199,6 +207,8 @@ export function ConceptMap() {
             );
           })}
         </svg>
+
+      </div>
 
         {/* Popover for selected node */}
         {selectedNode && (
@@ -237,7 +247,7 @@ export function ConceptMap() {
                 color: getNodeColor(selectedNode.id),
                 fontWeight: 600,
               }}>
-                {conceptsMastered.includes(selectedNode.id) ? 'Mastered' : conceptsStruggling.includes(selectedNode.id) ? 'In Progress' : 'Not Started'}
+                {conceptsMastered.includes(selectedNode.id) ? 'Mastered' : conceptsStruggling.includes(selectedNode.id) ? 'In progress' : 'Not started'}
               </span>
               {selectedNode.node.exerciseIds.length > 0 && (
                 <span style={{
@@ -251,7 +261,6 @@ export function ConceptMap() {
             </div>
           </div>
         )}
-      </div>
     </div>
   );
 }

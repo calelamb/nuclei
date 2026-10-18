@@ -8,6 +8,8 @@ interface FocusTrapOptions {
   restoreFocus?: boolean;
   /** Move focus into the container on mount. Default true. */
   autoFocus?: boolean;
+  /** CSS selector of regions whose controls are skipped when choosing the initial focus target (Tab still reaches them). */
+  autoFocusSkip?: string;
 }
 
 function focusableWithin(root: HTMLElement): HTMLElement[] {
@@ -23,7 +25,7 @@ function focusableWithin(root: HTMLElement): HTMLElement[] {
  */
 export function useFocusTrap(
   containerRef: RefObject<HTMLElement | null>,
-  { restoreFocus = true, autoFocus = true }: FocusTrapOptions = {},
+  { restoreFocus = true, autoFocus = true, autoFocusSkip }: FocusTrapOptions = {},
 ): void {
   useEffect(() => {
     const container = containerRef.current;
@@ -31,7 +33,8 @@ export function useFocusTrap(
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 
     if (autoFocus) {
-      const first = focusableWithin(container)[0];
+      const candidates = focusableWithin(container);
+      const first = autoFocusSkip ? candidates.find((el) => !el.closest(autoFocusSkip)) : candidates[0];
       (first ?? container).focus();
     }
 
@@ -64,5 +67,5 @@ export function useFocusTrap(
       document.removeEventListener('keydown', onKeyDown, true);
       if (restoreFocus && opener && document.contains(opener)) opener.focus();
     };
-  }, [containerRef, restoreFocus, autoFocus]);
+  }, [containerRef, restoreFocus, autoFocus, autoFocusSkip]);
 }

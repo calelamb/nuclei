@@ -23,7 +23,7 @@ describe('ProblemFilters', () => {
     const hardGroupAll = difficulty.querySelector('[data-value="all"]') as HTMLElement;
     fireEvent.click(hardGroupAll);
     expect(setDifficultyFilter).toHaveBeenCalledWith(null);
-    fireEvent.click(screen.getByRole('radio', { name: 'State Prep' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'State prep' }));
     expect(setCategoryFilter).toHaveBeenCalledWith('state-preparation');
     fireEvent.click(screen.getByRole('radio', { name: 'Solved' }));
     expect(setStatusFilter).toHaveBeenCalledWith('solved');

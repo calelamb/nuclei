@@ -40,7 +40,7 @@ describe('QuantumPlayground', () => {
   it('entangling shows a |00> / |11> histogram and matching arrows for both qubits', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.9);
     render(<QuantumPlayground onComplete={vi.fn()} onBridgeToIDE={vi.fn()} />);
-    click('Continue'); click('Apply H Gate'); click('Measure'); click('Measure 10 Times'); click('Entangle Qubits');
+    click('Continue'); click('Apply H Gate'); click('Measure'); click('Measure 10 Times'); click('Entangle qubits');
     expect(screen.getByRole('img', { name: /Joint results: \|00⟩ 0 times, \|11⟩ 10 times/ })).toBeTruthy();
     expect(screen.getAllByRole('img', { name: /measured \|1⟩/ })).toHaveLength(2);
   });
@@ -49,7 +49,7 @@ describe('QuantumPlayground', () => {
     vi.useFakeTimers();
     const bridge = vi.fn();
     render(<QuantumPlayground onComplete={vi.fn()} onBridgeToIDE={bridge} />);
-    click('Continue'); click('Apply H Gate'); click('Measure'); click('Measure 10 Times'); click('Entangle Qubits');
+    click('Continue'); click('Apply H Gate'); click('Measure'); click('Measure 10 Times'); click('Entangle qubits');
     click('Start lesson 1');
     await vi.advanceTimersByTimeAsync(700);
     expect(bridge).toHaveBeenCalledTimes(1);

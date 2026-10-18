@@ -28,7 +28,7 @@ describe('QuizBlock', () => {
     render(<QuizBlock questions={QUESTIONS} />);
     fireEvent.click(screen.getByRole('radio', { name: /^B.*\b3\b|3/ }));
     expect(screen.getByText(/not quite/i)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Try Again' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(screen.queryByText(/not quite/i)).toBeNull();
     fireEvent.click(screen.getByRole('radio', { name: /2/ }));
     expect(screen.getByText('A bit is 0 or 1.')).toBeTruthy();

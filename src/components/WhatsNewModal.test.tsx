@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import { WhatsNewModal, shouldShowWhatsNew, versionBadge } from './WhatsNewModal';
-import { WHATS_NEW, highlightsFor } from '../data/whatsNew';
+import { WHATS_NEW, headlineFor, highlightsFor } from '../data/whatsNew';
 import { useWorkspaceStore } from '../stores/workspaceStore';
 
 const SEEN_KEY = 'nuclei:whats_new_seen_version';
@@ -101,7 +101,7 @@ describe('<WhatsNewModal>', () => {
     expect(dialog.getAttribute('aria-labelledby')).toBe('whats-new-title');
     expect(dialog.getAttribute('aria-label')).toContain(CURRENT);
 
-    expect(getByText(WHATS_NEW.title)).toBeTruthy();
+    expect(getByText(headlineFor(WHATS_NEW, { platform: 'desktop', mode: useWorkspaceStore.getState().mode }).title)).toBeTruthy();
     expect(getByText(`v${CURRENT}`)).toBeTruthy();
     const shown = highlightsFor(WHATS_NEW, { platform: 'desktop', mode: useWorkspaceStore.getState().mode });
     expect(shown.length).toBeGreaterThan(0);

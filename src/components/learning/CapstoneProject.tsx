@@ -64,8 +64,8 @@ export function CapstoneProjectView() {
                     <div>
                       <div className="capv__step-desc">{milestone.description}</div>
                       <div className="capv__actions">
-                        <Button size="sm" variant="primary" icon={<Play size={12} aria-hidden="true" />} onClick={loadStarter}>Load Starter Code</Button>
-                        <Button size="sm" onClick={handleComplete}>Mark Complete</Button>
+                        <Button size="sm" variant="primary" icon={<Play size={12} aria-hidden="true" />} onClick={loadStarter}>Load starter code</Button>
+                        <Button size="sm" onClick={handleComplete}>Mark complete</Button>
                       </div>
 
                       {milestone.hints.slice(0, revealedHints).map((hint, hi) => (
@@ -76,7 +76,7 @@ export function CapstoneProjectView() {
                       ))}
                       {revealedHints < milestone.hints.length && (
                         <Button size="sm" variant="ghost" className="capv__link" icon={<Lightbulb size={12} aria-hidden="true" />} onClick={showNextHint}>
-                          Show Hint ({revealedHints + 1}/{milestone.hints.length})
+                          Show hint ({revealedHints + 1}/{milestone.hints.length})
                         </Button>
                       )}
                     </div>
@@ -91,7 +91,7 @@ export function CapstoneProjectView() {
 
         {activeProject.diracGuidancePrompt && (
           <div className="capv__dirac">
-            <div className="capv__dirac-title">Dirac Guidance</div>
+            <div className="capv__dirac-title">Dirac guidance</div>
             <div className="capv__dirac-text">{truncate(activeProject.diracGuidancePrompt, 200)}</div>
           </div>
         )}

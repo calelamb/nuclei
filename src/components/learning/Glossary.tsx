@@ -9,7 +9,7 @@ const CATEGORIES = [
   { key: 'gates', label: 'Gates' },
   { key: 'entanglement', label: 'Entanglement' },
   { key: 'algorithms', label: 'Algorithms' },
-  { key: 'error-correction', label: 'Error Correction' },
+  { key: 'error-correction', label: 'Error correction' },
   { key: 'hardware', label: 'Hardware' },
 ];
 

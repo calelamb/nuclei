@@ -77,7 +77,7 @@ export function validateExerciseResult(
 /**
  * Whether a plain Run should grade the exercise. An untouched starter is just
  * "see what this does": grading it would turn the card red before the learner
- * has tried anything. Check Solution always grades.
+ * has tried anything. Check solution always grades.
  */
 export function shouldAutoGrade(code: string, starterCode: string): boolean {
   return code.trim() !== starterCode.trim();

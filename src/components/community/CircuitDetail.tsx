@@ -192,7 +192,7 @@ export function CircuitDetail({ circuit, onClose, onOpenInEditor }: CircuitDetai
               }}
             >
               <Play size={14} />
-              Open in Editor
+              Open in editor
             </button>
             <button
               onClick={handleCopy}
@@ -214,7 +214,7 @@ export function CircuitDetail({ circuit, onClose, onOpenInEditor }: CircuitDetai
               }}
             >
               <Copy size={14} />
-              {copied ? 'Copied!' : 'Copy Code'}
+              {copied ? 'Copied!' : 'Copy code'}
             </button>
           </div>
 

@@ -132,7 +132,7 @@ export function ProblemDescription({ challenge }: ProblemDescriptionProps) {
           fontWeight: 600,
           fontFamily: TYPOGRAPHY.fontSans,
           textTransform: 'uppercase',
-          letterSpacing: 0.4,
+          letterSpacing: '0.04em',
           marginBottom: 8,
         }}>
           Solver Contract

@@ -61,9 +61,28 @@ describe('design guards', () => {
 
   it('uses accentText (not the raw teal fill colour) for text outside the trees other lanes still own', () => {
     // Raw accent teal fails AA as small text on white; fills and borders may still use it.
-    const pending = /^components\/(learning|challenges|community|experiments|markdown|qec)\/|^components\/hardware\/(HardwarePanel|LaunchPortal)\.tsx$/;
+    // learning/challenges/community are clean and guarded; experiments/qec stay exempt until the research lane lands.
+    const pending = /^components\/(experiments|markdown|qec)\/|^components\/hardware\/(HardwarePanel|LaunchPortal)\.tsx$/;
     const rawAccentText = /(?<![-\w])color:\s*(?:colors\.accent\b(?!Text|Light)|var\(--color-accent-quantum\))/;
     expect(offenders((f) => !pending.test(f.rel) && rawAccentText.test(f.text))).toEqual([]);
+  });
+
+  it('renders every lucide icon at the shared stroke weight', async () => {
+    const { ICON_STROKE } = await import('./tokens');
+    const css = files.find((f) => f.rel === 'index.css')?.text ?? '';
+    expect(css).toMatch(new RegExp(`\\.lucide\\s*\\{\\s*stroke-width:\\s*${ICON_STROKE}\\s*;`));
+  });
+
+  it('opts heavy glyphs in by class (nuclei-icon--bold), not by a strokeWidth prop the global rule would override', () => {
+    const owned = (f: { rel: string }) => /^components\/(ui|learning|challenges|community|settings|onboarding)\//.test(f.rel);
+    expect(offenders((f) => owned(f) && /<(Check|X|Minus)\b[^>]*strokeWidth=\{[2-9]/.test(f.text))).toEqual([]);
+    const css = files.find((f) => f.rel === 'index.css')?.text ?? '';
+    expect(css).toMatch(/\.lucide\.nuclei-icon--bold\s*\{/);
+  });
+
+  it('uses the single overline tracking (0.04em) in the Learn, challenge, community, settings and onboarding trees', () => {
+    const owned = (f: { rel: string }) => /^components\/(learning|challenges|community|settings|onboarding)\//.test(f.rel) && !f.rel.endsWith('KeyboardShortcuts.tsx');
+    expect(offenders((f) => owned(f) && (/letterSpacing:\s*0\.[45]\b(?!\s*\w)/.test(f.text) || /letter-spacing:\s*0\.[45]px/.test(f.text)))).toEqual([]);
   });
 
   it('draws modal backdrops with the scrim token, not a hard-coded black', () => {

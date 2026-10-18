@@ -23,9 +23,10 @@ export function Table({ label, dense = false, className, children }: TableProps)
     const el = scrollRef.current;
     if (!el) return;
     const overflowing = el.scrollWidth > el.clientWidth + 1;
+    const scrollable = overflowing || el.scrollHeight > el.clientHeight + 1;
     const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 1;
     el.dataset.overflow = String(overflowing);
-    el.tabIndex = overflowing ? 0 : -1;
+    el.tabIndex = scrollable ? 0 : -1;
     el.dataset.scrolledEnd = String(atEnd);
   }, []);
 

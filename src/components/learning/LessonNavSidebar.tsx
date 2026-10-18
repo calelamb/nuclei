@@ -41,6 +41,7 @@ export function LessonNavSidebar({
   const setCurrentLesson = useLearnStore((s) => s.setCurrentLesson);
   const clearCurrentLesson = useLearnStore((s) => s.clearCurrentLesson);
   const setSection = useLearnSectionStore((s) => s.setSection);
+  const setReturnTo = useLearnSectionStore((s) => s.setReturnTo);
 
   const track = currentTrackId ? getTrack(currentTrackId) : undefined;
   const lessons = useMemo(() => track?.lessons ?? [], [track]);
@@ -137,7 +138,13 @@ export function LessonNavSidebar({
             key={section}
             type="button"
             className="lnav__foot-link"
-            onClick={() => { setSection(section); clearCurrentLesson(); }}
+            onClick={() => {
+              if (currentTrackId && currentLessonId) {
+                setReturnTo({ trackId: currentTrackId, lessonId: currentLessonId, blockIndex: currentBlockIndex });
+              }
+              setSection(section);
+              clearCurrentLesson();
+            }}
           >
             <Icon size={12} aria-hidden="true" />
             {LEARN_SECTION_LABELS[section]}

@@ -362,7 +362,7 @@ function Mono({ colors, children }: { colors: C; children: React.ReactNode }) {
 }
 function SectionLabel({ colors, children }: { colors: C; children: React.ReactNode }) {
   return (
-    <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, color: colors.textDim, margin: '0 0 6px' }}>
+    <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: colors.textDim, margin: '0 0 6px' }}>
       {children}
     </div>
   );

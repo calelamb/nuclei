@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Trophy } from 'lucide-react';
+import { Lock, Trophy } from 'lucide-react';
+import { ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
 import { useThemeStore } from '../../stores/themeStore';
 import { BADGES } from '../../data/community/badges';
 
@@ -16,7 +17,7 @@ export function BadgeDisplay({ earnedBadgeIds }: BadgeDisplayProps) {
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))',
         gap: 8,
       }}
     >
@@ -27,6 +28,11 @@ export function BadgeDisplay({ earnedBadgeIds }: BadgeDisplayProps) {
         return (
           <div
             key={badge.id}
+            tabIndex={0}
+            role="group"
+            aria-label={`${badge.name}${earned ? '' : ' (locked)'}: ${badge.description}`}
+            onFocus={() => setHoveredId(badge.id)}
+            onBlur={() => setHoveredId(null)}
             style={{
               display: 'flex',
               flexDirection: 'column',
@@ -36,28 +42,24 @@ export function BadgeDisplay({ earnedBadgeIds }: BadgeDisplayProps) {
               borderRadius: 6,
               background: hovered ? colors.bg : 'transparent',
               position: 'relative',
-              opacity: earned ? 1 : 0.4,
-              transition: 'opacity 0.15s, background 0.15s',
+              transition: 'background 0.15s',
               cursor: 'default',
             }}
             onMouseEnter={() => setHoveredId(badge.id)}
             onMouseLeave={() => setHoveredId(null)}
           >
-            <Trophy
-              size={20}
-              style={{
-                color: earned ? colors.accentText : colors.textDim,
-                transition: 'color 0.15s',
-              }}
-            />
+            {earned
+              ? <Trophy size={ICON_SIZE.lg} strokeWidth={ICON_STROKE} style={{ color: colors.accentText }} aria-hidden="true" />
+              : <Lock size={ICON_SIZE.lg} strokeWidth={ICON_STROKE} style={{ color: colors.textDim }} aria-hidden="true" />}
             <span
               style={{
                 fontSize: 11,
                 fontWeight: 600,
                 fontFamily: TYPOGRAPHY.fontSans,
-                color: earned ? colors.text : colors.textDim,
+                color: earned ? colors.text : colors.textMuted,
                 textAlign: 'center',
                 lineHeight: 1.2,
+                overflowWrap: 'break-word',
               }}
             >
               {badge.name}
@@ -76,7 +78,7 @@ export function BadgeDisplay({ earnedBadgeIds }: BadgeDisplayProps) {
                   borderRadius: 6,
                   background: colors.bgElevated,
                   border: `1px solid ${colors.borderStrong}`,
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                  boxShadow: 'var(--shadow-md)',
                   whiteSpace: 'nowrap',
                   zIndex: 10,
                   pointerEvents: 'none',

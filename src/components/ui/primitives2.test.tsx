@@ -122,3 +122,40 @@ describe('Checkbox semantics', () => {
     expect(screen.getByRole('checkbox').hasAttribute('aria-checked')).toBe(false);
   });
 });
+
+describe('Tabs icon and count slots', () => {
+  it('renders an icon, a count, and names an icon-only tab from its title', () => {
+    render(
+      <Tabs
+        aria-label="Library"
+        value="a"
+        onChange={() => undefined}
+        options={[
+          { value: 'a', label: 'Tracks', count: 4, icon: <svg data-testid="ico" /> },
+          { value: 'b', label: '', title: 'Videos', icon: <svg /> },
+        ]}
+      />,
+    );
+    expect(screen.getByRole('tab', { name: /Tracks/ })).toBeTruthy();
+    expect(screen.getByTestId('ico').parentElement?.getAttribute('aria-hidden')).toBe('true');
+    expect(screen.getByRole('tab', { name: 'Videos' })).toBeTruthy();
+  });
+});
+
+describe('Tabs panel linkage', () => {
+  it('derives tab ids from idBase and points aria-controls at the panel', () => {
+    render(
+      <Tabs
+        aria-label="Result view"
+        value="a"
+        idBase="trun"
+        panelId="trun-panel"
+        onChange={() => undefined}
+        options={[{ value: 'a', label: 'One' }, { value: 'b', label: 'Two' }]}
+      />,
+    );
+    const tab = screen.getByRole('tab', { name: 'One' });
+    expect(tab.id).toBe('trun-a');
+    expect(tab.getAttribute('aria-controls')).toBe('trun-panel');
+  });
+});

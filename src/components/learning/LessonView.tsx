@@ -1,4 +1,5 @@
 import { useRef, useEffect } from 'react';
+import { useLearnSectionStore } from './learnSectionStore';
 import { useLearnStore } from '../../stores/learnStore';
 import { getTrack } from '../../data/lessons/tracks';
 import { TextBlock } from './TextBlock';
@@ -47,6 +48,8 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
   const currentBlockIndex = useLearnStore((s) => s.currentBlockIndex);
   const completedLessons = useLearnStore((s) => s.completedLessons);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const setReturnTo = useLearnSectionStore((s) => s.setReturnTo);
 
   const track = getTrack(trackId);
   const lessons = track?.lessons ?? [];
@@ -54,17 +57,39 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
   const prevLesson = currentIndex > 0 ? lessons[currentIndex - 1] : null;
   const nextLesson = currentIndex < lessons.length - 1 ? lessons[currentIndex + 1] : null;
   const isCompleted = completedLessons.includes(lesson.id);
+  const completedInTrack = lessons.filter((l) => completedLessons.includes(l.id)).length;
   const blockCount = lesson.contentBlocks.length;
 
-  // New lesson: jump to top and reset the reading position.
+  // New lesson: land on its heading (so keyboard and screen-reader users start here, not on <body>),
+  // then either return to a remembered reading position or jump to the top.
   useEffect(() => {
+    titleRef.current?.focus({ preventScroll: true });
+    const { restore, setRestore } = useLearnSectionStore.getState();
+    if (restore && restore.lessonId === lesson.id) {
+      setCurrentBlockIndex(restore.blockIndex);
+      // Cleared only after the scroll lands, so a StrictMode remount (cleanup cancels the frame) can retry.
+      const frame = requestAnimationFrame(() => {
+        document.getElementById(`block-${restore.blockIndex}`)?.scrollIntoView({ block: 'start' });
+        setRestore(null);
+      });
+      return () => cancelAnimationFrame(frame);
+    }
     scrollRef.current?.scrollTo(0, 0);
     setCurrentBlockIndex(0);
+    return undefined;
   }, [lesson.id, setCurrentBlockIndex]);
 
+  const setSection = useLearnSectionStore((s) => s.setSection);
+  const leaveToTracks = () => {
+    setSection('tracks');
+    setReturnTo({ trackId, lessonId: lesson.id, blockIndex: currentBlockIndex });
+    clearCurrentLesson();
+  };
+
   // Scroll-spy: mark the topmost visible block as current so the nav sidebar's
-  // outline follows the reader. A trigger line near the top of the viewport
-  // (rootMargin) decides which block "counts" as active.
+  // outline follows the reader. A thin band about 30% down
+  // the reader (rootMargin) decides which block "counts" as active, so a block is current once it
+  // is mostly on screen rather than while only its tail is still visible.
   useEffect(() => {
     const root = scrollRef.current;
     if (!root) return;
@@ -80,7 +105,7 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
         }
         if (visible.size > 0) setCurrentBlockIndex(Math.min(...visible));
       },
-      { root, rootMargin: '0px 0px -65% 0px', threshold: 0 },
+      { root, rootMargin: '-30% 0px -60% 0px', threshold: 0 },
     );
     els.forEach((el) => io.observe(el));
     return () => io.disconnect();
@@ -91,7 +116,7 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
   return (
     <div className="lesson">
       <div className="lesson__bar">
-        <Button size="sm" variant="ghost" icon={<ArrowLeft size={14} aria-hidden="true" />} onClick={clearCurrentLesson} title="Back to all tracks">
+        <Button size="sm" variant="ghost" icon={<ArrowLeft size={14} aria-hidden="true" />} onClick={leaveToTracks} title="Back to all tracks">
           Tracks
         </Button>
 
@@ -138,7 +163,7 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
             </Badge>
             <span>~{lesson.estimatedMinutes} min</span>
           </div>
-          <h1 className="lesson__title">{lesson.title}</h1>
+          <h1 ref={titleRef} tabIndex={-1} className="lesson__title">{lesson.title}</h1>
           <p className="lesson__lede">{lesson.description}</p>
         </header>
 
@@ -148,15 +173,24 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
           </div>
         ))}
 
-        {nextLesson && (
-          <div className="lesson__next">
-            <div>
-              <div className="lesson__next-kicker">Up next</div>
-              <div className="lesson__next-title">{nextLesson.title}</div>
+        {(nextLesson || isCompleted) && (
+          <div className={isCompleted ? 'lesson__next lesson__next--done' : 'lesson__next'} data-complete={isCompleted}>
+            <div className="lesson__next-text">
+              <div className="lesson__next-kicker">
+                {isCompleted ? (
+                  <>
+                    <CheckCircle className="lesson__next-check" size={14} aria-hidden="true" />
+                    Lesson complete · {completedInTrack} of {lessons.length}
+                  </>
+                ) : 'Up next'}
+              </div>
+              {nextLesson && <div className="lesson__next-title">{isCompleted ? `Up next: ${nextLesson.title}` : nextLesson.title}</div>}
             </div>
-            <Button variant="primary" size="lg" onClick={() => setCurrentLesson(trackId, nextLesson.id)}>
-              Next Lesson <ChevronRight size={16} aria-hidden="true" />
-            </Button>
+            {nextLesson && (
+              <Button variant="primary" size="lg" onClick={() => setCurrentLesson(trackId, nextLesson.id)}>
+                Next lesson <ChevronRight size={16} aria-hidden="true" />
+              </Button>
+            )}
           </div>
         )}
       </div>

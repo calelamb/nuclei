@@ -1,5 +1,4 @@
-import { useCallback, useMemo, useState, type KeyboardEvent } from 'react';
-import { arrowNavTarget } from '../../lib/arrowNav';
+import { useCallback, useMemo, useState } from 'react';
 import { Check, Loader, Play, SearchCode, X } from 'lucide-react';
 import { useChallengeModeStore } from '../../stores/challengeModeStore';
 import {
@@ -26,7 +25,7 @@ import type {
   TestCaseResult,
 } from '../../types/challenge';
 import type { CircuitSnapshot } from '../../types/quantum';
-import { Button, Select } from '../ui';
+import { Button, Select, Tabs } from '../ui';
 import './challenges.css';
 
 interface TestRunnerProps {
@@ -38,13 +37,13 @@ function formatVerdict(verdict: SubmissionStatus) {
     case 'accepted':
       return 'Accepted';
     case 'wrong_answer':
-      return 'Wrong Answer';
+      return 'Wrong answer';
     case 'runtime_error':
-      return 'Runtime Error';
+      return 'Runtime error';
     case 'compile_error':
-      return 'Compile Error';
+      return 'Compile error';
     case 'time_limit_exceeded':
-      return 'Time Limit Exceeded';
+      return 'Time limit exceeded';
     case 'running':
       return 'Running';
     default:
@@ -77,6 +76,8 @@ export function TestRunner({ challenge }: TestRunnerProps) {
   const setInspection = useChallengeModeStore((s) => s.setInspection);
   const setInspectionView = useChallengeModeStore((s) => s.setInspectionView);
   const [activeBottomTab, setActiveBottomTab] = useState<'tests' | 'inspection'>('tests');
+  // The verdict pill is reserved for Submit; a visible-test run only reports pass counts.
+  const [lastRunWasSubmit, setLastRunWasSubmit] = useState(false);
   // Efficiency report from the most recent accepted submission — surfaced as a
   // LeetCode-style performance panel above the test rows.
   const [perfReport, setPerfReport] = useState<EfficiencyReport | null>(null);
@@ -129,6 +130,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
     setUnsupportedMessage(null);
     setRunning(true);
     setActiveBottomTab('tests');
+    setLastRunWasSubmit(submit);
 
     const casesToRun = submit ? challenge.testCases : visibleTests;
     const capturedMetrics: CircuitMetrics[] = [];
@@ -290,24 +292,17 @@ export function TestRunner({ challenge }: TestRunnerProps) {
     );
   };
 
-  const tabs: ReadonlyArray<{ key: 'tests' | 'inspection'; label: string }> = [
-    { key: 'tests', label: 'Test Results' },
-    { key: 'inspection', label: isValueContract ? 'Return Output' : 'Quantum Output' },
+  const tabs: ReadonlyArray<{ value: 'tests' | 'inspection'; label: string }> = [
+    { value: 'tests', label: 'Test cases' },
+    { value: 'inspection', label: isValueContract ? 'Return output' : 'Quantum output' },
   ];
-
-  const handleTabKeys = (event: KeyboardEvent<HTMLDivElement>) => {
-    const target = arrowNavTarget(event.key, tabs.findIndex((t) => t.key === activeBottomTab), tabs.length);
-    if (target === null) return;
-    event.preventDefault();
-    setActiveBottomTab(tabs[target].key);
-    event.currentTarget.querySelector<HTMLElement>(`#trun-tab-${tabs[target].key}`)?.focus();
-  };
+  const passedCount = currentTestResults.filter((result) => result.passed).length;
 
   return (
     <div className="trun">
       <div className="trun__bar">
         <Button size="lg" icon={<Play size={12} aria-hidden="true" />} disabled={isRunning} onClick={() => handleRun(false)}>
-          Run Visible Tests
+          Run visible tests
         </Button>
         <Button size="lg" variant="primary" icon={<Check size={12} aria-hidden="true" />} disabled={isRunning} onClick={() => handleRun(true)}>
           Submit
@@ -325,38 +320,36 @@ export function TestRunner({ challenge }: TestRunnerProps) {
             ))}
           </Select>
           <Button size="lg" icon={<SearchCode size={12} aria-hidden="true" />} disabled={isRunning || !inspectionCaseId} onClick={handleInspect}>
-            {isValueContract ? 'Inspect Return Value' : 'Inspect Quantum Output'}
+            {isValueContract ? 'Inspect return value' : 'Inspect quantum output'}
           </Button>
         </div>
 
         {overallVerdict && !isRunning && !desktopOnly && (
           <div className="trun__verdict" role="status">
-            <span className="trun__badge" style={{ ['--verdict-color' as string]: verdictColor }}>
-              {overallVerdict === 'accepted' ? <Check size={12} aria-hidden="true" /> : <X size={12} aria-hidden="true" />}
-              {formatVerdict(overallVerdict)}
-            </span>
-            {totalScore !== null && <span className="trun__score">Score: {totalScore}%</span>}
+            {lastRunWasSubmit ? (
+              <>
+                <span className="trun__badge" style={{ ['--verdict-color' as string]: verdictColor }}>
+                  {overallVerdict === 'accepted' ? <Check size={12} aria-hidden="true" /> : <X size={12} aria-hidden="true" />}
+                  {formatVerdict(overallVerdict)}
+                </span>
+                {totalScore !== null && <span className="trun__score">Score: {totalScore}%</span>}
+              </>
+            ) : (
+              <span className="trun__score">{passedCount} of {currentTestResults.length} visible cases passed</span>
+            )}
           </div>
         )}
       </div>
 
-      <div className="trun__tabs" role="tablist" aria-label="Result view" onKeyDown={handleTabKeys}>
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            role="tab"
-            id={`trun-tab-${tab.key}`}
-            aria-selected={activeBottomTab === tab.key}
-            aria-controls="trun-panel"
-            tabIndex={activeBottomTab === tab.key ? 0 : -1}
-            className="trun__tab"
-            onClick={() => setActiveBottomTab(tab.key)}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        className="trun__tabs"
+        aria-label="Result view"
+        idBase="trun-tab"
+        panelId="trun-panel"
+        value={activeBottomTab}
+        options={tabs}
+        onChange={setActiveBottomTab}
+      />
 
       <div className="trun__body" id="trun-panel" role="tabpanel" aria-labelledby={`trun-tab-${activeBottomTab}`}>
         {activeBottomTab === 'inspection' ? (

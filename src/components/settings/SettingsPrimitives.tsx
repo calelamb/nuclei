@@ -73,7 +73,7 @@ export function Section({ id, title, defaultOpen = false, children }: {
         <Icon size={12} />
         <span style={{
           fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
-          letterSpacing: 0.5, fontFamily: TYPOGRAPHY.fontSans,
+          letterSpacing: '0.04em', fontFamily: TYPOGRAPHY.fontSans,
         }}>
           {title}
         </span>

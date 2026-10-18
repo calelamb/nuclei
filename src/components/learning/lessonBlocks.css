@@ -39,7 +39,7 @@
 .video__poster:hover .video__veil { background: rgba(0, 0, 0, 0.35); }
 .video__disc { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; background: rgba(0, 0, 0, 0.7); color: #fff; box-shadow: var(--shadow-md); transition: transform var(--duration-fast) var(--ease-standard); }
 .video__poster:hover .video__disc { transform: scale(1.08); }
-.video__disc--soon { background: color-mix(in srgb, var(--color-accent-quantum) 14%, transparent); color: var(--color-accent-quantum); box-shadow: none; }
+.video__disc--soon { background: color-mix(in srgb, var(--color-accent-quantum) 14%, transparent); color: var(--color-accent-quantum-text); box-shadow: none; }
 .video__soon { font-size: var(--font-size-body); color: var(--color-text-secondary); }
 .video__badge { position: absolute; top: var(--space-2); right: var(--space-2); padding: 2px var(--space-2); border-radius: var(--radius-xs); background: rgba(0, 0, 0, 0.75); color: #fff; font-size: var(--font-size-caption); font-weight: var(--font-weight-medium); }
 .video__meta { padding: var(--space-3) var(--space-4); }
@@ -48,7 +48,7 @@
 .video__source { flex-shrink: 0; padding: 2px var(--space-2); border-radius: var(--radius-xs); background: var(--color-surface-overlay); color: var(--color-text-secondary); font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); }
 .video__creator { margin-top: var(--space-0); font-size: var(--font-size-chrome-label); color: var(--color-text-secondary); }
 .video__chapters { display: flex; flex-direction: column; gap: var(--space-0); margin-top: var(--space-2); }
-.video__chapters-label { margin-bottom: var(--space-0); font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); letter-spacing: 0.5px; text-transform: uppercase; color: var(--color-text-secondary); }
+.video__chapters-label { margin-bottom: var(--space-0); font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-text-secondary); }
 .video__chapter { display: flex; align-items: center; gap: var(--space-2); width: 100%; padding: var(--space-1) var(--space-2); text-align: left; cursor: pointer; border: none; border-radius: var(--radius-xs); background: transparent; transition: background-color var(--duration-fast) var(--ease-standard); }
 .video__chapter:hover { background: var(--color-surface-overlay); }
 .video__chapter-time { min-width: 32px; font: var(--font-weight-medium) var(--font-size-caption) var(--font-mono); color: var(--color-accent-quantum-text); }

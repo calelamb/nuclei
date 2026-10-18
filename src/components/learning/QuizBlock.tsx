@@ -77,7 +77,7 @@ export function QuizBlock({ questions }: QuizBlockProps) {
             {chosen !== null && !solved && (
               <div className="quiz__feedback quiz__feedback--wrong" role="status">
                 <span>Not quite. Try again!</span>
-                <Button size="sm" variant="danger" onClick={() => retry(q.id)}>Try Again</Button>
+                <Button size="sm" variant="danger" onClick={() => retry(q.id)}>Try again</Button>
               </div>
             )}
 

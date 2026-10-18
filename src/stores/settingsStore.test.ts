@@ -87,3 +87,28 @@ describe('settingsStore — agentHardware', () => {
     expect(useSettingsStore.getState().agentHardware).toEqual(DEFAULT_AGENT_HARDWARE);
   });
 });
+
+describe('settingsStore — rendered General rows have consumers', () => {
+  it('every general.* key shown in SettingsPanel is read somewhere outside the store and panel', async () => {
+    const { readdirSync, readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const walk = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const p = join(dir, e.name);
+      if (e.isDirectory()) return walk(p);
+      return /\.(tsx?)$/.test(e.name) && !/\.test\./.test(e.name) ? [p] : [];
+    });
+    const src = join(process.cwd(), 'src');
+    const panel = readFileSync(join(src, 'components/settings/SettingsPanel.tsx'), 'utf8');
+    const rendered = Array.from(panel.matchAll(/general\.(\w+)/g)).map((m) => m[1]);
+    const others = walk(src)
+      .filter((p) => !/settingsStore\.ts$|SettingsPanel\.tsx$|motionPreference\.ts$/.test(p))
+      .map((p) => readFileSync(p, 'utf8'))
+      .join('\n');
+    // animationsEnabled is consumed inside the store itself (applyMotionPreference), covered by its own test.
+    const dead = [...new Set(rendered)]
+      .filter((k) => k !== 'animationsEnabled')
+      .filter((k) => !new RegExp(`\\b${k}\\b`).test(others));
+    expect(dead).toEqual([]);
+    expect(readFileSync(join(src, 'stores/settingsStore.ts'), 'utf8')).toContain('applyMotionPreference(get().general.animationsEnabled)');
+  });
+});

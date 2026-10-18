@@ -15,7 +15,7 @@ const DIFFICULTIES: ReadonlyArray<SegmentedOption<'all' | ChallengeDifficulty>> 
 
 const CATEGORIES: ReadonlyArray<SegmentedOption<'all' | ChallengeCategory>> = [
   { value: 'all', label: 'All' },
-  { value: 'state-preparation', label: 'State Prep' },
+  { value: 'state-preparation', label: 'State prep' },
   { value: 'algorithms', label: 'Algorithms' },
   { value: 'optimization', label: 'Optimization' },
   { value: 'protocols', label: 'Protocols' },
@@ -23,7 +23,7 @@ const CATEGORIES: ReadonlyArray<SegmentedOption<'all' | ChallengeCategory>> = [
 
 const STATUS_OPTIONS: ReadonlyArray<SegmentedOption<StatusFilter>> = [
   { value: 'all', label: 'All' },
-  { value: 'not_started', label: 'Not Started' },
+  { value: 'not_started', label: 'Not started' },
   { value: 'attempted', label: 'Attempted' },
   { value: 'solved', label: 'Solved' },
 ];

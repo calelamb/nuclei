@@ -1,13 +1,13 @@
-import { Select } from '../ui';
+import { EmptyState, Select } from '../ui';
 import { useRef } from 'react';
-import { Search } from 'lucide-react';
+import { Search, Share2 } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useCommunityStore } from '../../stores/communityStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { CircuitCard } from './CircuitCard';
 import { CircuitDetail } from './CircuitDetail';
 
-import { TYPOGRAPHY } from '../../styles/tokens';
+import { ICON_SIZE, ICON_STROKE, TYPOGRAPHY } from '../../styles/tokens';
 const CATEGORIES: { value: string | null; label: string }[] = [
   { value: null, label: 'All' },
   { value: 'tutorial', label: 'Tutorials' },
@@ -165,17 +165,10 @@ export function CircuitGallery() {
           />
         ))}
         {filtered.length === 0 && (
-          <div
-            style={{
-              gridColumn: '1 / -1',
-              textAlign: 'center',
-              padding: 24,
-              color: colors.textDim,
-              fontSize: 12,
-              fontFamily: TYPOGRAPHY.fontSans,
-            }}
-          >
-            No community circuits shared yet — publishing isn't live yet.
+          <div style={{ gridColumn: '1 / -1' }}>
+            <EmptyState icon={<Share2 size={ICON_SIZE.lg} strokeWidth={ICON_STROKE} />} title="No shared circuits yet">
+              Publishing to the community gallery is not live yet. Circuits you share will appear here.
+            </EmptyState>
           </div>
         )}
       </div>

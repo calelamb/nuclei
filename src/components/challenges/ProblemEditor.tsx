@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import Editor from '@monaco-editor/react';
 import { Braces } from 'lucide-react';
+import { Badge } from '../ui';
 import { useThemeStore } from '../../stores/themeStore';
 import { registerNucleiThemes } from '../editor/monacoThemes';
 import { useChallengeModeStore } from '../../stores/challengeModeStore';
@@ -22,7 +23,6 @@ function buildSignature(challenge: QuantumChallenge) {
 
 export function ProblemEditor({ challenge }: ProblemEditorProps) {
   const colors = useThemeStore((s) => s.colors);
-  const shadow = useThemeStore((s) => s.shadow);
   const mode = useThemeStore((s) => s.mode);
   const activeFramework = useChallengeModeStore((s) => s.activeFramework);
   const updateDraftCode = useChallengeModeStore((s) => s.updateDraftCode);
@@ -31,6 +31,7 @@ export function ProblemEditor({ challenge }: ProblemEditorProps) {
   const savedCode = progress[challenge.id]?.currentCode[activeFramework];
   const editorValue = savedCode || challenge.starter_template || challenge.starterCode[activeFramework] || '';
   const isValueContract = challenge.contract_kind === 'returns_value';
+  const frameworkLabel = (challenge.default_framework ?? 'qiskit').replace(/^./, (c) => c.toUpperCase());
 
   const handleChange = useCallback((value: string | undefined) => {
     if (value !== undefined) {
@@ -63,7 +64,7 @@ export function ProblemEditor({ challenge }: ProblemEditorProps) {
             fontFamily: TYPOGRAPHY.fontSans,
             marginBottom: 4,
           }}>
-            Function Contract
+            Function contract
           </div>
           <div style={{
             display: 'flex',
@@ -86,15 +87,7 @@ export function ProblemEditor({ challenge }: ProblemEditorProps) {
           fontSize: 11,
           fontFamily: TYPOGRAPHY.fontSans,
         }}>
-          <span style={{
-            padding: '3px 8px',
-            borderRadius: 999,
-            background: `${colors.accent}18`,
-            color: colors.accentText,
-            boxShadow: shadow.sm,
-          }}>
-            {isValueContract ? 'PYTHON VALUE' : (challenge.default_framework?.toUpperCase() ?? 'QISKIT')}
-          </span>
+          <Badge tone="accent">{isValueContract ? 'Python value' : frameworkLabel}</Badge>
           <span>
             {isValueContract
               ? 'Return a JSON-serializable value. The harness injects test inputs.'

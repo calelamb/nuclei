@@ -2,14 +2,13 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { LessonCodeEditor } from './LessonCodeEditor';
 import { useLearnStore } from '../../stores/learnStore';
 import { useDiracPanelStore } from '../../stores/diracPanelStore';
-import { usePlatform } from '../../platform/PlatformProvider';
-import { KERNEL_WS_URL } from '../../config/kernel';
-import { openAuthenticatedKernelSocket } from '../../services/kernelSocket';
 import type { Framework, SimulationResult, KernelResponse } from '../../types/quantum';
-import { Play, Lightbulb, CheckCircle, XCircle, HelpCircle, Terminal } from 'lucide-react';
+import { Lightbulb, CheckCircle, XCircle, HelpCircle, Terminal } from 'lucide-react';
 import { hasExpectedDistribution, isQuantumCode, shouldAutoGrade, validateExerciseResult } from './exerciseValidation';
 import { UnsupportedNotice } from './UnsupportedNotice';
 import { OutcomeResults } from './OutcomeResults';
+import { useLessonKernel } from './useLessonKernel';
+import { LessonRunButton } from './LessonRunButton';
 import { Button } from '../ui';
 import '../dirac/dirac.css';
 import './demo.css';
@@ -36,8 +35,6 @@ export function ExerciseBlock({
   const addHintUsed = useLearnStore((s) => s.addHintUsed);
   const lessonProgress = useLearnStore((s) => s.lessonProgress);
   const openDirac = useDiracPanelStore((s) => s.open);
-  const platform = usePlatform();
-  const isWeb = platform.getPlatform() === 'web';
 
   const isPassed = lessonId ? lessonProgress[lessonId]?.exercisesPassed?.includes(id) ?? false : false;
 
@@ -51,9 +48,6 @@ export function ExerciseBlock({
   const [hintsRevealed, setHintsRevealed] = useState(0);
   const [showDiracPrompt, setShowDiracPrompt] = useState(false);
 
-  const wsRef = useRef<WebSocket | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const pyodideRef = useRef<any>(null);
   const inactivityRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const codeRef = useRef(starterCode);
   const hasExpectations = hasExpectedDistribution(expectedProbabilities)
@@ -98,7 +92,7 @@ export function ExerciseBlock({
       setError(null);
       if (msg.data) {
         if (hasExpectations) {
-          // An untouched starter is shown, not graded; Check Solution grades it.
+          // An untouched starter is shown, not graded; Check solution grades it.
           if (shouldAutoGrade(codeRef.current, starterCode)) checkSolution(msg.data);
         } else {
           completeExercise(successMessage);
@@ -130,58 +124,28 @@ export function ExerciseBlock({
     }
   }, [checkSolution, completeExercise, hasExpectations, starterCode, successMessage]);
 
-  useEffect(() => {
-    if (isWeb) {
-      import('../../platform/pyodideKernel').then(({ PyodideKernel }) => {
-        const k = new PyodideKernel((msg) => handleMessage(msg as KernelResponse));
-        k.init().then(
-          () => { pyodideRef.current = k; },
-          (e: unknown) => setError(e instanceof Error ? e.message : String(e)),
-        );
-      });
-      return;
-    }
-    let ws: WebSocket | null = null;
-    let cancelled = false;
-    let retries = 0;
-    function connect() {
-      void openAuthenticatedKernelSocket(
-        KERNEL_WS_URL,
-        platform.getKernelAuthToken?.bind(platform),
-      ).then((socket) => {
-        if (cancelled) { socket.close(); return; }
-        ws = socket;
-        attach(socket);
-      });
-    }
-    function attach(ws: WebSocket) {
-      ws.onopen = () => { wsRef.current = ws; retries = 0; };
-      ws.onmessage = (ev) => {
-        try { handleMessage(JSON.parse(ev.data)); } catch { /* noop */ }
-      };
-      ws.onclose = () => {
-        wsRef.current = null;
-        if (retries < 3) { retries++; setTimeout(connect, 1000 * retries); }
-      };
-      ws.onerror = () => ws?.close();
-    }
-    connect();
-    return () => { cancelled = true; ws?.close(); };
-  }, [handleMessage, isWeb, platform]);
+  const kernel = useLessonKernel({
+    onMessage: handleMessage,
+    onInitError: (message) => { setError(message); setIsRunning(false); },
+  });
+  const { send: kernelSend } = kernel;
 
   // Inactivity timer for "Need help?" prompt
-  const resetInactivity = useCallback(() => {
-    setShowDiracPrompt(false);
+  const armInactivityTimer = useCallback(() => {
     if (inactivityRef.current) clearTimeout(inactivityRef.current);
     if (!isPassed) {
       inactivityRef.current = setTimeout(() => setShowDiracPrompt(true), 120_000);
     }
   }, [isPassed]);
+  const resetInactivity = useCallback(() => {
+    setShowDiracPrompt(false);
+    armInactivityTimer();
+  }, [armInactivityTimer]);
 
   useEffect(() => {
-    resetInactivity();
+    armInactivityTimer();
     return () => { if (inactivityRef.current) clearTimeout(inactivityRef.current); };
-  }, [resetInactivity]);
+  }, [armInactivityTimer]);
 
   const handleCodeChange = (value: string | undefined) => {
     codeRef.current = value ?? '';
@@ -203,14 +167,18 @@ export function ExerciseBlock({
       ? { type: 'execute' as const, code: localCode, shots: 1024, language: 'python' as const }
       : { type: 'run_python' as const, code: localCode };
 
-    if (isWeb && pyodideRef.current) {
-      pyodideRef.current.send(message);
-    } else if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(message));
-    } else {
-      setError('Kernel not connected');
-      setIsRunning(false);
-    }
+    kernelSend(message).then(
+      (sent) => {
+        if (!sent) {
+          setError(kernel.unavailableMessage());
+          setIsRunning(false);
+        }
+      },
+      (e: unknown) => {
+        setError(e instanceof Error ? e.message : String(e));
+        setIsRunning(false);
+      },
+    );
   };
 
   const revealHint = () => {
@@ -241,11 +209,9 @@ export function ExerciseBlock({
       </div>
 
       <div className="demo__actions demo__actions--divided">
-        <Button variant="primary" onClick={handleRun} loading={isRunning} icon={<Play size={12} fill="currentColor" aria-hidden="true" />}>
-          {isRunning ? 'Running...' : 'Run'}
-        </Button>
+        <LessonRunButton isRunning={isRunning} pythonLoading={kernel.loading} stage={kernel.stage} onRun={handleRun} />
         {result && hasExpectations && (
-          <Button onClick={() => checkSolution(result)} icon={<CheckCircle size={12} aria-hidden="true" />}>Check Solution</Button>
+          <Button onClick={() => checkSolution(result)} icon={<CheckCircle size={12} aria-hidden="true" />}>Check solution</Button>
         )}
         {feedback?.success && !hasExpectations && (
           <span className="exercise__ok"><CheckCircle size={12} aria-hidden="true" /> Code ran successfully. Explore the output above.</span>
@@ -253,7 +219,7 @@ export function ExerciseBlock({
         <span className="demo__spacer" />
         {hintsRevealed < hints.length && (
           <Button onClick={revealHint} icon={<Lightbulb size={12} aria-hidden="true" />}>
-            Show Hint ({hintsRevealed}/{hints.length})
+            Show hint ({hintsRevealed}/{hints.length})
           </Button>
         )}
       </div>

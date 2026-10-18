@@ -365,7 +365,7 @@ function SectionHeader({ label }: { label: string }) {
         fontSize: 11,
         fontWeight: 600,
         textTransform: 'uppercase',
-        letterSpacing: 0.5,
+        letterSpacing: '0.04em',
         color: colors.textDim,
         margin: '6px 0 4px',
       }}
@@ -424,7 +424,7 @@ function FrameworkRow({
                 background: `${colors.success}18`,
                 padding: '2px 6px',
                 borderRadius: 4,
-                letterSpacing: 0.5,
+                letterSpacing: '0.04em',
                 textTransform: 'uppercase',
               }}
             >
@@ -440,7 +440,7 @@ function FrameworkRow({
                 background: `${colors.accent}18`,
                 padding: '2px 6px',
                 borderRadius: 4,
-                letterSpacing: 0.5,
+                letterSpacing: '0.04em',
                 textTransform: 'uppercase',
               }}
             >

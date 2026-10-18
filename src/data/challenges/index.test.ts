@@ -86,4 +86,10 @@ describe('challenge catalog normalization', () => {
       expect(challenge.starter_template).not.toContain('return qc');
     }
   });
+
+  it('never starts a starter template with blank lines (value contracts have no imports)', () => {
+    for (const challenge of QUANTUM_CHALLENGES) {
+      expect(challenge.starter_template?.startsWith('\n'), challenge.id).toBe(false);
+    }
+  });
 });

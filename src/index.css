@@ -39,6 +39,12 @@ button, input, select, textarea {
   color: inherit;
 }
 
+/* ── Icons: one stroke weight everywhere. CSS beats lucide's strokeWidth attribute, so per-icon props
+   cannot drift; intentional exceptions opt in with .nuclei-icon--thin / .nuclei-icon--bold (check and cross marks) (mirrors ICON_STROKE in tokens.ts). ── */
+.lucide { stroke-width: 1.75; }
+.lucide.nuclei-icon--thin { stroke-width: 1.25; }
+.lucide.nuclei-icon--bold { stroke-width: 2.5; }
+
 /* ── Accessibility: one focus ring for the whole app (see --focus-ring in tokens.css) ── */
 :focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring-color);
@@ -49,13 +55,20 @@ button:focus:not(:focus-visible) {
   outline: none;
 }
 
-/* ── Reduced motion: disable all animations ── */
+/* ── Reduced motion: disable all animations (OS preference or Settings › Animations off) ── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+:root[data-reduced-motion='true'] *,
+:root[data-reduced-motion='true'] *::before,
+:root[data-reduced-motion='true'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
 }
 
 /* ── Keyframes ── */

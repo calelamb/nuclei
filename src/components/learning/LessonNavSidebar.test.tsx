@@ -28,4 +28,11 @@ describe('LessonNavSidebar section links (LR-05)', () => {
     expect(useLearnSectionStore.getState().section).toBe('glossary');
     expect(useLearnStore.getState().currentLessonId).toBeNull();
   });
+
+  it('remembers the lesson and reading position it was parked at', () => {
+    useLearnStore.setState({ currentBlockIndex: 3 });
+    render(<LessonNavSidebar collapsed={false} onToggleCollapsed={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Glossary' }));
+    expect(useLearnSectionStore.getState().returnTo).toEqual({ trackId: track.id, lessonId: track.lessons[0].id, blockIndex: 3 });
+  });
 });

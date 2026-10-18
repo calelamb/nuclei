@@ -50,3 +50,11 @@ describe('shortcuts sheet', () => {
     expect(rows).toContain('Toggle theme');
   });
 });
+
+describe('shortcuts sheet focus', () => {
+  it('does not autofocus the close button on open', () => {
+    render(<KeyboardShortcuts onClose={() => {}} />);
+    expect(document.activeElement).not.toBe(screen.getByRole('button', { name: 'Close shortcuts' }));
+    expect(document.activeElement).toBe(screen.getByRole('dialog', { name: 'Keyboard shortcuts' }));
+  });
+});

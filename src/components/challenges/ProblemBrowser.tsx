@@ -8,7 +8,7 @@ import {
 } from '../../stores/challengeModeStore';
 import { QUANTUM_CHALLENGES } from '../../data/challenges';
 import { ProblemFilters } from './ProblemFilters';
-import { Badge } from '../ui';
+import { Badge, Tabs } from '../ui';
 import { DIFFICULTY_TONE } from './difficultyTone';
 import type {
   ChallengeCategory,
@@ -19,14 +19,14 @@ import type {
 import './challenges.css';
 
 const CATEGORY_LABELS: Record<ChallengeCategory, string> = {
-  'state-preparation': 'State Prep',
+  'state-preparation': 'State prep',
   algorithms: 'Algorithms',
   optimization: 'Optimization',
   protocols: 'Protocols',
 };
 
 const STATUS_LABELS: Record<ProblemStatus, string> = {
-  not_started: 'Not Started',
+  not_started: 'Not started',
   attempted: 'Attempted',
   solved: 'Solved',
 };
@@ -37,36 +37,15 @@ const PRACTICE_TABS: Array<{
   detail: string;
   icon: typeof ListChecks;
 }> = [
-  { value: 'all', label: 'All Practice', detail: 'Circuit builders and protocol drills', icon: ListChecks },
-  { value: 'qkd', label: 'QKD Protocols', detail: 'BB84, QBER, intercept-resend, E91', icon: ShieldCheck },
+  { value: 'all', label: 'All practice', detail: 'Circuit builders and protocol drills', icon: ListChecks },
+  { value: 'qkd', label: 'QKD protocols', detail: 'BB84, QBER, intercept-resend, E91', icon: ShieldCheck },
 ];
-
-function PracticeTabButton({ active, tab, count, onClick }: {
-  active: boolean;
-  tab: (typeof PRACTICE_TABS)[number];
-  count: number;
-  onClick: () => void;
-}) {
-  const Icon = tab.icon;
-  return (
-    <button type="button" role="tab" aria-selected={active} className="ptab" onClick={onClick}>
-      <span className="ptab__icon"><Icon size={16} aria-hidden="true" /></span>
-      <span className="ptab__text">
-        <span className="ptab__label">{tab.label}</span>
-        <span className="ptab__detail">{tab.detail}</span>
-      </span>
-      <span className="ptab__count">{count}</span>
-    </button>
-  );
-}
 
 function StatusCell({ status, optimal }: { status: ProblemStatus; optimal?: boolean }) {
   return (
     <div className="prow__status" data-status={status} title={STATUS_LABELS[status]}>
       {status === 'solved' ? <CheckCircle2 size={14} aria-hidden="true" /> : <Circle size={14} aria-hidden="true" fill={status === 'attempted' ? 'currentColor' : 'none'} stroke={status === 'attempted' ? 'none' : 'currentColor'} />}
-      {status === 'not_started'
-        ? <span className="prow__sr">{STATUS_LABELS[status]}</span>
-        : <span>{STATUS_LABELS[status]}</span>}
+      <span className="prow__sr">{STATUS_LABELS[status]}</span>
       {status === 'solved' && optimal && <Star size={12} fill="currentColor" strokeWidth={0} aria-label="Solved optimally" />}
     </div>
   );
@@ -82,7 +61,7 @@ function ProblemRow({ challenge, progress, onClick }: {
   const bestScore = progress?.bestScore ?? 0;
 
   return (
-    <button type="button" className="prow prow-grid" onClick={onClick}>
+    <button type="button" className="prow prow-grid" onClick={onClick} aria-label={`${challenge.title}, ${STATUS_LABELS[status].toLowerCase()}`}>
       <StatusCell status={status} optimal={progress?.solvedOptimally} />
 
       <div className="prow__main">
@@ -132,29 +111,34 @@ export function ProblemBrowser() {
 
   return (
     <div className="pbrowse">
-      <div className="pbrowse__tabs" role="tablist" aria-label="Practice track">
-        {PRACTICE_TABS.map((tab) => (
-          <PracticeTabButton
-            key={tab.value}
-            tab={tab}
-            active={practiceTab === tab.value}
-            count={tab.value === 'qkd' ? qkdCount : challenges.length}
-            onClick={() => setPracticeTab(tab.value)}
-          />
-        ))}
-      </div>
+      <Tabs
+        className="pbrowse__tabs"
+        aria-label="Practice track"
+        value={practiceTab}
+        onChange={setPracticeTab}
+        options={PRACTICE_TABS.map((tab) => {
+          const Icon = tab.icon;
+          return {
+            value: tab.value,
+            label: tab.label,
+            icon: <Icon size={14} aria-hidden="true" />,
+            count: tab.value === 'qkd' ? qkdCount : challenges.length,
+            title: tab.detail,
+          };
+        })}
+      />
 
       <ProblemFilters />
 
       <div className="pbrowse__head">
-        <h2 className="pbrowse__title">{isQkdTab ? 'QKD Protocol Practice' : 'Quantum Problem Set'}</h2>
+        <h2 className="pbrowse__title">{isQkdTab ? 'QKD protocol practice' : 'Quantum problem set'}</h2>
         {isQkdTab && <p className="pbrowse__lede">Practice the classical post-processing and security checks behind QKD.</p>}
         <div className="pbrowse__stats">
           <span>{filtered.length} visible problems</span>
           <span>{solvedCount} solved</span>
           <span>{isQkdTab ? 'Browser + desktop Python value contracts' : 'Qiskit-first function contracts'}</span>
           <span>
-            Run Visible Tests <ArrowRight size={12} aria-hidden="true" /> Submit <ArrowRight size={12} aria-hidden="true" /> {isQkdTab ? 'Inspect Return Value' : 'Inspect Quantum Output'}
+            Run visible tests <ArrowRight size={12} aria-hidden="true" /> Submit <ArrowRight size={12} aria-hidden="true" /> {isQkdTab ? 'Inspect return value' : 'Inspect quantum output'}
           </span>
         </div>
       </div>
@@ -165,11 +149,11 @@ export function ProblemBrowser() {
         ) : (
           <div className="pbrowse__table">
             <div className="pbrowse__cols prow-grid">
-              <span>Status</span>
+              <span aria-hidden="true" />
               <span>Title</span>
               <span>Difficulty</span>
               <span>Category</span>
-              <span>Attempts / Best</span>
+              <span>Attempts and best</span>
             </div>
             {filtered.map((challenge) => (
               <ProblemRow key={challenge.id} challenge={challenge} progress={progress[challenge.id]} onClick={() => setActiveProblem(challenge)} />

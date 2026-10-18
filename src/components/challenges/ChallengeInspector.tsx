@@ -5,16 +5,9 @@ import {
   type InspectionView,
 } from '../../stores/challengeModeStore';
 
+import { Tabs } from '../ui';
 import './challenges.css';
 import { TYPOGRAPHY } from '../../styles/tokens';
-function TabButton({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
-  return (
-    <button type="button" role="tab" aria-selected={active} className="trun__tab" onClick={onClick}>
-      {label}
-    </button>
-  );
-}
-
 export function ChallengeInspector() {
   const colors = useThemeStore((s) => s.colors);
   const inspection = useChallengeModeStore((s) => s.inspection);
@@ -63,16 +56,16 @@ export function ChallengeInspector() {
         background: colors.bgPanel,
         flexShrink: 0,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          {visibleViews.map((view) => (
-            <TabButton
-              key={view}
-              active={activeView === view}
-              label={view === 'bloch' ? 'Bloch' : view === 'output' && !hasQuantumOutput ? 'Return Output' : view[0].toUpperCase() + view.slice(1)}
-              onClick={() => setInspectionView(view)}
-            />
-          ))}
-        </div>
+        <Tabs
+          aria-label="Inspection view"
+          value={activeView}
+          onChange={setInspectionView}
+          options={visibleViews.map((view) => ({
+            value: view,
+            label: view === 'bloch' ? 'Bloch' : view === 'output' && !hasQuantumOutput ? 'Return output' : view[0].toUpperCase() + view.slice(1),
+          }))}
+          className="cinsp__tabs"
+        />
         <div style={{
           color: colors.textMuted,
           fontSize: 11,
