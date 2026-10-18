@@ -8,6 +8,7 @@ import { create } from 'zustand';
 import { labAvailability, openLabSession, LabUnavailableError, type LabPlatform } from '../services/lab/labSession';
 import {
   createTrainabilityClient,
+  newTrainabilityJobId,
   type JobEnd,
   type JobEvent,
   type JobHandle,
@@ -363,8 +364,9 @@ export const useTrainabilityStore = create<TrainabilityState>((set, get) => {
       }
 
       const nowMs = Date.now();
-      const placeholderId = `pending-${nowMs}`;
-      const record: Omit<TrainabilityJobRecord, 'id'> = {
+      const jobId = newTrainabilityJobId();
+      const record: TrainabilityJobRecord = {
+        id: jobId,
         status: 'starting',
         target: {
           fileName: fileNameOf(target.filePath),
@@ -386,22 +388,9 @@ export const useTrainabilityStore = create<TrainabilityState>((set, get) => {
         error: null,
         codeKey: codeKey(`${target.framework}\n${target.code}`),
       };
-
-      let jobId = placeholderId;
-      const handle = client.start(
-        {
-          code: target.code,
-          language: kernelLanguageFor(target.framework, target.filePath),
-          observable: state.observable,
-          analyses,
-          settings,
-        },
-        (event) => patchJob(jobId, (job) => applyEvent(job, event)),
-      );
-      jobId = handle.jobId;
-      handles.set(jobId, handle);
+      // Register the job before the first message flies so no event can race it.
       set((s) => {
-        const trimmed = trimJobs({ ...s.jobs, [jobId]: { ...record, id: jobId } }, [jobId, ...s.jobOrder]);
+        const trimmed = trimJobs({ ...s.jobs, [jobId]: record }, [jobId, ...s.jobOrder]);
         return {
           jobs: trimmed.jobs,
           jobOrder: trimmed.order,
@@ -411,6 +400,19 @@ export const useTrainabilityStore = create<TrainabilityState>((set, get) => {
           observableError: null,
         };
       });
+
+      const handle = client.start(
+        {
+          jobId,
+          code: target.code,
+          language: kernelLanguageFor(target.framework, target.filePath),
+          observable: state.observable,
+          analyses,
+          settings,
+        },
+        (event) => patchJob(jobId, (job) => applyEvent(job, event)),
+      );
+      handles.set(jobId, handle);
 
       void handle.done.then((end) => {
         handles.delete(handle.jobId);

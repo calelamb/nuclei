@@ -47,6 +47,8 @@ export interface LintInput extends CodeInput {
 }
 
 export interface StartInput extends CodeInput {
+  /** Caller-chosen id, so the caller can register the job before the first message flies. */
+  jobId?: string;
   observable: string;
   analyses: TrainabilityAnalysis[];
   settings?: TrainabilitySettings;
@@ -102,7 +104,7 @@ const DEFAULTS = {
   cancelTimeoutMs: 10_000,
 };
 
-function defaultJobId(): string {
+export function newTrainabilityJobId(): string {
   const c = globalThis.crypto;
   if (c && typeof c.randomUUID === 'function') return `trn-${c.randomUUID()}`;
   return `trn-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -141,7 +143,7 @@ function isTrainabilityResponse(message: KernelResponse): message is Trainabilit
 
 export function createTrainabilityClient(session: LabSession, options: ClientOptions = {}): TrainabilityClient {
   const opts = { ...DEFAULTS, ...options };
-  const newJobId = options.newJobId ?? defaultJobId;
+  const newJobId = options.newJobId ?? newTrainabilityJobId;
   // Serialize sync requests: no correlation id on the wire.
   let chain: Promise<unknown> = Promise.resolve();
   const enqueue = <T,>(task: () => Promise<T>): Promise<T> => {
@@ -194,7 +196,7 @@ export function createTrainabilityClient(session: LabSession, options: ClientOpt
     },
 
     start(input, onEvent) {
-      const jobId = newJobId();
+      const jobId = input.jobId ?? newJobId();
       let finished = false;
       let acked = false;
       let resolveDone: (end: JobEnd) => void = () => undefined;

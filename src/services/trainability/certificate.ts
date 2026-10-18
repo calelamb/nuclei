@@ -68,6 +68,12 @@ export function serializeCertificateJson(doc: TrainabilityCertificateJson): stri
   return `${JSON.stringify(doc, null, 2)}\n`;
 }
 
+const SIMULABILITY_LABEL = {
+  g_sim_feasible: 'classically simulable via 𝔤-sim',
+  exponential_dla: 'exponential DLA',
+  unknown: 'unknown',
+} as const;
+
 const sci = (v: number | null | undefined) => formatSci(v, 3);
 const cell = (text: string) => text.replace(/\|/g, '\\|');
 
@@ -83,7 +89,7 @@ function intervalLabel(method: string | undefined): string {
 
 function table(header: string[], rows: string[][]): string[] {
   return [
-    `| ${header.join(' | ')} |`,
+    `| ${header.map(cell).join(' | ')} |`,
     `| ${header.map(() => '---').join(' | ')} |`,
     ...rows.map((r) => `| ${r.map(cell).join(' | ')} |`),
   ];
@@ -246,7 +252,7 @@ export function renderCertificateMarkdown(input: CertificateInput): string {
       ? trainability.evidence.map((e) => `- [${e.level}] (${e.source}) ${e.text}`)
       : ['- No evidence yet: run the analyses.']),
     '',
-    `**Simulability: ${simulability.kind.replace(/_/g, ' ')}.** ${simulability.summary}`,
+    `**Simulability: ${SIMULABILITY_LABEL[simulability.kind]}.** ${simulability.summary}`,
     '',
     ...simulability.evidence.map((e) => `- ${e}`),
     `- ${simulability.caveat}`,
