@@ -84,7 +84,7 @@ def test_second_call_failure_reports_call_index():
     assert len(response["artifacts"]) == 0 or response["status"] == "error"
 
 
-@pytest.mark.parametrize("module", ["socket", "subprocess", "ctypes", "multiprocessing", "http.client", "urllib.request", "requests"])
+@pytest.mark.parametrize("module", ["socket", "subprocess", "ctypes", "multiprocessing", "http.client", "urllib.request", "requests", "_socket", "_posixsubprocess", "_ctypes"])
 def test_blocked_imports(module):
     response = run(f"import {module}\n" + GOOD)
     assert code(response) == "entry_raised"

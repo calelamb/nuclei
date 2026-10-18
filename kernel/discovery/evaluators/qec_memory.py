@@ -8,7 +8,7 @@ reports per-round logical error rates with Wilson-based 95% intervals.
 
 from __future__ import annotations
 
-import os
+import math
 import threading
 from typing import Any, Callable
 
@@ -23,8 +23,6 @@ from kernel.discovery.evaluators.qec_stats import (
     sample_logical_errors,
 )
 from kernel.discovery.noise import MODELS
-
-import math
 
 KIND = "qec_memory"
 VERSION = "1.0.0"

@@ -84,6 +84,18 @@ def evaluate(request: dict[str, Any]) -> dict[str, Any]:
     return core.to_dict()
 
 
+def _read_request(raw: bytes) -> dict[str, Any]:
+    if len(raw) > MAX_REQUEST_BYTES:
+        raise ValueError("request too large")
+    try:
+        request = json.loads(raw.decode("utf-8"))
+    except UnicodeDecodeError as exc:
+        raise ValueError(f"request is not UTF-8: {exc}") from exc
+    if not isinstance(request, dict) or request.get("protocol_version") != PROTOCOL_VERSION:
+        raise ValueError("unsupported request")
+    return request
+
+
 def main() -> int:
     out_fd = os.dup(1)
     devnull = os.open(os.devnull, os.O_RDWR)
@@ -91,19 +103,17 @@ def main() -> int:
     os.close(devnull)
     raw = sys.stdin.buffer.read(MAX_REQUEST_BYTES + 1)
     try:
-        if len(raw) > MAX_REQUEST_BYTES:
-            raise ValueError("request too large")
-        request = json.loads(raw.decode("utf-8"))
-        if not isinstance(request, dict) or request.get("protocol_version") != PROTOCOL_VERSION:
-            raise ValueError("unsupported request")
+        request = _read_request(raw)
         apply_worker_limits(WorkerLimits(cpu_seconds=clamp_cpu(request.get("cpu_seconds"))))
-        result = evaluate(request)
-    except (ValueError, UnicodeDecodeError) as exc:
+    except ValueError as exc:
         result = failed("protocol_error", str(exc))
-    except InterruptedError:
-        result = failed("cancelled", "Evaluation was cancelled.")
-    except BaseException as exc:  # noqa: BLE001 - always answer with a coded failure
-        result = failed("scorer_exception", f"{type(exc).__name__}: {exc}")
+    else:
+        try:
+            result = evaluate(request)
+        except InterruptedError:
+            result = failed("cancelled", "Evaluation was cancelled.")
+        except BaseException as exc:  # noqa: BLE001 - always answer with a coded failure
+            result = failed("scorer_exception", f"{type(exc).__name__}: {exc}")
     data = json.dumps({"protocol_version": PROTOCOL_VERSION, **result}, allow_nan=False, default=str).encode() + b"\n"
     view = memoryview(data)
     while view:

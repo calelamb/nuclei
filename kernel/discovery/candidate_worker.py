@@ -68,6 +68,12 @@ _BLOCKED_IMPORTS = (
     "webbrowser",
     "smtplib",
     "ftplib",
+    # C-level twins that would sidestep the blocks above.
+    "_socket",
+    "_ssl",
+    "_ctypes",
+    "_posixsubprocess",
+    "_multiprocessing",
 )
 _BLOCKED_OS_ATTRS = (
     "system", "popen", "fork", "forkpty", "posix_spawn", "posix_spawnp",

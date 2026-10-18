@@ -57,6 +57,13 @@ def kill_process_group(proc: subprocess.Popen) -> None:
             pass
 
 
+def _kill_child(proc: subprocess.Popen) -> None:
+    try:
+        proc.kill()
+    except (ProcessLookupError, OSError):
+        pass
+
+
 def python_command(script_path: str) -> list[str]:
     return [sys.executable, "-I", script_path]
 
@@ -68,12 +75,13 @@ def run_process(
     wall_seconds: float,
     cancel_event: threading.Event | None = None,
     env: dict[str, str] | None = None,
-    register=None,
+    own_group: bool = True,
 ) -> ProcResult:
-    """Run ``command`` feeding ``payload`` on stdin; kill the group on timeout/cancel.
+    """Run ``command`` feeding ``payload`` on stdin; kill it on timeout/cancel.
 
-    ``register`` (optional) is called with the Popen right after spawn so a
-    manager can kill the group from another thread.
+    ``own_group=True`` starts a new session and kills the whole process group.
+    ``own_group=False`` keeps the child in the caller's group (so killing the
+    caller's group also reaps it) and kills only the child itself.
     """
     if cancel_event is not None and cancel_event.is_set():
         return ProcResult(cancelled=True)
@@ -84,12 +92,10 @@ def run_process(
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             env=env if env is not None else minimal_env(),
-            start_new_session=True,
+            start_new_session=own_group,
         )
     except OSError as exc:
         return ProcResult(spawn_error=f"{type(exc).__name__}: {exc}")
-    if register is not None:
-        register(proc)
 
     box: dict[str, tuple[bytes, bytes]] = {}
 
@@ -114,13 +120,14 @@ def run_process(
             timed_out = True
             break
         reader.join(POLL_SECONDS)
+    kill = kill_process_group if own_group else _kill_child
     if timed_out or cancelled:
-        kill_process_group(proc)
+        kill(proc)
     reader.join(5)
     try:
         proc.wait(timeout=5)
     except subprocess.TimeoutExpired:
-        kill_process_group(proc)
+        kill(proc)
     out, err = box.get("out", (b"", b""))
     return ProcResult(
         stdout=out or b"",

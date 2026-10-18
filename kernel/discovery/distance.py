@@ -101,6 +101,12 @@ def _load(cache_dir: str | None, key: str) -> DistanceResult | None:
         result = DistanceResult(**data)
     except (OSError, ValueError, TypeError):
         return None
+    if not (
+        (result.weight is None or isinstance(result.weight, int))
+        and isinstance(result.complete, bool)
+        and isinstance(result.method, str)
+    ):
+        return None
     _memory_cache[key] = result
     return result
 
@@ -110,7 +116,7 @@ def _store(cache_dir: str | None, key: str, result: DistanceResult) -> None:
     if not cache_dir:
         return
     try:
-        os.makedirs(cache_dir, exist_ok=True)
+        os.makedirs(cache_dir, mode=0o700, exist_ok=True)
         tmp = _disk_path(cache_dir, key) + f".{os.getpid()}.tmp"
         with open(tmp, "w", encoding="utf-8") as handle:
             json.dump(asdict(result), handle)
@@ -126,6 +132,7 @@ def _run_mode(circuit_text: str, mode: str, budget_s: float, cancel_event):
     result = run_process(
         python_command(os.path.abspath(__file__)), payload,
         wall_seconds=max(budget_s, 0.5), cancel_event=cancel_event, env=minimal_env(),
+        own_group=False,  # stay in the scorer's process group so killing the scorer reaps the search
     )
     if result.cancelled:
         raise InterruptedError("fault-distance search cancelled")
