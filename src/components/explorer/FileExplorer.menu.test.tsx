@@ -107,3 +107,12 @@ describe('FileExplorer new-file name input (research-r-01)', () => {
     expect(baseNameSelectionEnd('a.b.py')).toBe(3);
   });
 });
+
+describe('FileExplorer on the web build (desktop-only state)', () => {
+  it('uses the shared desktop-only state with a Download action', () => {
+    const web = { ...bridge, getPlatform: () => 'web' } as unknown as PlatformBridge;
+    render(<PlatformProvider bridge={web}><FileExplorer /></PlatformProvider>);
+    expect(screen.getByText(/folders open in the desktop app/i)).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Download Nuclei/ })).toBeTruthy();
+  });
+});

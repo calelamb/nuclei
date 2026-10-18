@@ -33,6 +33,7 @@ import {
   defaultCircuitFileName,
 } from '../../data/starterTemplates';
 import { MEMORY_PREFIX, isMemoryPath } from '../../hooks/useFileOps';
+import { DesktopOnlyState } from '../hardware/DesktopOnlyState';
 import { ExplorerNameInput } from './ExplorerNameInput';
 import { flattenVisible, resolveTreeKey } from './treeNavigation';
 
@@ -490,21 +491,9 @@ export function FileExplorer() {
 
   if (isWeb) {
     return (
-      <div
-        style={{
-          padding: 14,
-          color: colors.textDim,
-          fontSize: 12,
-          fontFamily: TYPOGRAPHY.fontSans,
-          lineHeight: 1.6,
-        }}
-      >
-        Folder projects are a desktop-only feature right now. Download Nuclei from{' '}
-        <a href="https://getnuclei.dev" style={{ color: colors.accentText }}>
-          getnuclei.dev
-        </a>{' '}
-        to open a whole {workspaceMode === 'research' ? 'project' : 'lecture'} folder. You can still edit and simulate circuits here.
-      </div>
+      <DesktopOnlyState title={`${workspaceMode === 'research' ? 'Project' : 'Lecture'} folders open in the desktop app`}>
+        You can still edit and simulate single files here.
+      </DesktopOnlyState>
     );
   }
 
