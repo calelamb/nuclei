@@ -282,7 +282,9 @@ export type LeftPanelId =
   | 'experiments'
   | 'qec'
   | 'estimator'
-  | 'transpiler';
+  | 'transpiler'
+  | 'trainability'
+  | 'discovery';
 
 export interface LeftPanelDef {
   id: LeftPanelId;
@@ -302,6 +304,11 @@ export const LEFT_PANEL_REGISTRY: readonly LeftPanelDef[] = [
   { id: 'files', label: 'Explorer', modes: ['learn', 'research'], order: 0 },
   { id: 'learning', label: 'Learning', modes: ['learn'], order: 1 },
   { id: 'experiments', label: 'Experiments', modes: ['research'], order: 1 },
+  // PRD 14 — Quantum AI Lab. Research-only takeovers grouped right after
+  // Experiments: the Discovery Engine (LLM-guided evolutionary search) and the
+  // Trainability Lab (gradient / Lie-algebra microscope).
+  { id: 'discovery', label: 'Discovery Engine', modes: ['research'], order: 1 },
+  { id: 'trainability', label: 'Trainability Lab', modes: ['research'], order: 1 },
   { id: 'qec', label: 'QEC Workbench', modes: ['research'], order: 2 },
   { id: 'challenges', label: 'Challenges', modes: ['learn'], order: 2 },
   { id: 'hardware', label: 'Hardware', modes: ['research'], order: 2 },

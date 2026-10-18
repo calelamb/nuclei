@@ -62,6 +62,12 @@ const QecAnalysisView = lazy(async () => ({
 const TranspilerExplorer = lazy(async () => ({
   default: (await import('../transpiler/TranspilerExplorer')).TranspilerExplorer,
 }));
+const DiscoveryWorkbench = lazy(async () => ({
+  default: (await import('../discovery/DiscoveryWorkbench')).DiscoveryWorkbench,
+}));
+const TrainabilityLab = lazy(async () => ({
+  default: (await import('../trainability/TrainabilityLab')).TrainabilityLab,
+}));
 const QecWorkbench = lazy(async () => ({
   default: (await import('../qec/workbench/QecWorkbench')).QecWorkbench,
 }));
@@ -586,11 +592,15 @@ export function PanelLayout() {
   // Transpiler rail item is active (controls sit in the sidebar).
   const showTranspilerMain = workspaceMode === 'research' && activeView === 'transpiler';
   const showQecWorkbench = workspaceMode === 'research' && activeView === 'qec';
+  // PRD 14 — Quantum AI Lab takeovers (Discovery Engine, Trainability Lab).
+  const showDiscoveryMain = workspaceMode === 'research' && activeView === 'discovery';
+  const showTrainabilityMain = workspaceMode === 'research' && activeView === 'trainability';
 
   // dev tools Phase 4 / P4.1 — when a Research takeover (transpiler/experiments)
   // is active, the editor+viz area is HIDDEN, not unmounted, so Monaco keeps its
   // per-tab models, undo, cursor, and scroll across the switch.
-  const editorHidden = showTranspilerMain || showExperimentsMain || showQecWorkbench;
+  const editorHidden =
+    showTranspilerMain || showExperimentsMain || showQecWorkbench || showDiscoveryMain || showTrainabilityMain;
 
   // A selected QEC campaign experiment shows the analysis surface (threshold +
   // decoder workbench, PRD 10 Phase E) instead of the sweep runs table.
@@ -811,6 +821,28 @@ export function PanelLayout() {
               }}>
                 <Suspense fallback={null}>
                   <QecWorkbench />
+                </Suspense>
+              </div>
+            )}
+            {showDiscoveryMain && (
+              <div style={{
+                flex: 1, minWidth: 0, overflow: 'hidden',
+                display: 'flex', flexDirection: 'column',
+                animation: 'nuclei-fade-in 200ms ease',
+              }}>
+                <Suspense fallback={null}>
+                  <DiscoveryWorkbench />
+                </Suspense>
+              </div>
+            )}
+            {showTrainabilityMain && (
+              <div style={{
+                flex: 1, minWidth: 0, overflow: 'hidden',
+                display: 'flex', flexDirection: 'column',
+                animation: 'nuclei-fade-in 200ms ease',
+              }}>
+                <Suspense fallback={null}>
+                  <TrainabilityLab />
                 </Suspense>
               </div>
             )}

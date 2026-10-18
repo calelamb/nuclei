@@ -1038,6 +1038,12 @@ async def handle_message(websocket):
                 "error": worker_response.get("error"),
             }))
 
+        elif isinstance(msg_type, str) and msg_type.startswith(_LAB_MESSAGE_PREFIXES):
+            # Protocol v1.3 (PRD 14): Trainability Lab + Discovery Engine.
+            # Each package owns its handlers and job managers; this branch
+            # only routes and hands over a thread-safe sender.
+            await _route_lab_message(msg, executor, websocket)
+
         else:
             await websocket.send(json.dumps({
                 "type": "error",
@@ -1045,9 +1051,51 @@ async def handle_message(websocket):
             }))
 
 
+_LAB_MESSAGE_PREFIXES = ("trainability_", "discovery_")
+
+
+def _lab_context(executor: Executor, websocket) -> "LabContext":
+    from kernel.lab_context import LabContext
+
+    async def _send_json(payload: dict) -> None:
+        try:
+            await websocket.send(json.dumps(payload))
+        except Exception:
+            # Connection gone mid-job; the job winds down on its own.
+            pass
+
+    return LabContext(
+        executor=executor,
+        send_json=_send_json,
+        loop=asyncio.get_running_loop(),
+        owner=id(websocket),
+    )
+
+
+async def _route_lab_message(msg: dict, executor: Executor, websocket) -> None:
+    msg_type = msg.get("type")
+    ctx = _lab_context(executor, websocket)
+    if msg_type.startswith("trainability_"):
+        from kernel.trainability.handlers import handle as handle_trainability
+        await handle_trainability(msg, ctx)
+    else:
+        from kernel.discovery.handlers import handle as handle_discovery
+        await handle_discovery(msg, ctx)
+
+
+async def _handle_connection(websocket):
+    try:
+        await handle_message(websocket)
+    finally:
+        # Cancel any Lab jobs this connection owns so a closed window never
+        # leaves a gradient sweep or discovery evaluation burning CPU.
+        from kernel.lab_context import release_owner
+        release_owner(id(websocket))
+
+
 async def _try_serve(port: int):
     return await websockets.serve(
-        handle_message,
+        _handle_connection,
         "localhost",
         port,
         max_size=MAX_MESSAGE_SIZE,
