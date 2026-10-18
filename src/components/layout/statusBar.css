@@ -2,7 +2,7 @@
    rounded hover, and the stronger text on top. Component CSS is unlayered, so it wins over the primitives layer. */
 .statusbar-ctl {
   color: var(--color-text-secondary);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-xs);
   transition: background-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
 }
 .statusbar-ctl:hover { background: var(--color-surface-overlay); color: var(--color-text-primary); }
