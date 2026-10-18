@@ -51,6 +51,8 @@ export function useKernel() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
   const retryCountRef = useRef(0);
+  /** A start failure was reported; the next successful boot says so in the Terminal. */
+  const hadFailureRef = useRef(false);
   const explainSeqRef = useRef(0);
   const runtimeSubscriptionsRef = useRef<Array<() => void>>([]);
   // A Run requested before the kernel was ready; fired by the effect after `execute`.
@@ -90,6 +92,7 @@ export function useKernel() {
     useEditorStore.getState().setKernelReady(false);
     useEditorStore.getState().setKernelStatus('failed', message);
     useSimulationStore.getState().addOutput(`Error: ${message}`, 'stderr');
+    hadFailureRef.current = true;
   }, []);
 
   const connect = useCallback(() => {
@@ -165,7 +168,10 @@ export function useKernel() {
   const markWebReady = useCallback(() => {
     const editor = useEditorStore.getState();
     // A Retry that worked: say so, so the earlier failure line is not the last word in the Terminal.
-    if (editor.kernelStatus === 'failed') useSimulationStore.getState().addOutput('Python ready', 'info');
+    if (hadFailureRef.current) {
+      hadFailureRef.current = false;
+      useSimulationStore.getState().addOutput('Python ready', 'info');
+    }
     editor.setKernelConnected(true);
     editor.setKernelReady(true);
     editor.setKernelStatus('ready');

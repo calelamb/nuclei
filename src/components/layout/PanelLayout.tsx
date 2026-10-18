@@ -35,6 +35,7 @@ import { DEFAULT_EDITOR_PANE_WIDTH, computeEditorPaneWidth } from './layoutMath'
 import { useDisplaySnapshot } from '../../layout/useDisplaySnapshot';
 import { useEditorStore } from '../../stores/editorStore';
 import { hasMeaningfulOutput, useSimulationStore } from '../../stores/simulationStore';
+import { shouldRenderBottomPanel } from '../../layout/bottomPanelPresence';
 import { useThemeStore } from '../../stores/themeStore';
 import { useUIModeStore } from '../../stores/uiModeStore';
 import { useLearnStore } from '../../stores/learnStore';
@@ -531,7 +532,7 @@ export function PanelLayout() {
               </div>
 
               {/* Bottom panel */}
-              {(showBottomPanel || result) && (
+              {shouldRenderBottomPanel({ panelVisible: showBottomPanel, hasResult: !!result, hasOutput: hasMeaningfulOutput(terminalOutput) }) && (
                 <>
                   {!bottomCollapsed && (
                     <ResizeHandle

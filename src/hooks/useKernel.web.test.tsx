@@ -112,6 +112,14 @@ describe('useKernel (web)', () => {
     act(() => retryKernel());
     await waitFor(() => expect(useEditorStore.getState().kernelStatus).toBe('ready'));
     expect(useEditorStore.getState().kernelError).toBeNull();
+    const texts = useSimulationStore.getState().terminalOutput.map((l) => l.text);
+    expect(texts[texts.length - 1]).toBe('Python ready');
+  });
+
+  it('does not announce Python ready after a normal first boot', async () => {
+    renderHook(() => useKernel(), { wrapper });
+    await waitFor(() => expect(useEditorStore.getState().kernelStatus).toBe('ready'));
+    expect(useSimulationStore.getState().terminalOutput.map((l) => l.text)).not.toContain('Python ready');
   });
 
   it('keeps live-preview output and errors out of the Terminal', async () => {
