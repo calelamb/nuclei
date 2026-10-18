@@ -18,7 +18,6 @@ interface ShortcutRow { keys: string; description: string }
 /** Editor behaviours that are not global bindings but are real. */
 const EDITOR_EXTRAS: Record<string, ShortcutRow> = {
   ghost: { keys: 'Tab', description: 'Accept ghost completion' },
-  tabFocus: { keys: 'Ctrl+M', description: 'Let Tab move focus out of the editor' },
 };
 
 const GROUP_ORDER: KeybindingGroup[] = ['Essential', 'Editor', 'Navigation', 'View'];
@@ -31,7 +30,7 @@ export function shortcutGroups(mac: boolean = isMacPlatform(), web: boolean = is
       keys: formatKeys(b, mac),
       description: b.label,
     }));
-    if (title === 'Editor') rows.push(EDITOR_EXTRAS.ghost, EDITOR_EXTRAS.tabFocus);
+    if (title === 'Editor') rows.push(EDITOR_EXTRAS.ghost);
     return { title, shortcuts: rows };
   });
 }
@@ -80,7 +79,7 @@ export function KeyboardShortcuts({ onClose }: KeyboardShortcutsProps) {
             color: colors.text, fontSize: 16, fontWeight: 600,
             fontFamily: TYPOGRAPHY.fontSans,
           }}>
-            Keyboard Shortcuts
+            Keyboard shortcuts
           </h2>
           <IconButton aria-label="Close shortcuts" onClick={onClose}><X size={16} /></IconButton>
         </div>

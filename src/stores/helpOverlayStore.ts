@@ -4,6 +4,9 @@ interface HelpOverlayState {
   shortcutsOpen: boolean;
   setShortcutsOpen: (open: boolean) => void;
   toggleShortcuts: () => void;
+  composeOpen: boolean;
+  setComposeOpen: (open: boolean) => void;
+  toggleCompose: () => void;
   paletteOpen: boolean;
   setPaletteOpen: (open: boolean) => void;
   togglePalette: () => void;
@@ -14,6 +17,9 @@ export const useHelpOverlayStore = create<HelpOverlayState>((set) => ({
   shortcutsOpen: false,
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   toggleShortcuts: () => set((s) => ({ shortcutsOpen: !s.shortcutsOpen })),
+  composeOpen: false,
+  setComposeOpen: (composeOpen) => set({ composeOpen }),
+  toggleCompose: () => set((s) => ({ composeOpen: !s.composeOpen })),
   paletteOpen: false,
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
   togglePalette: () => set((s) => ({ paletteOpen: !s.paletteOpen })),

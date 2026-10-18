@@ -47,6 +47,20 @@ describe('keybinding registry', () => {
     expect(formatKeys(bindingFor('goto-rail-view'), true)).toBe('⌘1–9');
   });
 
+  it('keeps plain Cmd+/ for the editor and puts the help sheet on Cmd+? (and never dispatches Cmd+/ from App)', () => {
+    expect(findBindingId(ev('/'))).toBeNull();
+    expect(findBindingId(ev('?', { shiftKey: true }))).toBe('shortcuts');
+    expect(findBindingId(ev('/', { shiftKey: true }))).toBe('shortcuts');
+    expect(formatKeys(bindingFor('shortcuts'), true)).toBe('⌘?');
+    expect(formatKeys(bindingFor('toggle-comment'), true)).toBe('⌘/');
+    expect(bindingFor('toggle-comment').owner).toBe('editor');
+  });
+
+  it('formats the Control-based Tab-focus chord in one notation', () => {
+    expect(formatKeys(bindingFor('tab-focus'), true)).toBe('⌃M');
+    expect(formatKeys(bindingFor('tab-focus'), false)).toBe('Ctrl+M');
+  });
+
   it('has unique ids', () => {
     const ids = KEYBINDINGS.map((b) => b.id);
     expect(new Set(ids).size).toBe(ids.length);

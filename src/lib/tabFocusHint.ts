@@ -1,7 +1,7 @@
-import { isMacPlatform } from '../config/keybindings';
+import { bindingFor, formatKeys, isMacPlatform } from '../config/keybindings';
 
 export function tabFocusToggleLabel(mac: boolean = isMacPlatform()): string {
-  return mac ? '⌃M' : 'Ctrl+M';
+  return formatKeys(bindingFor('tab-focus'), mac);
 }
 
 /**

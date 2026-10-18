@@ -20,6 +20,12 @@ export interface Keybinding {
   group: KeybindingGroup;
   /** `editor` bindings are owned by Monaco; they are listed but not dispatched by App. */
   owner: 'app' | 'editor';
+  /** Another `e.key` the same chord reports (Shift+/ reports '?'). */
+  alias?: string;
+  /** Shift is required but is part of the glyph already (⌘? rather than ⌘⇧?). */
+  implicitShift?: boolean;
+  /** The chord uses the physical Control key even on Mac (⌃M), not Command. */
+  ctrl?: boolean;
   /** Chrome keeps this chord for itself (new window, reopen tab): a web page never receives it. */
   browserReserved?: boolean;
 }
@@ -30,11 +36,14 @@ export const KEYBINDINGS: readonly Keybinding[] = [
   { id: 'palette', key: 'p', shift: true, label: 'Command palette', group: 'Essential', owner: 'app' },
   { id: 'toggle-dirac', key: 'd', label: 'Toggle Dirac panel', group: 'Essential', owner: 'app' },
   { id: 'focus-dirac', key: 'l', label: 'Focus Dirac input', group: 'Essential', owner: 'app' },
-  { id: 'shortcuts', key: '/', label: 'Keyboard shortcuts', group: 'Essential', owner: 'app' },
+  // Plain ⌘/ is Monaco's toggle-comment, so help lives on ⌘? (Shift+/); F1 is handled in App too.
+  { id: 'shortcuts', key: '/', alias: '?', shift: true, implicitShift: true, display: '?', label: 'Keyboard shortcuts', group: 'Essential', owner: 'app' },
 
   { id: 'inline-edit', key: 'k', label: 'Inline edit with Dirac (selection)', group: 'Editor', owner: 'editor' },
   { id: 'compose', key: 'i', label: 'Compose with Dirac', group: 'Editor', owner: 'app' },
   { id: 'find', key: 'f', label: 'Find', group: 'Editor', owner: 'editor' },
+  { id: 'toggle-comment', key: '/', label: 'Toggle line comment', group: 'Editor', owner: 'editor' },
+  { id: 'tab-focus', key: 'm', ctrl: true, label: 'Let Tab move focus out of the editor', group: 'Editor', owner: 'editor' },
 
   { id: 'open', key: 'o', label: 'Open file', group: 'Navigation', owner: 'app' },
   { id: 'new', key: 'n', label: 'New file', group: 'Navigation', owner: 'app', browserReserved: true },
@@ -58,7 +67,7 @@ export interface KeyLike {
 
 function keyMatches(binding: Keybinding, key: string): boolean {
   if (binding.key === '1-9') return /^[1-9]$/.test(key);
-  return binding.key === key;
+  return binding.key === key || binding.alias === key;
 }
 
 /** Resolve a keydown to a binding id, or null. Casing-insensitive (Chromium reports 'P' under Shift). */
@@ -85,8 +94,9 @@ export function isMacPlatform(): boolean {
 /** Glyph form on Mac (⌘⇧P), word form elsewhere (Ctrl+Shift+P). */
 export function formatKeys(binding: Keybinding, mac: boolean = isMacPlatform()): string {
   const key = binding.display ?? binding.key.toUpperCase();
-  if (mac) return `⌘${binding.shift ? '⇧' : ''}${key}`;
-  return `Ctrl+${binding.shift ? 'Shift+' : ''}${key}`;
+  const showShift = Boolean(binding.shift) && !binding.implicitShift;
+  if (mac) return `${binding.ctrl ? '⌃' : '⌘'}${showShift ? '⇧' : ''}${key}`;
+  return `Ctrl+${showShift ? 'Shift+' : ''}${key}`;
 }
 
 /** Whether this chord can actually reach the app in the running build (a browser tab never gets the reserved ones). */
