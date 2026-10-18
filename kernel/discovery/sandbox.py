@@ -64,6 +64,14 @@ def _interpret(result: ProcResult, isolation: str) -> dict[str, Any]:
         return _error("cancelled", "Evaluation was cancelled.", isolation)
     if result.timed_out:
         return _error("worker_timeout", "Candidate exceeded its wall-clock budget.", isolation)
+    if result.memory_exceeded:
+        return _error(
+            "worker_memory_exceeded",
+            "Candidate worker exceeded its memory limit and was killed.",
+            isolation,
+        )
+    if result.output_overflow or len(result.stdout) > MAX_RESPONSE_BYTES:
+        return _error("response_too_large", "Worker output exceeded the byte limit; it was killed.", isolation)
     if result.returncode is not None and result.returncode < 0:
         return _error(
             "worker_killed",
@@ -71,8 +79,6 @@ def _interpret(result: ProcResult, isolation: str) -> dict[str, Any]:
             "this usually means the CPU limit was exceeded.",
             isolation,
         )
-    if len(result.stdout) > MAX_RESPONSE_BYTES:
-        return _error("response_too_large", "Worker response exceeded the byte limit.", isolation)
     text = result.stdout.decode("utf-8", "replace").strip()
     if not text:
         return _error(
@@ -125,6 +131,7 @@ def run_candidate(
                 result = run_process(
                     command, payload, wall_seconds=wall_seconds,
                     cancel_event=cancel_event, env=minimal_env(iso.scratch_env(scratch)),
+                    max_output_bytes=MAX_RESPONSE_BYTES + 1024,
                 )
                 wrapped = attempt_info.mode != iso.MODE_PROCESS
                 if _wrapper_failed(result, wrapped):

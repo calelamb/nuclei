@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import threading
 import time
 
@@ -44,3 +45,62 @@ def test_timeout_is_reported_and_normal_exit_is_clean():
 def test_spawn_failure_is_reported_not_raised():
     result = run_process(["/definitely/not/a/binary"], b"", wall_seconds=5)
     assert result.spawn_error
+
+
+def _wait_dead(pid: int, seconds: float = 30) -> bool:
+    deadline = time.monotonic() + seconds
+    while _alive(pid) and time.monotonic() < deadline:
+        time.sleep(0.05)
+    return not _alive(pid)
+
+
+def test_group_is_killed_after_a_normal_worker_exit(tmp_path):
+    # RT-M3: the worker exits cleanly but leaves a background child holding the pipes.
+    pidfile = tmp_path / "pid"
+    command = ["sh", "-c", f"sleep 60 & echo $! > {pidfile}; echo done"]
+    start = time.monotonic()
+    result = run_process(command, b"", wall_seconds=30)
+    assert result.stdout.strip() == b"done" and result.returncode == 0
+    assert time.monotonic() - start < 15  # did not wait for the sleeper's pipe
+    assert _wait_dead(int(pidfile.read_text()))
+
+
+def test_output_flood_is_cut_at_cap_plus_one_and_kills_the_group():
+    # CR-H3: 600 MB flood must never be buffered.
+    command = ["sh", "-c", "yes xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"]
+    result = run_process(command, b"", wall_seconds=60, max_output_bytes=1_000_000)
+    assert result.output_overflow
+    assert len(result.stdout) == 1_000_001
+    assert not result.timed_out
+
+
+def test_stderr_flood_is_bounded_too():
+    command = ["sh", "-c", "yes e >&2"]
+    result = run_process(command, b"", wall_seconds=60)
+    assert result.output_overflow
+    assert len(result.stderr) <= 4096
+
+
+def test_large_stdin_payload_does_not_deadlock():
+    payload = b"a" * 3_000_000
+    result = run_process(["cat"], payload, wall_seconds=60, max_output_bytes=4_000_000)
+    assert result.stdout == payload
+
+
+def test_memory_watchdog_kills_group_over_the_threshold():
+    # RT-M1: low threshold (200 MB); the child touches ~600 MB at most.
+    script = "import time\nb = bytearray(400 * 1024 * 1024)\nfor i in range(0, len(b), 4096): b[i] = 1\ntime.sleep(60)\n"
+    start = time.monotonic()
+    result = run_process([sys.executable, "-c", script], b"", wall_seconds=60, memory_limit=200 * 1024 * 1024)
+    assert result.memory_exceeded and not result.timed_out
+    assert time.monotonic() - start < 30
+
+
+def test_memory_limit_env_override(monkeypatch):
+    from kernel.discovery.procrun import DEFAULT_MEMORY_LIMIT_BYTES, memory_limit_bytes
+
+    assert memory_limit_bytes() == DEFAULT_MEMORY_LIMIT_BYTES == 4 * 1024 ** 3
+    monkeypatch.setenv("NUCLEI_DISCOVERY_MAX_RSS_MB", "300")
+    assert memory_limit_bytes() == 300 * 1024 * 1024
+    monkeypatch.setenv("NUCLEI_DISCOVERY_MAX_RSS_MB", "junk")
+    assert memory_limit_bytes() == DEFAULT_MEMORY_LIMIT_BYTES

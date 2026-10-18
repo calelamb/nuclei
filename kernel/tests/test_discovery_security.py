@@ -75,3 +75,90 @@ def test_supervisor_rejects_trailing_data_after_the_response():
 def test_candidate_that_exits_early_gets_a_coded_error_not_a_success():
     program = "import os\nos._exit(0)\ndef build():\n    pass\n"
     assert code(run(program)) == "candidate_exited"
+
+
+def test_candidate_memory_hog_is_killed_with_a_coded_error(monkeypatch):
+    # RT-M1 with a LOW test threshold; the candidate touches ~700 MB, never the host's memory.
+    monkeypatch.setenv("NUCLEI_DISCOVERY_MAX_RSS_MB", "400")
+    program = (
+        "import stim, time\n"
+        "def build():\n"
+        "    b = bytearray(700 * 1024 * 1024)\n"
+        "    for i in range(0, len(b), 4096):\n"
+        "        b[i] = 1\n"
+        "    time.sleep(60)\n"
+        "    return stim.Circuit('H 0')\n"
+    )
+    start = time.monotonic()
+    response = run(program, wall=90)
+    assert code(response) == "worker_memory_exceeded"
+    assert time.monotonic() - start < 60
+
+
+def test_normal_candidate_is_not_hit_by_the_default_memory_limit():
+    assert run("import stim\ndef build():\n    return stim.Circuit('H 0')\n")["status"] == "ok"
+
+
+def _pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
+
+
+def test_setsid_and_double_fork_leave_no_survivor(tmp_path):
+    # CR-H4 / RT-M3: every escape primitive must either raise or be reaped by the group kill.
+    log = tmp_path / "log.txt"
+    pids = tmp_path / "pids.txt"
+    program = f"""
+import os, sys
+LOG = {str(log)!r}
+PIDS = {str(pids)!r}
+def attempt(name, fn):
+    try:
+        fn()
+        outcome = 'allowed'
+    except BaseException as exc:
+        outcome = 'blocked:' + type(exc).__name__
+    with open(LOG, 'a') as fh:
+        fh.write(name + '=' + outcome + chr(10))
+
+def grandchild_sleeper():
+    import posix
+    pid = posix.fork()
+    if pid == 0:
+        if posix.fork() == 0:
+            posix.setsid()
+            open(PIDS, 'a').write(str(posix.getpid()) + chr(10))
+            import time
+            time.sleep(120)
+        posix._exit(0)
+
+attempt('os.setsid', os.setsid)
+attempt('os.setpgid', lambda: os.setpgid(0, 0))
+attempt('os.fork', os.fork)
+attempt('posix.fork', __import__('posix').fork)
+attempt('posix.setsid', __import__('posix').setsid)
+attempt('posix.forkpty', __import__('posix').forkpty)
+attempt('posix.posix_spawn', lambda: __import__('posix').posix_spawn('/bin/sleep', ['sleep', '100'], {{}}))
+attempt('os.execv', lambda: os.execv('/bin/sleep', ['sleep', '100']))
+attempt('os.kill-all', lambda: os.kill(-1, 0))
+attempt('subprocess', lambda: __import__('subprocess').Popen(['sleep', '100']))
+attempt('double-fork', grandchild_sleeper)
+import stim
+def build():
+    return stim.Circuit('H 0')
+"""
+    response = run(program)
+    assert response["status"] == "ok"
+    outcomes = dict(line.split("=", 1) for line in log.read_text().splitlines())
+    assert outcomes, "candidate never ran its attempts"
+    for name, outcome in outcomes.items():
+        assert outcome.startswith("blocked"), f"{name} was {outcome}"
+    if pids.exists():
+        for pid in (int(p) for p in pids.read_text().split()):
+            deadline = time.monotonic() + 30
+            while _pid_alive(pid) and time.monotonic() < deadline:
+                time.sleep(0.1)
+            assert not _pid_alive(pid), f"survivor pid {pid}"
