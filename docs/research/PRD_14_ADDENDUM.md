@@ -167,3 +167,38 @@ Evaluators that see a parameterized circuit (`vqe_ground_state`, `trainability_f
 - `TrainabilityRunResult` adds `provenance` (§D).
 - `GradientStatistics` and `ScalingStudy` points add `method`, `backend` and optional `interval` (spec §5.5 already requires these).
 - `DiscoveryEvaluation` adds `stage`, `program_key`, `cache_hit`, `isolation` and `compute` (spec §6.4). `metrics.gradient_map` is optional (§C).
+
+---
+
+## F. Invention 4 — Red Queen mode (co-evolving the evaluator's adversary)
+
+The evaluator is the Discovery Engine's attack surface. Instead of only hand-writing cheating candidates, Nuclei **evolves them**.
+
+- **Mode:** `mutator.kind: red_queen` in a `*.discovery.yaml`.
+  - The system prompt flips: the model is told the evaluator's guardrails and is asked to find a program the evaluator **scores well** but which an **independent audit** rejects.
+  - Fitness is the *gap* between the evaluator's score and the audit's.
+- **Audit (`kernel/discovery/audit.py`):** a stricter, slower re-scoring of the same artifact. It does four things:
+  - re-parses the artifact from scratch;
+  - re-runs every guardrail under a *different* noise model and seed;
+  - runs the exact fault-distance search without budget shortcuts (for d ≤ 7);
+  - for parameterized evaluators, re-optimizes from fresh restarts and checks the variational bound.
+- **What counts as an exploit:** a candidate is an **exploit** when evaluator fitness ≥ the honest seed's fitness and the audit fails or disagrees beyond CI.
+- **What happens to an exploit:** it is saved as `experiments/<name>/discovery/<runId>/exploits/<id>.json`. The run's Guardrails tab shows exploits in a dedicated "Exploits found" lane. One click exports an exploit as a pytest regression fixture (`kernel/tests/fixtures/exploits/*.json`), which `test_discovery_exploits.py` replays. Each exploit must be rejected after the fix.
+- **Honesty:** a Red Queen run that finds nothing reports "no exploit found within budget". That is evidence, not proof, of robustness.
+
+## G. Invention 5 — Conjecture Engine (closed-loop trainability science)
+
+After a Discovery run, the archive holds hundreds of scored ansatzes. The Conjecture Engine turns that data into **falsifiable, machine-checked claims**.
+
+1. **Propose.** The depth model reads a compact archive digest: structural features per elite (gate counts by axis, entangler pattern, depth, parameter count, DLA dimension at the probe size, β with CI, hardness). It proposes ≤ 5 conjectures through a forced tool. Each one carries:
+   - `statement`;
+   - `feature_predicate`, a structured filter over the features (no code);
+   - `prediction`, for example `beta_upper95 < 0.1` or `verdict == polynomial`;
+   - `test_family`, a generator for *new* circuits satisfying the predicate, drawn from the template grammar (brick depth, axis pattern, entangler);
+   - `n_range`.
+2. **Test.** Each conjecture compiles to Microscope scaling studies on **fresh** circuits the search never saw (held out by construction). It uses the PPE up to 128 qubits where applicable, and sampling below that, with ≥ 5 circuits per conjecture.
+3. **Verdict.** Each conjecture is `supported` (every test circuit meets the prediction with its interval), `refuted` (at least one counterexample, which is shown), or `inconclusive`.
+   - The claim is never "proven". The UI says "supported on N held-out circuits up to n = 128".
+4. **Ledger.** The result is written to `experiments/<name>/discovery/<runId>/conjectures.json` and `.md`, with the evidence, the counterexamples, the evaluator fingerprints and the prompt hash.
+   - Dirac can cite the ledger.
+   - Refuted conjectures are kept, because a negative result is a result.
