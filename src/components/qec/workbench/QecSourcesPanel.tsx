@@ -15,6 +15,7 @@ import { QecPanelPinButton } from './QecPanelPinButton';
 import { Badge, IconButton } from '../../ui';
 import { isOpenableSource, useOpenSource } from './useOpenSource';
 import { ICON_SIZE, ICON_STROKE } from '../../../styles/tokens';
+import { countLabel } from '../import/qecImportModel';
 
 const SOURCE_ICONS: Readonly<Record<QecStudySource['kind'], LucideIcon>> = {
   stim: FileCode2, python: FileCode2, dem: Database,
@@ -251,7 +252,7 @@ export function QecSourcesPanel({ collapsed = false, onToggle = () => undefined 
       <nav className="qec-sources qec-sources--rail" aria-label="QEC sources and data">
         <SourcesToggle collapsed onToggle={onToggle} />
         <FolderTree aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} className="qec-sources__rail-icon" />
-        <span className="qec-sources__rail-count qec-mono" aria-label={`${study?.sources.length ?? 0} files`}>{study?.sources.length ?? 0}</span>
+        <span className="qec-sources__rail-count qec-mono" aria-label={countLabel(study?.sources.length ?? 0, 'file')}>{study?.sources.length ?? 0}</span>
       </nav>
     );
   }

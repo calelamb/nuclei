@@ -701,13 +701,6 @@
   margin-top: 2px; font-size: var(--font-size-chrome-label);
 }
 
-/* The tray is as wide as the canvas, whatever the viewport: below ~720px the counts sit above the job list, never beside it. */
-@container qec-tray (max-width: 719px) {
-  .qec-tray__content { flex-direction: column; align-items: stretch; gap: 14px; }
-  .qec-tray__content > .qec-tray__lead, .qec-tray__content > .qec-tray__jobs { margin-block: 0; }
-  .qec-tray__jobs dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-
 .qec-tray__summary {
   display: flex; align-items: stretch; border: 1px solid var(--qec-border); background: var(--qec-canvas);
 }
@@ -826,6 +819,7 @@
 
 /* Three empty circuit cards offer one Open button: only the first empty card keeps it. */
 .qec-open-circuit { display: contents; }
+.qec-open-circuit__actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; margin-top: 6px; }
 .qec-instrument[data-circuit][data-empty='true'] ~ .qec-instrument[data-circuit][data-empty='true'] .qec-open-circuit,
 .qec-instrument[data-circuit][data-empty='true'] ~ .qec-instrument[data-circuit][data-empty='true'] [data-hint] { display: none; }
 .qec-instrument__link {
