@@ -11,7 +11,7 @@ pytest.importorskip("qiskit")
 from kernel.discovery.audits import trainability_frontier as frontier_audit  # noqa: E402
 from kernel.discovery.evaluators import _frontier_probe  # noqa: E402
 from kernel.tests.test_discovery_frontier import (  # noqa: E402
-    SIZES, SPEC, artifact, config, identity_like, seed_like,
+    SIZES, SPEC, artifact, brick_ansatz, config, identity_like, seed_like,
 )
 
 SEED = 5
@@ -46,9 +46,9 @@ def test_contract_shape(case):
 def test_audit_agrees_on_the_honest_seed(case):
     report = run_audit(case)
     checks = by_id(report)
-    assert [c["status"] for c in report["checks"]] == ["pass"] * 7, report["checks"]
-    assert set(checks) == {"reparse", "ppe_reproducible", "ppe_vs_sampling", "dla_recheck",
-                           "hardness_recheck", "interval_consistency", "fitness_gap"}
+    assert [c["status"] for c in report["checks"]] == ["pass"] * 9, report["checks"]
+    assert set(checks) == {"reparse", "ppe_reproducible", "ppe_vs_sampling", "structure_recheck", "dla_recheck",
+                           "hardness_recheck", "light_cone_recheck", "interval_consistency", "fitness_gap"}
     assert "99% CI" in checks["ppe_vs_sampling"]["detail"] and "samples" in checks["ppe_vs_sampling"]["detail"]
     assert report["audit_fitness"] == pytest.approx(case[2]["fitness"], abs=0.6)
 
@@ -84,7 +84,8 @@ def test_audit_catches_a_planted_wrong_ppe_result(case, monkeypatch):
 
 def test_audit_catches_an_inflated_hardness_claim(case):
     lie = copy.deepcopy(case[2])
-    lie["metrics"]["hardness"]["hardness_lower"] += 4.0
+    lie["metrics"]["pp_exact_cost"]["log10_strings_lower"] += 4.0
+    lie["objectives"]["pp_exact_cost"]["value"] += 4.0
     lie["fitness"] += 2.0
     checks = by_id(run_audit(case, lie))
     assert checks["hardness_recheck"]["status"] == "fail"
@@ -95,6 +96,36 @@ def test_audit_catches_a_wrong_dla_claim(case):
     lie = copy.deepcopy(case[2])
     lie["metrics"]["dla"]["dimension"] = 99
     lie["metrics"]["dla"]["dimension_lower_bound"] = 99
+    assert by_id(run_audit(case, lie))["dla_recheck"]["status"] == "fail"
+
+
+def test_audit_catches_an_unreproducible_uncensored_cost_claim(case):
+    """A recorded exact cost lower than what the audit measures is also a disagreement."""
+    lie = copy.deepcopy(case[2])
+    lie["metrics"]["pp_exact_cost"]["log10_strings_lower"] -= 1.0
+    assert by_id(run_audit(case, lie))["hardness_recheck"]["status"] == "fail"
+
+
+def test_audit_catches_a_wrong_light_cone_claim(case):
+    lie = copy.deepcopy(case[2])
+    lie["metrics"]["light_cone"]["width"] += 5
+    assert by_id(run_audit(case, lie))["light_cone_recheck"]["status"] == "fail"
+
+
+def test_audit_catches_a_degenerate_family_the_evaluator_accepted(case):
+    """Planted: the evaluator 'accepted' a product circuit (as the pre-PH-H2 guard did)."""
+    cfg, _, evaluation = case
+    product_arts = [{"call_index": i, "artifact": artifact(brick_ansatz(*c["args"], entangle=False))}
+                    for i, c in enumerate(SPEC.calls(cfg))]
+    report = frontier_audit.audit(cfg, product_arts, SEED, evaluation=evaluation)
+    structure = by_id(report)["structure_recheck"]
+    assert structure["status"] == "fail" and "independent blocks" in structure["detail"]
+
+
+def test_audit_catches_a_wrong_dla_claim_at_a_smaller_probe(case):
+    lie = copy.deepcopy(case[2])
+    first = lie["metrics"]["dla_probes"][0]
+    first["dimension"] = first["dimension_lower_bound"] = 99
     assert by_id(run_audit(case, lie))["dla_recheck"]["status"] == "fail"
 
 
