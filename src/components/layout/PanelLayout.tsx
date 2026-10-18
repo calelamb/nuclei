@@ -47,7 +47,9 @@ import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useExperimentUiStore } from '../../stores/experimentUiStore';
 import { useExperimentStore } from '../../services/experimentStore';
-import { activityViewsForMode } from './panelRegistry';
+import { LessonSkeleton } from './LessonSkeleton';
+import { useLayoutSettled } from '../../layout/useLayoutSettled';
+import { railViewsFor } from '../../layout/panelRegistry';
 import { isWebBuild } from '../../platform/buildTarget';
 import { Tooltip } from '../ui';
 import { focusVizLanding } from './focusViz';
@@ -98,6 +100,7 @@ export function PanelLayout() {
   const bottomCollapsed = useBottomPanelStore((s) => s.collapsed);
   const setBottomCollapsed = useBottomPanelStore((s) => s.setCollapsed);
   const [isDraggingH, setIsDraggingH] = useState(false);
+  const [layoutLoaded, setLayoutLoaded] = useState(false);
   const [isDraggingV, setIsDraggingV] = useState(false);
 
   const colors = useThemeStore((s) => s.colors);
@@ -193,8 +196,10 @@ export function PanelLayout() {
   // see panelRegistry.ts. Learn mode reproduces today's exact set; Research
   // mode hides learning/challenges/community and adds the Experiments
   // placeholder.
-  const visibleActivityViews = activityViewsForMode(workspaceMode, { experimentalFeatures })
-    .filter((v) => features.explorerSidebar || v !== 'files');
+  const visibleActivityViews = railViewsFor(workspaceMode, {
+    developerViews: experimentalFeatures,
+    explorerSidebar: features.explorerSidebar,
+  });
 
   // The right rail only takes space when it has something to show AND the
   // editor can keep a usable width beside it. Otherwise the editor gets the
@@ -234,6 +239,8 @@ export function PanelLayout() {
   const booting = placeholder === 'booting';
   const startFailed = placeholder === 'failed';
   const showViz = (vizHasContent || placeholder !== null) && vizFits;
+  // The saved split loads and the column appears a beat after first paint; neither should animate.
+  const splitSettled = useLayoutSettled(layoutLoaded && topSplitSize.width > 0);
 
   const diracOpen = useDiracPanelStore((s) => s.isOpen);
   const closeDirac = useDiracPanelStore((s) => s.close);
@@ -299,6 +306,7 @@ export function PanelLayout() {
         if (epw) setEditorPaneWidth(epw);
         if (lp === 'clean' || lp === 'balanced' || lp === 'full') setPreset(lp);
       } catch { /* non-critical layout persistence */ }
+      setLayoutLoaded(true);
     })();
   }, [platform, setPreset]);
 
@@ -428,7 +436,7 @@ export function PanelLayout() {
             flex: 1, minWidth: 0, overflow: 'hidden',
             animation: 'nuclei-fade-in 200ms ease',
           }}>
-            <Suspense fallback={null}>
+            <Suspense fallback={<LessonSkeleton />}>
               <ChallengeModeView />
             </Suspense>
           </div>
@@ -438,7 +446,7 @@ export function PanelLayout() {
             flex: 1, minWidth: 0, overflow: 'hidden',
             animation: 'nuclei-fade-in 200ms ease',
           }}>
-            <Suspense fallback={null}>
+            <Suspense fallback={<LessonSkeleton />}>
               <LearnModeView />
             </Suspense>
           </div>
@@ -504,7 +512,7 @@ export function PanelLayout() {
                   width: showViz ? `${editorPaneWidth}%` : '100%',
                   minWidth: showViz ? EDITOR_MIN_WIDTH : 0,
                   display: 'flex', flexDirection: 'column',
-                  transition: isDraggingH ? 'none' : 'width var(--duration-normal) var(--ease-standard)',
+                  transition: isDraggingH || !splitSettled ? 'none' : 'width var(--duration-normal) var(--ease-standard)',
                 }}>
                   <EditorTabs />
                   <KernelBanner />
@@ -532,8 +540,8 @@ export function PanelLayout() {
                       }}
                       aria-label={unseenResult ? `${railTab.ariaLabel} · results ready` : railTab.ariaLabel}
                     >
-                      <span className="viz-rail__label">CIRCUIT</span>
                       {unseenResult && <span className="viz-rail__dot" aria-hidden="true" />}
+                      <span className="viz-rail__label">CIRCUIT</span>
                     </button>
                   </Tooltip>
                 )}

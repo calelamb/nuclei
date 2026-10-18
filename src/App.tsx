@@ -45,8 +45,9 @@ import { useExperimentUiStore } from './stores/experimentUiStore';
 import { useExperimentRun } from './hooks/useExperimentRun';
 import { openRunFolder } from './lib/openRunFolder';
 import { restorePersistedPlugins } from './plugins/pluginLoader';
-import { leftPanelsForMode, bottomLeftPanelsForMode } from './layout/panelRegistry';
-import type { LeftPanelId } from './layout/panelRegistry';
+import { topRailViewsFor } from './layout/panelRegistry';
+import { featuresFor } from './layout/uiModeFeatures';
+import { useUiFeatures } from './hooks/useUiFeatures';
 import type { PlatformBridge } from './platform/bridge';
 import type { Framework, KernelLanguage } from './types/quantum';
 
@@ -338,6 +339,7 @@ function AppInner() {
     }
   }, [platform]);
 
+  const uiFeatures = useUiFeatures();
   const commands = buildCommands({
     run: () => { const fn = getExecute(); if (fn) fn(); },
     openFile: () => fileOps.openFile(),
@@ -372,6 +374,7 @@ function AppInner() {
   }, {
     mode: workspaceMode,
     developerViews: experimentalFeatures,
+    explorerSidebar: uiFeatures.explorerSidebar,
     experiments: experiments.map((e) => ({ fileName: e.fileName, name: e.spec.name })),
     hasSelectedRun: selectedRunDir !== null,
     framework,
@@ -419,10 +422,8 @@ function AppInner() {
           // developer flag fresh so the mapping tracks the live rail.
           const mode = useWorkspaceStore.getState().mode;
           const dev = useSettingsStore.getState().general.experimentalFeatures;
-          const bottom = new Set(bottomLeftPanelsForMode(mode));
-          const topViews = leftPanelsForMode(mode, { developerViews: dev }).filter(
-            (v: LeftPanelId) => !bottom.has(v),
-          );
+          const explorerSidebar = featuresFor(mode, useUIModeStore.getState().mode).explorerSidebar;
+          const topViews = topRailViewsFor(mode, { developerViews: dev, explorerSidebar });
           const view = topViews[Number(e.key) - 1];
           if (view) {
             useNavigationStore.getState().setActiveView(view);

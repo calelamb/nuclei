@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  describeKernelFailure, kernelEngineName, kernelNotConnectedMessage, kernelStartFailureTitle,
+  describeKernelFailure, kernelEngineName, kernelUnavailableMessage, kernelNotConnectedMessage, kernelStartFailureTitle,
   kernelStartingMessage, kernelWaitingLabel, normalizeKernelError,
 } from './kernelErrors';
 
@@ -78,5 +78,31 @@ describe('shared kernel vocabulary (research-r-02)', () => {
     expect(kernelStartingMessage({ isWeb: false, again: 'Run again' })).toMatch(/^The kernel is still starting\. Run again/);
     expect(kernelNotConnectedMessage({ isWeb: false })).toBe("The kernel isn't connected. Check the status bar, then try again.");
     expect(kernelWaitingLabel(false)).toBe('Waiting for the kernel…');
+  });
+});
+
+describe('describeDesktopCommandError', () => {
+  it('maps a missing Tauri bridge to the desktop-only sentence and passes other errors through', async () => {
+    const { describeDesktopCommandError, DESKTOP_ONLY_MESSAGE } = await import('./kernelErrors');
+    expect(describeDesktopCommandError(new TypeError("Cannot read properties of undefined (reading 'invoke')"))).toBe(DESKTOP_ONLY_MESSAGE);
+    expect(describeDesktopCommandError("Cannot read properties of undefined (reading 'transformCallback')")).toBe(DESKTOP_ONLY_MESSAGE);
+    expect(describeDesktopCommandError(new Error('disk full'))).toBe('disk full');
+  });
+});
+
+describe('kernelUnavailableMessage (research-r-03)', () => {
+  it('connecting: still starting, with the caller follow-up', () => {
+    expect(kernelUnavailableMessage('connecting', { isWeb: false })).toBe('The kernel is still starting. Try again when the status bar says ready.');
+    expect(kernelUnavailableMessage('connecting', { isWeb: true, again: 'Run again' })).toBe('Python is still starting. Run again when the status bar says ready.');
+  });
+
+  it('failed: names the failed start like the banner and status bar do', () => {
+    expect(kernelUnavailableMessage('failed', { isWeb: false })).toBe("Kernel didn't start. Check the status bar, then retry.");
+    expect(kernelUnavailableMessage('failed', { isWeb: true })).toBe("Python didn't start. Check the status bar, then retry.");
+  });
+
+  it('ready or idle: the connection is gone', () => {
+    expect(kernelUnavailableMessage('ready', { isWeb: false })).toBe("The kernel isn't connected. Check the status bar, then try again.");
+    expect(kernelUnavailableMessage('idle', { isWeb: true })).toBe("Python isn't running. Check the status bar, then try again.");
   });
 });

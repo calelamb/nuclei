@@ -8,10 +8,10 @@
 }
 /* The tab is a full-height strip clipped by its neighbours: draw the focus ring inside it so all four edges show. */
 .viz-rail:hover { background: var(--color-surface-overlay); }
-.viz-rail:focus-visible, .dirac-rail:focus-visible { outline-offset: -2px; border-radius: var(--radius-sm); }
+.viz-rail:focus-visible, .dirac-rail:focus-visible { outline-offset: -2px; border-radius: var(--radius-xs); }
 .viz-rail { position: relative; }
-/* "Results are ready behind this tab": the same teal as the Terminal's unread badge. */
-.viz-rail__dot { position: absolute; top: var(--space-2); left: 50%; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; background: var(--color-accent-quantum); }
+/* "Results are ready behind this tab": the same teal as the Terminal's unread badge. It sits in the flow just before the label (the tab is vertical-rl, so the inline axis runs down the strip and margin-inline-end is the gap between dot and label), not pinned to the strip's far edge. */
+.viz-rail__dot { flex: none; width: 8px; height: 8px; margin-inline-end: var(--space-2); border-radius: 50%; background: var(--color-accent-quantum); }
 /* Where focus lands when the column comes back from its tab. */
 /* Programmatic landing target, not a control: no ring (same as the lesson and track titles). */
 [data-viz-landing]:focus, [data-viz-landing]:focus-visible { outline: none; }
@@ -41,3 +41,8 @@
   font: var(--font-weight-medium) var(--font-size-caption) var(--font-sans);
 }
 .circuit-more-wires:hover { color: var(--color-text-primary); }
+
+/* Results that no longer match the code: dim the graphics (spheres, bars) and keep every label at full strength.
+   The "From last run" pill already says why; text dimmed to 0.5 fell to 2:1 contrast. */
+.viz-stale { --viz-stale-graphic-opacity: 0.5; }
+.viz-stale .bloch-canvas, .viz-stale .histogram-chip__bar { opacity: var(--viz-stale-graphic-opacity); transition: opacity var(--duration-fast) var(--ease-standard); }

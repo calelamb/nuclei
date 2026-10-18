@@ -257,4 +257,23 @@ describe('PyodideRuntimeClient', () => {
     await client.ensureStarted();
     expect(seen).toEqual(['Restarting Python', 'Restarting Python']);
   });
+
+  it('a retry after a failed start is a plain start, not a "Restarting" boot (shell-r6-05)', async () => {
+    let attempt = 0;
+    const flaky: Responder = (req, reply) => {
+      if (req.type !== 'init') return okResponder(req, reply);
+      attempt += 1;
+      if (attempt === 1) {
+        reply({ id: req.id, type: 'failure', message: 'network down', code: 'load_failed' });
+        return;
+      }
+      okResponder(req, reply);
+    };
+    const { client } = makeClient(flaky);
+    await expect(client.ensureStarted()).rejects.toBeInstanceOf(PyodideRuntimeError);
+    const seen: string[] = [];
+    client.onProgress((p) => { if (p) seen.push(p.label); });
+    await client.ensureStarted();
+    expect(seen).toEqual(['Downloading Python', 'Starting kernel']);
+  });
 });

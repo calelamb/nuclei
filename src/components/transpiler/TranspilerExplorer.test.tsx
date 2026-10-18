@@ -27,6 +27,7 @@ describe('Transpiler Explorer platform honesty', () => {
     expect(screen.getAllByRole('button', { name: /Download Nuclei/ })).toHaveLength(1);
     expect(screen.queryByRole('button', { name: /Transpile$/ })).toBeNull();
     expect(document.body.textContent).not.toMatch(/Start it/);
+    expect(document.body.textContent).not.toMatch(/kernel/i);
   });
 
   it('on desktop, Transpile is gated with a waiting label while the kernel starts (research-r-02)', () => {
@@ -45,6 +46,14 @@ describe('Transpiler Explorer platform honesty', () => {
     render(<TranspilerControls />);
     fireEvent.click(screen.getByRole('button', { name: /Transpile/ }));
     expect(useTranspileStore.getState().error).toBe("The kernel isn't connected. Check the status bar, then try again.");
+  });
+
+  it('after a failed start, Transpile points at the failed start, not a dropped connection (research-r-03)', () => {
+    platform.web = false;
+    useEditorStore.setState({ kernelStatus: 'failed' });
+    render(<TranspilerControls />);
+    fireEvent.click(screen.getByRole('button', { name: /Transpile/ }));
+    expect(useTranspileStore.getState().error).toBe("Kernel didn't start. Check the status bar, then retry.");
   });
 
   it('shows an engine failure as an alert with Retry that restarts the kernel', () => {

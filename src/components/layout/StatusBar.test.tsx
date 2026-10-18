@@ -58,7 +58,8 @@ describe('<StatusBar> (extracted from PanelLayout, Phase A)', () => {
 
   it('renders the status-bar toolbar with its canonical slots', () => {
     const { getByRole, getByText } = renderStatusBar();
-    const toolbar = getByRole('toolbar', { name: 'Status bar' });
+    // A group, not a toolbar: it has no roving arrow-key model, so every control is its own Tab stop.
+    const toolbar = getByRole('group', { name: 'Status bar' });
     expect(toolbar).toBeTruthy();
     // Left slots
     expect(getByText('Qubits: —')).toBeTruthy();
@@ -198,7 +199,7 @@ describe('StatusBar kernel state', () => {
       kernelProgress: { step: 2, total: 3, label: 'Loading NumPy', fraction: 0.6 },
     });
     const { getByText, queryByText } = renderStatusBar();
-    expect(getByText('Loading NumPy…')).toBeTruthy();
+    expect(getByText(/^Starting (Python|kernel) 2\/3$/)).toBeTruthy();
     expect(queryByText(/ready/i)).toBeNull();
   });
 
@@ -244,5 +245,38 @@ describe('StatusBar controls', () => {
     expect(useUIModeStore.getState().mode).toBe('intermediate');
     fireEvent.click(items[0]);
     expect(useUIModeStore.getState().mode).toBe('beginner');
+  });
+});
+
+describe('<StatusBar> chrome (shell-r6-07, interaction-r-11)', () => {
+  beforeEach(() => {
+    useCircuitStore.setState({ snapshot: null, lastGood: null, error: null });
+    useSimulationStore.setState({ isRunning: false, result: null });
+    useWorkspaceStore.setState({ mode: 'learn' });
+    useExperimentRunStore.setState({ active: null });
+    useUIModeStore.setState({ mode: 'intermediate' });
+  });
+
+  it('every status-bar button is a control: the shared statusbar-ctl class, not the passive quiet text', () => {
+    const { getByRole } = renderStatusBar();
+    for (const name of [/^Layout preset:/, /^Level:/, /command palette/i, /theme$/]) {
+      expect(getByRole('button', { name }).className).toContain('statusbar-ctl');
+    }
+  });
+
+  it('dims Qubits and Depth while the diagram is the last good parse of broken code', () => {
+    const snapshot = { framework: 'qiskit', qubit_count: 2, classical_bit_count: 0, depth: 3, gates: [] } as never;
+    useCircuitStore.setState({ snapshot: null, lastGood: { snapshot, key: '__buffer__' } as never, error: 'SyntaxError' });
+    const { getByText } = renderStatusBar();
+    const qubits = getByText(/^Qubits:/);
+    expect(qubits.style.opacity).toBe('0.6');
+    expect(getByText(/^Depth:/).style.opacity).toBe('0.6');
+  });
+
+  it('keeps them at full strength for a live parse', () => {
+    const snapshot = { framework: 'qiskit', qubit_count: 2, classical_bit_count: 0, depth: 3, gates: [] } as never;
+    useCircuitStore.setState({ snapshot, error: null });
+    const { getByText } = renderStatusBar();
+    expect(getByText('Qubits: 2').style.opacity).toBe('1');
   });
 });

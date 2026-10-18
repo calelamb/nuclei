@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { render, cleanup, fireEvent, act } from '@testing-library/react';
+import { render, cleanup, fireEvent, act, waitFor } from '@testing-library/react';
 import { ResearchTour } from './ResearchTour';
 import { useResearchTourStore } from '../../stores/researchTourStore';
 import { useNavigationStore } from '../../stores/navigationStore';
@@ -93,6 +93,58 @@ describe('ResearchTour', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(document.activeElement).toBe(editor);
     editor.remove();
+  });
+
+  it('waits for an editor that remounts after the tour (QEC takeover) and focuses it on Done', async () => {
+    useResearchTourStore.setState({ active: false, step: 0 });
+    const opener = document.createElement('textarea');
+    document.body.appendChild(opener);
+    opener.focus();
+    render(<ResearchTour />);
+    act(() => { useResearchTourStore.setState({ active: true }); });
+    opener.remove(); // Monaco unmounted by the takeover
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(document.activeElement).toBe(document.body);
+    const editor = document.createElement('textarea');
+    editor.setAttribute('aria-label', 'Editor content');
+    setTimeout(() => document.body.appendChild(editor), 60);
+    await waitFor(() => expect(document.activeElement).toBe(editor));
+    editor.remove();
+  });
+
+  it('keeps waiting while the editor is mounted but cannot take focus yet (hidden under the takeover)', async () => {
+    useResearchTourStore.setState({ active: false, step: 0 });
+    const opener = document.createElement('button');
+    document.body.appendChild(opener);
+    opener.focus();
+    const editor = document.createElement('textarea');
+    editor.setAttribute('aria-label', 'Editor content');
+    editor.disabled = true; // not focusable, like a display:none editor
+    document.body.appendChild(editor);
+    render(<ResearchTour />);
+    act(() => { useResearchTourStore.setState({ active: true }); });
+    opener.remove();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(document.activeElement).not.toBe(editor);
+    setTimeout(() => { editor.disabled = false; }, 60);
+    await waitFor(() => expect(document.activeElement).toBe(editor));
+    editor.remove();
+  });
+
+  it('falls back to the mode chip when no editor ever mounts', async () => {
+    useResearchTourStore.setState({ active: false, step: 0 });
+    const chip = document.createElement('button');
+    chip.setAttribute('aria-label', 'Switch workspace mode');
+    document.body.appendChild(chip);
+    const opener = document.createElement('button');
+    document.body.appendChild(opener);
+    opener.focus();
+    render(<ResearchTour />);
+    act(() => { useResearchTourStore.setState({ active: true }); });
+    opener.remove();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(document.activeElement).toBe(chip), { timeout: 1500 });
+    chip.remove();
   });
 
   it('declares itself modal for assistive tech, since focus is held inside the card', () => {

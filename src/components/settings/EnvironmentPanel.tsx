@@ -12,6 +12,7 @@ import {
   Loader2,
   Terminal,
 } from 'lucide-react';
+import { describeDesktopCommandError } from '../../lib/kernelErrors';
 import { useThemeStore } from '../../stores/themeStore';
 import type { FrameworkInfo, FrameworkStatus, InstallEvent } from '../../stores/frameworksStore';
 import {
@@ -80,7 +81,7 @@ export function EnvironmentPanel() {
       setStatus(st);
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(describeDesktopCommandError(e));
     } finally {
       setLoading(false);
     }
@@ -130,7 +131,7 @@ export function EnvironmentPanel() {
       try {
         await fn();
       } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
+        setError(describeDesktopCommandError(e));
       } finally {
         await refresh();
         setBusy(null);

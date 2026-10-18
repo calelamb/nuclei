@@ -6,7 +6,7 @@ import { useEditorStore } from '../../stores/editorStore';
 import { useHardwareStore } from '../../stores/hardwareStore';
 import { useTranspileStore, SIMULATOR_TARGET_ID } from '../../stores/transpileStore';
 import { requestTranspile } from '../../lib/transpileSender';
-import { kernelNotConnectedMessage, kernelStartingMessage, kernelWaitingLabel } from '../../lib/kernelErrors';
+import { kernelUnavailableMessage, kernelWaitingLabel } from '../../lib/kernelErrors';
 import { isWebBuild } from '../../platform/buildTarget';
 import { ConnectivityMap } from '../hardware/ConnectivityMap';
 import { resolveTargetRequest } from './transpileMath';
@@ -48,7 +48,7 @@ export function TranspilerControls() {
     const target = resolveTargetRequest(targetId, backends, optimizationLevel);
     setPending(true);
     if (!requestTranspile(code, target)) {
-      setError(kernelStatus === 'connecting' ? kernelStartingMessage() : kernelNotConnectedMessage());
+      setError(kernelUnavailableMessage(kernelStatus));
     }
   };
 

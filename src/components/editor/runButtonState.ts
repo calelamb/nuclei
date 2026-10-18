@@ -1,5 +1,6 @@
 import type { KernelProgress, KernelStatus } from '../../stores/editorStore';
 import { kernelStartFailureTitle } from '../../lib/kernelErrors';
+import { bootStepLabel } from '../layout/kernelStatusModel';
 
 export type RunButtonKind = 'ready' | 'running' | 'loading' | 'failed';
 
@@ -85,7 +86,7 @@ function loadingState(input: RunButtonInput): RunButtonState {
     : progress?.label ?? (web ? 'Waiting for Python' : 'Waiting for the kernel');
   return {
     kind: 'loading',
-    label: counted ? `Loading ${counted.step}/${counted.total}` : progress ? `Starting ${web ? 'Python' : 'kernel'}…` : 'Starting…',
+    label: bootStepLabel(progress, { isWeb: web }).short,
     title: `${stage}. Click to run ${ready}.`,
     disabled: false,
     queueable: true,

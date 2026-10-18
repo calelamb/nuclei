@@ -11,6 +11,7 @@ import { CircuitRenderer } from '../circuit/CircuitRenderer';
 import { Button, EmptyState, Tabs } from '../ui';
 import { kernelStartFailureTitle } from '../../lib/kernelErrors';
 import { retryKernel } from '../../lib/kernelControl';
+import { bootStepLabel } from '../layout/kernelStatusModel';
 import { usePlatform } from '../../platform/PlatformProvider';
 import { useEditorStore } from '../../stores/editorStore';
 import { visibleVizPanelIds } from '../../layout/vizPanels';
@@ -22,7 +23,7 @@ import { fitCircuitWidth } from '../circuit/fitCircuit';
 import { useDisplaySnapshot } from '../../layout/useDisplaySnapshot';
 import { useElementSize } from '../../hooks/useElementSize';
 import { useResultStale } from '../../hooks/useResultStale';
-import { StaleResultNotice, STALE_RESULT_OPACITY } from '../layout/StaleResultNotice';
+import { StaleResultNotice } from '../layout/StaleResultNotice';
 import { BlochRail } from '../layout/BlochRail';
 import { VIZ_LANDING_ATTR } from '../layout/focusViz';
 import { BlochPanel } from '../bloch/BlochPanel';
@@ -137,10 +138,10 @@ export function VizZone({
 
   const progress = useEditorStore((st) => st.kernelProgress);
   if (booting && panels.length === 0) {
-    const stage = progress && progress.kind !== 'attempts' && progress.total > 0 ? ` (step ${progress.step} of ${progress.total})` : '';
+    const heading = bootStepLabel(progress, { isWeb: platform.getPlatform() === 'web' }).long;
     return (
       <div style={COLUMN_STYLE}>
-        <EmptyState className="viz-empty viz-empty--boot" icon={<Workflow size={20} />} title={`Preparing Python${stage}`}>
+        <EmptyState className="viz-empty viz-empty--boot" icon={<Workflow size={20} />} title={heading}>
           Circuit and results appear when it&rsquo;s ready.
         </EmptyState>
       </div>
@@ -184,7 +185,7 @@ export function VizZone({
         return (
         <PanelReveal key={p.id} when from="right" style={p.id === 'bloch' ? blochStyle : fills ? FILL_STYLE : CONTENT_STYLE}>
           <div
-            className={p.id === 'bloch' && stale ? 'nuclei-stale-results' : undefined}
+            className={p.id === 'bloch' && stale ? 'viz-stale' : undefined}
             style={p.id === 'bloch' ? FILL_BODY_STYLE_FLEX : fills ? FILL_BODY_STYLE : CONTENT_BODY_STYLE}
           >
             {p.id === 'bloch' && stale && <StaleResultNotice />}
@@ -202,12 +203,11 @@ export function VizZone({
           onSelect={(id) => setActiveTab(projectRoot, id)}
         />
       )}
-      <div ref={measureChip} data-testid="viz-chip" style={stale ? STALE_CHIP_STYLE : CHIP_STYLE} data-stale={stale ? 'true' : undefined}>{chip}</div>
+      <div ref={measureChip} data-testid="viz-chip" className={stale ? 'viz-stale' : undefined} style={CHIP_STYLE} data-stale={stale ? 'true' : undefined}>{chip}</div>
     </div>
   );
 }
 const CHIP_STYLE = { flexShrink: 0 } as const;
-const STALE_CHIP_STYLE = { opacity: STALE_RESULT_OPACITY, flexShrink: 0 } as const;
 
 // When even the floors of the circuit and the spheres do not fit, the rail scrolls instead of clipping.
 const COLUMN_STYLE = { width: '100%', height: '100%', minWidth: 0, display: 'flex', flexDirection: 'column', overflowY: 'auto' } as const;

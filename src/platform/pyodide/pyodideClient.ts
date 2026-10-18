@@ -145,6 +145,8 @@ export class PyodideRuntimeClient {
       },
       (error: unknown) => {
         this.quietRestart = false;
+        // A start that never finished is retried as a plain start, never a "restart".
+        this.restarted = false;
         this.teardown();
         throw error;
       },
@@ -254,6 +256,8 @@ export class PyodideRuntimeClient {
   private teardown(reason: 'timeout' | 'stopped' = 'timeout', quiet = false, previewTimedOut?: Pending) {
     this.quietRestart = quiet;
     const hadWorker = this.worker !== null;
+    // Only an engine that had finished booting is "restarting"; a retry after a failed start is just starting.
+    const wasReady = this.ready;
     this.worker?.terminate();
     this.worker = null;
     this.ready = false;
@@ -266,7 +270,7 @@ export class PyodideRuntimeClient {
     const orphaned = previewTimedOut ? [previewTimedOut] : detached;
     this.setProgress(null);
     this.setState('idle');
-    if (hadWorker) this.restarted = true;
+    if (wasReady) this.restarted = true;
     if (hadWorker || orphaned.length > 0) {
       const error = reason === 'stopped'
         ? new PyodideRuntimeError('Run stopped.', 'stopped')

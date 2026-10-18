@@ -1,10 +1,15 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { PluginMarketplace } from './PluginMarketplace';
 import { usePluginStore } from '../../plugins/pluginManager';
 
-afterEach(() => { cleanup(); usePluginStore.setState({ plugins: [] }); });
+const platform = vi.hoisted(() => ({ web: false }));
+vi.mock('../../platform/buildTarget', () => ({ isWebBuild: () => platform.web }));
+const openDirectory = vi.hoisted(() => vi.fn());
+vi.mock('../../platform/PlatformProvider', () => ({ loadBridge: async () => ({ openDirectory }) }));
+
+afterEach(() => { platform.web = false; openDirectory.mockClear(); cleanup(); usePluginStore.setState({ plugins: [] }); });
 
 describe('PluginMarketplace', () => {
   it('uses the shared Tabs primitive in sentence case (no hand-rolled uppercase strip)', () => {
@@ -30,5 +35,16 @@ describe('PluginMarketplace', () => {
     const { container } = render(<PluginMarketplace />);
     expect(container.querySelector('.nuclei-empty')).toBeTruthy();
     expect(screen.getByText('No plugins installed').className).toContain('nuclei-empty__title');
+  });
+
+  it('web: shows the desktop-only state, no Load/Create actions, and never opens a picker (shell-r6-02)', () => {
+    platform.web = true;
+    render(<PluginMarketplace />);
+    expect(screen.getByText('Plugins run in the desktop app')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Load plugin/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Create plugin/ })).toBeNull();
+    expect(screen.getAllByRole('button', { name: /Download Nuclei/ })).toHaveLength(1);
+    expect(document.body.textContent).not.toMatch(/Load one from a folder/);
+    expect(openDirectory).not.toHaveBeenCalled();
   });
 });

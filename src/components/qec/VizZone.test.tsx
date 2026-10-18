@@ -188,9 +188,30 @@ describe('<VizZone> while Python boots', () => {
   it('puts the step in the title and keeps the body to one sentence', () => {
     useEditorStore.setState({ kernelProgress: { step: 1, total: 3, label: 'Downloading Python', fraction: 0 } });
     const { container } = render(<VizZone visible={visible({})} chip={null} booting />);
-    expect(container.textContent).toContain('Preparing Python (step 1 of 3)');
+    expect(container.textContent).toContain('Starting Python (1 of 3)');
     expect(container.textContent).toContain('Circuit and results appear when it');
     expect(container.textContent).not.toMatch(/·\s*1\/3/);
     useEditorStore.setState({ kernelProgress: null });
+  });
+});
+
+describe('<VizZone> stale results (research-r-05)', () => {
+  afterEach(() => { useSimulationStore.getState().clearResult(); });
+
+  it('dims only the graphics: no opacity on the chip or the Bloch body wrapper, so labels stay readable', () => {
+    useSimulationStore.getState().beginRun('qc.h(0)');
+    useSimulationStore.getState().setResult({ probabilities: { '0': 1 }, bloch_coords: [] } as never);
+    useEditorStore.setState({ code: 'qc.h(0)\nqc.x(0)' });
+    const { getByTestId, container } = render(
+      <VizZone visible={visible({ bloch: true, histogramChip: true })} chip={<span>Top outcomes</span>} />,
+    );
+    const chip = getByTestId('viz-chip');
+    expect(chip.getAttribute('data-stale')).toBe('true');
+    expect(chip.className).toContain('viz-stale');
+    expect(chip.style.opacity).toBe('');
+    const body = container.querySelector('.viz-stale');
+    expect(body).toBeTruthy();
+    expect((body as HTMLElement).style.opacity).toBe('');
+    useEditorStore.setState({ code: 'qc.h(0)' });
   });
 });

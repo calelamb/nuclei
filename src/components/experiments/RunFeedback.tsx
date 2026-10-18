@@ -3,14 +3,14 @@ import { X } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useExperimentUiStore } from '../../stores/experimentUiStore';
 import { useExperimentRunStore } from '../../stores/experimentRunStore';
-import { useEditorStore } from '../../stores/editorStore';
+import { useEditorStore, type KernelStatus } from '../../stores/editorStore';
 import type { RunSummary } from '../../services/experimentRunner';
 import { TYPOGRAPHY, ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
 import { useProjectStore } from '../../stores/projectStore';
 import { useExperimentStore } from '../../services/experimentStore';
 import { useExperimentRun } from '../../hooks/useExperimentRun';
 import { Button, IconButton } from '../ui';
-import { kernelNotConnectedMessage, kernelStartingMessage } from '../../lib/kernelErrors';
+import { kernelUnavailableMessage } from '../../lib/kernelErrors';
 
 const SUMMARY_VISIBLE_MS = 8000;
 
@@ -29,11 +29,9 @@ const KERNEL_UNREACHABLE = /failed to connect to kernel/i;
  * is still booting is not a failure: say so and point at the status bar, the
  * one place its progress is shown.
  */
-function humanizeRunError(raw: string, kernelStarting: boolean): string {
+function humanizeRunError(raw: string, kernelStatus: KernelStatus): string {
   if (!KERNEL_UNREACHABLE.test(raw)) return raw;
-  return kernelStarting
-    ? kernelStartingMessage({ again: 'Run again' })
-    : kernelNotConnectedMessage();
+  return kernelUnavailableMessage(kernelStatus, { again: 'Run again' });
 }
 
 /**
@@ -52,7 +50,8 @@ export function RunFeedback({ compact = false }: { compact?: boolean }) {
   const projectRoot = useProjectStore((s) => s.projectRoot);
   const selectedFileName = useExperimentUiStore((s) => s.selectedExperimentFileName);
   const experiments = useExperimentStore((s) => s.experiments);
-  const kernelStarting = useEditorStore((s) => s.kernelStatus === 'connecting');
+  const kernelStatus = useEditorStore((s) => s.kernelStatus);
+  const kernelStarting = kernelStatus === 'connecting';
   const { run } = useExperimentRun();
 
   useEffect(() => {
@@ -77,7 +76,7 @@ export function RunFeedback({ compact = false }: { compact?: boolean }) {
     clearFeedback();
     void run(retryTarget, projectRoot);
   };
-  const text = isError ? humanizeRunError(lastError, kernelStarting) : describeRunSummary(lastSummary as RunSummary);
+  const text = isError ? humanizeRunError(lastError, kernelStatus) : describeRunSummary(lastSummary as RunSummary);
 
   return (
     <div
