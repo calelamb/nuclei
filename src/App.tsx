@@ -430,7 +430,7 @@ function AppInner() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [fileOps, themeToggle, cycleMode, toggleDirac, focusDirac, setShowShortcuts, setShowCommandPalette, showOnboarding]);
+  }, [fileOps, themeToggle, cycleMode, toggleDirac, focusDirac, setShowShortcuts, setShowCommandPalette, setComposeOpen, showOnboarding]);
 
   return (
     <>

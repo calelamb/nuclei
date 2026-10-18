@@ -11,6 +11,7 @@ import { computeCircuitGeometry, columnX } from './geometry';
 import { formatAngle } from './formatAngle';
 import { CircuitEmptyState } from './CircuitEmptyState';
 import { ExportMenu } from './ExportMenu';
+import { useEdgeFades } from './edgeFades';
 import { fitCircuitWidth } from './fitCircuit';
 import { useElementSize } from '../../hooks/useElementSize';
 import { GateExplorerPopup } from './GateExplorerPopup';
@@ -163,6 +164,8 @@ export function CircuitRenderer() {
   const colors = useThemeStore((s) => s.colors);
 
   const [measureContainer, containerSize] = useElementSize<HTMLDivElement>();
+  const { ref: fadeRef, onScroll: onContainerScroll, style: fadeStyle } = useEdgeFades<HTMLDivElement>();
+  const setContainerRef = useCallback((el: HTMLDivElement | null) => { measureContainer(el); fadeRef(el); }, [measureContainer, fadeRef]);
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
 
@@ -222,9 +225,10 @@ export function CircuitRenderer() {
         </span>
       </div>
       <div
-        ref={measureContainer}
+        ref={setContainerRef}
+        onScroll={onContainerScroll}
         className="circuit-renderer-container"
-        style={{ flex: 1, minHeight: 0, overflow: 'auto', position: 'relative', padding: '4px 0 6px', opacity: stale ? 0.45 : 1, transition: 'opacity var(--duration-fast) var(--ease-standard)' }}
+        style={{ ...fadeStyle, flex: 1, minHeight: 0, overflow: 'auto', position: 'relative', padding: '4px 0 6px', opacity: stale ? 0.45 : 1, transition: 'opacity var(--duration-fast) var(--ease-standard)' }}
         aria-description={ariaDescription}
       >
         <svg
