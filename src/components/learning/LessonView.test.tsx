@@ -11,11 +11,18 @@ vi.mock('./ExerciseBlock', () => ({ ExerciseBlock: () => <div /> }));
 vi.mock('./VideoPlayer', () => ({ VideoPlayer: () => <div /> }));
 vi.mock('./InteractiveBlochSphere', () => ({ InteractiveBlochSphere: () => <div /> }));
 
-class NoopObserver { observe() {} disconnect() {} unobserve() {} }
+const observed: IntersectionObserverInit[] = [];
+class NoopObserver {
+  constructor(_cb: unknown, options?: IntersectionObserverInit) { if (options) observed.push(options); }
+  observe() {}
+  disconnect() {}
+  unobserve() {}
+}
 const track = TRACKS.find((t) => t.lessons.length > 1)!;
 const lesson = track.lessons[0];
 
 beforeEach(() => {
+  observed.length = 0;
   localStorage.clear();
   vi.stubGlobal('IntersectionObserver', NoopObserver);
   Element.prototype.scrollIntoView = vi.fn();
@@ -47,5 +54,25 @@ describe('LessonView', () => {
       expect(useLearnSectionStore.getState().restore).toBeNull();
       resolve();
     }));
+  });
+
+  it('activates a block when its top crosses a line about 30% down the reader, not when a sliver is visible', () => {
+    render(<LessonView lesson={lesson} trackId={track.id} />);
+    expect(observed[0]?.rootMargin).toBe('-30% 0px -60% 0px');
+  });
+});
+
+describe('LessonView completion', () => {
+  it('turns the up-next card into a completion acknowledgement', () => {
+    useLearnStore.setState({ completedLessons: [lesson.id] });
+    render(<LessonView lesson={lesson} trackId={track.id} />);
+    expect(screen.getByText(/Lesson complete/).textContent).toMatch(/1 of \d+/);
+    expect(screen.getByRole('button', { name: /Next lesson/ })).toBeTruthy();
+  });
+
+  it('keeps the plain up-next card before the lesson is done', () => {
+    render(<LessonView lesson={lesson} trackId={track.id} />);
+    expect(screen.queryByText(/Lesson complete/)).toBeNull();
+    expect(screen.getByText('Up next')).toBeTruthy();
   });
 });
