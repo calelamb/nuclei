@@ -2,10 +2,15 @@ import type { LambdaGroupEstimate, RateUnits } from './qecFit';
 import { lambdaCaveats } from './qecLambdaText';
 import { formatLambda, formatNoise } from './qecPlotFormat';
 
+/** A decoder's table shows this many rows before the rest sit behind "Show all". */
+export const LAMBDA_ROW_LIMIT = 8;
+
 export interface LambdaRowView {
   /** p as text, e.g. "3.6×10⁻⁴". */
   p: string;
   noise: number;
+  /** Λ as a number, for range summaries. */
+  lambdaValue: number;
   lambda: string;
   /** "4.74–8.09", or null when the interval is not meaningful. */
   ci: string | null;
@@ -63,6 +68,7 @@ function toRow(e: LambdaGroupEstimate, showExperiment: boolean): LambdaRowView {
   return {
     p: formatNoise(e.noise),
     noise: e.noise,
+    lambdaValue: est.lambda.best,
     lambda: formatLambda(est.lambda.best),
     ci: est.intervalMeaningful ? `${formatLambda(est.ci95.low)}–${formatLambda(est.ci95.high)}` : null,
     rSquared: est.rSquared.toFixed(2),
@@ -117,4 +123,15 @@ export function buildLambdaTable(estimates: readonly LambdaGroupEstimate[], unit
     return { decoder, rows, collapsed: hidden.length > 0 ? { rows: hidden, summary: collapsedSummary(hidden, rows) } : null };
   });
   return { subtitle, groups, notes: distinctNotes(estimates) };
+}
+
+/** "Λ 4.7–8.1 over 12 values of p": one line that says what a long table holds. */
+export function lambdaRangeSummary(rows: readonly LambdaRowView[]): string {
+  if (rows.length === 0) return '';
+  const values = rows.map((r) => r.lambdaValue);
+  const low = formatLambda(Math.min(...values));
+  const high = formatLambda(Math.max(...values));
+  if (rows.length === 1) return `Λ ${low} at p = ${rows[0].p}`;
+  const span = low === high ? low : `${low}–${high}`;
+  return `Λ ${span} over ${rows.length} values of p`;
 }

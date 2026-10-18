@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import { TriangleAlert } from 'lucide-react';
 import { MIN_LAMBDA_DISTANCES, type LambdaGroupEstimate, type RateUnits } from '../../lib/qecFit';
-import { buildLambdaTable, type LambdaRowView } from '../../lib/qecLambdaTable';
+import { buildLambdaTable, lambdaRangeSummary, LAMBDA_ROW_LIMIT, type LambdaDecoderGroup, type LambdaRowView } from '../../lib/qecLambdaTable';
 import type { ThemeColors } from '../../stores/themeStore';
 import { ICON_SIZE, ICON_STROKE, TYPOGRAPHY } from '../../styles/tokens';
 import './qecAnalysis.css';
@@ -33,39 +34,7 @@ export function QecLambdaReadout({ decoders, estimates, units, colors, hideTitle
       )}
       {table.subtitle && <div style={{ fontSize: 11, color: colors.textMuted, margin: '2px 0 6px' }}>{table.subtitle}</div>}
       {table.groups.map((g) => (
-        <div key={g.decoder} style={{ marginBottom: 8 }}>
-          <Table label={`Λ for ${g.decoder}`} dense className="qec-lambda-table">
-            <caption style={{ captionSide: 'top', textAlign: 'left', fontWeight: 600, padding: '4px 8px', color: colors.text }}>{g.decoder}</caption>
-            <Thead>
-              <Tr>
-                <Th plain>p</Th>
-                <Th numeric plain>Λ</Th>
-                <Th numeric plain>95% CI</Th>
-                <Th numeric plain>r²</Th>
-                <Th aria-label="Warnings" />
-              </Tr>
-            </Thead>
-            <Tbody>
-              {g.rows.map((r) => <LambdaRow key={`${r.experiment}|${r.noise}`} row={r} colors={colors} />)}
-            </Tbody>
-            {g.collapsed && (
-              <Tbody>
-                <Tr>
-                  <Td colSpan={5} text>
-                    <details style={{ color: colors.textMuted, fontSize: 11 }}>
-                      <summary style={{ cursor: 'pointer' }}>{g.collapsed.summary}</summary>
-                      <Table label={`Λ for ${g.decoder}, rows not meaningful`} dense className="qec-lambda-table">
-                        <Tbody>
-                          {g.collapsed.rows.map((r) => <LambdaRow key={`${r.experiment}|${r.noise}`} row={r} colors={colors} />)}
-                        </Tbody>
-                      </Table>
-                    </details>
-                  </Td>
-                </Tr>
-              </Tbody>
-            )}
-          </Table>
-        </div>
+        <DecoderLambdaTable key={g.decoder} group={g} colors={colors} />
       ))}
       {withoutFit.map((d) => (
         <div key={d} style={{ fontSize: 11, color: colors.textMuted, marginBottom: 6 }}>
@@ -79,6 +48,56 @@ export function QecLambdaReadout({ decoders, estimates, units, colors, hideTitle
         </ul>
       )}
     </section>
+  );
+}
+
+/** One decoder's Λ table: the first rows, a one-line range summary, and the rest on request. */
+function DecoderLambdaTable({ group: g, colors }: { group: LambdaDecoderGroup; colors: ThemeColors }) {
+  const [showAll, setShowAll] = useState(false);
+  const overflow = g.rows.length > LAMBDA_ROW_LIMIT;
+  const shown = overflow && !showAll ? g.rows.slice(0, LAMBDA_ROW_LIMIT) : g.rows;
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <Table label={`Λ for ${g.decoder}`} dense className="qec-lambda-table">
+        <caption style={{ captionSide: 'top', textAlign: 'left', fontWeight: 600, padding: '4px 8px', color: colors.text }}>
+          {g.decoder}
+          {overflow && <span style={{ display: 'block', fontWeight: 400, fontSize: 11, color: colors.textMuted }}>{lambdaRangeSummary(g.rows)}</span>}
+        </caption>
+        <Thead>
+          <Tr>
+            <Th plain>p</Th>
+            <Th numeric plain>Λ</Th>
+            <Th numeric plain>95% CI</Th>
+            <Th numeric plain>r²</Th>
+            <Th aria-label="Warnings" />
+          </Tr>
+        </Thead>
+        <Tbody>
+          {shown.map((r) => <LambdaRow key={`${r.experiment}|${r.noise}`} row={r} colors={colors} />)}
+        </Tbody>
+        {g.collapsed && (
+          <Tbody>
+            <Tr>
+              <Td colSpan={5} text>
+                <details style={{ color: colors.textMuted, fontSize: 11 }}>
+                  <summary style={{ cursor: 'pointer' }}>{g.collapsed.summary}</summary>
+                  <Table label={`Λ for ${g.decoder}, rows not meaningful`} dense className="qec-lambda-table">
+                    <Tbody>
+                      {g.collapsed.rows.map((r) => <LambdaRow key={`${r.experiment}|${r.noise}`} row={r} colors={colors} />)}
+                    </Tbody>
+                  </Table>
+                </details>
+              </Td>
+            </Tr>
+          </Tbody>
+        )}
+      </Table>
+      {overflow && (
+        <button type="button" className="qec-link-button" style={{ margin: '4px 8px' }} onClick={() => setShowAll((v) => !v)}>
+          {showAll ? 'Show fewer' : `Show all ${g.rows.length}`}
+        </button>
+      )}
+    </div>
   );
 }
 

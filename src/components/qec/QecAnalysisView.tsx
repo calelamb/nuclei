@@ -6,7 +6,7 @@ import { useExperimentUiStore } from '../../stores/experimentUiStore';
 import { QecCampaignActions } from './QecCampaignActions';
 import { SegmentedControl } from '../ui/SegmentedControl';
 import { useElementSize } from '../../hooks/useElementSize';
-import { isShortAnalysis } from '../../lib/qecAnalysisLayout';
+import { canStackLambda, isShortAnalysis } from '../../lib/qecAnalysisLayout';
 import { ThresholdPanel } from './ThresholdPanel';
 import { DecoderWorkbench } from './DecoderWorkbench';
 import { isWebBuild } from '../../platform/buildTarget';
@@ -25,6 +25,8 @@ const ANALYSIS_TABS = [
   { value: 'lambda', label: 'Λ' },
   { value: 'decoders', label: 'Decoders' },
 ] as const;
+/** When Λ sits under the plot there is no separate Λ section. */
+const STACKED_TABS = ANALYSIS_TABS.filter((t) => t.value !== 'lambda');
 
 
 /**
@@ -51,9 +53,12 @@ export function QecAnalysisView({ embedded = false, actionsInHeader = false }: {
   const [scrollRef, scrollSize] = useElementSize<HTMLDivElement>();
   const [tab, setTab] = useState<AnalysisTab>('plot');
   const tabbed = isShortAnalysis(scrollSize.height, scrollSize.width);
+  const lambdaBelow = tabbed && canStackLambda(scrollSize.height, scrollSize.width);
+  // Λ lives under the plot when there is room; its tab would be a dead end then.
+  const activeTab: AnalysisTab = lambdaBelow && tab === 'lambda' ? 'plot' : tab;
 
   const tabSwitch = (
-    <SegmentedControl aria-label="Analysis section" value={tab} options={ANALYSIS_TABS} onChange={setTab} />
+    <SegmentedControl aria-label="Analysis section" value={activeTab} options={lambdaBelow ? STACKED_TABS : ANALYSIS_TABS} onChange={setTab} />
   );
 
   const webOnly = isWebBuild(); // no kernel to run campaigns in the browser
@@ -144,7 +149,9 @@ export function QecAnalysisView({ embedded = false, actionsInHeader = false }: {
           {tabbed ? (
             <>
               <div style={{ flex: '1 0 auto', minHeight: PLOT_MIN_HEIGHT }}>
-                {tab === 'decoders' ? <DecoderWorkbench tabs={tabSwitch} /> : <ThresholdPanel part={tab} tabs={tabSwitch} />}
+                {activeTab === 'decoders'
+                  ? <DecoderWorkbench tabs={tabSwitch} />
+                  : <ThresholdPanel part={lambdaBelow ? 'all' : activeTab} tabs={tabSwitch} />}
               </div>
             </>
           ) : (

@@ -120,12 +120,21 @@ const GUTTER = 12;
 
 export interface PlotBox { layout: 'row' | 'stack'; plotW: number; plotH: number }
 
+const STACK_ASPECT = 0.62;
+const FILL_ASPECT = 1.1;
+const FILL_MAX_H = 620;
+
+/** Height of the stacked plot at its natural proportion for a card of this width. */
+export function stackedPlotHeight(width: number): number {
+  return Math.round(Math.max(MIN_PLOT_W, width) * STACK_ASPECT);
+}
+
 /**
  * Size of the plot for a measured container. Wide containers put the Λ readout
  * beside the plot (plot fills the height); narrow ones stack it below with a
  * height in proportion to the width.
  */
-export function plotBox(container: { width: number; height: number }): PlotBox {
+export function plotBox(container: { width: number; height: number }, opts: { fill?: boolean } = {}): PlotBox {
   const w = container.width > 0 ? container.width : DEFAULT_BOX.width;
   const h = container.height > 0 ? container.height : DEFAULT_BOX.height;
   if (w >= WIDE_MIN_WIDTH) {
@@ -133,8 +142,11 @@ export function plotBox(container: { width: number; height: number }): PlotBox {
     return { layout: 'row', plotW, plotH: Math.max(MIN_PLOT_H, h - TOP_STRIP) };
   }
   const plotW = Math.max(MIN_PLOT_W, w);
-  const wanted = Math.min(plotW * 0.62, h - TOP_STRIP);
-  return { layout: 'stack', plotW, plotH: Math.round(Math.min(STACK_MAX_H, Math.max(MIN_PLOT_H, wanted))) };
+  // When the plot owns the card (no readout beside or below it) it grows with the height instead of
+  // stopping at its natural proportion and leaving the rest of the card empty.
+  const wanted = opts.fill ? Math.min(plotW * FILL_ASPECT, h - TOP_STRIP) : Math.min(plotW * STACK_ASPECT, h - TOP_STRIP);
+  const cap = opts.fill ? FILL_MAX_H : STACK_MAX_H;
+  return { layout: 'stack', plotW, plotH: Math.round(Math.min(cap, Math.max(MIN_PLOT_H, wanted))) };
 }
 
 // ───────────────────────────── whole figure ─────────────────────────────

@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, cleanup, fireEvent } from '@testing-library/react';
 import { QecAnalysisView } from './QecAnalysisView';
-import { isShortAnalysis, SHORT_ANALYSIS_HEIGHT } from '../../lib/qecAnalysisLayout';
+import { canStackLambda, isShortAnalysis, SHORT_ANALYSIS_HEIGHT } from '../../lib/qecAnalysisLayout';
 import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 
 const size = vi.hoisted(() => ({ current: { width: 700, height: 420 } }));
@@ -28,6 +28,25 @@ describe('isShortAnalysis', () => {
     expect(isShortAnalysis(900, 779)).toBe(true);
     expect(isShortAnalysis(900, 780)).toBe(false);
     expect(isShortAnalysis(900, 0)).toBe(false);
+  });
+});
+
+describe('canStackLambda (qec-r-24)', () => {
+  it('stacks the readout under the plot only in a narrow card with 260px to spare', () => {
+    expect(canStackLambda(900, 470)).toBe(true);
+    expect(canStackLambda(560, 470)).toBe(false);
+    expect(canStackLambda(900, 1000)).toBe(false);
+    expect(canStackLambda(0, 470)).toBe(false);
+  });
+});
+
+describe('a tall narrow card shows Λ under the plot instead of behind a tab (qec-r-24)', () => {
+  it('offers Plot | Decoders and keeps the Λ readout on the plot view', () => {
+    size.current = { width: 470, height: 900 };
+    const { getByRole, getByLabelText, queryByRole } = render(<QecAnalysisView embedded />);
+    expect(getByRole('radio', { name: 'Plot' })).toBeTruthy();
+    expect(queryByRole('radio', { name: 'Λ' })).toBeNull();
+    expect(getByLabelText('Error suppression factor Λ')).toBeTruthy();
   });
 });
 

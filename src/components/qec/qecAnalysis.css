@@ -19,3 +19,10 @@
 /* Segmented options never wrap onto two lines, whatever the header width. */
 .nuclei-segmented__option { white-space: nowrap; }
 .nuclei-table.qec-lambda-table { max-width: 440px; }
+
+/* A quiet in-text action such as "Show all 12". */
+.qec-link-button {
+  padding: 0; border: 0; background: transparent; cursor: pointer;
+  color: var(--color-accent-quantum-text); font-family: var(--font-sans); font-size: var(--font-size-caption);
+}
+.qec-link-button:hover { text-decoration: underline; }

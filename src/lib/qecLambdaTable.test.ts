@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { lambdaEstimates } from './qecFit';
-import { buildLambdaTable } from './qecLambdaTable';
+import { buildLambdaTable, lambdaRangeSummary, LAMBDA_ROW_LIMIT } from './qecLambdaTable';
 import { formatLambda } from './qecPlotFormat';
 import type { QecCampaignStatsRow } from '../types/qec';
 
@@ -69,5 +69,27 @@ describe('buildLambdaTable (qec-04)', () => {
     const t = buildLambdaTable(lambdaEstimates(two, { units: 'per_round' }), 'per_round');
     const exps = t.groups.flatMap((g) => g.rows.map((r) => r.experiment));
     expect(exps.some((e) => e !== null)).toBe(true);
+  });
+});
+
+describe('lambdaRangeSummary (qec-r-35)', () => {
+  const table = buildLambdaTable(lambdaEstimates(rows, { units: 'per_round' }), 'per_round');
+
+  it('summarises the span of Λ and p across the meaningful rows', () => {
+    const summary = lambdaRangeSummary(table.groups[0].rows);
+    expect(summary).toMatch(/^Λ [\d.]+–[\d.]+ over 2 values of p$/);
+  });
+
+  it('is a single value when every Λ is equal', () => {
+    const one = table.groups[0].rows.slice(0, 1);
+    expect(lambdaRangeSummary(one)).toMatch(/^Λ [\d.]+ at p = /);
+  });
+
+  it('is empty without rows', () => {
+    expect(lambdaRangeSummary([])).toBe('');
+  });
+
+  it('shows at most LAMBDA_ROW_LIMIT rows before offering the rest', () => {
+    expect(LAMBDA_ROW_LIMIT).toBe(8);
   });
 });

@@ -149,8 +149,8 @@ export function ThresholdPanel({ part = 'all', tabs }: { part?: ThresholdPart; t
   }
 
   const decoders = [...new Set(series.map((s) => s.decoder))].sort();
-  const fullBox = plotBox(area);
-  // Plot alone: the readout's column is not reserved, so the plot takes the full width.
+  // Plot alone: the readout's column is not reserved, so the plot takes the full width and the full height.
+  const fullBox = plotBox(area, { fill: part === 'plot' });
   const box = part === 'plot' && fullBox.layout === 'row'
     ? { layout: 'stack' as const, plotW: Math.max(MIN_PLOT_W, area.width - PLOT_ONLY_PAD), plotH: fullBox.plotH }
     : fullBox;
