@@ -38,7 +38,11 @@ export class PyodideRuntimeError extends Error {
 export const LOAD_FAILED_MESSAGE =
   "Couldn't start the browser Python engine. Check your connection or content blocker, then retry.";
 
+type RequestBody = { type: 'init' } | { type: 'call'; fn: RuntimeFunction; args: unknown[] };
+
 interface Pending {
+  /** What was posted, so a call that outlives a preview recycle can be sent again. */
+  body: RequestBody;
   resolve: (value: string) => void;
   reject: (error: PyodideRuntimeError) => void;
   timer: ReturnType<typeof setTimeout> | null;
@@ -166,7 +170,7 @@ export class PyodideRuntimeClient {
   }
 
   private request(
-    body: { type: 'init' } | { type: 'call'; fn: RuntimeFunction; args: unknown[] },
+    body: RequestBody,
     timeoutMs?: number,
     onOutput?: (line: string) => void,
     quietRestart?: boolean,
@@ -174,7 +178,7 @@ export class PyodideRuntimeClient {
     const worker = this.ensureWorker();
     const id = this.nextId++;
     return new Promise<string>((resolve, reject) => {
-      this.pending.set(id, { resolve, reject, timer: null, timeoutMs, onOutput, quietRestart });
+      this.pending.set(id, { body, resolve, reject, timer: null, timeoutMs, onOutput, quietRestart });
       worker.postMessage({ ...body, id } as WorkerRequest);
     });
   }
@@ -222,7 +226,9 @@ export class PyodideRuntimeClient {
     if (entry.timeoutMs === undefined || entry.timer) return;
     entry.timer = setTimeout(() => {
       if (!this.pending.has(id)) return;
-      this.teardown('timeout', entry.quietRestart === true); // rejects everything, including this call, with a timeout
+      // A preview timeout kills only the preview; anything queued behind it runs on the fresh worker.
+      if (entry.quietRestart === true) this.teardown('timeout', true, entry);
+      else this.teardown('timeout'); // rejects everything, including this call, with a timeout
     }, entry.timeoutMs);
   }
 
@@ -245,7 +251,7 @@ export class PyodideRuntimeClient {
     return entries;
   }
 
-  private teardown(reason: 'timeout' | 'stopped' = 'timeout', quiet = false) {
+  private teardown(reason: 'timeout' | 'stopped' = 'timeout', quiet = false, previewTimedOut?: Pending) {
     this.quietRestart = quiet;
     const hadWorker = this.worker !== null;
     this.worker?.terminate();
@@ -254,7 +260,10 @@ export class PyodideRuntimeClient {
     this.bootPromise = null;
     // Detach the old calls BEFORE notifying listeners: a listener may start a
     // new boot synchronously, and that new request must not be failed with them.
-    const orphaned = this.takePending();
+    const detached = this.takePending();
+    // After a preview timeout only the preview fails; calls queued behind it are sent again.
+    const survivors = previewTimedOut ? detached.filter((entry) => entry !== previewTimedOut) : [];
+    const orphaned = previewTimedOut ? [previewTimedOut] : detached;
     this.setProgress(null);
     this.setState('idle');
     if (hadWorker) this.restarted = true;
@@ -267,6 +276,26 @@ export class PyodideRuntimeClient {
         );
       orphaned.forEach((entry) => entry.reject(error));
     }
+    if (survivors.length > 0) this.redispatch(survivors);
+  }
+
+  /** Re-post calls that were queued on a worker that was recycled underneath them. */
+  private redispatch(entries: Pending[]) {
+    this.ensureStarted().then(
+      () => {
+        entries.forEach((entry) => {
+          const id = this.nextId++;
+          this.pending.set(id, { ...entry, timer: null });
+          this.worker?.postMessage({ ...entry.body, id } as WorkerRequest);
+        });
+      },
+      (error: unknown) => {
+        const failure = error instanceof PyodideRuntimeError
+          ? error
+          : new PyodideRuntimeError(LOAD_FAILED_MESSAGE, 'load_failed');
+        entries.forEach((entry) => entry.reject(failure));
+      },
+    );
   }
 }
 
