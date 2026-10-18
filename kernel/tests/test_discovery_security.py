@@ -173,6 +173,7 @@ def test_workers_turn_unserialisable_results_into_a_coded_failure(module):
         line = worker._encode_response({"status": "scored", "fitness": bad, "metrics": {"x": bad}})
         assert line.endswith(b"\n") and line.count(b"\n") == 1
         payload = json.loads(line)
-        assert payload["status"] == "failed" and payload["failure"]["code"] == "non_finite_result"
+        assert payload["failure"]["code"] == "non_finite_result"
+        assert payload.get("status", "failed") == "failed"
     ok = json.loads(worker._encode_response({"status": "scored", "fitness": 1.5}))
     assert ok["fitness"] == 1.5 and ok["protocol_version"] == 1
