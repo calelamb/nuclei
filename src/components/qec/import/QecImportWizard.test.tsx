@@ -63,7 +63,7 @@ function goNext(): void {
 }
 
 async function reachMapping(): Promise<void> {
-  await screen.findByText('2.00 KiB');
+  await screen.findByText('2 KB');
   goNext();
   fireEvent.click(screen.getByRole('radio', { name: /Tabular/ }));
   goNext();
@@ -87,7 +87,7 @@ async function reachImportStage(): Promise<void> {
 describe('<QecImportWizard /> finishing and defaults (qec-r-07/08/15/19)', () => {
   it('preselects the top supported adapter and names it in plain words', async () => {
     render(<QecImportWizard source="captures/capture.dets" client={nativeClient('sinter-csv')} />);
-    await screen.findByText('2.00 KiB');
+    await screen.findByText('2 KB');
     goNext();
     const radio = screen.getByRole<HTMLInputElement>('radio', { name: /Sinter-csv/ });
     expect(radio.checked).toBe(true);
@@ -140,7 +140,7 @@ describe('<QecImportWizard /> finishing and defaults (qec-r-07/08/15/19)', () =>
 describe('<QecImportWizard />', () => {
   it('shows only actual native Stim width requirements', async () => {
     render(<QecImportWizard source="captures/capture.dets" client={nativeClient('stim-results')} />);
-    await screen.findByText('2.00 KiB');
+    await screen.findByText('2 KB');
     goNext();
     fireEvent.click(screen.getByRole('radio', { name: /Stim-results/ }));
     goNext();
@@ -162,15 +162,16 @@ describe('<QecImportWizard />', () => {
 
   it('presents native sinter columns without invented mapping options', async () => {
     render(<QecImportWizard source="campaign/stats.csv" client={nativeClient('sinter-csv')} />);
-    await screen.findByText('2.00 KiB');
+    await screen.findByText('2 KB');
     goNext();
     fireEvent.click(screen.getByRole('radio', { name: /Sinter-csv/ }));
     goNext();
 
-    expect(screen.getByText(/sinter defines campaign-point fields/i)).toBeTruthy();
+    expect(screen.getByText(/nothing to map/i)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Add field mapping' })).toBeNull();
     expect(screen.queryByRole('group', { name: /Scientific meaning/i })).toBeNull();
-    fireEvent.click(screen.getByLabelText('Mapping reviewed'));
+    // Nothing to map means nothing to review: no checkbox, and Next is already open.
+    expect(screen.queryByLabelText('Mapping reviewed')).toBeNull();
     expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Next stage' }).disabled).toBe(false);
   });
 
@@ -183,9 +184,10 @@ describe('<QecImportWizard />', () => {
     expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Next stage' }).className).toContain('nuclei-btn--primary');
     // The reason is shown on the Import stage only, never on stage 1 before anything was chosen.
     expect(screen.queryByText(/Import unavailable:/)).toBeNull();
-    await screen.findByText('2.00 KiB');
+    await screen.findByText('2 KB');
     expect(screen.getByText('Copy-only import')).toBeTruthy();
-    expect(screen.getByText('a'.repeat(64))).toBeTruthy();
+    expect(screen.getByText('a'.repeat(12))).toBeTruthy();
+    expect(screen.queryByText('a'.repeat(64))).toBeNull();
 
     goNext();
     fireEvent.click(screen.getByRole('radio', { name: /Tabular/ }));
@@ -241,7 +243,7 @@ describe('<QecImportWizard />', () => {
       ],
     });
     render(<QecImportWizard source="captures/capture.parquet" client={fake} />);
-    await screen.findByText('2.00 KiB');
+    await screen.findByText('2 KB');
     goNext();
     fireEvent.click(screen.getByRole('radio', { name: /Tabular/ }));
     goNext();
@@ -351,7 +353,7 @@ describe('<QecImportWizard />', () => {
       results: [{ adapterId: 'tabular', adapterVersion: '1', supported: true, sourceKind: 'parquet', confidence: 0.8, sourceSha256: 'a'.repeat(64), details: { delimiter: 'comma', reason: 'Sinter columns detected' } }],
     });
     render(<QecImportWizard source="captures/capture.parquet" client={fake} />);
-    await screen.findByText('2.00 KiB');
+    await screen.findByText('2 KB');
     goNext();
     expect(screen.getByText(/delimiter: comma/)).toBeTruthy();
     expect(screen.getByText(/Sinter columns detected/)).toBeTruthy();
@@ -380,6 +382,24 @@ describe('<QecImportWizard />', () => {
     expect((await screen.findByRole('status')).textContent).toMatch(/Import cancelled/);
     expect(screen.queryByRole('progressbar')).toBeNull();
     expect(view.container.querySelector('.lucide-loader-circle')).toBeNull();
+  });
+
+  it('shows one spinning loader and the tray\'s short copyable job id while an import runs (qec-r-57/59)', async () => {
+    const fake = client();
+    vi.mocked(fake.startImport).mockImplementation(async (_input, onEvent) => {
+      onEvent?.({ type: 'job_started', requestId: 'import-run-0001', jobId: 'import-run-0001', jobKind: 'import', sourcePolicy: 'copy' });
+      return new Promise(() => undefined);
+    });
+    const view = render(<QecImportWizard source="captures/capture.parquet" client={fake} />);
+    await reachImportStage();
+    fireEvent.click(screen.getByRole('button', { name: 'Import data' }));
+    await screen.findByRole('progressbar');
+    const loaders = Array.from(view.container.querySelectorAll('.lucide-loader-circle, .lucide-loader-2'));
+    expect(loaders).toHaveLength(1);
+    expect(loaders[0].classList.contains('nuclei-spin')).toBe(true);
+    expect(screen.queryByText('import-run-0001')).toBeNull();
+    expect(screen.getByText('import-r')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Copy job id import-r' })).toBeTruthy();
   });
 
   it('keeps focus inside the dialog while the import runs and hides Back (rq-r3-04)', async () => {
@@ -429,7 +449,7 @@ describe('<QecImportWizard />', () => {
       sourceHash: 'a', provenanceId: 'p', sourceByteSize: 1, projectRoot: '/project',
     } as never } });
     render(<QecImportWizard source="captures/capture.parquet" client={client()} onClose={() => undefined} />);
-    await screen.findByText('2.00 KiB');
+    await screen.findByText('2 KB');
     expect(screen.getByRole('button', { name: 'Next stage' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Show session' })).toBeNull();
   });

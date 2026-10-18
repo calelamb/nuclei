@@ -171,3 +171,6 @@
   accent-color: var(--color-accent-quantum);
 }
 .qec-import-remove:hover { color: var(--color-error); }
+
+.qec-import-note { display: flex; align-items: flex-start; gap: 8px; margin: 0; color: var(--qec-text-muted); font-size: var(--font-size-chrome-label); line-height: 1.5; }
+.qec-import-note svg { flex: none; margin-top: 2px; }

@@ -1,16 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
-import { adapterDisplayName, countLabel, buildMapping, completeRows, formatBytes, mappingIsReviewed, sessionIdIssue, stageDescription, supportedAdapters } from './qecImportModel';
+import { adapterDisplayName, countLabel, buildMapping, completeRows, adapterNeedsNoMapping, mappingIsReviewed, sessionIdIssue, stageDescription, supportedAdapters } from './qecImportModel';
 
 const EMPTY_OPTIONS = {
   outputKind: '', detectorCount: '', observableCount: '', timestampUnit: '', bitOrder: '',
 };
 
 describe('qecImportModel', () => {
-  it('formats bounded source sizes across units', () => {
-    expect(formatBytes(12)).toBe('12 B');
-    expect(formatBytes(2048)).toBe('2.00 KiB');
-    expect(formatBytes(2 * 1024 * 1024)).toBe('2.00 MiB');
+  it('treats the sinter CSV mapping as satisfied without a review step', () => {
+    expect(adapterNeedsNoMapping('sinter-csv')).toBe(true);
+    expect(adapterNeedsNoMapping('stim-results')).toBe(false);
+    expect(mappingIsReviewed('sinter-csv', [], EMPTY_OPTIONS, false)).toBe(true);
+    expect(mappingIsReviewed('stim-results', [], EMPTY_OPTIONS, false)).toBe(false);
   });
 
   it('sorts only supported adapters by confidence without mutating the probe', () => {
