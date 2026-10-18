@@ -129,7 +129,7 @@ describe('design guards', () => {
       'components/qec/CodeLatticePanel.tsx': 1,
       'components/qec/QecCsvDropZone.tsx': 2,
       'components/community/CircuitGallery.tsx': 1,
-      'components/explorer/FileExplorer.tsx': 2,
+      'components/explorer/ExplorerNameInput.tsx': 1, // the inline create/rename field (was two in FileExplorer)
       'components/editor/inlineEdit/InlineEditWidget.tsx': 1,
       'components/community/UserProfile.tsx': 1,
       'components/editor/EditorTabStrip.tsx': 1,
