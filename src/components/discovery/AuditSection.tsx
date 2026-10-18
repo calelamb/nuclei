@@ -1,5 +1,6 @@
 import { CheckCircle2, CircleSlash, MinusCircle, XCircle } from 'lucide-react';
 import { LabCallout, formatDuration, formatSci } from '../lab';
+import { formatAuditSeed } from '../../services/discovery/format';
 import { auditStatus } from '../../services/discovery/redQueen';
 import type { AuditCheck, CandidateRecord, DiscoveryAudit, GuardrailStatus } from '../../types/discovery';
 import { Facts, Section } from './drawerSections';
@@ -55,7 +56,7 @@ function AuditBody({ audit }: { audit: DiscoveryAudit }) {
           ['Evaluator fitness', <span key="e" className="lab-mono">{fitness(audit.evaluator_fitness)}</span>],
           ['Audit fitness', <span key="a" className="lab-mono">{fitness(audit.audit_fitness)}</span>],
           ['Gap', <span key="g" className="lab-mono">{fitness(audit.gap)}</span>],
-          ['Audit seed', audit.seed],
+          ['Audit seed', formatAuditSeed(audit.seed)],
           ['Evaluator', `${audit.evaluator.kind} ${audit.evaluator.version}`],
           ['Isolation', audit.isolation],
           ['Evaluator fingerprint', <Fingerprint key="ef" value={audit.evaluator.fingerprint} />],

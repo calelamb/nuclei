@@ -74,8 +74,19 @@ export interface GradientMapLine {
   dead: boolean;
 }
 
+/**
+ * How a gradient or score was computed, as the kernel labels it. The set grows with the kernel,
+ * so a label the UI does not know is shown as is.
+ */
+export type ComputeMethod =
+  | 'statevector_sampling'
+  | 'statevector_exact'
+  | 'pauli_propagation_exact'
+  | 'pauli_propagation_bounded'
+  | 'stim_pymatching_sampling';
+
 export interface GradientMap {
-  method: 'pauli_propagation_exact' | 'statevector_sampling';
+  method: ComputeMethod;
   n_qubits: number;
   lines: GradientMapLine[];
   dead_fraction: number;
@@ -105,7 +116,7 @@ export interface DiscoveryEvaluation {
   program_key?: string;
   cache_hit?: boolean;
   isolation?: DiscoveryIsolation;
-  compute?: { backend: string; method: 'statevector_sampling' | 'pauli_propagation_exact' | null };
+  compute?: { backend: string; method: ComputeMethod | null };
 }
 
 export interface AstMutation {
@@ -134,6 +145,10 @@ export interface DiscoveryAudit {
   reasons: string[];
   evaluator: { kind: DiscoveryEvaluatorKind; version: string; fingerprint: string };
   audit_fingerprint: string;
+  /**
+   * DISPLAY ONLY. The kernel's audit seed is a 64-bit integer, which a JS number cannot hold exactly
+   * above 2^53; it must never be compared, hashed or sent back. Use `formatAuditSeed` to show it.
+   */
   seed: number;
   isolation: DiscoveryIsolation;
   timings_ms: { sandbox?: number; audit?: number; total: number };

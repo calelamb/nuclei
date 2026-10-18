@@ -1,4 +1,4 @@
-import type { MutatorKind } from '../../types/discovery';
+import type { ComputeMethod, MutatorKind } from '../../types/discovery';
 
 /** Small number formatters shared by the Discovery Engine UI. */
 
@@ -33,4 +33,27 @@ export function mutatorLabel(kind: MutatorKind, breadth: string, depth: string):
   if (kind === 'ast') return 'AST mutator';
   if (kind === 'red_queen') return 'Red Queen';
   return `${kind === 'llm' ? 'LLM' : 'Hybrid'} · ${breadth}/${depth}`;
+}
+
+const METHOD_LABEL: Record<ComputeMethod, string> = {
+  statevector_sampling: 'statevector sampling',
+  statevector_exact: 'exact statevector',
+  pauli_propagation_exact: 'exact Pauli propagation',
+  pauli_propagation_bounded: 'bounded Pauli propagation',
+  stim_pymatching_sampling: 'Stim sampling with PyMatching',
+};
+
+/** A readable name for a kernel compute method; an unknown (newer) label is shown as the kernel sent it. */
+export function describeMethod(method: string): string {
+  return (METHOD_LABEL as Record<string, string>)[method] ?? method.replaceAll('_', ' ');
+}
+
+/**
+ * The audit seed is a 64-bit integer that JSON parsing rounds above 2^53, so it is for display only:
+ * shown exactly when it is a safe integer, otherwise flagged as approximate.
+ */
+export function formatAuditSeed(seed: number | null | undefined): string {
+  if (seed === null || seed === undefined || !Number.isFinite(seed)) return '—';
+  if (Number.isSafeInteger(seed)) return String(seed);
+  return `≈ ${BigInt(Math.trunc(seed)).toString()} (rounded; not exact)`;
 }
