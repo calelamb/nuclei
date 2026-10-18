@@ -46,10 +46,11 @@ function restoreFocus(opener: HTMLElement | null) {
   }
   const deadline = performance.now() + EDITOR_WAIT_MS;
   const attempt = () => {
+    // The editor can be mounted yet hidden (display: none) while the takeover is still on screen; focus() then does nothing, so keep waiting until it sticks.
     const editor = document.querySelector<HTMLElement>(EDITOR_SELECTOR);
     if (editor) {
       editor.focus();
-      return;
+      if (document.activeElement === editor) return;
     }
     const focusMoved = document.activeElement !== null && document.activeElement !== document.body;
     if (focusMoved) return;

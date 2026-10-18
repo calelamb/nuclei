@@ -11,6 +11,8 @@ export function LessonSkeleton() {
       <div className="lesson-skeleton__text">
         <span className="lesson-skeleton__bar lesson-skeleton__bar--title" />
         <span className="lesson-skeleton__bar" />
+        <span className="lesson-skeleton__bar" />
+        <span className="lesson-skeleton__bar" />
         <span className="lesson-skeleton__bar lesson-skeleton__bar--short" />
       </div>
       <div className="lesson-skeleton__editor" />

@@ -112,6 +112,25 @@ describe('ResearchTour', () => {
     editor.remove();
   });
 
+  it('keeps waiting while the editor is mounted but cannot take focus yet (hidden under the takeover)', async () => {
+    useResearchTourStore.setState({ active: false, step: 0 });
+    const opener = document.createElement('button');
+    document.body.appendChild(opener);
+    opener.focus();
+    const editor = document.createElement('textarea');
+    editor.setAttribute('aria-label', 'Editor content');
+    editor.disabled = true; // not focusable, like a display:none editor
+    document.body.appendChild(editor);
+    render(<ResearchTour />);
+    act(() => { useResearchTourStore.setState({ active: true }); });
+    opener.remove();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(document.activeElement).not.toBe(editor);
+    setTimeout(() => { editor.disabled = false; }, 60);
+    await waitFor(() => expect(document.activeElement).toBe(editor));
+    editor.remove();
+  });
+
   it('falls back to the mode chip when no editor ever mounts', async () => {
     useResearchTourStore.setState({ active: false, step: 0 });
     const chip = document.createElement('button');

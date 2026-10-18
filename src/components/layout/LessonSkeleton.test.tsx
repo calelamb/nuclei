@@ -8,10 +8,10 @@ import { LessonSkeleton } from './LessonSkeleton';
 afterEach(cleanup);
 
 describe('LessonSkeleton (learn-r6-02)', () => {
-  it('is a labelled status shaped like a lesson: a title, two text bars and an editor block', () => {
+  it('is a labelled status shaped like a lesson: a title, text bars and an editor block', () => {
     const { getByRole, container } = render(<LessonSkeleton />);
     expect(getByRole('status', { name: 'Loading lesson' })).toBeTruthy();
-    expect(container.querySelectorAll('.lesson-skeleton__bar')).toHaveLength(3);
+    expect(container.querySelectorAll('.lesson-skeleton__bar')).toHaveLength(5);
     expect(container.querySelector('.lesson-skeleton__editor')).toBeTruthy();
   });
 
