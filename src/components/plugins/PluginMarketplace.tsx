@@ -16,6 +16,8 @@ import {
 } from '../../plugins/pluginLoader';
 import { scaffoldPlugin } from '../../services/pluginScaffold';
 import { loadBridge } from '../../platform/PlatformProvider';
+import { DesktopOnlyState } from '../hardware/DesktopOnlyState';
+import { isWebBuild } from '../../platform/buildTarget';
 import { PluginPanelHost } from './PluginPanelHost';
 import { PluginErrorCard } from './PluginErrorCard';
 import type { InstalledPlugin } from '../../plugins/types';
@@ -57,6 +59,18 @@ function ActionButton({
 /* ── Root ────────────────────────────────────────────────── */
 
 export function PluginMarketplace() {
+  // Plugins are loaded from a local folder, which the browser build cannot open.
+  if (isWebBuild()) {
+    return (
+      <DesktopOnlyState title="Plugins run in the desktop app">
+        Plugins are local folders of user-authored code, which the browser build cannot load.
+      </DesktopOnlyState>
+    );
+  }
+  return <DesktopPluginMarketplace />;
+}
+
+function DesktopPluginMarketplace() {
   const plugins = usePluginStore((s) => s.plugins);
 
   const [tab, setTab] = useState<Tab>('installed');
