@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from kernel.trainability._analysis_common import AnalysisError
 from kernel.trainability.ir import IrError
 from kernel.trainability.pauli import ObservableError
 
@@ -31,7 +32,7 @@ def normalize_error(exc: BaseException) -> TrainabilityError:
     """Map any exception raised by user code or an analysis to the envelope."""
     if isinstance(exc, TrainabilityError):
         return exc
-    if isinstance(exc, IrError):
+    if isinstance(exc, (IrError, AnalysisError)):
         return TrainabilityError(exc.code, exc.message)
     if isinstance(exc, ObservableError):
         return TrainabilityError("invalid_observable", exc.message, exc.column)
