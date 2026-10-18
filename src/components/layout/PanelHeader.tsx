@@ -1,10 +1,9 @@
-import { useState, useRef, useLayoutEffect, useEffect, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
+import type { ReactNode } from 'react';
 import { MoreVertical, EyeOff, RotateCcw, HelpCircle, type LucideIcon } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 
 import { TYPOGRAPHY, ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
-import { IconButton } from '../ui';
+import { IconButton, Menu, type MenuEntry } from '../ui';
 /**
  * PRD 11 Phase C — the shared panel header.
  *
@@ -47,81 +46,13 @@ export function PanelHeader({
   helpHref,
 }: PanelHeaderProps) {
   const colors = useThemeStore((s) => s.colors);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
-  const overflowRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  const hasOverflow = Boolean(onHide || onResetLayout || helpHref);
-
-  useLayoutEffect(() => {
-    if (!menuOpen) return;
-    const btn = overflowRef.current;
-    if (!btn) return;
-    const r = btn.getBoundingClientRect();
-    setMenuPos({ top: r.bottom + 4, right: window.innerWidth - r.right });
-  }, [menuOpen]);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onDown = (e: MouseEvent) => {
-      if (
-        !menuRef.current?.contains(e.target as Node) &&
-        !overflowRef.current?.contains(e.target as Node)
-      ) {
-        setMenuOpen(false);
-      }
-    };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenuOpen(false); };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [menuOpen]);
-
-  const runAndClose = (fn?: () => void) => {
-    setMenuOpen(false);
-    fn?.();
-  };
-
-  const menuItem = (label: string, MIcon: LucideIcon, onClick: () => void) => (
-    <button
-      role="menuitem"
-      onClick={onClick}
-      className="nuclei-menu-item"
-      style={{
-        display: 'flex', alignItems: 'center', gap: 8, width: '100%',
-        padding: '7px 10px', background: 'transparent', border: 'none', borderRadius: 6,
-        cursor: 'pointer', color: colors.text, fontSize: 12, textAlign: 'left',
-        fontFamily: TYPOGRAPHY.fontSans,
-      }}
-    >
-      <MIcon size={14} color={colors.textDim} />
-      {label}
-    </button>
-  );
-
-  const menu = menuPos && (
-    <div
-      ref={menuRef}
-      role="menu"
-      aria-label={`${title} panel options`}
-      style={{
-        position: 'fixed', top: menuPos.top, right: menuPos.right, minWidth: 172,
-        background: colors.bgElevated, border: `1px solid ${colors.border}`, borderRadius: 8,
-        boxShadow: '0 6px 24px rgba(0,0,0,0.28)', padding: 4, zIndex: 1000,
-      }}
-    >
-      {onHide && menuItem('Hide panel', EyeOff, () => runAndClose(onHide))}
-      {onResetLayout && menuItem('Reset layout', RotateCcw, () => runAndClose(onResetLayout))}
-      {helpHref &&
-        menuItem('Help', HelpCircle, () =>
-          runAndClose(() => window.open(helpHref, '_blank', 'noopener,noreferrer')),
-        )}
-    </div>
-  );
+  const openHelp = () => { if (helpHref) window.open(helpHref, '_blank', 'noopener,noreferrer'); };
+  const helpOnly = Boolean(helpHref) && !onHide && !onResetLayout;
+  const entries: MenuEntry[] = [
+    ...(onHide ? [{ id: 'hide', label: 'Hide panel', icon: <EyeOff size={ICON_SIZE.md} />, onSelect: onHide }] : []),
+    ...(onResetLayout ? [{ id: 'reset', label: 'Reset layout', icon: <RotateCcw size={ICON_SIZE.md} />, onSelect: onResetLayout }] : []),
+    ...(helpHref ? [{ id: 'help', label: 'Help', icon: <HelpCircle size={ICON_SIZE.md} />, onSelect: openHelp }] : []),
+  ];
 
   return (
     <div
@@ -154,19 +85,23 @@ export function PanelHeader({
       )}
       <div style={{ flex: 1 }} />
       {actions}
-      {hasOverflow && (
-        <IconButton
-          ref={overflowRef}
-          size="sm"
-          onClick={() => setMenuOpen((o) => !o)}
-          aria-label="Panel options"
-          aria-haspopup="menu"
-          aria-expanded={menuOpen}
-        >
-          <MoreVertical size={ICON_SIZE.md} strokeWidth={ICON_STROKE} />
+      {helpOnly && (
+        <IconButton size="sm" aria-label="Help" onClick={openHelp} tooltip={{ placement: 'below' }}>
+          <HelpCircle size={ICON_SIZE.md} strokeWidth={ICON_STROKE} />
         </IconButton>
       )}
-      {menuOpen && createPortal(menu, document.body)}
+      {!helpOnly && entries.length > 0 && (
+        <Menu
+          label={`${title} panel options`}
+          placement="bottom-end"
+          entries={entries}
+          trigger={(p) => (
+            <IconButton {...p} size="sm" aria-label="Panel options" tooltip={{ placement: 'below' }}>
+              <MoreVertical size={ICON_SIZE.md} strokeWidth={ICON_STROKE} />
+            </IconButton>
+          )}
+        />
+      )}
     </div>
   );
 }
