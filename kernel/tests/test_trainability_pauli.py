@@ -5,6 +5,7 @@ import pytest
 
 from kernel.trainability.pauli import (
     ObservableError,
+    PauliSum,
     PauliTerm,
     apply_pauli_term,
     parse_observable,
