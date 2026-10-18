@@ -52,6 +52,8 @@ interface QecImportWizardProps {
   source: string;
   client: QecImportClient;
   onClose?: () => void;
+  /** Rendered inside a dialog that already carries the title and close button. */
+  hosted?: boolean;
 }
 
 const EMPTY_OPTIONS: MappingOptions = {
@@ -439,6 +441,9 @@ const LAST_STAGE = IMPORT_STAGES.length - 1;
 
 function FinishedFooter({ sessionId, onClose }: { sessionId: string | null; onClose?(): void }): ReactElement {
   const selectPrimary = useResearchSelectionStore((state) => state.selectPrimary);
+  const showRef = useRef<HTMLButtonElement>(null);
+  // The Import button that had focus is gone; keep keyboard focus (and so Escape) inside the dialog.
+  useEffect(() => { showRef.current?.focus(); }, []);
   const showSession = (): void => {
     if (sessionId) selectPrimary({ kind: 'session', id: sessionId, sessionId }, 'user');
     onClose?.();
@@ -447,7 +452,7 @@ function FinishedFooter({ sessionId, onClose }: { sessionId: string | null; onCl
     <footer className="qec-import-wizard__footer qec-import-wizard__footer--finished">
       <div className="qec-import-commit">
         {onClose && <Button onClick={onClose}>Close</Button>}
-        <Button variant="primary" disabled={!sessionId} onClick={showSession}>Show session</Button>
+        <Button ref={showRef} variant="primary" disabled={!sessionId} onClick={showSession}>Show session</Button>
       </div>
     </footer>
   );
@@ -459,8 +464,14 @@ function WizardFooter(props: WizardFooterProps): ReactElement {
   const reason = props.stage === LAST_STAGE ? props.unavailable : null;
   return (
     <footer className="qec-import-wizard__footer">
-      <div className="qec-import-nav"><Button aria-label="Previous stage" disabled={props.stage === 0} onClick={props.onBack} icon={<ArrowLeft aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />}>Back</Button><Button aria-label="Next stage" disabled={!props.canAdvance} onClick={props.onNext}>Next<ArrowRight aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} /></Button></div>
-      <div className="qec-import-commit">{reason && <span role="status"><AlertCircle aria-hidden="true" size={14} />Import unavailable: {reason}</span>}<Button variant="primary" disabled={props.unavailable !== null} title={props.unavailable ? `Import unavailable: ${props.unavailable}` : undefined} loading={props.launching} onClick={props.onImport} icon={props.launching ? undefined : <CheckCircle2 aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />}>Import data</Button></div>
+      <div className="qec-import-nav"><Button aria-label="Previous stage" disabled={props.stage === 0} onClick={props.onBack} icon={<ArrowLeft aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />}>Back</Button></div>
+      <div className="qec-import-commit">
+        {reason && <span role="status"><AlertCircle aria-hidden="true" size={14} />Import unavailable: {reason}</span>}
+        {/* One primary action per stage: Next while the mapping is being built, Import data only on the last stage. */}
+        {props.stage === LAST_STAGE
+          ? <Button variant="primary" disabled={props.unavailable !== null} title={props.unavailable ? `Import unavailable: ${props.unavailable}` : undefined} loading={props.launching} onClick={props.onImport} icon={props.launching ? undefined : <CheckCircle2 aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />}>Import data</Button>
+          : <Button variant="primary" aria-label="Next stage" disabled={!props.canAdvance} onClick={props.onNext}>Next<ArrowRight aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} /></Button>}
+      </div>
     </footer>
   );
 }
@@ -482,7 +493,7 @@ function useDefaultAdapter(probe: ImportProbeResult | null, adapterId: string, c
   }, [probe, adapterId, choose]);
 }
 
-function QecImportWizardSession({ source, client, onClose }: QecImportWizardProps): ReactElement {
+function QecImportWizardSession({ source, client, onClose, hosted = false }: QecImportWizardProps): ReactElement {
   const [stage, setStage] = useState(0);
   const [sessionId, setSessionId] = useState('');
   const [sessionKind, setSessionKind] = useState<DestinationStageProps['sessionKind']>('hardware_import');
@@ -512,8 +523,8 @@ function QecImportWizardSession({ source, client, onClose }: QecImportWizardProp
 
   const activeStage = IMPORT_STAGES[stage];
   return (
-    <section className="qec-import-wizard" aria-label={`Import ${source}`}>
-      <header className="qec-import-wizard__header"><div><span>Canonical QEC data</span><h2>Import source</h2><p className="qec-mono">{source}</p></div>{onClose && <IconButton variant="secondary" aria-label="Close import wizard" onClick={onClose}><X aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} /></IconButton>}</header>
+    <section className={hosted ? 'qec-import-wizard qec-import-wizard--hosted' : 'qec-import-wizard'} aria-label={`Import ${source}`}>
+      {!hosted && <header className="qec-import-wizard__header"><div><span>Canonical QEC data</span><h2>Import source</h2><p className="qec-mono">{source}</p></div>{onClose && <IconButton variant="secondary" aria-label="Close import wizard" onClick={onClose}><X aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} /></IconButton>}</header>}
       <div className="qec-import-wizard__body">
         <StepRail stage={stage} finished={finished} />
         <div className="qec-import-stage">

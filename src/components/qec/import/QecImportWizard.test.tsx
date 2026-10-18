@@ -129,6 +129,8 @@ describe('<QecImportWizard /> finishing and defaults (qec-r-07/08/15/19)', () =>
     expect(screen.getByText(/1 canonical partition · Original preserved/)).toBeTruthy();
     expect(view.container.querySelectorAll('.qec-import-steps li[data-complete="true"]')).toHaveLength(7);
     expect(screen.queryByRole('button', { name: 'Import data' })).toBeNull();
+    // The Import button that had focus is gone; focus moves to Show session so Escape and Tab still work (qec-r-28).
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Show session' }));
     fireEvent.click(screen.getByRole('button', { name: 'Show session' }));
     expect(close).toHaveBeenCalledOnce();
     expect(useResearchSelectionStore.getState().present.primary).toMatchObject({ kind: 'session', sessionId: 'capture-session' });
@@ -176,10 +178,11 @@ describe('<QecImportWizard />', () => {
     const fake = client();
     render(<QecImportWizard source="captures/capture.parquet" client={fake} />);
 
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Import data' }).disabled).toBe(true);
-    // The reason is shown on the Import stage only; on stage 1 the disabled button carries it as a tooltip.
+    // One primary per stage: Next while building the mapping, Import data only on the last stage (qec-r-27).
+    expect(screen.queryByRole('button', { name: 'Import data' })).toBeNull();
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Next stage' }).className).toContain('nuclei-btn--primary');
+    // The reason is shown on the Import stage only, never on stage 1 before anything was chosen.
     expect(screen.queryByText(/Import unavailable:/)).toBeNull();
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Import data' }).title).toMatch(/probe/i);
     await screen.findByText('2.00 KiB');
     expect(screen.getByText('Copy-only import')).toBeTruthy();
     expect(screen.getByText('a'.repeat(64))).toBeTruthy();
@@ -254,7 +257,7 @@ describe('<QecImportWizard />', () => {
     expect(alert.textContent).toMatch(/Fix before importing/);
     expect(alert.textContent).toMatch(/Detector width must be explicit/);
     expect(screen.getByText(/18 source rows remain preserved/)).toBeTruthy();
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Import data' }).disabled).toBe(true);
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Next stage' }).disabled).toBe(true);
     await waitFor(() => expect(document.activeElement?.getAttribute('aria-label')).toMatch(/Review detector_count mapping/));
     expect(document.activeElement?.textContent).toBe('Review mapping');
   });
@@ -319,7 +322,7 @@ describe('<QecImportWizard />', () => {
     await screen.findByText('Validation passed');
     view.rerender(<QecImportWizard source="captures/second.parquet" client={fake} />);
     expect(await screen.findByRole('heading', { name: 'Source' })).toBeTruthy();
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Import data' }).disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Import data' })).toBeNull();
   });
 
   it('focuses stage headings and the first quarantine correction action', async () => {

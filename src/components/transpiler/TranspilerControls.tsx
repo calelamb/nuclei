@@ -6,6 +6,7 @@ import { useEditorStore } from '../../stores/editorStore';
 import { useHardwareStore } from '../../stores/hardwareStore';
 import { useTranspileStore, SIMULATOR_TARGET_ID } from '../../stores/transpileStore';
 import { requestTranspile } from '../../lib/transpileSender';
+import { isWebBuild } from '../../platform/buildTarget';
 import { ConnectivityMap } from '../hardware/ConnectivityMap';
 import { resolveTargetRequest } from './transpileMath';
 
@@ -36,6 +37,7 @@ export function TranspilerControls() {
   const setError = useTranspileStore((s) => s.setError);
 
   const isQiskit = framework === 'qiskit';
+  const desktopOnly = isWebBuild();
   const selectedBackend = backends.find((b) => b.name === targetId);
 
   const run = () => {
@@ -43,7 +45,7 @@ export function TranspilerControls() {
     const target = resolveTargetRequest(targetId, backends, optimizationLevel);
     setPending(true);
     if (!requestTranspile(code, target)) {
-      setError("The kernel isn't connected. Start it and try again.");
+      setError('The kernel is still starting. Try again when the status bar says ready.');
     }
   };
 
@@ -51,6 +53,19 @@ export function TranspilerControls() {
     display: 'flex', flexDirection: 'column', gap: 14, padding: 12,
     fontFamily: TYPOGRAPHY.fontSans, color: colors.text,
   };
+
+  if (desktopOnly) {
+    return (
+      <div style={shell}>
+        <div style={noteBox(colors)}>
+          <strong style={{ display: 'block', marginBottom: 4, fontSize: 12 }}>Desktop app only</strong>
+          <span style={{ fontSize: 12, color: colors.textMuted, lineHeight: 1.5 }}>
+            Transpiling needs the local Qiskit compiler, which the browser build does not include.
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   if (!isQiskit) {
     return (

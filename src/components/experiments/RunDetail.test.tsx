@@ -104,7 +104,7 @@ describe('RunDetail', () => {
     expect(getByText('Status')).toBeTruthy();
     expect(getByText('complete')).toBeTruthy();
     expect(getByText('theta = 1.5')).toBeTruthy();
-    expect(getByText('energy = -1.13')).toBeTruthy();
+    expect(getByText('Energy = -1.13')).toBeTruthy();
     expect(getByText(/deadbeef/)).toBeTruthy();
   });
 
@@ -144,7 +144,7 @@ describe('RunDetail', () => {
   });
 
   it('opens a failed run on stderr with the error in its own block and no empty output sections (research-19)', async () => {
-    const failed: RunRecord = { ...RECORD, manifest: { ...MANIFEST, status: 'failed', error: 'Traceback\n  boom' }, metrics: {} };
+    const failed: RunRecord = { ...RECORD, manifest: { ...MANIFEST, status: 'failed', error: 'Traceback (most recent call last):\n  boom\nValueError: boom' }, metrics: {} };
     useExperimentStore.setState({ runsByExperiment: { [FILE_NAME]: [failed] } });
     readTextFileMock.mockImplementation(async (path: string) => {
       if (pathEndsWith(path, 'stderr.txt')) return 'ValueError: boom';
@@ -154,7 +154,15 @@ describe('RunDetail', () => {
     await waitFor(() => expect(getByText(/ValueError: boom/)).toBeTruthy());
     expect(getByRole('tab', { name: 'stderr' }).getAttribute('aria-selected')).toBe('true');
     expect(queryByText('Measurements')).toBeNull();
-    expect(getByText(/Traceback/).tagName).toBe('PRE');
+    // The Error row carries only the exception line plus a way to the full traceback.
+    expect(getByRole('button', { name: /View traceback/ })).toBeTruthy();
+    expect(queryByText(/most recent call last/)).toBeNull();
+  });
+
+  it('omits the Error row for a run that completed (research-r-12)', async () => {
+    const { queryByText, getByText } = render(<RunDetail />);
+    await waitFor(() => expect(getByText('Status')).toBeTruthy());
+    expect(queryByText('Error')).toBeNull();
   });
 
   it('focuses Back on open and closes on Escape (LR-10)', async () => {

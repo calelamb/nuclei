@@ -5,6 +5,8 @@ import { useQecWorkbenchStore } from '../../../stores/qecWorkbenchStore';
 import { qecEntityRefKey, useResearchSelectionStore } from '../../../stores/researchSelectionStore';
 import type { ResearchSelection } from '../../../types/qecSelection';
 import { QecPanelPinButton } from './QecPanelPinButton';
+import { useQecStudyStore } from '../../../services/qecStudyStore';
+import { entityLabel } from './qecEntityLabel';
 import { ICON_SIZE, ICON_STROKE } from '../../../styles/tokens';
 import { Button, IconButton } from '../../ui';
 
@@ -17,7 +19,7 @@ function InspectorHeading({ onClose }: { onClose(): void }): ReactElement {
         <span className="qec-zone-heading__eyebrow">Contextual detail</span>
         <h2 tabIndex={-1} className="qec-inspector__title">Inspector</h2>
       </div>
-      <IconButton className="qec-inspector__close" aria-label="Close research inspector" onClick={onClose}>
+      <IconButton className="qec-inspector__close" aria-label="Close research inspector" tooltip={{ label: 'Close inspector', placement: 'below' }} onClick={onClose}>
         <X aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} />
       </IconButton>
     </header>
@@ -25,13 +27,14 @@ function InspectorHeading({ onClose }: { onClose(): void }): ReactElement {
 }
 
 function SelectionDetails({ selection }: { selection: ResearchSelection }): ReactElement {
+  const studies = useQecStudyStore((state) => state.studies);
   const refs = selection.primary ? [selection.primary, ...selection.scope] : [];
   if (refs.length === 0) {
     return (
       <div className="qec-zone-empty qec-zone-empty--compact">
         <Info aria-hidden="true" size={20} />
         <strong>Nothing selected</strong>
-        <span>Select a source or canvas object to inspect values and lineage.</span>
+        <span>Select a source to inspect its values and lineage.</span>
       </div>
     );
   }
@@ -39,11 +42,14 @@ function SelectionDetails({ selection }: { selection: ResearchSelection }): Reac
     <section className="qec-inspector__section" aria-labelledby="selection-heading">
       <h3 id="selection-heading">Active selection</h3>
       <dl>
-        {refs.map((ref) => (
-          <div key={qecEntityRefKey(ref)}>
-            <dt>{ref.kind.replaceAll('-', ' ')}</dt><dd className="qec-mono">{ref.id}</dd>
-          </div>
-        ))}
+        {refs.map((ref) => {
+          const { text, mono } = entityLabel(ref, studies);
+          return (
+            <div key={qecEntityRefKey(ref)}>
+              <dt>{ref.kind.replaceAll('-', ' ')}</dt><dd className={mono ? 'qec-mono' : undefined}>{text}</dd>
+            </div>
+          );
+        })}
         {selection.timeWindow && (
           <div><dt>Window</dt><dd className="qec-mono">{selection.timeWindow.start}–{selection.timeWindow.end} {selection.timeWindow.domain}</dd></div>
         )}
@@ -113,7 +119,7 @@ export function QecResearchInspector({ open, onClose }: QecResearchInspectorProp
       </div>
       <footer className="qec-inspector__footer">
         <Button disabled title="Select evidence before pinning a Finding" icon={<Pin aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} />}>
-          Pin Finding
+          Pin finding
         </Button>
       </footer>
     </aside>

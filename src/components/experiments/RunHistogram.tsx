@@ -16,6 +16,8 @@ import { TYPOGRAPHY } from '../../styles/tokens';
  * the pure probability-from-counts transform, wrapped in a small read-only
  * chart that matches the app's token-driven visual style.
  */
+const HISTOGRAM_HEIGHT = 220;
+
 export function RunHistogram({ measurements }: { measurements: Record<string, number> }) {
   const colors = useThemeStore((s) => s.colors);
   const shotCount = Object.values(measurements).reduce((a, b) => a + b, 0);
@@ -42,8 +44,8 @@ export function RunHistogram({ measurements }: { measurements: Record<string, nu
   const data = getHistogramData(asResult, 'sampled');
 
   return (
-    <div style={{ height: 220, display: 'flex', flexDirection: 'column' }}>
-      <ResponsiveContainer width="100%" height="100%">
+    <div style={{ height: HISTOGRAM_HEIGHT, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+      <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={HISTOGRAM_HEIGHT} initialDimension={{ width: 480, height: HISTOGRAM_HEIGHT }}>
         <BarChart data={data} margin={{ top: 5, right: 10, bottom: 5, left: 10 }}>
           <XAxis
             dataKey="state"

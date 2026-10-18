@@ -7,7 +7,7 @@ export const QEC_LIGHT_TOKENS = Object.freeze({
   textMuted: '#526175',
   quantum: '#0891B2',
   interactive: '#00B4D8',
-  analytical: '#2563EB',
+  analytical: '#0891B2',
   field: '#F0F9FF',
   selection: '#E0F2FE',
   selectionStrong: '#BAE6FD',

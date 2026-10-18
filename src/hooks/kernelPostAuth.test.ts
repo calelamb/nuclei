@@ -2,6 +2,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { sendPostAuthMessages } from './kernelPostAuth';
 import { useEditorStore } from '../stores/editorStore';
+import { requestHardwareBackends, setHardwareBackendsSender } from '../lib/hardwareBackendsSender';
 
 function fakeSocket() {
   const send = vi.fn();
@@ -21,6 +22,17 @@ describe('sendPostAuthMessages', () => {
     const { ws, send } = fakeSocket();
     sendPostAuthMessages(ws);
     expect(sentTypes(send)).toEqual(['hardware_connected_providers', 'hardware_list_jobs']);
+  });
+
+  it('lets the UI ask the kernel for live backends once authenticated', () => {
+    const send = vi.fn();
+    const ws = { send, readyState: WebSocket.OPEN } as unknown as WebSocket;
+    sendPostAuthMessages(ws);
+    send.mockClear();
+    expect(requestHardwareBackends()).toBe(true);
+    expect(sentTypes(send)).toEqual(['hardware_list_backends']);
+    setHardwareBackendsSender(null);
+    expect(requestHardwareBackends()).toBe(false);
   });
 
   it('parses open code first', () => {

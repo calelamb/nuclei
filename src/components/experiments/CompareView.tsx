@@ -138,7 +138,7 @@ export function CompareView() {
           Back to runs
         </Button>
         <span style={{ color: colors.text, fontSize: 13, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans }}>
-          Compare {runs.length} runs — {experiment.spec.name}
+          Compare {runs.length} runs
         </span>
         <Button
           variant="ghost"

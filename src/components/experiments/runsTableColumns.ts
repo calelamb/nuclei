@@ -1,4 +1,4 @@
-import type { RunRecord } from '../../types/experiment';
+import { paramValues, type RunRecord, type Sweep } from '../../types/experiment';
 
 /**
  * PRD 09 Phase D (D2) — pure column derivation + sort/filter logic for
@@ -27,9 +27,9 @@ const FIELD_COLUMNS: RunColumn[] = [
  * the fixed manifest fields, then metric columns (union, alphabetical so
  * newly-appearing user metrics don't jump around the header).
  */
-export function deriveColumns(runs: readonly RunRecord[]): RunColumn[] {
-  const paramNames: string[] = [];
-  const seenParams = new Set<string>();
+export function deriveColumns(runs: readonly RunRecord[], declaredParams: readonly string[] = []): RunColumn[] {
+  const paramNames: string[] = [...declaredParams];
+  const seenParams = new Set<string>(declaredParams);
   const metricNames = new Set<string>();
 
   for (const run of runs) {
@@ -171,9 +171,26 @@ export function metricDecimals(runs: readonly RunRecord[]): ReadonlyMap<string, 
   return map;
 }
 
-/** "counts_entropy" -> "Counts entropy": readable two-line headers instead of clipped snake_case. */
-export function humanizeColumnLabel(label: string): string {
-  if (!/[_-]/.test(label)) return label;
-  const spaced = label.replace(/[_-]+/g, ' ').trim();
-  return spaced.length === 0 ? label : spaced.charAt(0).toUpperCase() + spaced.slice(1);
+/** The one spelling of a metric name in every view: "counts_entropy" -> "Counts entropy", "energy" -> "Energy". */
+export function metricLabel(name: string): string {
+  const spaced = name.replace(/[_-]+/g, ' ').trim();
+  return spaced.length === 0 ? name : spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+/** Header text for a runs-table column: metrics are sentence-cased, swept parameters stay the identifiers the script uses. */
+export function columnDisplayLabel(column: RunColumn): string {
+  return column.kind === 'metric' ? metricLabel(column.label) : column.label;
+}
+
+/** "depth × 4, theta × 11": how many values each swept parameter takes. Unreadable axes print "?". */
+export function sweepAxesSummary(sweep: Sweep | undefined): string {
+  return Object.entries(sweep ?? {})
+    .map(([name, spec]) => {
+      try {
+        return `${name} × ${paramValues(spec, name).length}`;
+      } catch {
+        return `${name} × ?`;
+      }
+    })
+    .join(', ');
 }

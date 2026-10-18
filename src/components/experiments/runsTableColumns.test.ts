@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { columnDecimals, deriveColumns, filterByStatus, formatRunLabel, getRunValue, isNumericColumn, sortRuns } from './runsTableColumns';
+import {
+  columnDecimals, columnDisplayLabel, deriveColumns, filterByStatus, formatRunLabel, getRunValue, isNumericColumn, metricLabel, sortRuns, sweepAxesSummary,
+} from './runsTableColumns';
 import type { RunManifest, RunRecord } from '../../types/experiment';
 
 function manifest(overrides: Partial<RunManifest>): RunManifest {
@@ -157,5 +159,43 @@ describe('isNumericColumn', () => {
     expect(isNumericColumn({ key: 'duration_ms', label: 'd', kind: 'field' })).toBe(true);
     expect(isNumericColumn({ key: 'status', label: 's', kind: 'field' })).toBe(false);
     expect(isNumericColumn({ key: 'seed_honored', label: 's', kind: 'field' })).toBe(false);
+  });
+});
+
+describe('metricLabel', () => {
+  it('spells every metric one way: sentence case, spaces for underscores', () => {
+    expect(metricLabel('counts_entropy')).toBe('Counts entropy');
+    expect(metricLabel('top_state_probability')).toBe('Top state probability');
+    expect(metricLabel('energy')).toBe('Energy');
+    expect(metricLabel('fidelity')).toBe('Fidelity');
+  });
+});
+
+describe('columnDisplayLabel', () => {
+  it('labels metrics with metricLabel, keeps swept parameters verbatim and fixed fields as authored', () => {
+    expect(columnDisplayLabel({ key: 'counts_entropy', label: 'counts_entropy', kind: 'metric' })).toBe('Counts entropy');
+    expect(columnDisplayLabel({ key: 'max_depth', label: 'max_depth', kind: 'param' })).toBe('max_depth');
+    expect(columnDisplayLabel({ key: 'status', label: 'Status', kind: 'field' })).toBe('Status');
+  });
+});
+
+describe('deriveColumns with a declared sweep', () => {
+  it('shows a swept parameter column before any run exists', () => {
+    const cols = deriveColumns([], ['depth']);
+    expect(cols[0]).toEqual({ key: 'depth', label: 'depth', kind: 'param' });
+  });
+
+  it('does not duplicate a declared parameter once runs carry it', () => {
+    const cols = deriveColumns([record('a', { params: { depth: 2 } })], ['depth']);
+    expect(cols.filter((c) => c.key === 'depth')).toHaveLength(1);
+  });
+});
+
+describe('sweepAxesSummary', () => {
+  it('lists each swept parameter with its value count', () => {
+    expect(sweepAxesSummary({ depth: { values: [1, 2, 3, 4] }, theta: { range: [0, 1, 0.5] } } as never)).toBe('depth × 4, theta × 3');
+  });
+  it('is empty without a sweep', () => {
+    expect(sweepAxesSummary(undefined)).toBe('');
   });
 });

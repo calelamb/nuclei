@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, CircleAlert, CircleDot, ListChecks, LoaderCircle, Radio, RefreshCw } from 'lucide-react';
+import { ChevronDown, ChevronUp, CircleAlert, CircleDot, ListChecks, LoaderCircle, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
 
 import { resolveQecPanels } from '../../../layout/qecPanelRegistry';
@@ -34,10 +34,9 @@ function TrayHeader({ expanded, importing, idle, onToggle }: TrayHeaderProps): R
       <div className="qec-tray__tabs" aria-label="Operational instruments">
         {importing && <span className="qec-tray__active-instrument"><ListChecks aria-hidden="true" size={16} />Import</span>}
         {!importing && panels.map((panel) => <span className="qec-tray__active-instrument" key={panel.id}><ListChecks aria-hidden="true" size={16} />{panel.title}</span>)}
-        <span><Radio aria-hidden="true" size={14} /> Streams</span><span>Logs</span><span>Comparisons</span>
       </div>
       {idle && expanded && <span className="qec-tray__idle-note"><CircleDot aria-hidden="true" size={ICON_SIZE.xs} />No active jobs</span>}
-      <IconButton className="qec-tray__toggle" aria-expanded={expanded} aria-label={`${expanded ? 'Collapse' : 'Expand'} jobs and streams`} onClick={onToggle}>
+      <IconButton className="qec-tray__toggle" aria-expanded={expanded} aria-label={`${expanded ? 'Collapse' : 'Expand'} jobs and streams`} tooltip={{ label: `${expanded ? 'Collapse' : 'Expand'} jobs and streams`, placement: 'above' }} onClick={onToggle}>
         {expanded ? <ChevronDown aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} /> : <ChevronUp aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} />}
       </IconButton>
     </header>
@@ -306,11 +305,12 @@ export function QecWorkbenchTray({ client: providedClient, connectClient }: QecW
       {!scopedSource && expanded && (engineNotice
         ? <EngineNotice state={engine} />
         : <TrayContent client={engine.client} projectRoot={projectRoot} />)}
-      {scopedSource && <div className="qec-tray__import-host" hidden={!expanded}>
-        {engine.client
-          ? <QecImportSheet onDismiss={closeAndRestoreFocus}><QecImportWizard source={scopedSource} client={engine.client} onClose={closeAndRestoreFocus} /></QecImportSheet>
-          : <EngineNotice state={engine} />}
-      </div>}
+      {scopedSource && engine.client && (
+        <QecImportSheet source={scopedSource} onDismiss={closeAndRestoreFocus}>
+          <QecImportWizard source={scopedSource} client={engine.client} onClose={closeAndRestoreFocus} hosted />
+        </QecImportSheet>
+      )}
+      {scopedSource && !engine.client && <div className="qec-tray__import-host" hidden={!expanded}><EngineNotice state={engine} /></div>}
     </section>
   );
 }

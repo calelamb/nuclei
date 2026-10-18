@@ -6,7 +6,7 @@ import { DEFAULT_RUNS_VIEW, useExperimentUiStore } from '../../stores/experiment
 import { seriesColor } from '../../lib/seriesPalette';
 import { buildSweepSeries, findFailedMarkers, pickDefaultMetric } from '../../services/sweepPlot';
 import { toCsv, downloadCsv, downloadSvg } from '../../services/experimentExport';
-import { deriveColumns } from './runsTableColumns';
+import { deriveColumns, metricLabel } from './runsTableColumns';
 import { SweepPlotChart } from './SweepPlotChart';
 import { TYPOGRAPHY, ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
 import { Button, Select } from '../ui';
@@ -121,7 +121,7 @@ export function SweepPlot() {
         </PickerField>
         <PickerField label="Y">
           <Select size="sm" aria-label="Y metric" value={effectiveY} onChange={(e) => setYMetric(e.target.value)}>
-            {metricNames.map((m) => <option key={m} value={m}>{m}</option>)}
+            {metricNames.map((m) => <option key={m} value={m}>{metricLabel(m)}</option>)}
           </Select>
         </PickerField>
         {otherParams.length > 0 && (

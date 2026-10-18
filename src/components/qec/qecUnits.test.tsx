@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, cleanup, fireEvent } from '@testing-library/react';
+import { render, cleanup, fireEvent, within } from '@testing-library/react';
 import { ThresholdPanel } from './ThresholdPanel';
 import { DecoderWorkbench } from './DecoderWorkbench';
 import { useQecCampaignStore } from '../../stores/qecCampaignStore';
@@ -24,7 +24,13 @@ describe('shared units (qec-12, qec-21)', () => {
     const plot = render(<ThresholdPanel />);
     const table = render(<DecoderWorkbench />);
     expect(table.container.textContent).toMatch(/Logical error rate \(per round\)/);
-    fireEvent.click(plot.getByRole('radio', { name: 'Per shot' }));
+    fireEvent.click(within(plot.container).getByRole('radio', { name: 'Per shot' }));
+    expect(table.container.textContent).toMatch(/Logical error rate \(per shot\)/);
+  });
+
+  it('puts the same units control in the decoder table header so the Decoders tab can switch too (qec-r-34)', () => {
+    const table = render(<DecoderWorkbench />);
+    fireEvent.click(within(table.container).getByRole('radio', { name: 'Per shot' }));
     expect(table.container.textContent).toMatch(/Logical error rate \(per shot\)/);
   });
 

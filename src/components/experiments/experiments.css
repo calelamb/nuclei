@@ -1,13 +1,23 @@
 /* Experiments workspace: small structural classes; everything resolves from tokens.css. */
 
+.nuclei-qec-templates { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-3); }
 .nuclei-experiment-template {
-  display: block; width: 100%; margin-bottom: var(--space-1); padding: var(--space-2);
+  display: flex; flex-direction: column; gap: var(--space-1); width: 100%; padding: var(--space-2) var(--space-3);
   text-align: left; cursor: pointer; color: var(--color-text-primary);
-  background: transparent; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-soft);
+  background: transparent; border: 1px solid var(--color-border-strong); border-radius: var(--radius-soft);
   font-family: var(--font-sans);
   transition: background-color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
 }
-.nuclei-experiment-template:hover { border-color: var(--color-accent-quantum); }
+.nuclei-experiment-template:hover { border-color: var(--color-text-tertiary); }
+.nuclei-experiment-template[aria-checked='true'] {
+  border-color: var(--color-accent-quantum);
+  background: color-mix(in srgb, var(--color-accent-quantum) 10%, transparent);
+}
+.nuclei-experiment-template__title { font-size: var(--font-size-chrome-label); font-weight: var(--font-weight-medium); }
+.nuclei-experiment-template__desc { font-size: var(--font-size-caption); color: var(--color-text-secondary); line-height: 1.4; }
+.nuclei-qec-name-label { display: block; font-size: var(--font-size-caption); color: var(--color-text-secondary); margin-bottom: var(--space-1); }
+.nuclei-qec-name-hint { margin: var(--space-2) 0 0; font-size: var(--font-size-caption); color: var(--color-text-secondary); }
+.nuclei-qec-name-error { margin: var(--space-2) 0 0; font-size: var(--font-size-caption); color: var(--color-danger); }
 
 /* Left-rail experiment rows: CSS hover and a selected state instead of inline style mutation. */
 .nuclei-experiment-row {
@@ -82,16 +92,15 @@
 }
 .nuclei-runs-row__cell[data-numeric='true'] { text-align: right; }
 
-/* stdout / stderr switch in run detail */
-.nuclei-output-tab {
-  height: var(--control-height-sm); padding: 0 var(--space-3); cursor: pointer;
-  border: 1px solid var(--color-border-strong); border-radius: var(--radius-soft); background: transparent;
-  color: var(--color-text-secondary); font-family: var(--font-sans); font-size: var(--font-size-caption);
-  font-weight: var(--font-weight-semibold); text-transform: uppercase; letter-spacing: 0.04em;
-  transition: background-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
+/* stdout / stderr switch in run detail (ui/Tabs) */
+.nuclei-output-tabs { margin-bottom: var(--space-2); }
+
+/* A quiet in-text action, e.g. "View traceback" beside an error summary. */
+.nuclei-link-button {
+  padding: 0; border: 0; background: transparent; cursor: pointer; flex: none;
+  color: var(--color-accent-quantum-text); font-family: var(--font-sans); font-size: var(--font-size-caption);
 }
-.nuclei-output-tab:hover { background: var(--color-surface-overlay); color: var(--color-text-primary); }
-.nuclei-output-tab[aria-selected='true'] { background: var(--color-surface-overlay); border-color: var(--color-accent-quantum); color: var(--color-text-primary); }
+.nuclei-link-button:hover { text-decoration: underline; }
 
 /* Noise model list rows */
 .nuclei-noise-row {
@@ -122,3 +131,23 @@
 .nuclei-experiment-form-region { flex: 0 1 auto; min-height: 0; max-height: calc(100% - 160px); display: flex; flex-direction: column; }
 .nuclei-experiment-form-region > form { min-height: 0; overflow-y: auto; }
 .nuclei-experiment-form__footer { position: sticky; bottom: 0; margin: 0 -12px; padding: var(--space-3) 12px; background: var(--color-surface-base); border-top: 1px solid var(--color-border-subtle); display: flex; flex-direction: column; gap: var(--space-2); }
+
+/* A malformed experiment file: collapsed to one line, expands to plain-language problems. */
+.nuclei-broken-experiment {
+  margin: var(--space-2); border: 1px solid color-mix(in srgb, var(--color-danger) 45%, var(--color-border-strong)); border-radius: var(--radius-soft);
+  background: color-mix(in srgb, var(--color-danger) 7%, transparent);
+}
+.nuclei-broken-experiment__head {
+  display: flex; align-items: center; gap: var(--space-1); width: 100%; padding: var(--space-2);
+  background: transparent; border: 0; cursor: pointer; text-align: left;
+  color: var(--color-text-primary); font-family: var(--font-sans); font-size: var(--font-size-chrome-label);
+}
+.nuclei-broken-experiment__file { font-family: var(--font-mono); font-weight: var(--font-weight-medium); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nuclei-broken-experiment__count { margin-left: auto; flex: none; color: var(--color-text-secondary); font-size: var(--font-size-caption); }
+.nuclei-broken-experiment__body { padding: 0 var(--space-2) var(--space-2); }
+.nuclei-broken-experiment__body ul { margin: 0 0 var(--space-2); padding-left: var(--space-4); color: var(--color-text-secondary); font-size: var(--font-size-chrome-label); line-height: 1.5; }
+.nuclei-broken-experiment__error { margin: 0 0 var(--space-2); color: var(--color-danger); font-size: var(--font-size-chrome-label); }
+.nuclei-broken-experiment__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
+/* Zero runs: the EmptyState owns the space under the header, centred. */
+.nuclei-runs-empty { flex: 1; }

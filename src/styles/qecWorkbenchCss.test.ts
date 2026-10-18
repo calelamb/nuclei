@@ -14,6 +14,20 @@ const responsiveStyles = readFileSync(
 );
 const mainSource = readFileSync(resolve(process.cwd(), 'src/main.tsx'), 'utf8');
 
+describe('QEC type scale (design-r-16)', () => {
+  const wizardStyles = readFileSync(
+    resolve(process.cwd(), 'src/components/qec/import/qecImportWizard.css'),
+    'utf8',
+  );
+
+  it.each([
+    ['qecWorkbench.css', qecStyles],
+    ['qecImportWizard.css', wizardStyles],
+  ])('uses the type-scale tokens, not pixel literals, in %s', (_name, css) => {
+    expect(css.match(/font-size:\s*\d+(\.\d+)?px/g) ?? []).toEqual([]);
+  });
+});
+
 describe('QEC workbench CSS tokens', () => {
   it('aliases surfaces, text and status colours to the global tokens instead of redefining them (design-r-12)', () => {
     for (const pair of [
@@ -37,7 +51,7 @@ describe('QEC workbench CSS tokens', () => {
   it('defines exact light, responsive, overflow, focus, and reduced-motion contracts', () => {
     expect(qecStyles).toContain('--qec-canvas: var(--color-surface-base, #ffffff)');
     expect(qecStyles).toContain('--qec-recessed: var(--color-surface-sunken, #f1f5f9)');
-    expect(qecStyles).toContain('--qec-analytical: #2563eb');
+    expect(qecStyles).toMatch(/--qec-analytical: var\(--color-accent-quantum/);
     expect(qecStyles).toMatch(/\.qec-workbench\s*{[\s\S]*?overflow: hidden;/);
     expect(responsiveStyles).toMatch(
       /@media \(max-width: 1179px\)[\s\S]*?\.qec-inspector\s*{[\s\S]*?position: absolute;/,

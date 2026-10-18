@@ -116,6 +116,23 @@ describe('plotBox', () => {
   });
 });
 
+describe('plotBox when the plot owns the card (qec-r-24)', () => {
+  it('fills a tall narrow card instead of stopping at 62% of the width', () => {
+    const natural = plotBox({ width: 468, height: 800 });
+    const filled = plotBox({ width: 468, height: 800 }, { fill: true });
+    expect(natural.plotH).toBeLessThan(300);
+    expect(filled.plotH).toBeGreaterThan(natural.plotH * 1.5);
+    expect(filled.plotH).toBeLessThanOrEqual(Math.round(468 * 1.1));
+  });
+  it('never exceeds the available height', () => {
+    const b = plotBox({ width: 468, height: 400 }, { fill: true });
+    expect(b.plotH).toBeLessThanOrEqual(400);
+  });
+  it('leaves the row layout alone', () => {
+    expect(plotBox({ width: 1100, height: 520 }, { fill: true })).toEqual(plotBox({ width: 1100, height: 520 }));
+  });
+});
+
 describe('layoutFigure', () => {
   const base = {
     yLabels: ['10⁻⁴', '10⁻³'], xLabels: ['10⁻³', '10⁻²'], legend: [group(4)],

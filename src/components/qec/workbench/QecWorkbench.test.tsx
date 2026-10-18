@@ -340,6 +340,13 @@ describe('<QecWorkbench />', () => {
     expect(screen.queryByText(/later workbench task/)).toBeNull();
   });
 
+  it('does not style inert labels as tray tabs (interaction-r-07)', () => {
+    render(<QecWorkbench />);
+    const tray = screen.getByRole('region', { name: 'QEC jobs and streams' });
+    for (const label of ['Logs', 'Comparisons']) expect(within(tray).queryByText(label)).toBeNull();
+    expect(within(tray).queryByText(/^Streams$/)).toBeNull();
+  });
+
   it('shows honest empty states instead of data-like placeholders (qec-06, design-22)', () => {
     const { container } = render(<QecWorkbench />);
     expect(container.querySelector('.qec-instrument__trace, .qec-instrument__field')).toBeNull();

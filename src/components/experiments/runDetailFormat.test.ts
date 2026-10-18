@@ -35,7 +35,7 @@ describe('runDetailFormat', () => {
   });
 
   it('prints metric chips with the table decimals (LR-12)', () => {
-    expect(toMetricChips({ energy: -1.14333 }, new Map([['energy', 4]]))).toEqual(['energy = -1.1433']);
-    expect(toMetricChips({ shots: 100 }, new Map([['shots', 0]]))).toEqual(['shots = 100']);
+    expect(toMetricChips({ energy: -1.14333 }, new Map([['energy', 4]]))).toEqual(['Energy = -1.1433']);
+    expect(toMetricChips({ shots: 100 }, new Map([['shots', 0]]))).toEqual(['Shots = 100']);
   });
 });

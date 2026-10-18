@@ -2,6 +2,7 @@
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { InvestigationCanvas } from './InvestigationCanvas';
+import { circuitHint } from './circuitHint';
 import { orderCanvasPanels } from './orderCanvasPanels';
 import { resolveQecPanels } from '../../../layout/qecPanelRegistry';
 import { useQecWorkbenchStore } from '../../../stores/qecWorkbenchStore';
@@ -42,12 +43,41 @@ describe('canvas grid rows', () => {
   });
 });
 
-describe('empty circuit hint', () => {
-  it('does not claim a Study references no circuit when no Study exists', () => {
+describe('empty circuit hint (qec-r-32)', () => {
+  const base = { projectOpen: true, studyCount: 0, hasActiveStudy: false, circuitCount: 0 };
+
+  it('asks for a project folder before anything else when none is open', () => {
+    expect(circuitHint({ ...base, projectOpen: false })).toBe('Open a project folder to load circuits.');
+    expect(circuitHint({ ...base, projectOpen: false, studyCount: 3 })).toBe('Open a project folder to load circuits.');
+  });
+
+  it('asks to choose a Study when Studies exist but none is active', () => {
+    expect(circuitHint({ ...base, studyCount: 2 })).toBe('Choose a Study to see its circuit.');
+  });
+
+  it('asks to create a Study only when there are none', () => {
+    expect(circuitHint(base)).toBe('Create a Study to attach a .stim circuit.');
+  });
+
+  it('describes the active Study once one is chosen', () => {
+    expect(circuitHint({ ...base, studyCount: 1, hasActiveStudy: true, circuitCount: 0 })).toBe('This Study references no .stim circuit.');
+    expect(circuitHint({ ...base, studyCount: 1, hasActiveStudy: true, circuitCount: 2 })).toBe('Double-click a .stim file under Referenced files to open it.');
+  });
+
+  it('renders the no-project hint on the canvas and never claims a Study references nothing', () => {
     useQecWorkbenchStore.setState({ preset: 'build' });
     const noop = () => undefined;
     render(<InvestigationCanvas inspectorOpen onToggleInspector={noop} toggleRef={{ current: null }} />);
     expect(screen.queryAllByText('This Study references no .stim circuit.')).toHaveLength(0);
-    expect(screen.getAllByText('Create a Study to attach a .stim circuit.').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Open a project folder to load circuits.').length).toBeGreaterThan(0);
+  });
+});
+
+describe('selection promises (qec-r-26)', () => {
+  it('does not claim selections are linked across instruments', () => {
+    useQecWorkbenchStore.setState({ preset: 'build' });
+    const noop = () => undefined;
+    render(<InvestigationCanvas inspectorOpen onToggleInspector={noop} toggleRef={{ current: null }} />);
+    expect(screen.queryByText('Selections linked')).toBeNull();
   });
 });

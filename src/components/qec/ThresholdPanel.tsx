@@ -33,6 +33,8 @@ const DOCS = 'https://getnuclei.dev/docs/research/qec-studio/';
 const PLOT_ONLY_PAD = 24;
 /** Below this panel width the title would be squeezed out, so the units toggle moves below the header and both labelled exports stay. */
 const COMPACT_HEADER_WIDTH = 620;
+/** Height of the units toggle row that sits above the figure in a compact header. */
+const UNITS_ROW_HEIGHT = 40;
 
 function ExportButton({ label, title, ariaLabel, onClick }: {
   label: string; title: string; ariaLabel: string; onClick: () => void;
@@ -149,8 +151,9 @@ export function ThresholdPanel({ part = 'all', tabs }: { part?: ThresholdPart; t
   }
 
   const decoders = [...new Set(series.map((s) => s.decoder))].sort();
-  const fullBox = plotBox(area);
-  // Plot alone: the readout's column is not reserved, so the plot takes the full width.
+  // Plot alone: the readout's column is not reserved, so the plot takes the full width and the full height.
+  const unitsRow = roundsKnown && compact ? UNITS_ROW_HEIGHT : 0;
+  const fullBox = plotBox({ width: area.width, height: area.height > 0 ? area.height - unitsRow : 0 }, { fill: part === 'plot' });
   const box = part === 'plot' && fullBox.layout === 'row'
     ? { layout: 'stack' as const, plotW: Math.max(MIN_PLOT_W, area.width - PLOT_ONLY_PAD), plotH: fullBox.plotH }
     : fullBox;

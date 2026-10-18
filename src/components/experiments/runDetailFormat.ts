@@ -1,3 +1,5 @@
+import { metricLabel } from './runsTableColumns';
+
 /** Pure formatters for the run detail manifest (kept out of the component). */
 
 const MINUTE = 60_000;
@@ -55,7 +57,7 @@ export function describeLastRun(
   return { label, title: formatLocalDateTime(iso), summary: `last run ${label}` };
 }
 
-/** Metric chips printed with the same per-metric decimals the runs table uses. */
+/** Metric chips printed with the same per-metric decimals and labels the runs table uses. */
 export function toMetricChips(metrics: Record<string, number>, decimals: ReadonlyMap<string, number>): string[] {
-  return Object.entries(metrics).map(([name, value]) => `${name} = ${value.toFixed(decimals.get(name) ?? 4)}`);
+  return Object.entries(metrics).map(([name, value]) => `${metricLabel(name)} = ${value.toFixed(decimals.get(name) ?? 4)}`);
 }

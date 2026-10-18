@@ -894,7 +894,8 @@ async def handle_message(websocket):
         elif msg_type == "hardware_list_backends":
             provider = msg.get("provider", None)
             try:
-                backends = hardware_manager.list_backends(provider)
+                # Listing hits each provider's network API; keep it off the event loop.
+                backends = await asyncio.to_thread(hardware_manager.list_backends, provider)
                 await websocket.send(json.dumps({
                     "type": "hardware_backends",
                     "backends": [b.to_dict() for b in backends],

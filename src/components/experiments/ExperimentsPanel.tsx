@@ -10,12 +10,13 @@ import { createTauriExperimentFs } from '../../services/experimentFs';
 import { campaignTaskCount, expandGrid } from '../../types/experiment';
 import { describeLastRun } from './runDetailFormat';
 import { NewExperimentForm } from './NewExperimentForm';
+import { BrokenExperimentCard } from './BrokenExperimentCard';
 import { NewQecExperimentMenu } from './NewQecExperimentMenu';
 import { NoiseModelLibrary } from './NoiseModelLibrary';
 import { RunButton } from './RunButton';
 import { RunFeedback } from './RunFeedback';
 import { TYPOGRAPHY, ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
-import { Button, IconButton } from '../ui';
+import { Button, EmptyState, IconButton } from '../ui';
 import './experiments.css';
 
 /**
@@ -119,10 +120,12 @@ function ExperimentRow({
           <Pencil size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />
         </IconButton>
       </div>
-      <div style={{ color: colors.textDim, fontSize: 11, fontFamily: TYPOGRAPHY.fontMono }}>
-        {spec.type === 'qec_campaign'
-          ? `${'generate' in spec.source ? spec.source.generate.code : spec.source.entry} · ${spec.noise.model} · ${spec.decoders.join('+')}`
-          : `${spec.entry} · ${spec.backend.provider}/${spec.backend.target}`}
+      <div style={{ color: colors.textDim, fontSize: 11, fontFamily: TYPOGRAPHY.fontMono, display: 'flex', flexDirection: 'column' }}>
+        {/* One fact per line: a wrapped " · " separator would dangle at the end of the first line. */}
+        {(spec.type === 'qec_campaign'
+          ? [`${'generate' in spec.source ? spec.source.generate.code : spec.source.entry}`, `${spec.noise.model} · ${spec.decoders.join('+')}`]
+          : [spec.entry, [spec.backend.provider, spec.backend.target].filter(Boolean).join('/')]
+        ).filter(Boolean).map((line) => <span key={line} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{line}</span>)}
       </div>
       <div
         className="nuclei-experiment-row__meta"
@@ -219,9 +222,13 @@ export function ExperimentsPanel() {
 
       <div style={{ flex: 1, minHeight: LIST_MIN_HEIGHT, overflow: 'auto' }}>
         {experiments.length === 0 && validationErrors.length === 0 && (
-          <div style={{ padding: 16, color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>
-            No experiments yet. Create one to declare a parameter sweep.
-          </div>
+          <EmptyState
+            icon={<FlaskConical size={ICON_SIZE.lg} strokeWidth={ICON_STROKE} />}
+            title="No experiments yet"
+            action={<Button size="sm" variant="primary" onClick={() => openForm(undefined)}>New experiment</Button>}
+          >
+            An experiment declares a parameter sweep over your circuit.
+          </EmptyState>
         )}
 
         {experiments.map((experiment) => (
@@ -237,21 +244,7 @@ export function ExperimentsPanel() {
         ))}
 
         {validationErrors.map((err) => (
-          <div
-            key={err.fileName}
-            role="alert"
-            style={{
-              margin: 8, padding: 10, border: `1px solid ${colors.error}`, borderRadius: 'var(--radius-soft)',
-              background: `${colors.error}12`,
-            }}
-          >
-            <div style={{ color: colors.error, fontSize: 11, fontWeight: 600, marginBottom: 4, fontFamily: TYPOGRAPHY.fontMono }}>
-              {err.fileName}
-            </div>
-            <ul style={{ margin: 0, paddingLeft: 16, color: colors.textMuted, fontSize: 11 }}>
-              {err.errors.map((msg) => <li key={msg}>{msg}</li>)}
-            </ul>
-          </div>
+          <BrokenExperimentCard key={err.fileName} projectRoot={projectRoot} fileName={err.fileName} errors={err.errors} />
         ))}
       </div>
 

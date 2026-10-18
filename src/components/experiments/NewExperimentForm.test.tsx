@@ -104,7 +104,7 @@ describe('NewExperimentForm', () => {
     fireEvent.change(getByLabelText('Notes (optional)'), { target: { value: 'H2 ansatz sweep' } });
     fireEvent.click(getByText('Add'));
 
-    const nameInput = document.querySelector('input[placeholder="theta"]') as HTMLInputElement;
+    const nameInput = document.querySelector('input[aria-label="Parameter name"]') as HTMLInputElement;
     fireEvent.change(nameInput, { target: { value: 'theta' } });
     const valuesSelect = nameInput.closest('[data-sweep-row]')!.querySelector('select') as HTMLSelectElement;
     fireEvent.change(valuesSelect, { target: { value: 'values' } });
@@ -128,7 +128,7 @@ describe('NewExperimentForm', () => {
     fireEvent.change(getByLabelText('Entry file'), { target: { value: 'run.py' } });
     fireEvent.click(getByText('Add'));
 
-    const nameInput = document.querySelector('input[placeholder="theta"]') as HTMLInputElement;
+    const nameInput = document.querySelector('input[aria-label="Parameter name"]') as HTMLInputElement;
     fireEvent.change(nameInput, { target: { value: 'theta' } });
     const [startInput, stopInput] = Array.from(
       nameInput.closest('[data-sweep-row]')!.querySelectorAll('input[placeholder="start"], input[placeholder="stop"]'),
@@ -241,5 +241,16 @@ describe('NewExperimentForm', () => {
     fireEvent.click(getByText('Save changes'));
     await waitFor(() => expect(writeTextFileMock).toHaveBeenCalledTimes(1));
     expect(existsMock).not.toHaveBeenCalled();
+  });
+
+  it('flags unnamed sweep rows instead of silently ignoring them (research-r-09)', () => {
+    const { getByText, getAllByText } = render(
+      <NewExperimentForm projectRoot="/proj" onClose={vi.fn()} />,
+    );
+    fireEvent.click(getByText('Add'));
+    fireEvent.click(getByText('Add'));
+    expect(getAllByText('Name this parameter to include it in the sweep.')).toHaveLength(2);
+    expect(getByText(/2 parameters unnamed/)).toBeTruthy();
+    expect(document.querySelector('input[placeholder="theta"]')).toBeNull();
   });
 });

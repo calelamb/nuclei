@@ -2,7 +2,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import { TYPOGRAPHY } from '../../styles/tokens';
 import { Table, Thead, Tbody, Tr, Th, Td } from '../ui/Table';
 import type { RunRecord } from '../../types/experiment';
-import { formatRunLabel, metricDecimals } from './runsTableColumns';
+import { formatRunLabel, metricDecimals, metricLabel } from './runsTableColumns';
 
 /**
  * PRD 09 Phase E (E1) — runs (rows) x metrics (columns), derived + user
@@ -29,7 +29,7 @@ export function CompareMetricsTable({ runs, precisionRuns }: { runs: readonly Ru
       <Thead>
         <Tr>
           <Th plain>Run</Th>
-          {metricNames.map((name) => <Th key={name} numeric plain>{name}</Th>)}
+          {metricNames.map((name) => <Th key={name} numeric plain title={name}>{metricLabel(name)}</Th>)}
         </Tr>
       </Thead>
       <Tbody>

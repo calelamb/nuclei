@@ -80,11 +80,13 @@ describe('ExperimentsPanel', () => {
   });
 
   it('renders malformed experiments as a validation-error card, not a crash', () => {
-    const { getByText, getAllByRole } = render(<ExperimentsPanel />);
+    const { getByRole, getAllByRole, queryByText } = render(<ExperimentsPanel />);
     const alerts = getAllByRole('alert');
     expect(alerts).toHaveLength(1);
-    expect(alerts[0].textContent).toContain('broken.experiment.yaml');
-    expect(getByText(/shots: Invalid input/)).toBeTruthy();
+    expect(alerts[0].textContent).toContain('broken');
+    expect(alerts[0].textContent).toMatch(/\d+ problems?/);
+    fireEvent.click(getByRole('button', { name: /broken.experiment.yaml/ }));
+    expect(queryByText(/Invalid input/)).toBeNull();
   });
 
   it('clicking an experiment row selects it in the UI store', () => {

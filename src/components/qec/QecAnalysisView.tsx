@@ -4,9 +4,9 @@ import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 import { useExperimentStore } from '../../services/experimentStore';
 import { useExperimentUiStore } from '../../stores/experimentUiStore';
 import { QecCampaignActions } from './QecCampaignActions';
-import { SegmentedControl } from '../ui/SegmentedControl';
+import { Tabs } from '../ui';
 import { useElementSize } from '../../hooks/useElementSize';
-import { isShortAnalysis } from '../../lib/qecAnalysisLayout';
+import { canStackLambda, isShortAnalysis } from '../../lib/qecAnalysisLayout';
 import { ThresholdPanel } from './ThresholdPanel';
 import { DecoderWorkbench } from './DecoderWorkbench';
 import { isWebBuild } from '../../platform/buildTarget';
@@ -25,6 +25,8 @@ const ANALYSIS_TABS = [
   { value: 'lambda', label: 'Λ' },
   { value: 'decoders', label: 'Decoders' },
 ] as const;
+/** When Λ sits under the plot there is no separate Λ section. */
+const STACKED_TABS = ANALYSIS_TABS.filter((t) => t.value !== 'lambda');
 
 
 /**
@@ -51,9 +53,13 @@ export function QecAnalysisView({ embedded = false, actionsInHeader = false }: {
   const [scrollRef, scrollSize] = useElementSize<HTMLDivElement>();
   const [tab, setTab] = useState<AnalysisTab>('plot');
   const tabbed = isShortAnalysis(scrollSize.height, scrollSize.width);
+  const lambdaBelow = tabbed && canStackLambda(scrollSize.height, scrollSize.width);
+  // Λ lives under the plot when there is room; its tab would be a dead end then.
+  const activeTab: AnalysisTab = lambdaBelow && tab === 'lambda' ? 'plot' : tab;
 
+  // Sections are real tabs (underline, one row of their own); the units control keeps the segmented style so the two never look alike.
   const tabSwitch = (
-    <SegmentedControl aria-label="Analysis section" value={tab} options={ANALYSIS_TABS} onChange={setTab} />
+    <Tabs aria-label="Analysis section" value={activeTab} options={lambdaBelow ? STACKED_TABS : ANALYSIS_TABS} onChange={setTab} />
   );
 
   const webOnly = isWebBuild(); // no kernel to run campaigns in the browser
@@ -131,6 +137,7 @@ export function QecAnalysisView({ embedded = false, actionsInHeader = false }: {
               ? 'Open or drop a sinter stats CSV to see logical error rate vs physical error and compare decoders.'
               : 'Open or drop a sinter stats CSV, or run a QEC campaign from Experiments, to see logical error rate vs physical error and compare decoders.'}
             docsHref={QEC_PLOT_CSV_DOCS}
+            align={embedded ? 'top' : 'center'}
           >
             {!csvSource && <QecCsvDropZone />}
           </QecEmptyState>
@@ -143,18 +150,25 @@ export function QecAnalysisView({ embedded = false, actionsInHeader = false }: {
           <CsvMappingPreview />
           {tabbed ? (
             <>
+              {/* flex: none: a tall table must not squeeze the tab strip down to its border. */}
+              {hasData && <div style={{ flex: 'none', padding: '0 12px' }}>{tabSwitch}</div>}
               <div style={{ flex: '1 0 auto', minHeight: PLOT_MIN_HEIGHT }}>
-                {tab === 'decoders' ? <DecoderWorkbench tabs={tabSwitch} /> : <ThresholdPanel part={tab} tabs={tabSwitch} />}
+                {activeTab === 'decoders' && hasData
+                  ? <DecoderWorkbench />
+                  : <ThresholdPanel part={hasData ? (lambdaBelow ? 'all' : activeTab === 'decoders' ? 'plot' : activeTab) : 'all'} />}
               </div>
             </>
           ) : (
             <>
-              <div style={{ flex: '2 1 0', minHeight: PLOT_MIN_HEIGHT, borderBottom: `1px solid ${colors.border}` }}>
+              <div style={{ flex: hasData ? '2 1 0' : '1 1 0', minHeight: PLOT_MIN_HEIGHT, borderBottom: hasData ? `1px solid ${colors.border}` : undefined }}>
                 <ThresholdPanel />
               </div>
-              <div style={{ flex: '1 1 0', minHeight: TABLE_MIN_HEIGHT }}>
-                <DecoderWorkbench />
-              </div>
+              {/* Until data loads there is nothing to compare: one empty state, not one per panel. */}
+              {hasData && (
+                <div style={{ flex: '1 1 0', minHeight: TABLE_MIN_HEIGHT }}>
+                  <DecoderWorkbench />
+                </div>
+              )}
             </>
           )}
         </div>

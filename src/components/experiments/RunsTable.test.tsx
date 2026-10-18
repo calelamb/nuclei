@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, cleanup, fireEvent, act } from '@testing-library/react';
-import { RunsTable } from './RunsTable';
+import { RunsTable, RUN_COLUMN_WIDTH } from './RunsTable';
+import { formatRunLabel } from './runsTableColumns';
 import { useExperimentStore } from '../../services/experimentStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useExperimentUiStore } from '../../stores/experimentUiStore';
 import { useExperimentRunStore } from '../../stores/experimentRunStore';
+import { useEditorStore } from '../../stores/editorStore';
 import type { ExperimentSpec, RunManifest, RunRecord } from '../../types/experiment';
 
 const SPEC: ExperimentSpec = {
@@ -116,9 +118,9 @@ describe('RunsTable', () => {
 
   it('sorts descending by a metric column (energy) after a second click', () => {
     const { container, getByText } = render(<RunsTable />);
-    fireEvent.click(getByText('energy'));
+    fireEvent.click(getByText('Energy'));
     expect(visibleRunDirs(container)[0]).toBe('20260712-000003-cccc'); // -2.0 asc first
-    fireEvent.click(getByText('energy'));
+    fireEvent.click(getByText('Energy'));
     expect(visibleRunDirs(container)[0]).toBe('20260712-000002-bbbb'); // -0.5 desc first
   });
 
@@ -192,7 +194,7 @@ describe('RunsTable', () => {
 
   it('keeps sort and filter after unmounting for run detail and coming back (research-12)', () => {
     const first = render(<RunsTable />);
-    fireEvent.click(first.getByText('energy'));
+    fireEvent.click(first.getByText('Energy'));
     fireEvent.change(first.getByLabelText('Filter by status'), { target: { value: 'complete' } });
     first.unmount();
     const { container, getByLabelText } = render(<RunsTable />);
@@ -206,12 +208,51 @@ describe('RunsTable', () => {
     expect(getByRole('status').textContent).toContain("Couldn't reach the Python kernel");
   });
 
-  it('points the kernel error at the toolbar and offers Retry (LR-19)', () => {
+  it('points the kernel error at the status bar, never a toolbar this view does not have, and offers Retry (LR-19)', () => {
+    useEditorStore.setState({ kernelStatus: 'failed' });
     useExperimentRunStore.setState({ lastError: 'Failed to connect to kernel' });
     const { getByRole } = render(<RunsTable />);
-    expect(getByRole('status').textContent).toContain('toolbar');
-    expect(getByRole('status').textContent).not.toContain('status bar');
+    expect(getByRole('status').textContent).toContain('status bar');
+    expect(getByRole('status').textContent).not.toContain('toolbar');
     expect(getByRole('button', { name: 'Retry' })).toBeTruthy();
+  });
+
+  it('calls a still-booting kernel starting, not a failed run (research-r-07)', () => {
+    useEditorStore.setState({ kernelStatus: 'connecting' });
+    useExperimentRunStore.setState({ lastError: 'Failed to connect to kernel' });
+    const { getByRole, queryByRole } = render(<RunsTable />);
+    expect(getByRole('status').textContent).toContain('still starting');
+    expect(getByRole('status').textContent).not.toContain('Run failed');
+    expect(queryByRole('button', { name: 'Retry' })).toBeNull();
+  });
+
+  it('shows how many of the runs a filter keeps (research-r-11)', () => {
+    const { getByLabelText, getByText } = render(<RunsTable />);
+    expect(getByText('3 runs')).toBeTruthy();
+    fireEvent.change(getByLabelText('Filter by status'), { target: { value: 'failed' } });
+    expect(getByText('1 of 3 runs')).toBeTruthy();
+  });
+
+  it('counts checked runs a filter hides and keeps Compare secondary (research-r-11)', () => {
+    const { container, getByLabelText, getByRole } = render(<RunsTable />);
+    const boxes = Array.from(container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
+    fireEvent.click(boxes[0]);
+    fireEvent.click(boxes[1]);
+    fireEvent.change(getByLabelText('Filter by status'), { target: { value: 'failed' } });
+    const compare = getByRole('button', { name: /Compare/ });
+    expect(compare.textContent).toContain('2, 1 hidden');
+    expect(compare.className).toContain('nuclei-btn--secondary');
+  });
+
+  it('lands Back from Compare on the first checked run (research-r-16)', () => {
+    const first = render(<RunsTable />);
+    const boxes = Array.from(first.container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
+    fireEvent.click(boxes[0]);
+    fireEvent.click(boxes[1]);
+    fireEvent.click(first.getByRole('button', { name: /Compare/ }));
+    first.unmount();
+    const { container } = render(<RunsTable />);
+    expect(document.activeElement).toBe(container.querySelector(`[data-run-dir="${useExperimentUiStore.getState().compareSelection[0]}"]`));
   });
 
   it('formats a numeric column with consistent decimals (research-18)', () => {
@@ -310,5 +351,33 @@ describe('RunsTable', () => {
       const { getByText } = render(<RunsTable />);
       expect(getByText(/point(s)? ready/)).toBeTruthy();
     });
+
+    it('offers exactly one Run sweep action at zero runs, with the swept axes and a disabled Sweep tab (research-r-14)', () => {
+      useExperimentStore.setState({ runsByExperiment: { [FILE_NAME]: [] } });
+      const { getAllByRole, getByText, getByRole } = render(<RunsTable />);
+      expect(getAllByRole('button', { name: /^Run( sweep)?$/ })).toHaveLength(1);
+      expect(getByText(/theta × 3/)).toBeTruthy();
+      expect((getByRole('tab', { name: 'Sweep plot' }) as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    it('hides Export CSV and Compare until a run exists', () => {
+      useExperimentStore.setState({ runsByExperiment: { [FILE_NAME]: [] } });
+      const { queryByRole } = render(<RunsTable />);
+      expect(queryByRole('button', { name: /Export CSV/ })).toBeNull();
+      expect(queryByRole('button', { name: /^Compare/ })).toBeNull();
+    });
+
+    it('keeps the swept parameter as a column before any run exists (research-r-14)', () => {
+      useExperimentStore.setState({ runsByExperiment: { [FILE_NAME]: [] } });
+      const { getByText } = render(<RunsTable />);
+      expect(getByText('theta')).toBeTruthy();
+    });
+  });
+});
+
+describe('run column width', () => {
+  it('leaves room for the longest run label at roughly 7.5px a character plus cell padding', () => {
+    const longest = formatRunLabel('2026-10-15_082150_a458');
+    expect(RUN_COLUMN_WIDTH).toBeGreaterThanOrEqual(longest.length * 7.5 + 16);
   });
 });

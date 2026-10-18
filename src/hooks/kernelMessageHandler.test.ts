@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { handleKernelMessage } from './kernelMessageHandler';
 import { useSimulationStore } from '../stores/simulationStore';
 import { useCircuitStore } from '../stores/circuitStore';
+import { setHardwareBackendsSender } from '../lib/hardwareBackendsSender';
+import { vi } from 'vitest';
 
 describe('handleKernelMessage — run failure tracking', () => {
   beforeEach(() => {
@@ -53,5 +55,27 @@ describe('handleKernelMessage — run failure tracking', () => {
     handleKernelMessage({ type: 'error', message: 'invalid syntax', phase: 'parse', code: 'execution_error' }, {});
     expect(useCircuitStore.getState().error).toBe('invalid syntax');
     expect(useCircuitStore.getState().previewPaused).toBe(false);
+  });
+});
+
+describe('handleKernelMessage — backend discovery', () => {
+  it('asks the kernel for backends once when a provider connects, and not when a connect fails', () => {
+    const sender = vi.fn();
+    setHardwareBackendsSender(sender);
+    handleKernelMessage({ type: 'hardware_connected', provider: 'ibm', success: false } as never, {});
+    expect(sender).not.toHaveBeenCalled();
+    handleKernelMessage({ type: 'hardware_connected', provider: 'ibm', success: true } as never, {});
+    expect(sender).toHaveBeenCalledTimes(1);
+    setHardwareBackendsSender(null);
+  });
+
+  it('asks once after the kernel reports already-connected providers, never for an empty list', () => {
+    const sender = vi.fn();
+    setHardwareBackendsSender(sender);
+    handleKernelMessage({ type: 'hardware_connected_providers', providers: [] } as never, {});
+    expect(sender).not.toHaveBeenCalled();
+    handleKernelMessage({ type: 'hardware_connected_providers', providers: ['ibm', 'ionq'] } as never, {});
+    expect(sender).toHaveBeenCalledTimes(1);
+    setHardwareBackendsSender(null);
   });
 });

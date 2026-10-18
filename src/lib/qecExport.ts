@@ -9,6 +9,7 @@
 import type { QecCampaignStatsRow } from '../types/qec';
 import { assignExperiments } from './qecExperiments';
 import { roundForExport } from './qecPlotFormat';
+import type { DecoderComparison } from './qecWorkbench';
 import {
   DEFAULT_MAX_LIKELIHOOD_FACTOR, roundsFromMetadata, rowProblem, rowRate, type RateUnits,
 } from './qecFit';
@@ -63,4 +64,19 @@ export function qecRatesToCsv(rows: readonly QecCampaignStatsRow[], opts: QecRat
     return [...common, roundForExport(fit.best), roundForExport(fit.low), roundForExport(fit.high), units, 'likelihood_ratio', factor, note, ...provenance].map(csvCell).join(',');
   });
   return [QEC_RATES_CSV_COLUMNS.join(','), ...lines].join('\n') + '\n';
+}
+
+export const QEC_DECODER_CSV_COLUMNS = [
+  'decoder', 'experiment', 'distance', 'noise', 'shots', 'discards', 'kept_shots', 'errors',
+  'logical_error_rate', 'ci_lo', 'ci_hi', 'units', 'ci_method', 'seconds_per_shot', 'strong_id', 'task_collision',
+] as const;
+
+/** The Decoder Workbench table as CSV, with floats rounded to 8 significant figures exactly like the plot-data export. */
+export function decoderTableToCsv(cmp: DecoderComparison): string {
+  const lines = cmp.rows.map((w) => [
+    w.decoder, w.experiment, w.distance, w.noise, w.shots, w.discards, w.kept, w.errors,
+    roundForExport(w.rate.p), roundForExport(w.rate.lo), roundForExport(w.rate.hi), w.units,
+    `likelihood_ratio_factor_${cmp.maxLikelihoodFactor}`, roundForExport(w.secondsPerShot), w.strongId, w.collides ? 'yes' : 'no',
+  ].map(csvCell).join(','));
+  return [QEC_DECODER_CSV_COLUMNS.join(','), ...lines].join('\n') + '\n';
 }

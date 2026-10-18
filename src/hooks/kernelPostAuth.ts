@@ -1,5 +1,6 @@
 import { useEditorStore } from '../stores/editorStore';
 import { kernelLanguageFor } from '../types/quantum';
+import { setHardwareBackendsSender } from '../lib/hardwareBackendsSender';
 
 const LEGACY_CREDENTIAL_PREFIX = 'nuclei-hardware-';
 
@@ -36,4 +37,8 @@ export function sendPostAuthMessages(ws: WebSocket): void {
   migrateLegacyCredentials(ws);
   ws.send(JSON.stringify({ type: 'hardware_connected_providers' }));
   ws.send(JSON.stringify({ type: 'hardware_list_jobs' }));
+  // Lets the Launch dialog and Hardware panel ask for the live backend list on demand.
+  setHardwareBackendsSender(() => {
+    if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'hardware_list_backends' }));
+  });
 }

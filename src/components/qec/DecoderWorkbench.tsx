@@ -5,8 +5,11 @@ import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 import { PanelHeader } from '../layout/PanelHeader';
 import { QecEmptyState } from './QecEmptyState';
 import { decoderComparison, formatSecondsPerShot } from '../../lib/qecWorkbench';
+import { decoderTableToCsv } from '../../lib/qecExport';
 import { isWebBuild } from '../../platform/buildTarget';
 import { useQecUnits } from '../../hooks/useQecUnits';
+import { useElementSize } from '../../hooks/useElementSize';
+import { QecUnitsToggle } from './QecUnitsToggle';
 import { formatNoise, formatRateInterval } from '../../lib/qecPlotFormat';
 import { downloadCsv } from '../../services/experimentExport';
 
@@ -15,6 +18,8 @@ import { Button } from '../ui';
 import './qecAnalysis.css';
 import { Table, Thead, Tbody, Tr, Th, Td } from '../ui/Table';
 const DOCS = 'https://getnuclei.dev/docs/research/qec-studio/';
+/** Below this width an all-zero Discards column is dropped so the columns that matter stay on screen. */
+const NARROW_TABLE_WIDTH = 720;
 
 /**
  * PRD 10 Phase E — the decoder workbench. Same campaign, same circuits: a
@@ -28,29 +33,16 @@ export function DecoderWorkbench({ tabs }: { tabs?: ReactNode } = {}) {
   const rowsByStrongId = useQecCampaignStore((s) => s.rowsByStrongId);
   const liveRows = useMemo(() => Object.values(rowsByStrongId), [rowsByStrongId]);
   const rows = useDeferredValue(liveRows);
-  const { units } = useQecUnits();
+  const { units, roundsKnown, setRequested } = useQecUnits();
+  const [areaRef, area] = useElementSize<HTMLDivElement>();
   const unitText = units === 'per_round' ? 'per round' : 'per shot';
   const cmp = useMemo(() => decoderComparison(rows, { units }), [rows, units]);
   const wb = cmp.rows;
   const contexts = useMemo(() => [...new Set(wb.map((w) => w.context))], [wb]);
   const showExperiment = contexts.length > 1;
+  const hideDiscards = area.width > 0 && area.width < NARROW_TABLE_WIDTH && wb.every((w) => w.discards === 0);
 
-  const exportCsv = () => {
-    const cell = (v: string | number | null) => {
-      const t = v === null ? '' : String(v);
-      return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
-    };
-    const csv =
-      'decoder,experiment,distance,noise,shots,discards,kept_shots,errors,logical_error_rate,ci_lo,ci_hi,units,ci_method,seconds_per_shot,strong_id,task_collision\n' +
-      wb
-        .map((w) => [
-          w.decoder, w.experiment, w.distance, w.noise, w.shots, w.discards, w.kept, w.errors,
-          w.rate.p, w.rate.lo, w.rate.hi, w.units, `likelihood_ratio_factor_${cmp.maxLikelihoodFactor}`, w.secondsPerShot, w.strongId, w.collides ? 'yes' : 'no',
-        ].map(cell).join(','))
-        .join('\n') +
-      '\n';
-    downloadCsv(csv, 'decoder-workbench.csv');
-  };
+  const exportCsv = () => downloadCsv(decoderTableToCsv(cmp), 'decoder-workbench.csv');
 
   const header = (
     <PanelHeader
@@ -59,6 +51,7 @@ export function DecoderWorkbench({ tabs }: { tabs?: ReactNode } = {}) {
       actions={
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           {tabs}
+          {wb.length > 0 && roundsKnown && <QecUnitsToggle units={units} onChange={setRequested} />}
           {wb.length > 0 && (
             <Button size="sm" onClick={exportCsv} title="Export the decoder table as CSV" aria-label="Export decoder table (CSV)" icon={<Download size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />}>
               CSV
@@ -89,7 +82,7 @@ export function DecoderWorkbench({ tabs }: { tabs?: ReactNode } = {}) {
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg }}>
       {header}
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      <div ref={areaRef} style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         <Table label="Decoder comparison" className="decoder-table">
           <Thead>
             <Tr>
@@ -99,7 +92,7 @@ export function DecoderWorkbench({ tabs }: { tabs?: ReactNode } = {}) {
               <Th numeric plain>p</Th>
               <Th numeric>Logical error rate ({unitText})</Th>
               <Th numeric>Kept shots</Th>
-              <Th numeric>Discards</Th>
+              {!hideDiscards && <Th numeric>Discards</Th>}
               <Th numeric>Errors</Th>
               <Th numeric title="CPU core-seconds per shot (sampling + decoding), from sinter's seconds column">Time / shot</Th>
             </Tr>
@@ -113,7 +106,7 @@ export function DecoderWorkbench({ tabs }: { tabs?: ReactNode } = {}) {
                 <Td numeric>{w.noise === null ? '—' : formatNoise(w.noise)}</Td>
                 <Td numeric>{formatRateInterval(w.rate.p, w.rate.lo, w.rate.hi)}</Td>
                 <Td numeric>{w.kept.toLocaleString()}</Td>
-                <Td numeric>{w.discards.toLocaleString()}</Td>
+                {!hideDiscards && <Td numeric>{w.discards.toLocaleString()}</Td>}
                 <Td numeric>{w.errors.toLocaleString()}</Td>
                 <Td numeric>{formatSecondsPerShot(w.secondsPerShot)}</Td>
               </Tr>
