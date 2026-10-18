@@ -55,7 +55,8 @@ function ExportButton({ label, title, ariaLabel, onClick }: {
 /** Which half of the figure to show: both side by side, only the plot, or only the Λ readout. */
 export type ThresholdPart = 'all' | 'plot' | 'lambda';
 
-export function ThresholdPanel({ part = 'all', tabs }: { part?: ThresholdPart; tabs?: ReactNode } = {}) {
+/** `bare` drops the title bar from the empty state: before data loads the bar would only repeat the empty state's heading. */
+export function ThresholdPanel({ part = 'all', tabs, bare = false }: { part?: ThresholdPart; tabs?: ReactNode; bare?: boolean } = {}) {
   const colors = useThemeStore((s) => s.colors);
   const mode = useThemeStore((s) => s.mode);
   const rowsByStrongId = useQecCampaignStore((s) => s.rowsByStrongId);
@@ -136,7 +137,7 @@ export function ThresholdPanel({ part = 'all', tabs }: { part?: ThresholdPart; t
     const unplottable = series.length > 0;
     return (
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg }}>
-        {header}
+        {!bare && header}
         <QecEmptyState
           title={csvImport || unplottable ? 'No plottable points' : 'No campaign results yet'}
           body={unplottable

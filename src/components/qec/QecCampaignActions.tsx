@@ -18,7 +18,7 @@ import { ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
  * `embedded` hides Run when there is nothing to run (the workbench has no
  * experiment picker, so a dead button would only add noise).
  */
-export function QecCampaignActions({ embedded = false }: { embedded?: boolean }) {
+export function QecCampaignActions({ embedded = false, showOpenCsv = true }: { embedded?: boolean; showOpenCsv?: boolean }) {
   const running = useQecCampaignStore((s) => s.running);
   const statsCsv = useQecCampaignStore((s) => s.statsCsv);
   const projectRoot = useProjectStore((s) => s.projectRoot);
@@ -32,7 +32,7 @@ export function QecCampaignActions({ embedded = false }: { embedded?: boolean })
 
   return (
     <>
-      <QecCsvOpenButton />
+      {showOpenCsv && <QecCsvOpenButton />}
       {statsCsv ? (
         <Button
           size="sm"
