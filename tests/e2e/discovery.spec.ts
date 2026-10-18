@@ -230,7 +230,7 @@ test('@discovery runs a search, inspects the results and confirms the champion',
 
   await lab.getByRole('tab', { name: /^Guardrails/ }).click();
   await expect(lab.getByTestId('exploits-found-lane')).toHaveAttribute('data-state', 'empty');
-  await expect(lab.getByText('File reads are not blocked', { exact: true })).toBeVisible();
+  await expect(lab.getByText('File reads are being restricted', { exact: true })).toBeVisible();
 
   await lab.getByRole('tab', { name: /^Overview/ }).click();
   await lab.getByRole('button', { name: /Confirm on fresh seeds/ }).click();
