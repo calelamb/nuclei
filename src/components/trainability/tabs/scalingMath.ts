@@ -1,8 +1,13 @@
 /** Pure geometry for the scaling plot's fit curves. */
 
-import type { ScalingFit, ScalingStudy } from '../../../types/trainability';
+import type { Interval, ScalingFit, ScalingPoint, ScalingStudy } from '../../../types/trainability';
+import { isNumber, validInterval } from '../../../services/trainability/intervals';
 
-type Point = ScalingStudy['points'][number];
+/** A point with a usable variance (the interval defaults to the point itself). */
+export type ResolvedPoint = ScalingPoint & { variance: number; variance_ci95: Interval };
+/** A PPE point that produced only a rigorous interval, no variance estimate. */
+export type IntervalOnlyPoint = ScalingPoint & { variance: null; variance_ci95: Interval };
+type Point = ResolvedPoint;
 
 export interface Curve {
   n: number;
@@ -61,7 +66,7 @@ export function powerLawCurve(
   from: number,
   to: number,
 ): Curve[] {
-  const usable = points.filter((p) => p.variance > 0 && p.n_qubits > 0);
+  const usable = points.filter((p) => isNumber(p.variance) && p.variance > 0 && p.n_qubits > 0);
   if (usable.length === 0) return [];
   const meanLogVar = meanOf(usable.map((p) => Math.log(p.variance)));
   const meanLogN = meanOf(usable.map((p) => Math.log(p.n_qubits)));
@@ -71,4 +76,40 @@ export function powerLawCurve(
 
 export function distinctLayers(study: ScalingStudy): number[] {
   return [...new Set(study.points.map((p) => p.n_layers))].sort((a, b) => a - b);
+}
+
+export interface ScalingPointSets {
+  resolved: ResolvedPoint[];
+  intervalOnly: IntervalOnlyPoint[];
+  failed: ScalingPoint[];
+}
+
+/**
+ * Sort kernel points into what can be plotted and what cannot (CR-C2). A
+ * failed point carries `error` and null variance/interval/params/method; an
+ * interval-only point has a rigorous bound but no estimate, so it must never
+ * be drawn as if it were a measurement.
+ */
+export function splitScalingPoints(points: readonly ScalingPoint[]): ScalingPointSets {
+  const resolved: ResolvedPoint[] = [];
+  const intervalOnly: IntervalOnlyPoint[] = [];
+  const failed: ScalingPoint[] = [];
+  for (const p of points) {
+    const ci = validInterval(p.variance_ci95);
+    if (p.error) {
+      failed.push(p);
+    } else if (isNumber(p.variance)) {
+      resolved.push({ ...p, variance: p.variance, variance_ci95: ci ?? [p.variance, p.variance] });
+    } else if (ci) {
+      intervalOnly.push({ ...p, variance: null, variance_ci95: ci });
+    } else {
+      failed.push(p);
+    }
+  }
+  return { resolved, intervalOnly, failed };
+}
+
+/** The fit's preferred model, with a null from the kernel meaning "none". */
+export function preferredModel(fit: ScalingFit): 'exponential' | 'power_law' | 'none' {
+  return fit.preferred ?? 'none';
 }

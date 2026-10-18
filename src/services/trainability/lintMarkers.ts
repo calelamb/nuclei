@@ -6,6 +6,7 @@
  */
 
 import type { TrainabilityDiagnostic, TrainabilitySeverity } from '../../types/trainability';
+import { diagnosticMessage } from './diagnosticCopy';
 
 export const TRAINABILITY_MARKER_OWNER = 'trainability';
 
@@ -42,7 +43,7 @@ const SEVERITY_KEY: Record<TrainabilitySeverity, keyof MarkerSeverityMap> = {
 
 /** "Title: message — Citation label" so the marker is self-explanatory. */
 export function formatMarkerMessage(diagnostic: TrainabilityDiagnostic): string {
-  const base = `${diagnostic.title}: ${diagnostic.message}`;
+  const base = `${diagnostic.title}: ${diagnosticMessage(diagnostic)}`;
   return diagnostic.citation ? `${base} (${diagnostic.citation.label})` : base;
 }
 

@@ -54,27 +54,54 @@ export type Interval = [number, number];
 
 // ── Analysis results ────────────────────────────────────────────────────
 
+/**
+ * How an interval was obtained. The kernel's `interval` field is an OBJECT
+ * `{kind, ...}` for both estimators (never `[lo, hi]`): read numbers from
+ * `variance_mean_ci95` / `variance_ci95` and label them with `kind`.
+ */
+export type IntervalKind = 'bootstrap' | 'truncation';
+export interface IntervalInfo {
+  kind: IntervalKind;
+  [extra: string]: unknown;
+}
+
 export interface GradientStatistics {
-  samples: number;
+  /** Null for PPE results (no sampling happened). */
+  samples: number | null;
   init: GradientInit;
   per_parameter: Array<{
     name: string;
-    mean: number;
-    variance: number;
-    abs_mean: number;
-    variance_ci95: Interval;
+    mean: number | null;
+    /** Null when the PPE run did not resolve this parameter: interval only. */
+    variance: number | null;
+    abs_mean: number | null;
+    variance_ci95: Interval | null;
   }>;
-  variance_mean: number;
-  variance_mean_ci95: Interval;
-  gradient_norm_mean: number;
-  gate_values: Array<{ source_index: number; parameter: string; variance: number; abs_mean: number }>;
+  /** Null when a PPE run was incomplete or uninformative; see `variance_mean_ci95`. */
+  variance_mean: number | null;
+  variance_mean_ci95: Interval | null;
+  gradient_norm_mean: number | null;
+  gate_values: Array<{
+    source_index: number;
+    parameter: string;
+    /** Null = unresolved (interval only). Never paint the heatmap from null. */
+    variance: number | null;
+    abs_mean: number | null;
+    variance_ci95?: Interval | null;
+  }>;
   elapsed_ms: number;
-  /** Spec v2: the estimator used. For `ppe`, `variance_ci95` values are the
-   * rigorous truncation interval, not a bootstrap CI. */
+  /** Spec v2: the estimator used. */
   method?: ResolvedMethod;
   backend?: string;
-  /** PPE only: truncation interval on `variance_mean`. */
-  interval?: Interval;
+  /** The interval's provenance object (never a `[lo, hi]` pair). */
+  interval?: IntervalInfo | null;
+  interval_kind?: IntervalKind | null;
+  /** Why a result is incomplete or uninformative, in the kernel's words. */
+  notes?: string[];
+  /** Empirical Var[C] of the cost itself (sampling path; may be null on PPE). */
+  cost_variance?: number | null;
+  cost_variance_ci95?: Interval | null;
+  cost_mean?: number | null;
 }
 
 export type ScalingVerdict = 'barren_plateau' | 'polynomial' | 'inconclusive';
@@ -83,25 +110,31 @@ export interface ScalingFit {
   n_layers: number;
   exponential: { beta: number; beta_ci95: Interval; log2_intercept: number; r2: number; aic: number } | null;
   power_law: { alpha: number; alpha_ci95: Interval; r2: number; aic: number } | null;
-  preferred: 'exponential' | 'power_law' | 'none';
+  /** Null when no model could be preferred (too few points, or all excluded). */
+  preferred: 'exponential' | 'power_law' | 'none' | null;
   delta_aic: number | null;
   verdict: ScalingVerdict;
+  /** Carries the reason for an inconclusive verdict and any excluded points. */
   summary: string;
 }
 
+export interface ScalingPoint {
+  n_qubits: number;
+  n_layers: number;
+  /** The next four are null on a failed point (see `error`). */
+  n_params: number | null;
+  variance: number | null;
+  variance_ci95: Interval | null;
+  method?: ResolvedMethod | null;
+  backend?: string;
+  /** PPE only: the interval's provenance object. */
+  interval?: IntervalInfo | null;
+  interval_kind?: IntervalKind | null;
+  error?: { code: string; message: string } | null;
+}
+
 export interface ScalingStudy {
-  points: Array<{
-    n_qubits: number;
-    n_layers: number;
-    n_params: number;
-    variance: number;
-    variance_ci95: Interval;
-    /** Spec v2: per-point estimator; PPE points reach 128 qubits. */
-    method?: ResolvedMethod;
-    backend?: string;
-    /** PPE only: rigorous truncation interval (not a CI). */
-    interval?: Interval;
-  }>;
+  points: ScalingPoint[];
   fits: ScalingFit[];
   observable?: string;
   notes?: string[];
@@ -128,7 +161,9 @@ export interface LieAlgebraResult {
     observable_in_algebra: boolean | null;
     state_in_algebra: boolean | null;
   };
+  /** Ragone prediction of the COST variance Var[C] (not the gradient variance). */
   predicted_variance: number | null;
+  prediction_quantity?: 'cost_variance';
   prediction_applicable: boolean;
   assumptions: string[];
   simulability: { kind: 'g_sim_feasible' | 'exponential_dla' | 'unknown'; summary: string };
@@ -230,13 +265,21 @@ export interface TrainabilityProvenance {
 // ── Messages ────────────────────────────────────────────────────────────
 
 export type TrainabilityRequest =
-  | { type: 'trainability_inspect'; code: string; language?: KernelLanguage; params?: Record<string, number> }
+  | {
+      type: 'trainability_inspect';
+      code: string;
+      language?: KernelLanguage;
+      params?: Record<string, number>;
+      /** Echoed on the reply and on its errors; lets the client drop stale replies. */
+      request_id?: string;
+    }
   | {
       type: 'trainability_lint';
       code: string;
       language?: KernelLanguage;
       observable?: string;
       params?: Record<string, number>;
+      request_id?: string;
     }
   | {
       type: 'trainability_start';
@@ -251,8 +294,13 @@ export type TrainabilityRequest =
   | { type: 'trainability_cancel'; job_id: string };
 
 export type TrainabilityResponse =
-  | ({ type: 'trainability_inspected' } & TrainabilityInspection)
-  | { type: 'trainability_lint_result'; diagnostics: TrainabilityDiagnostic[]; summary: TrainabilityLintSummary }
+  | ({ type: 'trainability_inspected'; request_id?: string } & TrainabilityInspection)
+  | {
+      type: 'trainability_lint_result';
+      diagnostics: TrainabilityDiagnostic[];
+      summary: TrainabilityLintSummary;
+      request_id?: string;
+    }
   | { type: 'trainability_started'; job_id: string }
   | { type: 'trainability_progress'; job_id: string; analysis: TrainabilityAnalysis; fraction: number; message: string }
   | {

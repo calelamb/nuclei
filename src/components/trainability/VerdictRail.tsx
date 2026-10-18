@@ -18,24 +18,45 @@ import {
   deriveSimulabilityVerdict,
   deriveTrainabilityVerdict,
   type BpRisk,
+  type EvidenceItem,
   type EvidenceLevel,
+  type SimulabilityVerdict,
 } from '../../services/trainability/verdict';
 import { certificatePaths } from '../../services/trainability/certificate';
+import { diagnosticMessage } from '../../services/trainability/diagnosticCopy';
 import type { TrainabilityDiagnostic, TrainabilityJobRecord, TrainabilitySeverity } from '../../types/trainability';
 
 const RISK_TONE: Record<BpRisk, LabTone> = { high: 'danger', medium: 'warning', low: 'success', unknown: 'neutral' };
+/** Human labels for the evidence chain; the verdict's internal ids never reach the UI. */
+const EVIDENCE_SOURCE_LABEL: Record<EvidenceItem['source'], string> = {
+  scaling: 'Scaling',
+  lie: 'Lie algebra',
+  gradients: 'Gradients',
+  lint: 'Lint',
+  circuit: 'Circuit',
+};
+const SIMULABILITY_LABEL: Record<SimulabilityVerdict['kind'], string> = {
+  g_sim_feasible: 'Classically simulable (𝔤-sim)',
+  g_sim_not_applicable: 'Small DLA, 𝔤-sim not applicable',
+  exponential_dla: 'Exponential DLA',
+  unknown: 'Unknown',
+};
 const LEVEL_TONE: Record<EvidenceLevel, LabTone> = { high: 'danger', medium: 'warning', low: 'success', info: 'neutral' };
 const SEVERITY_ICON: Record<TrainabilitySeverity, LucideIcon> = { error: OctagonAlert, warning: AlertTriangle, info: Info };
 const SEVERITY_TONE: Record<TrainabilitySeverity, LabTone> = { error: 'danger', warning: 'warning', info: 'neutral' };
 
 export function TrainabilityCard({ job, diagnostics }: { job: TrainabilityJobRecord | null; diagnostics: readonly TrainabilityDiagnostic[] }) {
-  const verdict = useMemo(() => deriveTrainabilityVerdict(job?.results ?? {}, diagnostics), [job, diagnostics]);
+  const nParameters = job?.target.nParameters ?? null;
+  const verdict = useMemo(
+    () => deriveTrainabilityVerdict(job?.results ?? {}, diagnostics, { nParameters }),
+    [job, diagnostics, nParameters],
+  );
   return (
     <LabCard title="Trainability" subtitle="Barren-plateau risk">
       <div className="lab-stack" style={{ gap: 'var(--space-3)' }}>
         <div className="lab-row">
           <LabPill tone={RISK_TONE[verdict.risk]} dot>
-            BP risk: {verdict.risk}
+            {verdict.notApplicable ? 'BP risk: n/a (no free parameters)' : `BP risk: ${verdict.risk}`}
           </LabPill>
           {job?.status && job.status !== 'complete' && <LabPill outline>{job.status}</LabPill>}
         </div>
@@ -45,9 +66,9 @@ export function TrainabilityCard({ job, diagnostics }: { job: TrainabilityJobRec
           </p>
         ) : (
           <ol aria-label="Evidence chain" style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 'var(--space-2)' }}>
-            {verdict.evidence.map((e) => (
-              <li key={`${e.source}-${e.text}`} className="lab-row" style={{ alignItems: 'flex-start' }}>
-                <LabPill tone={LEVEL_TONE[e.level]} outline>{e.source}</LabPill>
+            {verdict.evidence.map((e, index) => (
+              <li key={`${e.source}-${index}-${e.text}`} className="lab-row" style={{ alignItems: 'flex-start' }}>
+                <LabPill tone={LEVEL_TONE[e.level]} outline>{EVIDENCE_SOURCE_LABEL[e.source]}</LabPill>
                 <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{e.text}</span>
               </li>
             ))}
@@ -65,12 +86,12 @@ export function SimulabilityCard({ job }: { job: TrainabilityJobRecord | null })
     <LabCard title="Simulability" subtitle="Classical simulation evidence">
       <div className="lab-stack" style={{ gap: 'var(--space-2)' }}>
         <div className="lab-row">
-          <LabPill tone={tone} dot>{verdict.kind.replace(/_/g, ' ')}</LabPill>
+          <LabPill tone={tone} dot>{SIMULABILITY_LABEL[verdict.kind]}</LabPill>
           {verdict.ppe.used && <LabPill tone="dirac" outline>Pauli propagation</LabPill>}
         </div>
         <p style={{ margin: 0 }}>{verdict.summary}</p>
-        {verdict.evidence.map((e) => (
-          <p key={e} className="lab-muted" style={{ margin: 0 }}>{e}</p>
+        {verdict.evidence.map((e, index) => (
+          <p key={`${index}-${e}`} className="lab-muted" style={{ margin: 0 }}>{e}</p>
         ))}
         <p className="lab-muted" style={{ margin: 0, fontStyle: 'italic' }}>{verdict.caveat}</p>
       </div>
@@ -107,10 +128,10 @@ export function LintList() {
       )}
       {lint.diagnostics.length > 0 && (
         <ul aria-label="Lint diagnostics" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-          {lint.diagnostics.map((d) => {
+          {lint.diagnostics.map((d, index) => {
             const Icon = SEVERITY_ICON[d.severity];
             return (
-              <li key={`${d.code}-${d.line ?? 'summary'}-${d.title}`} style={{ padding: 'var(--space-3) var(--space-4)', borderTop: '1px solid var(--lab-hairline)' }}>
+              <li key={`${d.code}-${d.line ?? 'summary'}-${d.title}-${index}`} style={{ padding: 'var(--space-3) var(--space-4)', borderTop: '1px solid var(--lab-hairline)' }}>
                 <div className="lab-row" style={{ alignItems: 'flex-start' }}>
                   <Icon size={14} aria-hidden style={{ marginTop: 2, flexShrink: 0, color: `var(--color-${d.severity === 'info' ? 'info' : d.severity === 'warning' ? 'warning' : 'danger'})` }} />
                   <div style={{ minWidth: 0, flex: 1 }}>
@@ -123,7 +144,7 @@ export function LintList() {
                         </LabButton>
                       )}
                     </div>
-                    <p style={{ margin: 'var(--space-1) 0' }}>{d.message}</p>
+                    <p style={{ margin: 'var(--space-1) 0' }}>{diagnosticMessage(d)}</p>
                     {d.citation && <LabCitation label={d.citation.label} url={d.citation.url} />}
                   </div>
                 </div>
@@ -154,7 +175,7 @@ export function ExportCard({ job }: { job: TrainabilityJobRecord | null }) {
         </LabButton>
         {!done && <p className="lab-muted" style={{ margin: 0 }}>Available once an analysis has finished.</p>}
         {done && paths && exportState.status === 'idle' && (
-          <p className="lab-muted" style={{ margin: 0 }}>
+          <p className="lab-muted" style={{ margin: 0, overflowWrap: 'anywhere', minWidth: 0 }}>
             Writes <span className="lab-mono">{paths.json}</span> and <span className="lab-mono">.md</span> to the project.
           </p>
         )}
