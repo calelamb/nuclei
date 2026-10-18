@@ -15,6 +15,8 @@
   font-weight: 100 900; font-style: normal; font-display: swap;
 }
 
+/* Resets live in the lowest layer (declared in tokens.css) so any primitive or component rule beats them. */
+@layer reset {
 * {
   margin: 0;
   padding: 0;
@@ -53,6 +55,7 @@ button, input, select, textarea {
 
 button:focus:not(:focus-visible) {
   outline: none;
+}
 }
 
 /* ── Reduced motion: disable all animations (OS preference or Settings › Animations off) ── */
@@ -123,12 +126,14 @@ button:focus:not(:focus-visible) {
 }
 
 /* ── Interactive element defaults ── */
+@layer reset {
 button, [role="button"] {
   transition: background-color var(--duration-fast) var(--ease-standard),
               color var(--duration-fast) var(--ease-standard),
               border-color var(--duration-fast) var(--ease-standard),
               box-shadow var(--duration-fast) var(--ease-standard),
               opacity var(--duration-fast) var(--ease-standard);
+}
 }
 
 /* Ket/bra labels: JetBrains-style ligatures turn "|-⟩" into a turnstile. Keep glyphs literal. */

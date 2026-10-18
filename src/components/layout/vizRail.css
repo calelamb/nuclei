@@ -14,7 +14,7 @@
 .viz-empty .nuclei-empty__title, .viz-empty .nuclei-empty__body { text-wrap: balance; }
 
 /* Boot placeholder: top-aligned where the circuit header will land, so the eye does not jump when Python is ready. */
-.viz-empty--boot { justify-content: flex-start; padding-top: var(--space-6); }
+.nuclei-empty.viz-empty--boot { justify-content: flex-start; padding-top: var(--space-6); }
 .viz-empty--boot .nuclei-empty__body { max-width: 36ch; text-wrap: balance; }
 
 /* "No results yet" fills whatever the results zone has left, so it reads the same in every layout preset. */

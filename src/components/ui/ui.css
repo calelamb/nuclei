@@ -5,6 +5,8 @@
  * beat contextual resets such as `.qec-workbench button { color: inherit }`.
  */
 
+@layer primitives {
+
 .nuclei-spin { animation: nuclei-spin 900ms linear infinite; }
 
 /* ── Button ── */
@@ -398,3 +400,4 @@
 /* ErrorBoundary fallback: EmptyState centred in the failed panel; the message stays mono and wraps. */
 .nuclei-error-boundary { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; }
 .nuclei-error-boundary__message { font-family: var(--font-mono); font-size: var(--font-size-caption); word-break: break-word; }
+}

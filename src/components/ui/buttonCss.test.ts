@@ -37,7 +37,9 @@ describe('primary button identity', () => {
 describe('disabled primary under the light theme (cascade)', () => {
   it('does not paint the teal fill on a disabled primary button', () => {
     const style = document.createElement('style');
-    style.textContent = css.replace(/var\(--[\w-]+\)/g, (m) => (m.includes('surface-overlay') ? 'rgb(1, 2, 3)' : 'rgb(9, 9, 9)'));
+    // jsdom's CSS engine predates @layer, so test the cascade of the rules themselves, unwrapped.
+    const unlayered = css.replace('@layer primitives {', '').replace(/\}\s*$/, '');
+    style.textContent = unlayered.replace(/var\(--[\w-]+\)/g, (m) => (m.includes('surface-overlay') ? 'rgb(1, 2, 3)' : 'rgb(9, 9, 9)'));
     document.head.appendChild(style);
     document.documentElement.setAttribute('data-theme', 'light');
     const btn = document.createElement('button');
