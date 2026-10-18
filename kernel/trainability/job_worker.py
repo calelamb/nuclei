@@ -31,6 +31,7 @@ from typing import Any, Callable
 
 import numpy as np
 
+from kernel.lab_proc import apply_cpu_limit, start_parent_watch
 from kernel.trainability._errors import Cancelled, TrainabilityError, normalize_error
 from kernel.trainability._jsonable import to_jsonable
 from kernel.trainability._usercode import LoadedCircuit, load_circuit, resolve_observable
@@ -257,6 +258,8 @@ def _claim_stdout() -> Emit:
 
 def main() -> int:
     emit = _claim_stdout()
+    start_parent_watch()  # die with the kernel (a SIGKILLed parent never runs release_all)
+    apply_cpu_limit()
     try:
         spec = json.loads(sys.stdin.readline())
         for extra in reversed(spec.get("sys_path") or []):
