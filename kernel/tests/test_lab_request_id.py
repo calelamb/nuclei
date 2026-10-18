@@ -21,6 +21,8 @@ CASES = {
                           {"type": "trainability_lint", "code": 7}, "trainability"),
     "discovery_mutate": ({"type": "discovery_mutate", "program": GOOD_PROGRAM, "seed": 1, "count": 1},
                          "discovery_mutations", {"type": "discovery_mutate", "program": "", "seed": 1}, "discovery"),
+    "discovery_program_key": ({"type": "discovery_program_key", "program": GOOD_PROGRAM}, "discovery_program_key_result",
+                              {"type": "discovery_program_key", "program": "def x(:"}, "discovery"),
     "discovery_evaluators": ({"type": "discovery_evaluators"}, "discovery_evaluators_result", None, "discovery"),
     "discovery_conjecture_schema": ({"type": "discovery_conjecture_schema"}, "discovery_conjecture_schema_result",
                                     None, "discovery"),
@@ -76,3 +78,38 @@ def test_helpers():
     original = {"type": "x"}
     assert with_request_id(original, {"request_id": "r"}) == {"type": "x", "request_id": "r"}
     assert original == {"type": "x"}, "payload must not be mutated"
+
+
+# ------------------------------------------------------- CR-M1: discovery_program_key
+
+
+def test_program_key_matches_the_cache_normalization():
+    from kernel.discovery.cache import program_key
+
+    base = "def build(d, r):\n    x = 1\n    return x\n"
+    edited = "# note\ndef build(d,  r):\n\n    x   =  1  # trailing\n    return x\n\n"
+
+    async def scenario():
+        async with connection() as ws:
+            ws.push({"type": "discovery_program_key", "program": base, "request_id": "k1"})
+            ws.push({"type": "discovery_program_key", "program": edited})
+            ws.push({"type": "discovery_program_key", "program": base.replace("= 1", "= 2")})
+            await ws.wait_for(lambda m: len([x for x in ws.sent if x["type"] == "discovery_program_key_result"]) == 3, 30)
+            return [m for m in ws.sent if m["type"] == "discovery_program_key_result"]
+
+    first, second, third = asyncio.run(scenario())
+    assert first == {"type": "discovery_program_key_result", "program_key": program_key(base), "request_id": "k1"}
+    assert "request_id" not in second and second["program_key"] == first["program_key"]
+    assert third["program_key"] != first["program_key"]
+
+
+def test_program_key_reports_a_syntax_error_with_the_request_id():
+    reply = asyncio.run(ask({"type": "discovery_program_key", "program": "def build(:\n", "request_id": "bad-1"},
+                            "discovery_program_key_result"))
+    assert reply["type"] == "error" and reply["phase"] == "discovery" and reply["code"] == "invalid_program"
+    assert reply["request_id"] == "bad-1" and "line 1" in reply["message"]
+
+
+def test_program_key_validates_the_program_field():
+    reply = asyncio.run(ask({"type": "discovery_program_key", "program": ""}, "discovery_program_key_result"))
+    assert reply["type"] == "error" and reply["code"] == "invalid_request"

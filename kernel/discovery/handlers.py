@@ -10,6 +10,7 @@ import asyncio
 import re
 from typing import Any
 
+from kernel.discovery.cache import ProgramSyntaxError, strict_program_key
 from kernel.discovery.constants import (
     DEFAULT_STAGE,
     ERR_BUSY,
@@ -143,6 +144,16 @@ async def _mutate(msg: dict[str, Any], ctx) -> None:
     await ctx.send_json(with_request_id({"type": "discovery_mutations", "mutations": mutations}, msg))
 
 
+async def _program_key(msg: dict[str, Any], ctx) -> None:
+    """``discovery_program_key {program}`` -> ``{program_key}``: the cache's normalized-AST hash, without evaluating."""
+    program = _program(msg)
+    try:
+        key = await asyncio.to_thread(strict_program_key, program)
+    except ProgramSyntaxError as exc:
+        raise RequestError("invalid_program", f"The program has a syntax error: {exc}") from exc
+    await ctx.send_json(with_request_id({"type": "discovery_program_key_result", "program_key": key}, msg))
+
+
 async def handle(msg: dict[str, Any], ctx) -> None:
     """Dispatch one ``discovery_*`` message."""
     manager = get_manager()
@@ -163,6 +174,8 @@ async def handle(msg: dict[str, Any], ctx) -> None:
             await _cancel(msg, ctx)
         elif msg_type == "discovery_mutate":
             await _mutate(msg, ctx)
+        elif msg_type == "discovery_program_key":
+            await _program_key(msg, ctx)
         elif isinstance(msg_type, str) and msg_type.startswith("discovery_audit"):
             # Red Queen mode (addendum §F): independent audits of scored artifacts.
             from kernel.discovery.audits.handlers import handle as handle_audit

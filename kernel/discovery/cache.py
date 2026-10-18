@@ -14,17 +14,41 @@ from kernel.discovery.constants import EVALUATION_CACHE_SIZE
 CacheKey = tuple[str, str, int, str, str]
 
 
-def program_key(program: str) -> str:
-    """SHA-256 of ``ast.dump`` of the parsed module.
+class ProgramSyntaxError(ValueError):
+    """The program does not parse, so it has no normalized form."""
+
+
+def normalize_program(program: str) -> str:
+    """The normalized form the cache key is built from: ``ast.dump`` of the parsed module.
 
     Comments and whitespace do not survive parsing, so editing them is free.
+    Raises :class:`ProgramSyntaxError` when the program does not parse.
+    """
+    try:
+        return "ast:" + ast.dump(ast.parse(program))
+    except SyntaxError as exc:
+        where = f" (line {exc.lineno})" if exc.lineno else ""
+        raise ProgramSyntaxError(f"{exc.msg}{where}") from exc
+    except (ValueError, RecursionError, MemoryError) as exc:
+        raise ProgramSyntaxError(f"{type(exc).__name__}: {exc}"[:200]) from exc
+
+
+def program_key(program: str) -> str:
+    """SHA-256 of the normalized program (see :func:`normalize_program`).
+
     A program that does not parse is keyed by its raw text under a distinct
     prefix, so it can never collide with a parseable program.
     """
     try:
-        material = "ast:" + ast.dump(ast.parse(program))
-    except (SyntaxError, ValueError, RecursionError, MemoryError):
+        material = normalize_program(program)
+    except ProgramSyntaxError:
         material = "raw:" + program
+    return hashlib.sha256(material.encode("utf-8", errors="surrogatepass")).hexdigest()
+
+
+def strict_program_key(program: str) -> str:
+    """Like :func:`program_key` but raises :class:`ProgramSyntaxError` instead of keying raw text."""
+    material = normalize_program(program)
     return hashlib.sha256(material.encode("utf-8", errors="surrogatepass")).hexdigest()
 
 
