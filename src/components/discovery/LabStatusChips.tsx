@@ -3,13 +3,15 @@ import { useThemeStore } from '../../stores/themeStore';
 import { useLabActivityStore } from '../../stores/labActivityStore';
 import { useModeSwitchStore } from '../../stores/modeSwitchStore';
 import { useNavigationStore } from '../../stores/navigationStore';
+import { isConjectureTestActive, useConjectureStore } from '../../stores/conjectureStore';
 import { isTrainabilityJobActive, useTrainabilityStore } from '../../stores/trainabilityStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
 import type { NavView } from '../../stores/navigationStore';
 
 /**
  * Status-bar chips for Quantum AI Lab work in flight (PRD 14 §3.3): a
- * Discovery Engine run (running or paused) and a Trainability Lab job. Each
+ * Discovery Engine run (running or paused), a Trainability Lab job and a
+ * Conjecture Engine test. Each
  * chip is a button that jumps to its view, switching to Research mode first.
  */
 function useOpenLabView() {
@@ -66,6 +68,7 @@ export function LabStatusChips() {
     const job = s.activeJobId ? s.jobs[s.activeJobId] : undefined;
     return job?.target.fileName ?? 'analysis';
   });
+  const conjectureActive = useConjectureStore((s) => isConjectureTestActive(s));
   const open = useOpenLabView();
 
   return (
@@ -88,6 +91,16 @@ export function LabStatusChips() {
           tone="accent"
           live
           onClick={() => open('trainability')}
+        />
+      )}
+      {conjectureActive && (
+        <Chip
+          label="Conjecture test"
+          detail=": running"
+          title="Conjecture Engine: a held-out test is running. Open the Discovery Engine."
+          tone="accent"
+          live
+          onClick={() => open('discovery')}
         />
       )}
     </>

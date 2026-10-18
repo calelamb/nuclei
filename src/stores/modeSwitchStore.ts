@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { useWorkspaceStore, type WorkspaceMode } from './workspaceStore';
 import { useExperimentRunStore } from './experimentRunStore';
 import { useLabActivityStore } from './labActivityStore';
+import { isConjectureTestActive, useConjectureStore } from './conjectureStore';
 import { isTrainabilityJobActive, useTrainabilityStore } from './trainabilityStore';
 
 /**
@@ -25,8 +26,8 @@ interface PendingSwitch {
 
 /**
  * The in-flight work a mode switch would hide. A sweep keeps its historic
- * behavior; a running discovery search or an active trainability job is
- * covered too (PRD 14 §3.3). A paused discovery run is not running work.
+ * behavior; a running discovery search, an active trainability job or a
+ * running conjecture test is covered too (PRD 14 §3.3). A paused discovery run is not running work.
  */
 function findInFlightWork(target: WorkspaceMode): PendingSwitch | null {
   const sweep = useExperimentRunStore.getState().active;
@@ -45,6 +46,9 @@ function findInFlightWork(target: WorkspaceMode): PendingSwitch | null {
       runningName: `Trainability analysis of ${job?.target.fileName ?? 'the current file'}`,
       panelName: 'Trainability Lab',
     };
+  }
+  if (isConjectureTestActive(useConjectureStore.getState())) {
+    return { target, runningName: 'Conjecture test', panelName: 'Discovery Engine' };
   }
   return null;
 }

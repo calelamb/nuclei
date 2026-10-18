@@ -4,6 +4,8 @@ import { useWorkspaceStore } from './workspaceStore';
 import { useExperimentRunStore } from './experimentRunStore';
 import { useLabActivityStore } from './labActivityStore';
 import { useTrainabilityStore } from './trainabilityStore';
+import { useConjectureStore } from './conjectureStore';
+import { emptyRunConjectures, type TestJob } from '../services/conjecture/state';
 import { jobFixture } from '../services/trainability/fixtures';
 
 const activeRun = {
@@ -114,6 +116,26 @@ describe('modeSwitchStore (PRD 11 Phase B)', () => {
         panelName: 'Trainability Lab',
       });
       useModeSwitchStore.getState().confirmPending();
+      expect(useWorkspaceStore.getState().mode).toBe('learn');
+    });
+
+    it('stages a confirm for a running conjecture test', () => {
+      useConjectureStore.setState({
+        byRun: { r: { ...emptyRunConjectures(), jobs: { j: { jobId: 'j', conjectureId: 'cj-1', status: 'running' } as TestJob } } },
+      });
+      useModeSwitchStore.getState().requestSwitch('learn');
+      expect(useModeSwitchStore.getState().pending).toEqual({
+        target: 'learn',
+        runningName: 'Conjecture test',
+        panelName: 'Discovery Engine',
+      });
+    });
+
+    it('a finished conjecture test does not block the switch', () => {
+      useConjectureStore.setState({
+        byRun: { r: { ...emptyRunConjectures(), jobs: { j: { jobId: 'j', conjectureId: 'cj-1', status: 'complete' } as TestJob } } },
+      });
+      useModeSwitchStore.getState().requestSwitch('learn');
       expect(useWorkspaceStore.getState().mode).toBe('learn');
     });
 
