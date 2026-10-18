@@ -4,10 +4,14 @@ import { ICON_SIZE, ICON_STROKE, TYPOGRAPHY } from '../../styles/tokens';
 
 const NOT_SINTER = 'Not a sinter stats CSV: ';
 
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 /** Splits the parser's whole-file message into a plain lead sentence and the detail line behind it. */
 function splitCsvError(message: string): { lead: string; detail: string | null } {
   if (message.startsWith(NOT_SINTER)) {
-    return { lead: "This isn't a sinter stats CSV.", detail: message.slice(NOT_SINTER.length) };
+    return { lead: "This isn't a sinter stats CSV.", detail: capitalize(message.slice(NOT_SINTER.length)) };
   }
   return { lead: message, detail: null };
 }
