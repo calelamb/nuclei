@@ -4,7 +4,7 @@ import { NO_EXPLOIT_MESSAGE } from './redQueen';
 import { runDiscovery, type DiscoveryRunContext, type RunnerEvent } from './runner';
 import {
   SEED_PROGRAM, TOY_EVALUATOR, createFakeKernel, createFakeLlm, createManualClock, createMemoryFs, improveValue, joinPath,
-  makeSpec, testHash, type FakeKernelOptions,
+  makeSpec, testHash, type FakeKernelOptions, type Scorer,
 } from './testkit';
 
 const ctx: DiscoveryRunContext = {
@@ -117,6 +117,32 @@ describe('Red Queen runner: audits', () => {
     const system = llm.calls[0].system[0].text;
     expect(system).toContain('security test of Nuclei');
     expect(system).not.toContain('research collaborator');
+  });
+});
+
+describe('Red Queen runner: cascade threshold (CR-H5)', () => {
+  // Fitness grows with the IMPROVE value, so a descendant of the best elite always beats the best screen result.
+  const rising: Scorer = (program) => ({
+    fitness: 1 + improveValue(program) * 0.01,
+    descriptors: { d1: improveValue(program) % 10, d2: improveValue(program) % 90 },
+    program_key: `key:${improveValue(program)}`,
+  });
+
+  it('compares screen fitness with evaluator screen fitness, not the adversarial fitness of an exploit', async () => {
+    const { deps, fs, kernel } = setup({ auditor: exploitOnC2, scorer: rising });
+    const run = await runDiscovery(
+      rqSpec({
+        evaluation: { cascade: true, promote_if: 'island_best' },
+        red_queen: { audit_every: 'all', max_audits: 100 },
+        search: { islands: 1, generations: 3, candidates_per_generation: 3, migration_interval: 0, early_stop_patience: 0, exploration: 0 },
+      }),
+      ctx, deps,
+    ).done;
+    const files = candidatesOf(fs, run);
+    expect(files.find((c) => c.id === 'c-0002')?.audit?.verdict).toBe('exploit');
+    // The exploit sits in the archive with adversarial fitness 1000+; the threshold must not read that.
+    expect(files.some((c) => c.generation >= 2 && c.outcome === 'evaluated')).toBe(true);
+    expect(kernel.audits().some((a) => Number(a.candidate_id.slice(2)) > 3)).toBe(true);
   });
 });
 
