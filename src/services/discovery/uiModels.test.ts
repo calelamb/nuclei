@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { fixtureCandidates, fixtureRun } from './fixtures';
-import { candidateKind, fitnessExtent, indexById, isImprovement, normalizeFitness } from './candidateView';
+import { candidateKind, promoteBlockedReason, fitnessExtent, indexById, isImprovement, normalizeFitness } from './candidateView';
 import { buildTrajectory, stepPath, trajectorySummary } from './trajectory';
 import { buildLineageLayout, isMoreNode, LINEAGE_MAX_LEAF_SIBLINGS, LINEAGE_ROW, lineageNeighbor, lineageSignature } from './lineageLayout';
 import { DEFAULT_FILTER, filterCandidates, sortCandidates } from './candidateTable';
@@ -34,6 +34,14 @@ describe('candidateView', () => {
   });
 });
 
+describe('promoteBlockedReason', () => {
+  it('blocks failed, rejected and duplicate candidates with a reason, and allows scored ones', () => {
+    for (const kind of ['failed', 'rejected', 'duplicate'] as const) expect(promoteBlockedReason(kind)).toMatch(/\S/);
+    expect(promoteBlockedReason('scored')).toBeNull();
+    expect(promoteBlockedReason('seed')).toBeNull();
+  });
+});
+
 describe('buildTrajectory', () => {
   const t = buildTrajectory(candidates);
   it('puts rejected and failed candidates on the baseline lane below every fitness', () => {
@@ -59,7 +67,7 @@ describe('buildTrajectory', () => {
     expect(empty.points).toEqual([]);
     expect(empty.yMax).toBeGreaterThan(empty.yMin);
     expect(stepPath([{ index: 1, best: 2 }, { index: 4, best: 3 }], 10, (v) => v, (v) => -v)).toBe('M1,-2H4V-3H10');
-    expect(trajectorySummary(t)).toMatch(/4 scored, 1 rejected|scored/);
+    expect(trajectorySummary(t)).toMatch(/scored \(excluding the seed/);
   });
 });
 

@@ -1,4 +1,5 @@
 import { LabCallout } from '../lab';
+import { earlyStopNotice } from '../../services/discovery/format';
 import { FRONTIER_HONESTY } from '../../services/discovery/honesty';
 import type { RunView } from '../../stores/discoveryStore';
 
@@ -10,7 +11,9 @@ export function RunNotices({ view }: { view: RunView }) {
   const { run, notices } = view;
   const frontier = run.spec.evaluator.kind === 'trainability_frontier';
   const message = run.message && !notices.includes(run.message) ? run.message : null;
-  const all = message ? [message, ...notices] : notices;
+  const stop = earlyStopNotice(run);
+  const withStop = stop && stop !== message && !notices.includes(stop) ? [...notices, stop] : notices;
+  const all = message ? [message, ...withStop] : withStop;
   const shown = all.slice(-COLLAPSE_AFTER);
   const hidden = all.slice(0, Math.max(0, all.length - COLLAPSE_AFTER));
   return (

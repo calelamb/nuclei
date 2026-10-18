@@ -11,7 +11,7 @@ import {
   formatSci,
 } from '../lab';
 import { useDiscoveryStore, type DiscoveryDefinition } from '../../stores/discoveryStore';
-import { runTimeLabel } from '../../services/discovery/format';
+import { bestFitnessLabel, runTimeLabel } from '../../services/discovery/format';
 import type { RunRecord } from '../../types/discovery';
 import { EvaluatorChip, RunStatusPill } from './pills';
 import { useDiscoveryBoot } from './useDiscoveryBoot';
@@ -21,7 +21,7 @@ const LIST_STYLE = { listStyle: 'none', margin: 0, padding: 0, display: 'grid', 
 const VISIBLE_RUNS = 4;
 
 function RunRow({ run, selected, onSelect }: { run: RunRecord; selected: boolean; onSelect: () => void }) {
-  const best = run.best_fitness_history[run.best_fitness_history.length - 1];
+  const best = bestFitnessLabel(run.best_fitness_history[run.best_fitness_history.length - 1], run.spec.mutator.kind === 'red_queen', (v) => formatSci(v, 3));
   return (
     <li>
       <button
@@ -33,8 +33,8 @@ function RunRow({ run, selected, onSelect }: { run: RunRecord; selected: boolean
         style={{ width: '100%', height: 'auto', flexWrap: 'wrap', justifyContent: 'flex-start', gap: '2px var(--space-2)', minHeight: 28, padding: '3px 8px', background: selected ? 'var(--lab-quantum-soft)' : undefined }}
       >
         <RunStatusPill status={run.status} />
-        <span className="lab-mono" style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis' }}>{runTimeLabel(run.run_id, true)}</span>
-        <span className="lab-mono lab-muted" title="Best fitness">{best === undefined ? '—' : formatSci(best, 3)}</span>
+        <span className="lab-mono" style={{ flex: '1 1 auto', textAlign: 'left', whiteSpace: 'nowrap' }}>{runTimeLabel(run.run_id, true)}</span>
+        <span className="lab-mono lab-muted" title={best.title}>{best.text}</span>
       </button>
     </li>
   );

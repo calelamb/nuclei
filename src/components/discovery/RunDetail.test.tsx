@@ -153,7 +153,7 @@ describe('Overview tab', () => {
     renderOn(<DiscoveryWorkbench />);
     const trajectory = screen.getByRole('img', { name: 'Fitness trajectory' });
     expect(trajectory.getAttribute('aria-describedby')).toBeTruthy();
-    expect(document.getElementById(trajectory.getAttribute('aria-describedby') as string)?.textContent).toMatch(/scored, 2 rejected, 1 failed, 1 screened out/);
+    expect(document.getElementById(trajectory.getAttribute('aria-describedby') as string)?.textContent).toMatch(/scored \(excluding the seed, seed scored too\), 2 rejected, 1 failed, 1 screened out/);
     const pareto = screen.getByRole('img', { name: 'Pareto front' });
     expect(document.getElementById(pareto.getAttribute('aria-describedby') as string)?.textContent).toMatch(/Pareto front of \d+ of \d+ archived candidates/);
   });

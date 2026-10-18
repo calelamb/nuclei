@@ -1,7 +1,7 @@
 import { Activity, Coins, Gauge, Percent, Share2, ShieldAlert, Trophy } from 'lucide-react';
 import { LabKpi, LabKpiStrip, formatInterval, formatPct, formatSci } from '../lab';
 import type { DiscoveryKpis } from '../../stores/discoveryStore';
-import { formatCount, signed } from '../../services/discovery/format';
+import { SEED_EXCLUDED_NOTE, formatCount, signed } from '../../services/discovery/format';
 
 const SEGMENTS = [
   { key: 'scored', label: 'scored', color: 'var(--color-success)' },
@@ -20,6 +20,7 @@ function EvaluationsTile({ kpis }: { kpis: DiscoveryKpis }) {
       <div className="disc-stack-bar" aria-hidden>
         {total > 0 && SEGMENTS.map((s) => (kpis.counts[s.key] > 0 ? <span key={s.key} style={{ flexGrow: kpis.counts[s.key], background: s.color }} /> : null))}
       </div>
+      <div className="lab-dim" style={{ fontSize: 11 }}>outcomes {SEED_EXCLUDED_NOTE}</div>
       <ul className="disc-inline-counts" aria-label="Evaluation outcomes">
         {SEGMENTS.map((s) => (
           <li key={s.key}><b>{kpis.counts[s.key]}</b> {s.label}</li>
