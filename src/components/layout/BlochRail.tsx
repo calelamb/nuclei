@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import { useSimulationStore } from '../../stores/simulationStore';
 import { useElementSize } from '../../hooks/useElementSize';
 import { blochRailHeights } from '../../layout/blochRail';
 
@@ -11,8 +10,7 @@ const EMPTY_MIN_PX = 240;
  * height the circuit keeps; the spheres take every pixel left over, never less than one full row, so
  * the panel pages its grid from a box that is as tall as the rail can honestly give it.
  */
-export function BlochRail({ children }: { children: ReactNode }) {
-  const count = useSimulationStore((s) => s.result?.bloch_coords?.length ?? 0);
+export function BlochRail({ children, count }: { children: ReactNode; /** Spheres on show: measured, or the starting states before a run. */ count: number }) {
   const [measureRef, size] = useElementSize<HTMLDivElement>();
   const { min } = blochRailHeights(count, size.width);
   return (

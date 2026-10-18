@@ -114,3 +114,8 @@ export function blochCaption(readout: BlochReadout, audience: BlochAudience, com
   if (readout.kind === 'mixed') return 'Entangled';
   return compact ? readout.short : readout.summary;
 }
+
+/** Every qubit in |0>: the Bloch vectors a circuit has before it runs. */
+export function groundStateCoords(qubitCount: number): BlochVector[] {
+  return Array.from({ length: Math.max(0, Math.floor(qubitCount)) }, () => ({ x: 0, y: 0, z: 1 }));
+}

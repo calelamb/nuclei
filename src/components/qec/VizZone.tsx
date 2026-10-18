@@ -4,6 +4,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useQecStore } from '../../stores/qecStore';
 import { useProjectStore } from '../../stores/projectStore';
+import { useLayoutStore } from '../../stores/layoutStore';
 import { useVizZoneStore } from '../../stores/vizZoneStore';
 import { PanelReveal } from '../layout/PanelReveal';
 import { CircuitRenderer } from '../circuit/CircuitRenderer';
@@ -52,12 +53,20 @@ interface VizPanelDef {
   icon: LucideIcon;
   /** 'content' panels size to what they show (Bloch tiles); 'fill' panels take the rest of the rail. */
   fit: 'content' | 'fill';
-  render: () => ReactNode;
+  render: (ctx: VizRenderContext) => ReactNode;
+}
+
+/** What a panel's body needs from the zone beyond the stores it reads itself. */
+interface VizRenderContext {
+  /** Spheres on show: measured, or the starting states before a run. */
+  blochCount: number;
+  /** Qubits to draw at |0> before the first run (the Balanced preset), else 0. */
+  initialQubits: number;
 }
 
 const MAIN_VIZ_PANELS: VizPanelDef[] = [
   { id: 'circuit', title: 'Circuit', icon: Workflow, fit: 'content', render: () => <CircuitRenderer /> },
-  { id: 'bloch', title: 'Bloch Sphere', icon: Orbit, fit: 'content', render: () => <BlochRail><BlochPanel /></BlochRail> },
+  { id: 'bloch', title: 'Bloch Sphere', icon: Orbit, fit: 'content', render: ({ blochCount, initialQubits }) => <BlochRail count={blochCount}><BlochPanel initialQubits={initialQubits} /></BlochRail> },
   { id: 'qecTimeline', title: 'Timeline', icon: LayoutGrid, fit: 'fill', render: () => <QecTimelinePanel /> },
   { id: 'qecLattice', title: 'Code Lattice', icon: Grid3x3, fit: 'fill', render: () => <CodeLatticePanel /> },
   { id: 'qecDetectorGraph', title: 'Detector Graph', icon: Share2, fit: 'fill', render: () => <DetectorGraphPanel /> },
@@ -99,7 +108,11 @@ export function VizZone({
   const platform = usePlatform();
   const { snapshot: circuitSnapshot } = useDisplaySnapshot();
   const [measureColumn, columnSize] = useElementSize<HTMLDivElement>();
-  const blochCount = useSimulationStore((st) => st.result?.bloch_coords?.length ?? 0);
+  const measuredBlochCount = useSimulationStore((st) => st.result?.bloch_coords?.length ?? 0);
+  const preset = useLayoutStore((s) => s.preset);
+  const initialQubits = measuredBlochCount === 0 && preset === 'balanced' ? (circuitSnapshot?.qubit_count ?? 0) : 0;
+  const blochCount = measuredBlochCount > 0 ? measuredBlochCount : initialQubits;
+  const renderCtx: VizRenderContext = { blochCount, initialQubits };
   const [measureChip, chipSize] = useElementSize<HTMLDivElement>();
   const blochMin = blochCount > 0 ? blochRailHeights(blochCount, columnSize.width).min : EMPTY_RESULTS_MIN_PX;
   const circuitHeight = useCircuitHeight({
@@ -150,7 +163,7 @@ export function VizZone({
       {circuitPanel && (
         <PanelReveal when from="right" style={circuitRevealStyle}>
           <section aria-label={circuitPanel.title} style={{ borderBottom: `1px solid ${colors.border}`, display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-            {circuitPanel.render()}
+            {circuitPanel.render(renderCtx)}
           </section>
         </PanelReveal>
       )}
@@ -167,7 +180,7 @@ export function VizZone({
             style={fills || p.id === 'bloch' ? FILL_BODY_STYLE_FLEX : CONTENT_BODY_STYLE}
           >
             {p.id === 'bloch' && stale && <StaleResultNotice />}
-            {p.render()}
+            {p.render(renderCtx)}
           </div>
         </PanelReveal>
         );
@@ -176,6 +189,7 @@ export function VizZone({
       {statePanels.length > 2 && (
         <TabbedPanels
           panels={statePanels}
+          renderCtx={renderCtx}
           rememberedTab={rememberedTab}
           onSelect={(id) => setActiveTab(projectRoot, id)}
         />
@@ -220,8 +234,9 @@ function useCircuitHeight(input: {
   }, [snapshot, railWidth, railHeight, chipHeight, blochMin]);
 }
 
-function TabbedPanels({ panels, rememberedTab, onSelect }: {
+function TabbedPanels({ panels, renderCtx, rememberedTab, onSelect }: {
   panels: VizPanelDef[];
+  renderCtx: VizRenderContext;
   rememberedTab: string | null;
   onSelect: (id: PanelId) => void;
 }) {
@@ -241,7 +256,7 @@ function TabbedPanels({ panels, rememberedTab, onSelect }: {
         })}
       />
       <div style={{ flex: 1, minHeight: 240, overflow: 'hidden', position: 'relative', display: 'flex', flexDirection: 'column' }}>
-        {active.render()}
+        {active.render(renderCtx)}
       </div>
     </>
   );

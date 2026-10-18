@@ -52,6 +52,26 @@ describe('BlochPanel', () => {
     expect(constructed).not.toHaveBeenCalled();
   });
 
+  it('before any run, draws one sphere per qubit at |0> when given the circuit width (Balanced preset)', () => {
+    render(<BlochPanel initialQubits={3} />);
+    expect(screen.getAllByRole('img')).toHaveLength(3);
+    expect(screen.getAllByText('Initial state')).toHaveLength(3);
+    expect(screen.queryByText(/run your circuit/i)).toBeNull();
+  });
+
+  it('a real result replaces the initial spheres', () => {
+    setCoords([{ x: 0, y: 0, z: -1 }]);
+    render(<BlochPanel initialQubits={3} />);
+    expect(screen.getAllByRole('img')).toHaveLength(1);
+    expect(screen.queryByText('Initial state')).toBeNull();
+  });
+
+  it('labels a single qubit q0 so a lone card still says which qubit it is', () => {
+    setCoords([{ x: 0, y: 0, z: 1 }]);
+    render(<BlochPanel />);
+    expect(screen.getByText('q0')).toBeTruthy();
+  });
+
   it('draws every visible qubit on ONE shared stage', () => {
     setCoords([{ x: 0, y: 0, z: 1 }, { x: 0, y: 0, z: -1 }]);
     render(<BlochPanel />);

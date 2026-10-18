@@ -75,7 +75,7 @@ function UiLevelMenu() {
 /* ── Layout Preset Switcher: a menu like Level, so it is exactly as wide as its label ── */
 const PRESET_OPTIONS: ReadonlyArray<{ value: LayoutPreset; label: string; hint: string }> = [
   { value: 'clean', label: 'Clean', hint: 'Results appear after you run' },
-  { value: 'balanced', label: 'Balanced', hint: 'Bloch spheres shown from the start' },
+  { value: 'balanced', label: 'Balanced', hint: 'Circuit and Bloch spheres from the start, at |0>' },
   { value: 'full', label: 'Full', hint: 'Adds the Terminal and Histogram tab' },
 ];
 
