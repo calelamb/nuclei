@@ -28,7 +28,7 @@ afterEach(cleanup);
 describe('Run slot while Python boots (web)', () => {
   it('is clickable: the press asks for a run, which queues', () => {
     mount();
-    const btn = screen.getByRole('button', { name: /Click to run as soon as Python is ready/ }) as HTMLButtonElement;
+    const btn = screen.getByRole('button', { name: /Loading 1\/3/ }) as HTMLButtonElement;
     expect(btn.disabled).toBe(false);
     expect(btn.textContent).toContain('Loading 1/3');
     fireEvent.click(btn);
@@ -38,16 +38,27 @@ describe('Run slot while Python boots (web)', () => {
   it('shows Queued once a run is waiting, and a second click cancels it', () => {
     useRunQueueStore.setState({ queued: true });
     mount();
-    const btn = screen.getByRole('button', { name: 'Runs as soon as Python is ready. Click to cancel.' });
+    const btn = screen.getByRole('button', { name: /Queued · 1\/3/ });
     expect(btn.textContent).toContain('Queued · 1/3');
     fireEvent.click(btn);
     expect(execute).not.toHaveBeenCalled();
     expect(useRunQueueStore.getState().queued).toBe(false);
   });
 
+  it('is named by its visible label and exposes the queued toggle state (interaction-r-06)', () => {
+    const { unmount } = mount();
+    const waiting = screen.getByRole('button', { name: /Loading 1\/3/ });
+    expect(waiting.getAttribute('aria-label')).toBeNull();
+    expect(waiting.getAttribute('aria-pressed')).toBe('false');
+    unmount();
+    useRunQueueStore.setState({ queued: true });
+    mount();
+    expect(screen.getByRole('button', { name: /Queued · 1\/3/ }).getAttribute('aria-pressed')).toBe('true');
+  });
+
   it('a failed kernel stays a disabled status', () => {
     useEditorStore.setState({ kernelStatus: 'failed', kernelError: 'boom', kernelProgress: null });
     mount();
-    expect((screen.getByRole('button', { name: /boom/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: /Python didn't start/ }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

@@ -49,10 +49,11 @@ export function getRunButtonState(input: RunButtonInput): RunButtonState {
     return { kind: 'ready', label: 'Run', title: 'Run simulation', disabled: false };
   }
   if (input.kernelStatus === 'failed') {
+    const web = input.engine === 'Python';
     return {
       kind: 'failed',
-      label: kernelStartFailureTitle(input.engine === 'Python'),
-      title: `${(input.kernelError ?? 'The kernel did not start').replace(/[.\s]+$/, '')}. Use Retry in the banner below.`,
+      label: kernelStartFailureTitle(web),
+      title: `${(input.kernelError ?? (web ? 'Python did not start' : 'The kernel did not start')).replace(/[.\s]+$/, '')}. Use Retry in the banner below.`,
       disabled: true,
     };
   }
@@ -62,6 +63,7 @@ export function getRunButtonState(input: RunButtonInput): RunButtonState {
 /** Still starting: Run is clickable (it queues), and shows what it is waiting on once queued. */
 function loadingState(input: RunButtonInput): RunButtonState {
   const queued = Boolean(input.runQueued);
+  const web = input.engine === 'Python';
   // The toolbar is narrow, so the button carries the step count and the full
   // stage text lives in the tooltip and the status bar chip.
   const progress = input.kernelProgress;
@@ -80,10 +82,10 @@ function loadingState(input: RunButtonInput): RunButtonState {
   }
   const stage = counted
     ? `${counted.label} (step ${counted.step} of ${counted.total})`
-    : progress?.label ?? 'Waiting for the Python kernel';
+    : progress?.label ?? (web ? 'Waiting for Python' : 'Waiting for the kernel');
   return {
     kind: 'loading',
-    label: counted ? `Loading ${counted.step}/${counted.total}` : progress ? 'Starting kernel…' : 'Starting…',
+    label: counted ? `Loading ${counted.step}/${counted.total}` : progress ? `Starting ${web ? 'Python' : 'kernel'}…` : 'Starting…',
     title: `${stage}. Click to run ${ready}.`,
     disabled: false,
     queueable: true,
