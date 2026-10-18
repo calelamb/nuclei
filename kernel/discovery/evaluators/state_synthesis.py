@@ -1,5 +1,11 @@
 """``state_synthesis`` — prepare a target state with few expensive gates (PRD 14 spec 6.3).
 
+Parameter laundering (hard-coding pre-trained angles to dodge a parameter count) does not apply
+here by design: the objective is the canonical *gate* cost (two-qubit gates, depth or T-count), and
+the number of free parameters is never rewarded or scored. A fixed rotation is a legitimate gate
+and is already charged by that gate cost, and the free parameters the evaluator trains cost the
+same gates. ``metrics.n_fixed_nonclifford_angles`` is reported for transparency only.
+
 The candidate's ``build(n_qubits)`` returns a Qiskit/Cirq circuit. The sandbox
 converts it to IR; this trusted scorer re-validates the IR, runs the five
 guardrails in order, and computes every number itself.
@@ -35,6 +41,7 @@ from kernel.discovery.evaluators._circuit_common import (
     adam_minimize,
     circuit_costs,
     continuous_rotations,
+    effective_parameter_counts,
     dropped_measurements,
     initial_parameters,
     ir_conversion_check,
@@ -171,7 +178,7 @@ def _best_fidelity(
         "restart_fidelities": [float(x) for x in checked],
         "optimized": True,
         "steps": opt["steps"],
-        "best_theta": result["best_theta"][int(np.argmax(checked))],
+        "best_theta": [float(x) for x in result["best_theta"][int(np.argmax(checked))]],
     }
 
 
@@ -237,6 +244,11 @@ def _scored(
         "cost_kind": cost_kind,
         "costs": costs,
         "continuous_rotations": continuous_rotations(circuit),
+        # Informational only: unlike vqe_ground_state this cost is gates, not parameters, so a hard-coded
+        # angle is already charged as the gate it is and is NOT an extra penalty (see module docstring).
+        "n_fixed_nonclifford_angles": effective_parameter_counts(circuit)["n_fixed_nonclifford_angles"],
+        "best_theta": list(outcome.get("best_theta", [])),
+        "parameter_names": list(circuit.parameters),
     }
     if circuit.parameters:
         metrics["gradient_map"] = gradient_map(

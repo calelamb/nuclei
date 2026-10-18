@@ -105,7 +105,9 @@ def _best_oracle_fidelity(circuit, target, config, evaluation, seed, cancel) -> 
         theta = np.zeros(0)
         return _oracle_fidelity(circuit, theta, target), theta, "no free parameters"
     reported = scored_metric(evaluation, "best_theta")
-    if isinstance(reported, list) and len(reported) == m:
+    if isinstance(reported, list) and len(reported) != m:
+        raise ValueError(f"reported best_theta has {len(reported)} entries for {m} parameters")
+    if isinstance(reported, list):
         theta = np.asarray(reported, dtype=float)
         return _oracle_fidelity(circuit, theta, target), theta, "evaluator's reported best_theta"
     candidates = _reoptimize(circuit, target, config, seed, cancel)
@@ -132,7 +134,9 @@ def _check_fidelity(evaluation, audit_f: float, source: str, m: int) -> tuple[st
     if not isinstance(claimed, (int, float)):
         return SKIPPED, "the evaluation has no fidelity to compare with."
     exact = m == 0 or source.startswith("evaluator")
-    if claimed > audit_f + (EXACT_TOLERANCE if exact else OVERCLAIM_WARN):
+    if exact and abs(claimed - audit_f) > EXACT_TOLERANCE:
+        return FAIL, f"evaluator claims F={claimed:.6f} but the oracle ({source}) gives F={audit_f:.6f}."
+    if claimed > audit_f + OVERCLAIM_WARN:
         status = FAIL if exact else WARN
         return status, f"evaluator claims F={claimed:.6f} but the oracle ({source}) gives F={audit_f:.6f}."
     return PASS, f"oracle F={audit_f:.6f} via {source}; evaluator F={claimed:.6f}"
@@ -185,6 +189,9 @@ def audit(
         audit_f, theta, source = _best_oracle_fidelity(circuit, target, config, evaluation, seed, cancel)
     except IrError as exc:
         checks.append(check("oracle_fidelity", "Oracle fidelity", SKIPPED, f"{exc}"))
+        return result(checks, None, notes)
+    except ValueError as exc:  # a reported best_theta that does not fit the circuit
+        checks.append(check("fidelity_reproduced", "Fidelity reproduced by the oracle", FAIL, f"{exc}"[:300]))
         return result(checks, None, notes)
     notes.append(f"oracle fidelity {audit_f:.6f} ({source})")
     m = len(circuit.parameters)

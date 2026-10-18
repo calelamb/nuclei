@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import math
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Callable
 
 import numpy as np
@@ -59,11 +59,102 @@ def qubit_count_check(holder: CircuitHolder, expected: int) -> CheckResult:
     return PASS, None
 
 
-def parameter_budget_check(holder: CircuitHolder, limit: int) -> CheckResult:
+def parameter_budget_check(holder: CircuitHolder, limit: int, *, label: str = "free parameters") -> CheckResult:
     count = len(holder.circuit.parameters) if holder.circuit else 0
     if count > limit:
-        return FAIL, f"{count} free parameters exceeds the budget of {limit}."
+        return FAIL, f"{count} {label} exceeds the budget of {limit}."
     return PASS, None
+
+
+#: A fixed angle within this (radians) of a multiple of pi/2 is a Clifford rotation (free). 1e-6 forgives
+#: constants printed to six digits (3.141593); an offset that small carries no hidden information.
+CLIFFORD_ANGLE_TOLERANCE = 1e-6
+_HALF_PI = math.pi / 2
+
+
+def _is_multiple_of(angle: float, unit: float) -> bool:
+    ratio = float(angle) / unit
+    return abs(ratio - round(ratio)) * unit < CLIFFORD_ANGLE_TOLERANCE
+
+
+def _fixed_angle_is_charged(angle: float) -> bool:
+    """A hard-coded angle costs a parameter unless it is Clifford (k*pi/2) or T-like (odd k*pi/4).
+
+    Clifford angles carry no continuous information. Odd multiples of pi/4 are the Clifford+T
+    alphabet: a finite set (about 2 bits per gate) that cannot hide a pre-trained continuous
+    value, and ``t_count`` already prices them in ``costs``. Any other constant (0.734, ...) is a
+    continuous value the candidate chose offline instead of letting the evaluator train it.
+    """
+    return not (_is_multiple_of(angle, _HALF_PI) or _is_multiple_of(angle, math.pi / 4))
+
+
+def _shared_use_is_charged(ref: ParamRef) -> bool:
+    """A 2nd+ use of one free parameter smuggles a fixed offset/ratio unless both are Clifford-clean.
+
+    ``RY(t + 0.7)`` next to ``RY(t)`` encodes the pre-trained gap 0.7 in constants. Integer
+    coefficients (``RZ(2t)``) and offsets that are multiples of pi/2 are legitimate tying.
+    """
+    integer_coeff = abs(ref.coeff - round(ref.coeff)) < CLIFFORD_ANGLE_TOLERANCE
+    return not (integer_coeff and _is_multiple_of(ref.offset, _HALF_PI))
+
+
+def effective_parameter_counts(circuit: ParamCircuit) -> dict[str, int]:
+    """Free parameters plus the constants that behave like trained parameters.
+
+    ``effective_parameters = n_free_parameters + n_fixed_nonclifford_angles`` where the second term
+    counts (a) hard-coded gate angles that are neither Clifford nor T-like and (b) every use of a
+    free parameter after its first whose offset/coefficient is not a clean Clifford tying.
+    This closes parameter laundering: pre-training angles offline and hard-coding them.
+    """
+    seen: set[str] = set()
+    fixed = 0
+    for gate in circuit.gates:
+        for angle in gate.angles:
+            if isinstance(angle, ParamRef):
+                if angle.name in seen and _shared_use_is_charged(angle):
+                    fixed += 1
+                seen.add(angle.name)
+            elif _fixed_angle_is_charged(angle):
+                fixed += 1
+    free = len(circuit.parameters)
+    return {"n_free_parameters": free, "n_fixed_nonclifford_angles": fixed, "effective_parameters": free + fixed}
+
+
+def promote_fixed_angles(circuit: ParamCircuit) -> ParamCircuit:
+    """The same circuit with every charged hard-coded angle turned into a fresh free parameter.
+
+    ``vqe_ground_state`` measures an *ansatz* trained under the evaluator's own budget. A charged
+    constant is a pre-trained parameter, so the evaluator trains it like any other (from its own
+    initialization, ignoring the candidate's value): offline optimization cannot beat the training
+    budget, and ``len(result.parameters) == effective_parameters`` by construction.
+    """
+    taken = set(circuit.parameters)
+    added: list[str] = []
+
+    def fresh() -> ParamRef:
+        name = f"fixed_{len(added)}"
+        while name in taken:
+            name = f"_{name}"
+        taken.add(name)
+        added.append(name)
+        return ParamRef(name)
+
+    seen: set[str] = set()
+    gates = []
+    for gate in circuit.gates:
+        angles = []
+        for angle in gate.angles:
+            if isinstance(angle, ParamRef):
+                charged = angle.name in seen and _shared_use_is_charged(angle)
+                seen.add(angle.name)
+                angles.append(fresh() if charged else angle)
+            else:
+                angles.append(fresh() if _fixed_angle_is_charged(angle) else angle)
+        gates.append(replace(gate, angles=tuple(angles)))
+    return ParamCircuit(
+        n_qubits=circuit.n_qubits, gates=gates, parameters=[*circuit.parameters, *added],
+        framework=circuit.framework, notes=list(circuit.notes),
+    )
 
 
 def dropped_measurements(circuit: ParamCircuit) -> str | None:

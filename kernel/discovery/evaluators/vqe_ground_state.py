@@ -29,9 +29,11 @@ from kernel.discovery.evaluators._circuit_common import (
     CircuitHolder,
     adam_minimize,
     circuit_costs,
+    effective_parameter_counts,
     initial_parameters,
     ir_conversion_check,
     parameter_budget_check,
+    promote_fixed_angles,
     qubit_count_check,
     thin_curve,
 )
@@ -139,8 +141,18 @@ def calls(config: dict[str, Any]) -> list[dict[str, Any]]:
     return [{"args": [config["hamiltonian"]["n_qubits"]], "kwargs": {}}]
 
 
+def _ir_conversion_check(holder: CircuitHolder, artifact: Any) -> tuple[str, str | None]:
+    """Parse the IR, then promote hard-coded non-Clifford angles to evaluator-trained parameters."""
+    status, detail = ir_conversion_check(holder, artifact)
+    if status == PASS and holder.circuit is not None:
+        holder.extras["submitted"] = holder.circuit
+        holder.circuit = promote_fixed_angles(holder.circuit)
+    return status, detail
+
+
 def _has_parameters_check(holder: CircuitHolder) -> tuple[str, str | None]:
-    if holder.circuit is None or not holder.circuit.parameters:
+    submitted = holder.extras.get("submitted")  # the candidate must offer at least one genuinely free parameter
+    if submitted is None or not submitted.parameters:
         return FAIL, "The ansatz has no free parameters, so there is nothing to train."
     return PASS, None
 
@@ -180,11 +192,11 @@ def _guardrails(
 ) -> list[Guardrail]:
     n = config["hamiltonian"]["n_qubits"]
     return [
-        Guardrail("ir_conversion", "Circuit converts to elementary gates", lambda: ir_conversion_check(holder, artifact)),
+        Guardrail("ir_conversion", "Circuit converts to elementary gates", lambda: _ir_conversion_check(holder, artifact)),
         Guardrail("qubit_count", f"Exactly {n} qubits", lambda: qubit_count_check(holder, n)),
         Guardrail(
-            "parameter_budget", f"At most {config['max_parameters']} free parameters",
-            lambda: parameter_budget_check(holder, config["max_parameters"]),
+            "parameter_budget", f"At most {config['max_parameters']} effective parameters (free + fixed non-Clifford angles)",
+            lambda: parameter_budget_check(holder, config["max_parameters"], label="effective parameters"),
         ),
         Guardrail("has_parameters", "Has free parameters", lambda: _has_parameters_check(holder)),
         Guardrail(
@@ -221,6 +233,7 @@ def _train(
         "restart_energies": [float(x) for x in verified],
         "curve": thin_curve(curve, CURVE_POINTS),
         "best_restart": best,
+        "best_theta": [float(x) for x in result["best_theta"][best]],
     }
 
 
@@ -274,7 +287,8 @@ def _scored(
 ) -> EvaluationCore:
     e_best = trained["e_best"]
     relative_error = max((e_best - e0) / max(abs(e0), RELATIVE_FLOOR), 0.0)
-    n_params = len(circuit.parameters)
+    counts = effective_parameter_counts(holder.extras["submitted"])
+    n_params = len(circuit.parameters)  # == counts["effective_parameters"]: promoted constants are trained parameters
     costs = circuit_costs(circuit)
     fitness = -math.log10(max(relative_error, RELATIVE_FLOOR)) - config["cost_weight"] * n_params
     samples = config["trainability_prefilter"]["samples"]
@@ -284,7 +298,11 @@ def _scored(
         "relative_energy_error": relative_error,
         "curve": trained["curve"],
         "restart_energies": trained["restart_energies"],
-        "n_parameters": n_params,
+        "n_parameters": counts["n_free_parameters"],
+        "n_fixed_nonclifford_angles": counts["n_fixed_nonclifford_angles"],
+        "effective_parameters": n_params,
+        "best_theta": trained["best_theta"],
+        "parameter_names": list(circuit.parameters),
         "costs": costs,
         "prefilter": holder.extras.get("prefilter"),
         "gradient_map": gradient_map(circuit, hamiltonian, samples=samples, seed=seed, objective_name="energy"),
@@ -296,7 +314,7 @@ def _scored(
             "relative_energy_error": {
                 "value": relative_error, "direction": "minimize", "label": "Relative energy error",
             },
-            "parameters": {"value": n_params, "direction": "minimize", "label": "Parameters"},
+            "parameters": {"value": n_params, "direction": "minimize", "label": "Effective parameters"},
         },
         descriptors={"parameters": n_params, "two_qubit_gates": costs["two_qubit_gates"]},
         metrics=metrics,
