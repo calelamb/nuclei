@@ -19,7 +19,7 @@ const STATUS_TONE: Record<TrainabilityJobStatus, LabTone> = {
   running: 'quantum',
   cancelling: 'warning',
   complete: 'success',
-  cancelled: 'warning',
+  cancelled: 'neutral',
   failed: 'danger',
 };
 
@@ -30,6 +30,7 @@ export function TrainabilitySidebar() {
   const selectedJobId = useTrainabilityStore((s) => s.selectedJobId);
   const selectJob = useTrainabilityStore((s) => s.selectJob);
   const certificates = useTrainabilityStore((s) => s.savedCertificates);
+  const unavailable = useTrainabilityStore((s) => s.unavailable);
   const displayedId = selectedJobId ?? jobOrder[0] ?? null;
 
   return (
@@ -38,10 +39,20 @@ export function TrainabilitySidebar() {
         <div className="lab-stack">
           <section aria-label="Recent jobs">
             <LabSectionLabel>
-              <History size={11} aria-hidden /> Recent jobs
+              <span className="lab-row" style={{ gap: 'var(--space-1)', flexWrap: 'wrap' }}>
+                <History size={11} aria-hidden /> Recent jobs
+              </span>
             </LabSectionLabel>
             {jobOrder.length === 0 ? (
-              <LabEmptyState compact title="No analyses yet" body="Run analyses from the Trainability Lab; they are kept here for the session." />
+              <LabEmptyState
+                compact
+                title="No analyses yet"
+                body={
+                  unavailable
+                    ? 'Analyses need the desktop app; there is nothing to list in this build.'
+                    : 'Run analyses from the Trainability Lab; they are kept here for the session.'
+                }
+              />
             ) : (
               <ul aria-label="Recent trainability jobs" style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 'var(--space-1)' }}>
                 {jobOrder.map((id) => {
@@ -52,13 +63,22 @@ export function TrainabilitySidebar() {
                       <button
                         type="button"
                         className="lab-button lab-button--ghost"
-                        style={{ width: '100%', justifyContent: 'flex-start', gap: 'var(--space-2)', background: id === displayedId ? 'var(--lab-quantum-soft)' : undefined }}
+                        style={{
+                          width: '100%',
+                          minWidth: 0,
+                          overflow: 'hidden',
+                          justifyContent: 'flex-start',
+                          gap: 'var(--space-2)',
+                          background: id === displayedId ? 'var(--lab-quantum-soft)' : undefined,
+                        }}
                         aria-pressed={id === displayedId}
                         onClick={() => selectJob(id)}
                       >
-                        <LabPill tone={STATUS_TONE[job.status]} dot>{job.status}</LabPill>
-                        <span className="lab-mono" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{job.target.fileName}</span>
-                        <span className="lab-muted lab-mono">{job.elapsedMs === null ? '…' : formatDuration(job.elapsedMs)}</span>
+                        <span style={{ flexShrink: 0 }}><LabPill tone={STATUS_TONE[job.status]} dot>{job.status}</LabPill></span>
+                        <span className="lab-mono" title={job.target.fileName} style={{ flex: '1 1 0', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'left' }}>
+                          {job.target.fileName}
+                        </span>
+                        <span className="lab-muted lab-mono" style={{ flexShrink: 0 }}>{job.elapsedMs === null ? '…' : formatDuration(job.elapsedMs)}</span>
                       </button>
                     </li>
                   );
@@ -76,7 +96,7 @@ export function TrainabilitySidebar() {
             ) : (
               <ul aria-label="Saved certificates" style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 'var(--space-1)' }}>
                 {certificates.map((c) => (
-                  <li key={c.jsonPath} className="lab-mono" style={{ overflowWrap: 'anywhere' }}>{c.jsonPath}</li>
+                  <li key={c.jsonPath} className="lab-mono" style={{ overflowWrap: 'anywhere', minWidth: 0 }}>{c.jsonPath}</li>
                 ))}
               </ul>
             )}

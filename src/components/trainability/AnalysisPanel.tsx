@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { FlaskConical, Hourglass } from 'lucide-react';
+import { Ban, FlaskConical, Hourglass } from 'lucide-react';
 import { LabCallout, LabEmptyState, LabProgress, LabSkeleton } from '../lab';
 import type { TrainabilityAnalysis, TrainabilityResults } from '../../types/trainability';
 import type { AnalysisView } from './analysisState';
@@ -28,6 +28,15 @@ export function AnalysisPanel<K extends TrainabilityAnalysis>({
           icon={FlaskConical}
           title={`${title} was not requested`}
           body="Enable it in the target bar and run the analyses again."
+          compact
+        />
+      );
+    case 'cancelled':
+      return (
+        <LabEmptyState
+          icon={Ban}
+          title="Not run (cancelled)"
+          body={`${title} was cancelled before it finished. Run the analyses again to compute it.`}
           compact
         />
       );
