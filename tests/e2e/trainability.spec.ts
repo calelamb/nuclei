@@ -77,7 +77,8 @@ test('@trainability runs the analyses and shows verdicts', async ({ page }) => {
   await page.getByRole('button', { name: 'Trainability Lab' }).click();
 
   const lab = page.getByRole('region', { name: 'Trainability Lab', exact: true });
-  await expect(lab).toBeVisible();
+  // The Lab chunk compiles on first open in the dev server; allow for a cold start under load.
+  await expect(lab).toBeVisible({ timeout: 15_000 });
   await expect(lab.getByText('n = 4', { exact: true })).toBeVisible();
 
   await lab.getByRole('button', { name: /Run analyses/ }).click();
