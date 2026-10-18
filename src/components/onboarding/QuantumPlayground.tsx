@@ -18,7 +18,7 @@ qc.measure([0, 1], [0, 1])
 
 const STEPS = [
   {
-    title: 'Meet the Qubit',
+    title: 'Meet the qubit',
     dirac: "This is a qubit — the basic unit of quantum information. Unlike a regular bit that's either 0 or 1, a qubit can exist in both states at once. Right now it's in the |0⟩ state — think of it as pointing straight up.",
     action: null,
     buttonLabel: 'Continue',
@@ -27,7 +27,7 @@ const STEPS = [
     title: 'Superposition',
     dirac: "Let's put this qubit into superposition. The Hadamard gate (H) takes a qubit from a definite state and puts it halfway between |0⟩ and |1⟩. Watch what happens.",
     action: 'apply_h' as const,
-    buttonLabel: 'Apply H Gate',
+    buttonLabel: 'Apply an H gate',
   },
   {
     title: 'Measurement',
@@ -36,10 +36,10 @@ const STEPS = [
     buttonLabel: 'Measure',
   },
   {
-    title: 'See the Pattern',
+    title: 'See the pattern',
     dirac: "Interesting, right? Let's measure a bunch more times to see the pattern. Each measurement is random, but over many tries, you'll see roughly half 0s and half 1s.",
     action: 'measure_many' as const,
-    buttonLabel: 'Measure 10 Times',
+    buttonLabel: 'Measure 10 times',
   },
   {
     title: 'Entanglement',
@@ -48,7 +48,7 @@ const STEPS = [
     buttonLabel: 'Entangle qubits',
   },
   {
-    title: "You're Ready",
+    title: "You're ready",
     dirac: "You just built a quantum circuit! You understand qubits, superposition, measurement, and entanglement — the four pillars of quantum computing. Lesson 1 turns it into real code.",
     action: 'bridge' as const,
     buttonLabel: 'Start lesson 1',
@@ -111,7 +111,7 @@ function Bar({ label, count, total, color }: { label: string; count: number; tot
         data-bar-baseline=""
         style={{ display: 'flex', alignItems: 'flex-end', height: BAR_MAX_PX, borderBottom: `1px solid ${OUTLINE}` }}
       >
-        <div style={{
+        <div data-bar-fill="" style={{
           width: 36, height: total > 0 ? (count / total) * BAR_MAX_PX : 0, background: color,
           borderRadius: '4px 4px 0 0',
           transition: `height ${getDuration(DURATION.normal)}ms ${EASING.enter}`,
@@ -130,7 +130,7 @@ function MiniHistogram({ shots }: { shots: readonly Outcome[] }) {
   return (
     <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, height: BAR_MAX_PX + 30 }} role="img" aria-label={`Measurement results: |0⟩ ${zeros} times, |1⟩ ${ones} times out of ${total}`}>
       <Bar label="|0⟩" count={zeros} total={total} color={colors.accent} />
-      <Bar label="|1⟩" count={ones} total={total} color={colors.basisZ} />
+      <Bar label="|1⟩" count={ones} total={total} color={colors.accent} />
     </div>
   );
 }
@@ -140,9 +140,12 @@ function PairHistogram({ pair }: { pair: PairResult }) {
   const colors = useThemeStore((s) => s.colors);
   const total = pair.counts['00'] + pair.counts['11'];
   return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
     <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, height: BAR_MAX_PX + 30 }} role="img" aria-label={`Joint results: |00⟩ ${pair.counts['00']} times, |11⟩ ${pair.counts['11']} times out of ${total}; |01⟩ and |10⟩ never appear`}>
       <Bar label="|00⟩" count={pair.counts['00']} total={total} color={colors.accent} />
-      <Bar label="|11⟩" count={pair.counts['11']} total={total} color={colors.basisZ} />
+      <Bar label="|11⟩" count={pair.counts['11']} total={total} color={colors.accent} />
+    </div>
+    <span style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans }}>Last shot: {pair.last}{pair.last}</span>
     </div>
   );
 }
@@ -202,11 +205,11 @@ export function QuantumPlayground({ onComplete, onBridgeToIDE }: PlaygroundProps
       transition: pg.bridging ? `opacity ${getDuration(500)}ms ${EASING.exit}, transform ${getDuration(500)}ms ${EASING.exit}` : 'none',
     }}>
       {/* Step indicator */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 32, position: 'absolute', top: 32 }} role="progressbar" aria-valuenow={pg.step + 1} aria-valuemin={1} aria-valuemax={STEPS.length}>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 32, position: 'absolute', top: 32 }} role="progressbar" aria-label={`Step ${pg.step + 1} of ${STEPS.length}`} aria-valuenow={pg.step + 1} aria-valuemin={1} aria-valuemax={STEPS.length}>
         {STEPS.map((_, i) => (
           <div key={i} style={{
             width: i <= pg.step ? 32 : 20, height: 3, borderRadius: 2,
-            background: i <= pg.step ? colors.accent : colors.border,
+            background: i <= pg.step ? 'var(--color-accent-quantum)' : 'var(--color-border-control)',
             transition: `all ${getDuration(DURATION.slow)}ms ${EASING.enter}`,
           }} />
         ))}

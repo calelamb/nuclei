@@ -19,28 +19,28 @@ describe('QuantumPlayground', () => {
     render(<QuantumPlayground onComplete={vi.fn()} onBridgeToIDE={vi.fn()} />);
     expect(document.activeElement?.textContent).toBe('Continue');
     click('Continue');
-    expect(document.activeElement?.textContent).toBe('Apply H Gate');
+    expect(document.activeElement?.textContent).toBe('Apply an H gate');
   });
 
   it('shows the measured outcome on the Bloch arrow and in the histogram', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.9);
     render(<QuantumPlayground onComplete={vi.fn()} onBridgeToIDE={vi.fn()} />);
-    click('Continue'); click('Apply H Gate'); click('Measure');
+    click('Continue'); click('Apply an H gate'); click('Measure');
     expect(screen.getByRole('img', { name: /measured \|1⟩/ })).toBeTruthy();
     expect(screen.getByRole('img', { name: /\|0⟩ 0 times, \|1⟩ 1 times out of 1/ })).toBeTruthy();
   });
 
-  it('"Measure 10 Times" yields exactly 10 shots, not 10 on top of the earlier one', () => {
+  it('"Measure 10 times" yields exactly 10 shots, not 10 on top of the earlier one', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.9);
     render(<QuantumPlayground onComplete={vi.fn()} onBridgeToIDE={vi.fn()} />);
-    click('Continue'); click('Apply H Gate'); click('Measure'); click('Measure 10 Times');
+    click('Continue'); click('Apply an H gate'); click('Measure'); click('Measure 10 times');
     expect(screen.getByRole('img', { name: /out of 10$/ })).toBeTruthy();
   });
 
   it('entangling shows a |00> / |11> histogram and matching arrows for both qubits', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.9);
     render(<QuantumPlayground onComplete={vi.fn()} onBridgeToIDE={vi.fn()} />);
-    click('Continue'); click('Apply H Gate'); click('Measure'); click('Measure 10 Times'); click('Entangle qubits');
+    click('Continue'); click('Apply an H gate'); click('Measure'); click('Measure 10 times'); click('Entangle qubits');
     expect(screen.getByRole('img', { name: /Joint results: \|00⟩ 0 times, \|11⟩ 10 times/ })).toBeTruthy();
     expect(screen.getAllByRole('img', { name: /measured \|1⟩/ })).toHaveLength(2);
   });
@@ -49,7 +49,7 @@ describe('QuantumPlayground', () => {
     vi.useFakeTimers();
     const bridge = vi.fn();
     render(<QuantumPlayground onComplete={vi.fn()} onBridgeToIDE={bridge} />);
-    click('Continue'); click('Apply H Gate'); click('Measure'); click('Measure 10 Times'); click('Entangle qubits');
+    click('Continue'); click('Apply an H gate'); click('Measure'); click('Measure 10 times'); click('Entangle qubits');
     click('Start lesson 1');
     await vi.advanceTimersByTimeAsync(700);
     expect(bridge).toHaveBeenCalledTimes(1);
@@ -59,7 +59,7 @@ describe('QuantumPlayground', () => {
   it('never paints the |1⟩ bar in Dirac purple', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.9);
     render(<QuantumPlayground onComplete={vi.fn()} onBridgeToIDE={vi.fn()} />);
-    click('Continue'); click('Apply H Gate'); click('Measure');
+    click('Continue'); click('Apply an H gate'); click('Measure');
     const histogram = screen.getByRole('img', { name: /Measurement results/ });
     expect(histogram.innerHTML).not.toContain('rgb(123, 45, 142)');
   });
@@ -86,7 +86,29 @@ describe('QuantumPlayground', () => {
   it('puts a baseline under the histogram bars', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.9);
     render(<QuantumPlayground onComplete={vi.fn()} onBridgeToIDE={vi.fn()} />);
-    click('Continue'); click('Apply H Gate'); click('Measure');
+    click('Continue'); click('Apply an H gate'); click('Measure');
     expect(document.querySelectorAll('[data-bar-baseline]').length).toBeGreaterThan(0);
+  });
+
+  it('uses sentence-case titles and labels the step indicator (r7-learn-05)', () => {
+    render(<QuantumPlayground onComplete={vi.fn()} onBridgeToIDE={vi.fn()} />);
+    expect(screen.getByRole('heading', { name: 'Meet the qubit' })).toBeTruthy();
+    const bar = screen.getByRole('progressbar');
+    expect(bar.getAttribute('aria-label')).toBe('Step 1 of 6');
+    const dashes = Array.from(bar.children) as HTMLElement[];
+    expect(dashes[0].style.background).toBe('var(--color-accent-quantum)');
+    expect(dashes[3].style.background).toBe('var(--color-border-control)');
+    click('Continue');
+    expect(bar.getAttribute('aria-label')).toBe('Step 2 of 6');
+  });
+
+  it('draws every outcome bar in one palette and captions the last paired shot', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.9);
+    render(<QuantumPlayground onComplete={vi.fn()} onBridgeToIDE={vi.fn()} />);
+    click('Continue'); click('Apply an H gate'); click('Measure'); click('Measure 10 times');
+    const fills = Array.from(document.querySelectorAll<HTMLElement>('[data-bar-fill]')).map((b) => b.style.background);
+    expect(new Set(fills).size).toBe(1);
+    click('Entangle qubits');
+    expect(screen.getByText('Last shot: 11')).toBeTruthy();
   });
 });
