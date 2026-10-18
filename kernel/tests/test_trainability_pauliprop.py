@@ -224,3 +224,24 @@ def test_large_shallow_local_observable_finishes_within_budget(n):
     assert time.perf_counter() - t0 < 20.0
     assert out["method"] == "pauli_propagation_exact"
     assert out["variance_mean"] > 0.1 / n**2   # local cost: Var ~ n^-2 (1/n-weighted terms)
+
+
+# ---- PH-LOW: constant RZZ/RXX/RYY/RZX at k*pi/2 are Clifford for the PPE
+@pytest.mark.parametrize("name", ["RZZ", "RXX", "RYY", "RZX"])
+@pytest.mark.parametrize("k", [1, 2, 3])
+def test_constant_quarter_turn_two_qubit_rotation_is_accepted_and_exact(name, k):
+    b = Builder(3)
+    b.rot("RY", (0,)).rot("RX", (1,)).rot("RY", (2,))
+    b.add(name, (0, 2), k * math.pi / 2)
+    b.rot("RX", (0,)).rot("RZ", (2,)).rot("RY", (1,))
+    c = b.build()
+    obs = PauliSum((PauliTerm(1.0, ((0, "Z"), (2, "Z"))), PauliTerm(0.5, ((1, "X"),))))
+    ok, why = ppe_applicable(c, obs, init="uniform")
+    assert ok, why
+    res = ppe_gradient_variances(c, obs, min_weight_abs=0)
+    assert res["method"] == "pauli_propagation_exact"
+    rng = np.random.default_rng(k)
+    vals = rng.uniform(0, 2 * math.pi, (30000, len(c.parameters)))
+    _, g = compile_circuit(c).value_and_grad(vals, obs)
+    for row, emp, se in zip(res["per_parameter"], g.var(axis=0), g.var(axis=0) * math.sqrt(2 / 30000)):
+        assert abs(row["variance"] - emp) <= 5 * se + 1e-9, (name, k, row, emp)

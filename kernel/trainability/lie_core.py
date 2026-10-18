@@ -37,6 +37,21 @@ Dimension matches (not isomorphism proofs): ``su(2^n)`` = ``4^n - 1``, ``so(2^n)
 deep circuit is ``Var = P_𝔤(ρ) P_𝔤(O) / dim 𝔤`` (Ragone et al., Nat. Commun. 15, 7172 (2024)).
 Algebras with polynomial dimension also make expectation values classically computable
 (𝔤-sim, Goh et al. 2023).
+
+Reductive 𝔤 (revised after the physics review)
+----------------------------------------------
+The simple-𝔤 formula is *wrong* for a general DLA: a centre (elements commuting with all of 𝔤)
+adds nothing to the variance, and with several simple ideals ``𝔤 = ⊕_j 𝔤_j ⊕ 𝔷`` the group is a
+product of independent Haar factors, so the variances add::
+
+    Var = Σ_j P_{𝔤_j}(ρ) P_{𝔤_j}(O) / dim 𝔤_j        (ρ = |0><0|, 𝔷 excluded).
+
+(Applying the simple formula to su(2) ⊕ su(16) gave 0.062 against a measured 0.336.)  For a
+Pauli-string basis the centre is the set of strings commuting with the whole basis and the simple
+ideals are the connected components of the anticommutation graph on the remaining strings
+(:func:`ideal_decomposition`).  For a Pauli-sum basis the ideal structure is not computed: the
+prediction is available only when 𝔤 is verifiably simple, i.e. ``dim 𝔤 = 4^n − 1`` (a subalgebra of
+su(2^n) of full dimension *is* su(2^n)).
 """
 
 from __future__ import annotations
@@ -341,6 +356,36 @@ def classify_dimension(dim: int, n: int) -> dict:
             "candidates": [{"family": f, "label": lab} for f, lab in candidates], "note": note}
 
 
+def ideal_decomposition(basis: PauliArray) -> dict:
+    """Centre and simple ideals of a Pauli-string algebra.
+
+    Returns ``{"labels": int array (-1 = central), "ideal_sizes": [dim of each ideal],
+    "centre_dimension": int}``.  Central strings anticommute with no basis string; the ideals are the
+    connected components of the anticommutation graph on the non-central strings (strings in different
+    components commute, so ``𝔤 = 𝔷 ⊕ ⊕_j 𝔤_j``).
+    """
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+
+    d = len(basis)
+    if d == 0:
+        return {"labels": np.zeros(0, np.intp), "ideal_sizes": [], "centre_dimension": 0}
+    step = max(1, _CHUNK_PAIRS // d)
+    rows, cols = [], []
+    for start in range(0, d, step):
+        ii, jj = _anticommute_pairs(basis.x[start:start + step], basis.z[start:start + step], basis.x, basis.z)
+        rows.append(ii + start)
+        cols.append(jj)
+    ii, jj = np.concatenate(rows), np.concatenate(cols)
+    central = np.bincount(ii, minlength=d) == 0
+    graph = coo_matrix((np.ones(len(ii), np.int8), (ii, jj)), shape=(d, d))
+    _, comp = connected_components(graph, directed=False)
+    labels = np.full(d, -1, np.intp)
+    labels[~central] = np.unique(comp[~central], return_inverse=True)[1]
+    sizes = np.bincount(labels[~central], minlength=0).tolist() if (~central).any() else []
+    return {"labels": labels, "ideal_sizes": [int(v) for v in sizes], "centre_dimension": int(central.sum())}
+
+
 def _term_map(observable: Sequence[tuple[float, tuple]]) -> dict[tuple[int, int], float]:
     out: dict[tuple[int, int], float] = {}
     for coeff, ops in observable:
@@ -355,16 +400,24 @@ def g_purities(basis_strings: PauliArray, observable: Sequence[tuple[float, tupl
     ``observable_in_algebra`` ignores the identity component (it is invisible to the variance);
     ``state_in_algebra`` means every non-identity ``{I,Z}^n`` string lies in the algebra.
     """
-    basis_keys = set()
-    for ph, ops in basis_strings.to_sparse():
-        basis_keys.add(_to_ints(ops))
+    all_keys = [_to_ints(ops) for _, ops in basis_strings.to_sparse()]
+    basis_keys = set(all_keys)
     terms = {k: c for k, c in _term_map(observable).items() if c != 0.0 and k != (0, 0)}
     in_basis = sum(c * c for k, c in terms.items() if k in basis_keys)
     out_basis = sum(c * c for k, c in terms.items() if k not in basis_keys)
-    z_count = int(is_z_type(basis_strings).sum())
+    z_type = is_z_type(basis_strings)
+    z_count = int(z_type.sum())
+    dec = ideal_decomposition(basis_strings)
+    ideals = []
+    for j, size in enumerate(dec["ideal_sizes"]):
+        members = np.nonzero(dec["labels"] == j)[0]
+        keys = {all_keys[int(m)] for m in members}
+        ideals.append({"dimension": size, "purity_observable": float(2 ** n * sum(
+            c * c for k, c in terms.items() if k in keys)), "purity_state": int(z_type[members].sum()) / 2 ** n})
     return {"purity_observable": float(2 ** n * in_basis), "purity_state": z_count / 2 ** n,
             "observable_in_algebra": bool(terms) and out_basis == 0.0,
-            "state_in_algebra": z_count == 2 ** n - 1, "dimension": len(basis_strings), "n_qubits": n}
+            "state_in_algebra": z_count == 2 ** n - 1, "dimension": len(basis_strings), "n_qubits": n,
+            "ideals": ideals, "centre_dimension": dec["centre_dimension"]}
 
 
 def g_purities_sum(closure: dict, observable: Sequence[tuple[float, tuple]], n: int, tol: float = 1e-9) -> dict:
@@ -395,3 +448,15 @@ def predicted_variance(purities: dict, dim: int) -> float | None:
     if dim <= 0 or not (purities.get("observable_in_algebra") or purities.get("state_in_algebra")):
         return None
     return float(purities["purity_state"] * purities["purity_observable"] / dim)
+
+
+def predicted_variance_reductive(purities: dict) -> float | None:
+    """Ragone for ``𝔤 = 𝔷 ⊕ ⊕_j 𝔤_j``: ``Σ_j P_j(ρ) P_j(O) / dim 𝔤_j`` (centre excluded).
+
+    ``None`` when there is no non-central ideal, or neither operand lies in the algebra.  The caller
+    guarantees each ideal is simple (Pauli-string basis: components of the anticommutation graph).
+    """
+    ideals = purities.get("ideals") or []
+    if not ideals or not (purities.get("observable_in_algebra") or purities.get("state_in_algebra")):
+        return None
+    return float(sum(i["purity_state"] * i["purity_observable"] / i["dimension"] for i in ideals))

@@ -70,6 +70,15 @@ def test_trn003_fires_for_polynomial_dla_and_stays_silent_for_large_dla():
     d = next(d for d in res["diagnostics"] if d["code"] == "TRN003")
     assert d["severity"] == "info" and "28" in d["message"] and "Goh" in d["citation"]["label"]
     assert "TRN003" not in codes(lint(two_axis_hea(4, 3), parse_observable("Z0", 4)))
+    # wording: a polynomial dimension suggests simulability but does not guarantee trainability (PH-M3)
+    assert "trainable in the barren-plateau sense" not in d["message"]
+    assert "does not by itself guarantee trainability" in d["message"]
+
+
+def test_trn003_is_silent_for_a_full_exponential_family_at_small_n():
+    from kernel.tests._trainability_physics_helpers import brickwork_hea
+    res = lint(brickwork_hea(3, 4), parse_observable("Z0", 3))     # so(8) = so(2^3): dim 28 <= 4n^2 = 36
+    assert "TRN003" not in codes(res)
 
 
 # --------------------------------------------------------------------- TRN004
