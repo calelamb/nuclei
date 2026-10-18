@@ -52,7 +52,7 @@ def run_namespace(code: str, params: dict | None) -> tuple[dict, GateLineMap]:
                 exec(compiled, namespace)  # noqa: S102 - user's own code, same trust as execute
     except TrainabilityError:
         raise
-    except Exception as exc:
+    except (Exception, SystemExit) as exc:
         raise TrainabilityError("execution_error", short_message(traceback.format_exc())) from exc
     return namespace, lines
 
