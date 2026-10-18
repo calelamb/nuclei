@@ -23,6 +23,8 @@ interface SimulationState {
   runCode: string | null;
   /** The exact code that produced `result`; null when unknown (never reported stale). */
   resultCode: string | null;
+  /** The result on screen when the current run began, so Stop can put it back instead of leaving the zone empty. */
+  heldResult: { result: SimulationResult; resultCode: string | null } | null;
   isRunning: boolean;
   /** The last run ended in an error; cleared when a new run starts or a result lands. */
   lastRunFailed: boolean;
@@ -36,6 +38,10 @@ interface SimulationState {
   beginRun: (code: string) => void;
   setResult: (result: SimulationResult | null) => void;
   clearResult: () => void;
+  /** Call before `clearResult` when a new run starts. */
+  holdResultForRun: () => void;
+  /** The run was stopped: bring back the result that was on screen before it began. */
+  restoreHeldResult: () => void;
   setRunning: (running: boolean) => void;
   setRunFailed: (failed: boolean) => void;
   setRunNoCircuit: (noCircuit: boolean) => void;
@@ -79,6 +85,7 @@ export const useSimulationStore = create<SimulationState>((set) => ({
   result: null,
   runCode: null,
   resultCode: null,
+  heldResult: null,
   isRunning: false,
   lastRunFailed: false,
   lastRunNoCircuit: false,
@@ -87,6 +94,7 @@ export const useSimulationStore = create<SimulationState>((set) => ({
   terminalOutput: [],
   beginRun: (runCode) => set({ runCode }),
   setResult: (result) => set((s) => ({
+    heldResult: null,
     result,
     resultCode: result ? s.runCode : null,
     isRunning: false,
@@ -95,6 +103,10 @@ export const useSimulationStore = create<SimulationState>((set) => ({
     lastRunStopped: result ? false : s.lastRunStopped,
   })),
   clearResult: () => set({ result: null, resultCode: null, isRunning: false }),
+  holdResultForRun: () => set((s) => ({ heldResult: s.result ? { result: s.result, resultCode: s.resultCode } : null })),
+  restoreHeldResult: () => set((s) => (s.heldResult
+    ? { result: s.heldResult.result, resultCode: s.heldResult.resultCode, heldResult: null }
+    : { heldResult: null })),
   setRunning: (isRunning) => set((s) => ({
     isRunning,
     lastRunFailed: isRunning ? false : s.lastRunFailed,

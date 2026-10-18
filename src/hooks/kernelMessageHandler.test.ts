@@ -157,7 +157,7 @@ describe('handleKernelMessage: a user Stop (research-r-02)', () => {
   const previous = { counts: { '00': 512, '11': 512 } } as never;
 
   beforeEach(() => {
-    useSimulationStore.setState({ result: previous, resultCode: 'old', isRunning: true, lastRunFailed: false, lastRunStopped: false, terminalOutput: [] });
+    useSimulationStore.setState({ result: null, resultCode: null, heldResult: { result: previous, resultCode: 'old' }, isRunning: true, lastRunFailed: false, lastRunStopped: false, terminalOutput: [] });
   });
 
   it('keeps the results the person already had and ends the run', () => {
@@ -178,5 +178,19 @@ describe('handleKernelMessage: a user Stop (research-r-02)', () => {
   it('an ordinary empty result still clears results', () => {
     handleKernelMessage({ type: 'result', data: null }, {});
     expect(useSimulationStore.getState().result).toBeNull();
+  });
+});
+
+describe('simulationStore hold/restore (research-r-02)', () => {
+  it('holds the on-screen result across clearResult and a landed result drops the hold', () => {
+    const prev = { counts: { '0': 1 } } as never;
+    useSimulationStore.setState({ result: prev, resultCode: 'a', heldResult: null });
+    useSimulationStore.getState().holdResultForRun();
+    useSimulationStore.getState().clearResult();
+    expect(useSimulationStore.getState().result).toBeNull();
+    useSimulationStore.getState().setResult({ counts: { '1': 1 } } as never);
+    expect(useSimulationStore.getState().heldResult).toBeNull();
+    useSimulationStore.getState().restoreHeldResult();
+    expect(useSimulationStore.getState().result).not.toBe(prev);
   });
 });

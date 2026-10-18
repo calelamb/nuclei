@@ -123,6 +123,7 @@ export function handleKernelMessage(msg: KernelResponse, connectTimers: ConnectT
     case 'result':
       if (msg.stopped && msg.data === null) {
         // Stop is the person's choice, not a failure: keep whatever results they already had.
+        useSimulationStore.getState().restoreHeldResult();
         useSimulationStore.getState().setRunning(false);
         useSimulationStore.getState().setRunStopped(true);
         break;
