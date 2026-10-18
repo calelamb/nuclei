@@ -300,7 +300,9 @@
   background: var(--color-scrim); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
   animation: nuclei-fade-in var(--duration-fast) var(--ease-standard);
 }
-.nuclei-dialog-scrim.nuclei-dialog-scrim--top { align-items: flex-start; padding-top: 15vh; }
+.nuclei-dialog-scrim.nuclei-dialog-scrim--top { align-items: flex-start; padding-top: min(15vh, 96px); }
+/* Offset + panel height + an 24px bottom gutter always fit the viewport (the old 15vh + 86vh overflowed by 1vh). */
+.nuclei-dialog-scrim--top .nuclei-dialog { max-height: calc(100vh - min(15vh, 96px) - 24px); }
 .nuclei-dialog {
   display: flex; flex-direction: column; max-height: 86vh; padding: var(--space-5);
   background: var(--color-surface-raised); border: 1px solid var(--color-border-strong); border-radius: var(--radius-round);

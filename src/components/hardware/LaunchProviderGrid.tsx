@@ -37,7 +37,8 @@ export function LaunchProviderGrid({ isWeb, cudaqInstalled, connected, qsharpBlo
       {ordered.map((p) => {
         const status = statusOf(p);
         const qsharpBlocked = qsharpBlocks(p.name);
-        const disabled = status.kind === 'coming-soon' || qsharpBlocked;
+        // Desktop-only providers on the web are as inert as coming-soon ones; the header's Download button is the way forward.
+        const disabled = status.kind === 'coming-soon' || status.kind === 'desktop-only' || qsharpBlocked;
         return (
           <button
             key={p.name}

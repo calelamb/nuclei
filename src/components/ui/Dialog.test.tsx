@@ -2,6 +2,8 @@
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { Dialog } from './Dialog';
 
 afterEach(cleanup);
@@ -96,5 +98,32 @@ describe('Dialog', () => {
   it('honours an initial focus target', () => {
     render(<Dialog title="T" onClose={() => {}} initialFocus="[data-primary]"><button>Cancel</button><button data-primary>Save</button></Dialog>);
     expect(document.activeElement?.textContent).toBe('Save');
+  });
+});
+
+describe('Dialog initial focus', () => {
+  it('focuses the initialFocus target and asks for a visible ring', () => {
+    const spy = vi.spyOn(HTMLElement.prototype, 'focus');
+    render(
+      <Dialog title="Pick" onClose={() => {}} initialFocus="[data-pick]">
+        <button>First</button>
+        <button data-pick>Second</button>
+      </Dialog>,
+    );
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Second' }));
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ focusVisible: true }));
+    spy.mockRestore();
+  });
+});
+
+describe('top-anchored dialog maths (ui.css)', () => {
+  const css = readFileSync(join(__dirname, 'ui.css'), 'utf8');
+  const rule = (sel: string) => css.match(new RegExp(`${sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([^}]*)\\}`))?.[1] ?? '';
+
+  it('caps the top offset so offset + height + bottom gutter never exceeds the viewport', () => {
+    const scrim = rule('.nuclei-dialog-scrim.nuclei-dialog-scrim--top');
+    expect(scrim).toMatch(/padding-top:\s*min\(15vh,\s*96px\)/);
+    const panel = rule('.nuclei-dialog-scrim--top .nuclei-dialog');
+    expect(panel).toMatch(/max-height:\s*calc\(100vh - min\(15vh,\s*96px\) - 24px\)/);
   });
 });

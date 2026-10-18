@@ -175,6 +175,8 @@ export function LaunchModal() {
       width={1040}
       // Top-anchored so the panel does not re-centre (and jump) when step two is shorter than step one.
       align="top"
+      // On the web the only working card is the simulator; start there so the focus ring is visible and Enter does something useful.
+      initialFocus={isWeb && !selectedProvider ? '[data-provider="simulator"]' : undefined}
       className="launch-dialog"
       flush
       // Escape steps back from a provider (see the key effect above); the scrim always closes.

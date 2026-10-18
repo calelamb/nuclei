@@ -69,12 +69,20 @@ describe('LaunchModal honesty', () => {
     expect(screen.getByText('2 jobs ahead')).toBeTruthy();
   });
 
-  it('badges hardware providers Desktop app on the web build and offers a download instead of Launch', () => {
+  it('badges hardware providers Desktop app on the web build as inert cards (no dead-end step)', () => {
     mount('web');
     expect(screen.getAllByText('Desktop app').length).toBeGreaterThanOrEqual(6);
+    const ibm = document.querySelector<HTMLButtonElement>('[data-provider="ibm"]');
+    expect(ibm?.disabled).toBe(true);
     fireEvent.click(screen.getByText('IBM Quantum'));
-    expect(screen.getByRole('button', { name: /Download Nuclei to launch/ })).toBeTruthy();
+    expect(useHardwareStore.getState().selectedProvider).toBeNull();
+    expect(screen.getByRole('button', { name: /Download Nuclei/ })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Launch' })).toBeNull();
+  });
+
+  it('on the web build opens with focus on the one card that works, not the Download button', () => {
+    mount('web');
+    expect(document.activeElement).toBe(document.querySelector('[data-provider="simulator"]'));
   });
 
   it('on the web build the Local Simulator says Run here, closes the dialog and runs', () => {
