@@ -147,17 +147,21 @@ export function VizZone({
 
       {statePanels.length === 0 && circuitPanel && <ResultsEmptyState />}
 
-      {statePanels.length > 0 && statePanels.length <= 2 && statePanels.map((p) => (
-        <PanelReveal key={p.id} when from="right" style={p.fit === 'fill' ? FILL_STYLE : CONTENT_STYLE}>
+      {statePanels.length > 0 && statePanels.length <= 2 && statePanels.map((p) => {
+        // Before the first run the Bloch panel is just the shared empty state: it takes the rest of the rail so it is centred like the Clean preset's.
+        const fills = p.fit === 'fill' || (p.id === 'bloch' && blochCount === 0);
+        return (
+        <PanelReveal key={p.id} when from="right" style={fills ? FILL_STYLE : CONTENT_STYLE}>
           <div
             className={p.id === 'bloch' && stale ? 'nuclei-stale-results' : undefined}
-            style={p.fit === 'fill' ? FILL_BODY_STYLE : CONTENT_BODY_STYLE}
+            style={fills ? FILL_BODY_STYLE : CONTENT_BODY_STYLE}
           >
             {p.id === 'bloch' && stale && <StaleResultNotice />}
             {p.render()}
           </div>
         </PanelReveal>
-      ))}
+        );
+      })}
 
       {statePanels.length > 2 && (
         <TabbedPanels

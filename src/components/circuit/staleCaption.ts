@@ -5,7 +5,7 @@ export interface StalePill { label: string; tooltip: string; line: number | null
 /** What the pill over a dimmed (last-good) diagram says, or null when nothing explains the staleness yet. */
 export function describeStale(input: { previewPaused: boolean; error: string | null; errorLine: number | null }): StalePill | null {
   if (input.previewPaused) {
-    return { label: 'Preview paused · Run to execute', tooltip: PREVIEW_PAUSED_CAPTION, line: null };
+    return { label: 'Preview paused', tooltip: PREVIEW_PAUSED_CAPTION, line: null };
   }
   if (input.errorLine !== null) {
     return {
