@@ -19,7 +19,10 @@ const boot = vi.hoisted(() => {
 vi.mock('../../platform/PlatformProvider', () => ({
   usePlatform: () => ({ getPlatform: () => 'web', getKernelAuthToken: undefined }),
 }));
-vi.mock('./LessonCodeEditor', () => ({ LessonCodeEditor: () => <div /> }));
+const mockEditorChange = vi.hoisted(() => ({ current: null as null | ((v: string) => void) }));
+vi.mock('./LessonCodeEditor', () => ({
+  LessonCodeEditor: ({ onChange }: { onChange: (v: string) => void }) => { mockEditorChange.current = onChange; return <div />; },
+}));
 vi.mock('../../platform/pyodide/pyodideClient', () => ({
   pyodideRuntime: {
     isReady: () => false,
@@ -108,5 +111,45 @@ describe('InteractiveDemo on the web when Python fails to start', () => {
     expect(boot.inits).toBe(2);
     expect(screen.queryByText(/Kernel not connected/)).toBeNull();
     expect(screen.getByText(/Couldn't start the browser Python engine/)).toBeTruthy();
+  });
+});
+
+describe('InteractiveDemo stale results (r7-learn-01)', () => {
+  const RESULT = { probabilities: { '0': 0.5, '1': 0.5 }, measurements: { '0': 500, '1': 524 }, shot_count: 1024 };
+
+  it('disables Reset on untouched code', async () => {
+    render(<InteractiveDemo code={CODE} framework="qiskit" description="demo" />);
+    await act(async () => { await Promise.resolve(); });
+    expect((screen.getByRole('button', { name: /Reset/ }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('marks results stale after the code changes and clears on the next run', async () => {
+    mockEditorChange.current = null;
+    render(<InteractiveDemo code={CODE} framework="qiskit" description="demo" />);
+    await act(async () => { await Promise.resolve(); boot.resolveInit(); await Promise.resolve(); await Promise.resolve(); });
+    fireEvent.click(screen.getByRole('button', { name: /^Run$/ }));
+    await act(async () => { boot.onMessage({ type: 'result', data: RESULT }); });
+    expect(screen.queryByText(/From last run/)).toBeNull();
+
+    await act(async () => { mockEditorChange.current?.(CODE + '\nqc.x(0)'); });
+    expect(screen.getByRole('button', { name: /From last run · Run again/ })).toBeTruthy();
+    expect((screen.getByRole('button', { name: /Reset/ }) as HTMLButtonElement).disabled).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: /From last run · Run again/ }));
+    await act(async () => { boot.onMessage({ type: 'result', data: RESULT }); });
+    expect(screen.queryByText(/From last run/)).toBeNull();
+  });
+
+  it('Reset restores the code and keeps the old result marked stale', async () => {
+    mockEditorChange.current = null;
+    render(<InteractiveDemo code={CODE} framework="qiskit" description="demo" />);
+    await act(async () => { await Promise.resolve(); boot.resolveInit(); await Promise.resolve(); await Promise.resolve(); });
+    fireEvent.click(screen.getByRole('button', { name: /^Run$/ }));
+    await act(async () => { boot.onMessage({ type: 'result', data: RESULT }); });
+    await act(async () => { mockEditorChange.current?.(CODE + '\nqc.x(0)'); });
+    fireEvent.click(screen.getByRole('button', { name: /Reset/ }));
+    // Back at the code that produced the result, so nothing is stale any more.
+    expect(screen.queryByText(/From last run/)).toBeNull();
+    expect(screen.getByRole('list', { name: 'Outcome probabilities' })).toBeTruthy();
   });
 });
