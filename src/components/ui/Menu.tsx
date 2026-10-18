@@ -58,7 +58,7 @@ interface Row { entry: MenuItemEntry; depth: number }
 
 /**
  * The one menu: a real keyboard citizen. The trigger gets aria-haspopup and
- * aria-expanded; opening focuses the first item; Up/Down/Home/End rove (skipping
+ * aria-expanded; opening focuses the checked item (else the first); Up/Down/Home/End rove (skipping
  * disabled items); Right/Left expand and collapse disclosures; Escape closes and
  * returns focus to the trigger; Tab closes. Portaled and flipped/clamped so it is
  * never clipped by an overflow:hidden toolbar or the viewport edge.
@@ -127,7 +127,8 @@ export function Menu({ label, entries, trigger, placement = 'bottom-start', minW
       return;
     }
     if (!focusedOnOpen.current) {
-      items[0]?.focus();
+      // A menu of choices opens on the current choice, so arrowing starts from where you are.
+      (items.find((el) => el.getAttribute('aria-checked') === 'true') ?? items[0])?.focus();
       focusedOnOpen.current = true;
     }
   }, [open, pos, rows]);

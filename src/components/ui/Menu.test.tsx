@@ -25,6 +25,25 @@ const basic = (onA = vi.fn(), onB = vi.fn()): MenuEntry[] => [
 ];
 
 describe('Menu', () => {
+  it('opens a checkable menu on the checked item, not the first one', () => {
+    const trigger = setup([
+      { id: 'b', label: 'Beginner', checked: false },
+      { id: 'i', label: 'Intermediate', checked: true },
+      { id: 'a', label: 'Advanced', checked: false },
+    ]);
+    fireEvent.click(trigger);
+    expect(document.activeElement?.textContent).toBe('Intermediate');
+  });
+
+  it('falls back to the first item when a checkable menu has nothing checked', () => {
+    const trigger = setup([
+      { id: 'b', label: 'Beginner', checked: false },
+      { id: 'i', label: 'Intermediate', checked: false },
+    ]);
+    fireEvent.click(trigger);
+    expect(document.activeElement?.textContent).toBe('Beginner');
+  });
+
   it('moves focus to the item under the pointer so only one row is highlighted', () => {
     const trigger = setup(basic());
     fireEvent.click(trigger);
