@@ -318,7 +318,7 @@ function RunsTableBody() {
           }}
           role="rowgroup"
         >
-          <div style={{ minWidth: contentMinWidth }}>
+          <div style={{ minWidth: contentMinWidth, minHeight: '100%', display: 'flex', flexDirection: 'column' }}>
             <div
               role="row"
               data-testid="runs-header"

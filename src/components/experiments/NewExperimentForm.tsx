@@ -336,7 +336,7 @@ export function NewExperimentForm({ projectRoot, existing, dirtyRef: sharedDirty
           >
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <TextInput
-                mono value={row.name} placeholder="Parameter name" aria-label="Parameter name"
+                mono value={row.name} placeholder="name" aria-label="Parameter name"
                 onChange={(e) => updateRow(row.id, { name: e.target.value })}
                 style={{ flex: 1 }}
               />

@@ -120,10 +120,12 @@ function ExperimentRow({
           <Pencil size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />
         </IconButton>
       </div>
-      <div style={{ color: colors.textDim, fontSize: 11, fontFamily: TYPOGRAPHY.fontMono }}>
-        {spec.type === 'qec_campaign'
-          ? `${'generate' in spec.source ? spec.source.generate.code : spec.source.entry} · ${spec.noise.model} · ${spec.decoders.join('+')}`
-          : [spec.entry, [spec.backend.provider, spec.backend.target].filter(Boolean).join('/')].filter(Boolean).join(' · ')}
+      <div style={{ color: colors.textDim, fontSize: 11, fontFamily: TYPOGRAPHY.fontMono, display: 'flex', flexDirection: 'column' }}>
+        {/* One fact per line: a wrapped " · " separator would dangle at the end of the first line. */}
+        {(spec.type === 'qec_campaign'
+          ? [`${'generate' in spec.source ? spec.source.generate.code : spec.source.entry}`, `${spec.noise.model} · ${spec.decoders.join('+')}`]
+          : [spec.entry, [spec.backend.provider, spec.backend.target].filter(Boolean).join('/')]
+        ).filter(Boolean).map((line) => <span key={line} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{line}</span>)}
       </div>
       <div
         className="nuclei-experiment-row__meta"
