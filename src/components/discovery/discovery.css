@@ -1,0 +1,78 @@
+/* Discovery Engine surfaces. Built on app tokens and the Lab (lab.css) roles
+ * only: no hard-coded colors. Charts and cells read --lab-* variables. */
+
+.disc-stack-bar {
+  display: flex;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  background: var(--lab-surface-3);
+  margin: 6px 0;
+}
+.disc-stack-bar > span { display: block; height: 100%; min-width: 2px; }
+
+.disc-counts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px 12px;
+  margin: 0;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+.disc-counts div { display: flex; justify-content: space-between; gap: 6px; }
+.disc-counts dt { margin: 0; }
+.disc-counts dd { margin: 0; font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--color-text-primary); }
+
+.disc-tabpanel { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+.disc-two-col { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-4); align-items: start; }
+@media (max-width: 1180px) { .disc-two-col { grid-template-columns: minmax(0, 1fr); } }
+
+/* Lineage */
+.disc-lineage { position: relative; border: 1px solid var(--lab-hairline); border-radius: var(--radius-round); background: var(--lab-surface-2); overflow: hidden; }
+.disc-lineage svg { display: block; width: 100%; height: 460px; cursor: grab; touch-action: none; }
+.disc-lineage svg:active { cursor: grabbing; }
+.disc-lineage svg:focus-visible { outline: 2px solid var(--lab-focus); outline-offset: -2px; }
+.disc-lineage__link { fill: none; stroke: var(--lab-axis); stroke-width: 1; }
+.disc-lineage__node { cursor: pointer; }
+.disc-lineage__node:hover circle:first-of-type { stroke-width: 2.5; }
+.disc-lineage__controls { position: absolute; top: var(--space-2); right: var(--space-2); display: flex; gap: 4px; }
+.disc-lineage__ring { fill: none; stroke: var(--color-success); stroke-width: 1.6; }
+.disc-lineage__selected { fill: none; stroke: var(--lab-focus); stroke-width: 2; }
+
+/* Archive */
+.disc-archive { display: grid; gap: 2px; }
+.disc-archive__cell {
+  aspect-ratio: 1 / 1;
+  min-height: 28px;
+  border-radius: 3px;
+  border: 1px solid var(--lab-hairline);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  padding: 0;
+  color: var(--color-text-primary);
+}
+.disc-archive__cell--empty { background: var(--lab-hatch), var(--lab-surface-2); }
+button.disc-archive__cell { cursor: pointer; }
+button.disc-archive__cell:hover { border-color: var(--color-text-primary); }
+.disc-archive__cell--dark { color: var(--color-text-primary); }
+
+/* Gradient strip */
+.disc-gradient { display: flex; gap: 1px; height: 28px; align-items: stretch; }
+.disc-gradient__cell { flex: 1 1 0; min-width: 2px; border-radius: 1px; background: var(--lab-surface-3); position: relative; }
+.disc-gradient__cell--dead { background: var(--lab-hatch), var(--lab-danger-soft); outline: 1px solid var(--color-danger); outline-offset: -1px; }
+.disc-gradient__cell--live { background: var(--color-accent-quantum); }
+.disc-gradient__cell--touched::after { content: ''; position: absolute; left: 0; right: 0; bottom: -4px; height: 2px; background: var(--color-warning); }
+
+/* Bars */
+.disc-bar { height: 6px; border-radius: var(--radius-pill); background: var(--lab-surface-3); overflow: hidden; display: flex; min-width: 80px; }
+.disc-bar > span { display: block; height: 100%; }
+
+.disc-exploits { border: 1px dashed var(--lab-axis); border-radius: var(--radius-round); }
+
+@media (prefers-reduced-motion: reduce) {
+  .disc-lineage svg, .disc-archive__cell { transition: none; }
+}

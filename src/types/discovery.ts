@@ -479,3 +479,20 @@ export interface RunRecord {
   notices: string[];
   confirmation: RunConfirmation | null;
 }
+
+// ── Red Queen mode (later wave) ─────────────────────────────────────────
+
+/**
+ * An evaluator exploit found by the adversary in Red Queen mode (addendum
+ * §F). The Guardrails tab already has a lane for them; a later wave fills it.
+ */
+export interface DiscoveryExploit {
+  id: string;
+  /** Candidate that triggered the exploit. */
+  candidateId: string;
+  /** The guardrail or evaluator behavior that was bypassed. */
+  guardrail: string;
+  summary: string;
+  /** Whether the evaluator was patched to close the hole. */
+  patched: boolean;
+}

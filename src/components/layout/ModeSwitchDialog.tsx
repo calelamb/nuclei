@@ -83,7 +83,7 @@ export function ModeSwitchDialog() {
         >
           <strong style={{ color: colors.text }}>{pending.runningName}</strong> is running.
           Switching modes will <strong style={{ color: colors.text }}>not</strong> stop it — the
-          run keeps going, the Experiments panel just won't be visible in {targetLabel}.
+          run keeps going, the {pending.panelName ?? 'Experiments panel'} just won't be visible in {targetLabel}.
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <button
