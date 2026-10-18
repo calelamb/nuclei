@@ -804,4 +804,8 @@
 
 /* Three empty circuit cards offer one Open button: only the first empty card keeps it. */
 .qec-open-circuit { display: contents; }
-.qec-instrument[data-empty='true'] ~ .qec-instrument[data-empty='true'] .qec-open-circuit { display: none; }
+.qec-instrument[data-circuit][data-empty='true'] ~ .qec-instrument[data-circuit][data-empty='true'] .qec-open-circuit,
+.qec-instrument[data-circuit][data-empty='true'] ~ .qec-instrument[data-circuit][data-empty='true'] [data-hint] { display: none; }
+.qec-instrument__link {
+  padding: 0; border: 0; background: none; color: var(--color-accent-quantum-text); font: inherit; cursor: pointer; text-decoration: underline;
+}

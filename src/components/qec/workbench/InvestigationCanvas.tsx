@@ -3,13 +3,11 @@ import type { LucideIcon } from 'lucide-react';
 import type { CSSProperties, ReactElement, ReactNode, RefObject } from 'react';
 import { resolveQecPanels, type QecWorkbenchPanelDef, type QecWorkbenchPanelId } from '../../../layout/qecPanelRegistry';
 import { useQecStore } from '../../../stores/qecStore';
-import { useProjectStore } from '../../../stores/projectStore';
 import { useQecWorkbenchStore } from '../../../stores/qecWorkbenchStore';
 import { ICON_SIZE, ICON_STROKE } from '../../../styles/tokens';
-import { Button, IconButton } from '../../ui';
-import { useQecStudyStore } from '../../../services/qecStudyStore';
-import { useQecStudyUiStore } from '../../../stores/qecStudyUiStore';
-import { useOpenSource } from './useOpenSource';
+import { IconButton } from '../../ui';
+import { OpenCircuitAction } from './OpenCircuitAction';
+import { instrumentDocsHref } from './instrumentDocs';
 import { CodeLatticePanel } from '../CodeLatticePanel';
 import { DetectorGraphPanel } from '../DetectorGraphPanel';
 import { QecAnalysisView } from '../QecAnalysisView';
@@ -18,7 +16,6 @@ import { QecTimelinePanel } from '../QecTimelinePanel';
 import { QEC_RESEARCH_INSPECTOR_ID } from './QecResearchInspector';
 import { QecPanelPinButton } from './QecPanelPinButton';
 import { orderCanvasPanels } from './orderCanvasPanels';
-import { circuitHint } from './circuitHint';
 import { canvasGrid, isInstrumentEmpty } from './canvasGrid';
 import { useQecCampaignStore } from '../../../stores/qecCampaignStore';
 
@@ -88,30 +85,6 @@ function EmptyInstrument({ panelId }: { panelId: QecWorkbenchPanelId }): ReactEl
   );
 }
 
-/** One click to the circuit when the active Study names exactly one; otherwise say where the files are. */
-function OpenCircuitAction(): ReactElement {
-  const studies = useQecStudyStore((state) => state.studies);
-  const activeStudyId = useQecStudyUiStore((state) => state.activeStudyId);
-  const { open, error } = useOpenSource();
-  const projectOpen = useProjectStore((state) => state.projectRoot !== null);
-  const study = studies.find((entry) => entry.study.id === activeStudyId)?.study ?? null;
-  const circuits = study?.sources.filter((source) => source.kind === 'stim') ?? [];
-  if (circuits.length !== 1) {
-    return (
-      <span className="qec-instrument__hint">
-        {circuitHint({ projectOpen, studyCount: studies.length, hasActiveStudy: study !== null, circuitCount: circuits.length })}
-      </span>
-    );
-  }
-  const circuit = circuits[0];
-  return (
-    <span className="qec-open-circuit">
-      <Button size="sm" variant="primary" onClick={() => { void open(circuit); }}>{`Open ${circuit.path.split('/').pop()}`}</Button>
-      {error && <span className="qec-instrument__hint" role="alert">{error}</span>}
-    </span>
-  );
-}
-
 function CircuitInstrument({ panelId }: { panelId: QecWorkbenchPanelId }): ReactElement {
   const hasCircuit = useQecStore((state) => state.snapshot !== null);
   if (!hasCircuit) return <EmptyInstrument panelId={panelId} />;
@@ -130,8 +103,6 @@ function instrumentBody(panelId: QecWorkbenchPanelId): ReactNode {
   }
 }
 
-const CIRCUIT_DOCS = 'https://getnuclei.dev/docs/research/qec-studio/';
-
 /** "7 ticks" / "8 detectors": the circuit fact each instrument is drawn from, shown beside its title. */
 function useInstrumentContext(panelId: QecWorkbenchPanelId): string | null {
   const snapshot = useQecStore((state) => state.snapshot);
@@ -141,20 +112,21 @@ function useInstrumentContext(panelId: QecWorkbenchPanelId): string | null {
   return null;
 }
 
-function InstrumentActions({ panelId }: { panelId: QecWorkbenchPanelId }): ReactElement | null {
-  if (panelId === 'campaign-center') return <QecCampaignActions embedded />;
-  if (!CIRCUIT_PANELS.has(panelId)) return null;
+/** Every instrument header carries the same pair: a docs link and the pin. */
+function InstrumentActions({ panelId }: { panelId: QecWorkbenchPanelId }): ReactElement {
   return (
-    <a
-      className="qec-instrument__help"
-      href={CIRCUIT_DOCS}
-      target="_blank"
-      rel="noopener noreferrer"
-      aria-label="Open documentation in a new tab"
-      title="Documentation"
-    >
-      <HelpCircle aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />
-    </a>
+    <>
+      {panelId === 'campaign-center' && <QecCampaignActions embedded />}
+      <a
+        className="qec-instrument__help"
+        href={instrumentDocsHref(panelId)}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Open documentation in a new tab"
+      >
+        <HelpCircle aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />
+      </a>
+    </>
   );
 }
 
@@ -178,6 +150,7 @@ function CanvasInstrument({ panel, primary, rowSpan, empty, fullWidth }: CanvasI
       aria-labelledby={`${panel.id}-instrument-heading`}
       data-panel={panel.id}
       data-empty={empty ? 'true' : undefined}
+      data-circuit={CIRCUIT_PANELS.has(panel.id) ? 'true' : undefined}
       style={style}
     >
       <header>
