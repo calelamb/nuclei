@@ -5,6 +5,8 @@ import { useDiracStore } from '../../stores/diracStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { compose } from '../../services/compose';
 import { Dialog, TextInput } from '../ui';
+import { displayFrameworkName } from '../../data/starterTemplates';
+import { DiracKeyNotice, useHasDiracKey } from './DiracKeyNotice';
 
 interface ComposeModalProps {
   open: boolean;
@@ -29,6 +31,7 @@ function ComposeDialog({ onClose }: { onClose: () => void }) {
   const colors = useThemeStore((s) => s.colors);
   const framework = useEditorStore((s) => s.framework);
   const currentCode = useEditorStore((s) => s.code);
+  const hasKey = useHasDiracKey();
   const setPreview = useDiracStore((s) => s.setComposePreview);
 
   const handleSubmit = useCallback(async () => {
@@ -58,28 +61,35 @@ function ComposeDialog({ onClose }: { onClose: () => void }) {
       onClose={onClose}
       initialFocus="input"
     >
-      <TextInput
-        size="lg"
-        value={intent}
-        onChange={(e) => setIntent(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            void handleSubmit();
-          }
-        }}
-        placeholder="Describe what you want — e.g. 'a 3-qubit GHZ state'"
-        aria-label="Describe what Dirac should compose"
-      />
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, fontSize: 11, color: colors.textDim }}>
-        {loading && (<><Loader2 className="nuclei-spin" size={12} /> Thinking…</>)}
-        {!loading && (
-          <span>
-            Framework: <span style={{ color: colors.accentText }}>{framework}</span> · Enter to submit · Esc to close
-          </span>
-        )}
-        {error && <span role="alert" style={{ color: colors.error, marginLeft: 'auto' }}>{error}</span>}
-      </div>
+      {!hasKey ? (
+        <DiracKeyNotice onAddKey={onClose} />
+      ) : (
+        <>
+          <TextInput
+            size="lg"
+            value={intent}
+            onChange={(e) => { setIntent(e.target.value); if (error) setError(null); }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                void handleSubmit();
+              }
+            }}
+            placeholder="Describe what you want — e.g. 'a 3-qubit GHZ state'"
+            aria-label="Describe what Dirac should compose"
+            invalid={Boolean(error)}
+          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, fontSize: 11, color: colors.textDim }}>
+            {loading && (<><Loader2 className="nuclei-spin" size={12} /> Thinking…</>)}
+            {!loading && (
+              <span>
+                Framework: <span style={{ color: colors.accentText }}>{displayFrameworkName(framework)}</span> · Enter to submit · Esc to close
+              </span>
+            )}
+            {error && <span role="alert" style={{ color: colors.error, marginLeft: 'auto' }}>{error}</span>}
+          </div>
+        </>
+      )}
     </Dialog>
   );
 }
