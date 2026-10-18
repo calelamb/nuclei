@@ -26,6 +26,8 @@ export interface LaunchBackendStepProps {
   readonly onSelectBackend: (name: string) => void;
   readonly onSelectSubProvider: (sub: string | null) => void;
   readonly onConnect: (provider: HardwareProviderType, token: string) => void;
+  /** Providers with several credential fields (AWS keys, Azure workspace) use the full credential form. */
+  readonly onSetupCredentials: (provider: HardwareProviderType) => void;
   readonly onCancel: () => void;
   readonly onLaunch: () => void;
 }
@@ -124,6 +126,7 @@ export function LaunchBackendStep(props: LaunchBackendStepProps) {
   const colors = useThemeStore((s) => s.colors);
   const { provider, isWeb, connected, backends, selectedBackend, hasCode } = props;
   const needsToken = providerNeedsToken(provider.name) && INLINE_KEY_FIELD[provider.name] !== undefined;
+  const needsCredentialForm = providerNeedsToken(provider.name) && INLINE_KEY_FIELD[provider.name] === undefined;
   const subs = AGGREGATOR_SUB_PROVIDERS[provider.name];
   const canLaunch = connected && Boolean(selectedBackend) && hasCode;
 
@@ -148,7 +151,7 @@ export function LaunchBackendStep(props: LaunchBackendStepProps) {
   const empty = emptyBackendsCopy(provider, connected);
   return (
     <div className="launch-step">
-      {!(needsToken && !connected) && (
+      {!((needsToken || needsCredentialForm) && !connected) && (
         <h3 className="launch-step__heading" tabIndex={-1} data-launch-focus>
           {providerNeedsToken(provider.name) ? 'Choose a backend' : `Choose a ${provider.label} target`}
         </h3>
@@ -162,6 +165,16 @@ export function LaunchBackendStep(props: LaunchBackendStepProps) {
       )}
 
       {needsToken && !connected && <TokenField provider={provider} connecting={props.connecting} onConnect={props.onConnect} />}
+      {needsCredentialForm && !connected && (
+        <div className="launch-token">
+          <span className="launch-token__label"><KeyRound size={12} aria-hidden="true" /> {provider.label} needs several credentials</span>
+          <div>
+            <Button variant="primary" onClick={() => props.onSetupCredentials(provider.name)}>
+              Set up {provider.label}
+            </Button>
+          </div>
+        </div>
+      )}
       {needsToken && connected && (
         <div className="launch-saved"><KeyRound size={12} aria-hidden="true" /> Token saved</div>
       )}

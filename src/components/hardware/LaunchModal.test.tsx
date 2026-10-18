@@ -105,4 +105,12 @@ describe('LaunchModal honesty', () => {
     await act(async () => { await new Promise((r) => requestAnimationFrame(() => r(null))); });
     expect(document.activeElement?.id).toBe('launch-token-input');
   });
+
+  it('sends multi-field providers to the credential form instead of a dead end', () => {
+    mount('desktop');
+    fireEvent.click(screen.getByText('AWS Braket'));
+    fireEvent.click(screen.getByRole('button', { name: 'Set up AWS Braket' }));
+    expect(useHardwareStore.getState().launchOpen).toBe(false);
+    expect(useHardwareStore.getState().showCredentialSetup).toBe('braket');
+  });
 });

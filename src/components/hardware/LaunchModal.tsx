@@ -119,6 +119,11 @@ export function LaunchModal() {
     selectBackend(null);
   };
 
+  const handleSetupCredentials = (provider: HardwareProviderType) => {
+    closeLaunch();
+    useHardwareStore.getState().setShowCredentialSetup(provider);
+  };
+
   const handleConnect = (provider: HardwareProviderType, token: string) => {
     getHardware()?.hardwareConnect(provider, { token });
   };
@@ -207,6 +212,7 @@ export function LaunchModal() {
             onSelectBackend={selectBackend}
             onSelectSubProvider={selectSubProvider}
             onConnect={handleConnect}
+            onSetupCredentials={handleSetupCredentials}
             onCancel={closeLaunch}
             onLaunch={handleLaunch}
           />
