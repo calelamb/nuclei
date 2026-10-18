@@ -1,3 +1,5 @@
+import { useResearchTourStore } from '../../stores/researchTourStore';
+
 const LANDING_SELECTORS = ['.lesson__title', '.tracks__title', '.monaco-editor textarea'];
 
 /**
@@ -5,6 +7,8 @@ const LANDING_SELECTORS = ['.lesson__title', '.tracks__title', '.monaco-editor t
  * or editor) so they do not have to Tab through the whole shell from the top of the page.
  */
 export function focusLanding(): boolean {
+  // The Research tour owns focus while it is open; moving it into the editor behind the dim would let typing edit code.
+  if (useResearchTourStore.getState().active) return true;
   for (const selector of LANDING_SELECTORS) {
     const el = document.querySelector<HTMLElement>(selector);
     if (!el) continue;

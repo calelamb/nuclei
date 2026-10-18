@@ -80,9 +80,25 @@ export function ResearchTour() {
     };
   }, [active]);
 
+  // Focus lands on the primary button for every step, and stays in the card: anything that
+  // pulls it into a text field behind the dim (Monaco mounting, a late focus call) is undone,
+  // so typing and Tab can never edit code under the tour.
+  useEffect(() => {
+    if (!active) return undefined;
+    primaryRef.current?.focus();
+    const frame = requestAnimationFrame(() => primaryRef.current?.focus());
+    const keepInCard = (e: FocusEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target || cardRef.current?.contains(target)) return;
+      const editable = target.matches('textarea, input, select, [contenteditable="true"]');
+      if (editable) primaryRef.current?.focus();
+    };
+    document.addEventListener('focusin', keepInCard);
+    return () => { cancelAnimationFrame(frame); document.removeEventListener('focusin', keepInCard); };
+  }, [active, step]);
+
   useEffect(() => {
     if (!active) return;
-    primaryRef.current?.focus();
     const trapTab = (e: KeyboardEvent) => {
       const items = Array.from(cardRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []);
       if (items.length === 0) return;
