@@ -22,7 +22,6 @@ interface Props {
 export function DiracNoKey({ replacing = false }: Props) {
   const mode = useWorkspaceStore((s) => s.mode);
   const pendingPrompt = useDiracPanelStore((s) => s.pendingPrompt);
-  const focusSignal = useDiracPanelStore((s) => s.focusSignal);
   const closeKeyEntry = useDiracPanelStore((s) => s.closeKeyEntry);
   const openSettings = useNavigationStore((s) => s.openSettings);
   const [value, setValue] = useState('');
@@ -33,11 +32,6 @@ export function DiracNoKey({ replacing = false }: Props) {
   useEffect(() => {
     if (replacing || pendingPrompt) inputRef.current?.focus();
   }, [replacing, pendingPrompt]);
-
-  // "Add API key" from the editor's AI surfaces asks the panel to focus; here that means the key field.
-  useEffect(() => {
-    if (focusSignal > 0) inputRef.current?.focus();
-  }, [focusSignal]);
 
   const save = () => {
     const trimmed = value.trim();

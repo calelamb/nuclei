@@ -255,7 +255,7 @@ function iconBtn(colors: ThemeColors): CSSProperties {
 /** A failed transpile: the message in body colour, with Retry when the engine itself is down. */
 function TranspileError({ message }: { message: string }) {
   const colors = useThemeStore((s) => s.colors);
-  const engineDown = useEditorStore((s) => !s.kernelReady);
+  const engineDown = useEditorStore((s) => s.kernelStatus === 'failed' || s.kernelStatus === 'idle');
   return (
     <div
       role="alert"

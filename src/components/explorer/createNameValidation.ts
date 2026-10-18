@@ -14,8 +14,9 @@ export function validateNewName({ name, existingNames }: NameCheckInput): string
     return 'Names cannot contain slashes. Use the file tree to choose a location.';
   }
   const lower = name.toLowerCase();
-  if (existingNames.some((existing) => existing.toLowerCase() === lower)) {
-    return `A file or folder named ${name} already exists. Choose another name.`;
+  const clash = existingNames.find((existing) => existing.toLowerCase() === lower);
+  if (clash !== undefined) {
+    return `A file or folder named ${clash} already exists. Choose another name.`;
   }
   return null;
 }

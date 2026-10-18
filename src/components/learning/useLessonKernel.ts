@@ -92,6 +92,7 @@ export function useLessonKernel({ onMessage, onInitError, onReady }: Options): L
         pyodideRuntime.onState((s) => { if (!cancelledRef.current) setLoading(s !== 'ready'); }),
       ];
       setLoading(!pyodideRuntime.isReady());
+      setProgress(pyodideRuntime.currentProgress());
       const kernel = new PyodideKernel((msg) => handlers.current.onMessage(msg as KernelResponse));
       try {
         await kernel.init();

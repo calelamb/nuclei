@@ -11,6 +11,7 @@ const boot = vi.hoisted(() => {
     stateCb: null as ((s: string) => void) | null,
     failInit: false,
     inits: 0,
+    current: null as { step: number; total: number; label: string; fraction: number } | null,
   };
   return state;
 });
@@ -22,6 +23,7 @@ vi.mock('./LessonCodeEditor', () => ({ LessonCodeEditor: () => <div /> }));
 vi.mock('../../platform/pyodide/pyodideClient', () => ({
   pyodideRuntime: {
     isReady: () => false,
+    currentProgress: () => boot.current,
     onProgress: (cb: (p: { step: number; total: number; label: string; fraction: number } | null) => void) => { boot.progress = cb; return () => {}; },
     onState: (cb: (s: string) => void) => { boot.stateCb = cb; return () => {}; },
   },
@@ -42,7 +44,7 @@ import { InteractiveDemo } from './InteractiveDemo';
 
 const CODE = 'from qiskit import QuantumCircuit\nqc = QuantumCircuit(1)\nqc.h(0)';
 
-beforeEach(() => { boot.sent = []; boot.failInit = false; boot.inits = 0; });
+beforeEach(() => { boot.current = null; boot.sent = []; boot.failInit = false; boot.inits = 0; });
 afterEach(cleanup);
 
 describe('InteractiveDemo on the web before Python is ready', () => {
@@ -75,6 +77,14 @@ describe('InteractiveDemo on the web before Python is ready', () => {
     expect(screen.getByRole('button', { name: /^Run$/ })).toBeTruthy();
     await act(async () => { boot.resolveInit(); await Promise.resolve(); await Promise.resolve(); });
     expect(boot.sent.filter((m) => m.type === 'execute')).toHaveLength(0);
+  });
+
+  it('shows the step count when the stage was reported before the lesson mounted', async () => {
+    boot.current = { step: 1, total: 3, label: 'Downloading Python', fraction: 0 };
+    render(<InteractiveDemo code={CODE} framework="qiskit" description="demo" />);
+    await act(async () => { await Promise.resolve(); });
+    fireEvent.click(screen.getByRole('button', { name: /^Run$/ }));
+    expect(screen.getByRole('button', { name: /Queued · 1\/3/ })).toBeTruthy();
   });
 
   it('re-sends the live parse once Python is ready so the circuit summary can appear', async () => {

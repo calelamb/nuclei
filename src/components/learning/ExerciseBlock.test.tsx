@@ -18,7 +18,8 @@ vi.mock('./LessonCodeEditor', () => ({
 }));
 vi.mock('../../platform/pyodide/pyodideClient', () => ({
   pyodideRuntime: {
-    isReady: () => true,
+    isReady: () => false,
+    currentProgress: () => null,
     onProgress: () => () => {},
     onState: () => () => {},
   },
@@ -62,6 +63,21 @@ beforeEach(() => {
   });
 });
 afterEach(cleanup);
+
+describe('ExerciseBlock Run while Python boots', () => {
+  it('queues the press, and a second press cancels so nothing is sent', async () => {
+    render(<ExerciseBlock {...props} />);
+    await act(async () => { await Promise.resolve(); });
+    fireEvent.click(screen.getByRole('button', { name: /^Run$/ }));
+    const queued = screen.getByRole('button', { name: /Queued|Loading Python/ });
+    expect(queued.getAttribute('aria-pressed')).toBe('true');
+    expect(queued.getAttribute('title') ?? '').toMatch(/cancel/i);
+    fireEvent.click(queued);
+    expect(screen.getByRole('button', { name: /^Run$/ })).toBeTruthy();
+    await act(async () => { boot.resolveInit(); await Promise.resolve(); await Promise.resolve(); });
+    expect(boot.sent.filter((m) => m.type === 'run_python' || m.type === 'execute')).toHaveLength(0);
+  });
+});
 
 describe('ExerciseBlock grading honesty', () => {
   it('withdraws Check solution once the code is edited after a run', async () => {

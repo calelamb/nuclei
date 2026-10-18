@@ -53,6 +53,7 @@ export function ExerciseBlock({
 
   const inactivityRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const codeRef = useRef(starterCode);
+  const runTokenRef = useRef(0);
   const outputRef = useRef<string[]>([]);
   const resultRef = useRef<SimulationResult | null>(null);
   const expectations = useMemo(
@@ -161,7 +162,13 @@ export function ExerciseBlock({
     resetInactivity();
   };
 
+  const handleCancelQueued = () => {
+    runTokenRef.current += 1;
+    setIsRunning(false);
+  };
+
   const handleRun = () => {
+    const token = ++runTokenRef.current;
     setIsRunning(true);
     setError(null);
     setUnsupported(null);
@@ -177,9 +184,9 @@ export function ExerciseBlock({
       ? { type: 'execute' as const, code: localCode, shots: 1024, language: 'python' as const }
       : { type: 'run_python' as const, code: localCode };
 
-    kernelSend(message).then(
+    kernelSend(message, { isCancelled: () => token !== runTokenRef.current }).then(
       (sent) => {
-        if (!sent) {
+        if (!sent && token === runTokenRef.current) {
           setError(kernel.unavailableMessage());
           setIsRunning(false);
         }
@@ -219,7 +226,7 @@ export function ExerciseBlock({
       </div>
 
       <div className="demo__actions demo__actions--divided">
-        <LessonRunButton isRunning={isRunning} pythonLoading={kernel.loading} progress={kernel.progress} onRun={handleRun} />
+        <LessonRunButton isRunning={isRunning} pythonLoading={kernel.loading} progress={kernel.progress} onRun={handleRun} onCancelQueued={handleCancelQueued} />
         {hasRun && hasExpectations && !isRunning && (
           <Button onClick={checkSolution} icon={<CheckCircle size={12} aria-hidden="true" />}>Check solution</Button>
         )}

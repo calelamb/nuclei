@@ -15,4 +15,10 @@ describe('validateNewName', () => {
   it('rejects an empty name', () => {
     expect(validateNewName({ name: '', existingNames: [] })).toMatch(/name/);
   });
+
+  it('names the existing entry when the clash differs only by case', () => {
+    expect(validateNewName({ name: 'BELL.PY', existingNames: ['bell.py'] })).toBe(
+      'A file or folder named bell.py already exists. Choose another name.',
+    );
+  });
 });

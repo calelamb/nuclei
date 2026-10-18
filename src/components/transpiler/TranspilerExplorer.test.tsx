@@ -60,6 +60,15 @@ describe('Transpiler Explorer platform honesty', () => {
     registerKernelRetry(null);
   });
 
+  it('offers no Retry while the engine is already reconnecting', () => {
+    platform.web = false;
+    useEditorStore.setState({ kernelReady: false, kernelStatus: 'connecting' });
+    useTranspileStore.setState({ error: "The kernel isn't connected. Check the status bar, then try again." });
+    render(<TranspilerExplorer />);
+    expect(screen.getByRole('alert')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+  });
+
   it('names the docs link', () => {
     platform.web = false;
     render(<TranspilerExplorer />);

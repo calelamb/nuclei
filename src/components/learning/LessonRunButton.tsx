@@ -31,7 +31,7 @@ export function LessonRunButton({ isRunning, pythonLoading, progress, onRun, onC
   });
   const cancellable = queued && onCancelQueued !== undefined;
   const label = cancellable ? boot.label : queued ? 'Loading Python…' : isRunning ? 'Running…' : 'Run';
-  const title = pythonLoading && (queued || progress) ? boot.title : undefined;
+  const title = cancellable || (pythonLoading && !queued && progress) ? boot.title : undefined;
   return (
     <Button
       variant="primary"
@@ -39,7 +39,7 @@ export function LessonRunButton({ isRunning, pythonLoading, progress, onRun, onC
       loading={isRunning && !cancellable}
       keepFocus
       title={title}
-      aria-pressed={pythonLoading ? queued : undefined}
+      aria-pressed={pythonLoading && onCancelQueued ? queued : undefined}
       icon={<Play size={12} fill="currentColor" aria-hidden="true" />}
     >
       {label}
