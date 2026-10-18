@@ -1,5 +1,6 @@
 import { Circle, Sun, Moon, X, Command } from 'lucide-react';
 import { usePlatform } from '../../platform/PlatformProvider';
+import { usePreviewPending } from '../../layout/usePreviewPending';
 import { useDisplaySnapshot } from '../../layout/useDisplaySnapshot';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useEditorStore } from '../../stores/editorStore';
@@ -133,6 +134,7 @@ function KernelDot({ color, pulse }: { color: string; pulse: boolean }) {
 /* ── Status Bar ── */
 export function StatusBar() {
   const { snapshot } = useDisplaySnapshot();
+  const previewPending = usePreviewPending();
   const isRunning = useSimulationStore((s) => s.isRunning);
   const result = useSimulationStore((s) => s.result);
   const lastRunFailed = useSimulationStore((s) => s.lastRunFailed);
@@ -210,10 +212,10 @@ export function StatusBar() {
       {/* Left side: editor stats and the layout preset only mean something while the editor is on screen. */}
       {!takeover && (
         <>
-          <span style={{ color: colors.textMuted }}>
+          <span style={{ color: colors.textMuted, opacity: previewPending ? 0.6 : 1 }}>
             Qubits: {snapshot ? snapshot.qubit_count : '—'}
           </span>
-          <span style={{ color: colors.textMuted }}>
+          <span style={{ color: colors.textMuted, opacity: previewPending ? 0.6 : 1 }}>
             Depth: {snapshot ? snapshot.depth : '—'}
           </span>
           {features.layoutPresets && <LayoutPresetSwitcher />}

@@ -6,6 +6,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useDisplaySnapshot } from '../../layout/useDisplaySnapshot';
+import { usePreviewPending } from '../../layout/usePreviewPending';
 import { renderGate, gateY, GATE_SIZE, LABEL_WIDTH } from './gates';
 import { computeCircuitGeometry, columnX } from './geometry';
 import { formatAngle } from './formatAngle';
@@ -152,10 +153,14 @@ function describeCircuit(snapshot: import('../../types/quantum').CircuitSnapshot
   return `${snapshot.qubit_count}-qubit circuit with depth ${snapshot.depth}. Gates: ${gateTypes.join(', ')}. Sequence: ${gateList}.`;
 }
 
+/** A diagram waiting on its refreshed preview: dimmer than live, lighter than the last-good stale state. */
+const PENDING_OPACITY = 0.6;
+
 export function CircuitRenderer() {
   const { snapshot, stale } = useDisplaySnapshot();
   const error = useCircuitStore((s) => s.error);
   const previewPaused = useCircuitStore((s) => s.previewPaused);
+  const previewPending = usePreviewPending();
   const errorLine = useEditorStore((s) => s.errors[0]?.line ?? null);
   const isRunning = useSimulationStore((s) => s.isRunning);
   const highlights = useCircuitStore((s) => s.highlights);
@@ -217,7 +222,8 @@ export function CircuitRenderer() {
   const hasClassical = classical_bit_count > 0;
   const { columns, svgWidth, svgHeight, classicalWireY, wireStart, wireEnd } = computeCircuitGeometry(snapshot);
 
-  const stalePill = stale ? describeStale({ previewPaused, error, errorLine }) : null;
+  const stalePill = stale || previewPending ? describeStale({ previewPaused, error, errorLine, previewPending }) : null;
+  const dimmed = stale || previewPending;
   const highlightSet = new Set(highlights.map((h) => h.gateIndex));
 
   const ariaDescription = describeCircuit(snapshot);
@@ -229,7 +235,7 @@ export function CircuitRenderer() {
       <div className="nuclei-pane-header" style={{ justifyContent: 'space-between', padding: '0 10px 0 12px' }}>
         <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
           <span className="nuclei-overline">Circuit</span>
-          {!stale && (
+          {!dimmed && (
             <span style={{ fontSize: 11, color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans, whiteSpace: 'nowrap' }}>
               {qubit_count} {qubit_count === 1 ? 'qubit' : 'qubits'} · depth {depth}
             </span>
@@ -253,7 +259,7 @@ export function CircuitRenderer() {
         ref={setContainerRef}
         onScroll={handleScroll}
         className="circuit-renderer-container"
-        style={{ ...fadeStyle, flex: 1, minHeight: 0, overflow: 'auto', position: 'relative', padding: '4px 0 6px', opacity: stale ? 0.45 : 1, transition: 'opacity var(--duration-fast) var(--ease-standard)' }}
+        style={{ ...fadeStyle, flex: 1, minHeight: 0, overflow: 'auto', position: 'relative', padding: '4px 0 6px', opacity: stale ? 0.45 : previewPending ? PENDING_OPACITY : 1, transition: 'opacity var(--duration-fast) var(--ease-standard)' }}
         aria-description={ariaDescription}
       >
         <svg
