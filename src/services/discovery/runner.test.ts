@@ -152,7 +152,7 @@ describe('cascade', () => {
     const stagesOf = (id: string) => evaluates(kernel).filter((m) => m.candidate_id === id).map((m) => (m as { stage?: string }).stage);
     expect(stagesOf(loser.id)).toEqual(['screen']);
     expect(stagesOf(winners[0].id)).toEqual(['screen', 'full']);
-    expect(stagesOf('c-0000')).toEqual(['full']);
+    expect(stagesOf('c-0000')).toEqual(['screen', 'full']);
     for (const grid of run.archive.islands) {
       for (const elite of Object.values(grid)) {
         expect(files.find((c) => c.id === elite.candidateId)!.evaluation?.stage).toBe('full');

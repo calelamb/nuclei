@@ -4,7 +4,7 @@
  * Never throws; a problem becomes a notice and a skipped or invalid record.
  */
 
-import type { CandidateLlmInfo, CandidateRecord, DiscoveryEvaluation, DiscoveryStage } from '../../types/discovery';
+import type { CandidateLlmInfo, CandidateRecord, DiscoveryEvaluation, DiscoveryStage, RunUsage } from '../../types/discovery';
 import { optimisticFitness, shouldPromote } from './cascade';
 import { isCancelled, syntheticFailure } from './kernelEval';
 import { resolveProposal, type LlmResult } from './llmMutator';
@@ -170,6 +170,11 @@ async function produceWithAst(ctx: RunContext, item: PlanItem, parent: Candidate
   return { kind: 'ok', produced: { program: m.program, llm: null, astOps: m.operators, regionWarning: false } };
 }
 
+/** Usage after one kernel evaluation of `stage`. */
+export function countEvaluation(usage: RunUsage, stage: DiscoveryStage, cascade: boolean): RunUsage {
+  return stage === 'full' && cascade ? usage : { ...usage, evaluations: usage.evaluations + 1 };
+}
+
 /** Evaluate through the cascade; returns the updated record (still `pending` if cancelled). */
 export async function evaluateCandidate(
   ctx: RunContext,
@@ -190,7 +195,7 @@ export async function evaluateCandidate(
     ctx.evalLimit(async () => {
       if (ctx.control.stopped) return syntheticFailure(request(stage), ctx.evaluator, 'cancelled', 'Run stopped.');
       ctx.activity(candidate.id, stage === 'screen' ? 'screening' : 'evaluating');
-      ctx.setUsage((u) => (stage === 'full' && spec.evaluation.cascade ? u : { ...u, evaluations: u.evaluations + 1 }));
+      ctx.setUsage((u) => countEvaluation(u, stage, spec.evaluation.cascade));
       return ctx.kernel.evaluate(request(stage));
     });
 

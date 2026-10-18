@@ -9,7 +9,7 @@ import type {
   EvaluatorObjectiveDef,
   RunConfirmation,
 } from '../../types/discovery';
-import { medianFitness, type ArchiveElite } from './archive';
+import type { ArchiveElite } from './archive';
 
 export type PromoteRule = 'island_median' | 'island_best' | 'always';
 
@@ -18,25 +18,49 @@ export type PromoteRule = 'island_median' | 'island_best' | 'always';
  * of the primary objective's 95% interval, so the optimistic fitness is the
  * fitness plus the gap to the other end: a log10 ratio when both bounds are
  * positive (the log-scale evaluators), else the linear width. No interval
- * means no slack. This is a deliberately generous filter: the screen exists
- * to drop clear losers, not to rank near-ties.
+ * means no slack.
+ *
+ * A zero lower bound on a minimised (log-scale) objective is a screen that
+ * saw no errors at all: its optimistic end is unbounded, so the screen cannot
+ * rule the candidate out and it is always promoted (CR-C1; the QEC screen caps
+ * at about 3.70 with zero errors in 5000 shots, below a full-stage 4.476).
+ * This is a deliberately generous filter: the screen exists to drop clear
+ * losers, not to rank near-ties.
  */
 export function optimisticFitness(
   evaluation: DiscoveryEvaluation,
   primary: Pick<EvaluatorObjectiveDef, 'key'> | undefined,
 ): number | null {
   if (evaluation.status !== 'scored' || evaluation.fitness === null) return null;
-  const ci = primary ? evaluation.objectives[primary.key]?.ci95 : null;
+  const objective = primary ? evaluation.objectives[primary.key] : undefined;
+  const ci = objective?.ci95;
   if (!ci || !(ci[1] > ci[0])) return evaluation.fitness;
+  if (!(ci[0] > 0) && objective?.direction === 'minimize') return Number.POSITIVE_INFINITY;
   const delta = ci[0] > 0 ? Math.log10(ci[1] / ci[0]) : ci[1] - ci[0];
   return evaluation.fitness + (Number.isFinite(delta) ? delta : 0);
 }
 
-/** Promotion threshold from the island's elites, frozen at generation start. */
-export function promotionThreshold(rule: PromoteRule, islandElites: readonly ArchiveElite[]): number | null {
-  if (rule === 'always' || islandElites.length === 0) return null;
-  if (rule === 'island_best') return Math.max(...islandElites.map((e) => e.fitness));
-  return medianFitness(islandElites);
+/**
+ * The screen-stage fitness of an island's elites: the reference the optimistic
+ * screen fitness of a child is compared with, so both sides come from the
+ * same (screen) stage. Elites without a screen evaluation are skipped. The
+ * archive itself holds full-stage (or, in Red Queen mode, adversarial)
+ * fitness, which is on a different scale and must not be used here.
+ */
+export function screenReferences(
+  elites: readonly ArchiveElite[],
+  screenFitnessOf: (candidateId: string) => number | null,
+): number[] {
+  return elites.map((e) => screenFitnessOf(e.candidateId)).filter((f): f is number => f !== null && Number.isFinite(f));
+}
+
+/** Promotion threshold from the island's screen references, frozen at generation start. */
+export function promotionThreshold(rule: PromoteRule, references: readonly number[]): number | null {
+  if (rule === 'always' || references.length === 0) return null;
+  if (rule === 'island_best') return Math.max(...references);
+  const sorted = [...references].sort((x, y) => x - y);
+  const mid = sorted.length >> 1;
+  return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
 export function shouldPromote(optimistic: number | null, threshold: number | null): boolean {

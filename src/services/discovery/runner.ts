@@ -18,6 +18,7 @@
 import {
   type ArchiveAxis,
   type CandidateRecord,
+  type DiscoveryEvaluation,
   type DiscoveryEvaluatorInfo,
   type DiscoverySpec,
   type RunRecord,
@@ -35,7 +36,7 @@ import { awaitBatch, submitBatch } from './batch';
 import { confirmChampion } from './confirmation';
 import { buildSystemPrompt } from './prompt';
 import { emptyUsage, exhaustedBudget, llmBudgetLeft, planProposal, thresholdForIsland, type PlanItem } from './planning';
-import { evaluateCandidate, runProposal } from './proposalTask';
+import { countEvaluation, evaluateCandidate, runProposal } from './proposalTask';
 import {
   candidateIdFor, createPersister, loadCandidates, loadRunRecord, makeRunId, runPaths, type Persister,
 } from './records';
@@ -342,7 +343,7 @@ export function runDiscovery(
         if (budgetStop) break;
         const plan = planProposal({
           spec, archive: r.archive, rng, candidateId: candidateIdFor(r.next_candidate_index),
-          proposalIndex: r.next_candidate_index, llmAvailable: deps.llm.hasKey(), llmBudgetLeft: llmBudgetLeft(spec, view),
+          proposalIndex: r.next_candidate_index, llmAvailable: deps.llm.hasKey(), llmBudgetLeft: llmBudgetLeft(spec, view), candidates,
         });
         if (plan.kind === 'stop') { budgetStop = plan.reason; break; }
         if (plan.kind === 'empty') break;
@@ -358,7 +359,7 @@ export function runDiscovery(
       if (batch === 'interrupted') return { interrupted: true, budgetStop };
       const tasks: Array<Promise<unknown>> = [
         ...requeue.map((c) =>
-          evaluateCandidate(ctx, c, thresholdForIsland(spec, frozen, c.island)).then(async (done) => {
+          evaluateCandidate(ctx, c, thresholdForIsland(spec, frozen, c.island, candidates)).then(async (done) => {
             ctx.saveCandidate(done);
             await auditIfDue(ctx, done);
           })),
@@ -440,13 +441,30 @@ export function runDiscovery(
   };
 }
 
+/**
+ * Evaluate the seed. With the cascade on, the seed is screened first too
+ * (CR-C1): its screen result is the per-island reference children are
+ * compared with, so the promotion test is like-for-like.
+ */
 async function evaluateSeed(ctx: RunContext, seed: CandidateRecord): Promise<CandidateRecord> {
   const { spec } = ctx;
-  const evaluation = await ctx.kernel.evaluate({
-    runId: ctx.runId, wireId: seed.id, evaluator: { kind: spec.evaluator.kind, config: spec.evaluator.config },
-    program: seed.program, entry: spec.entry, seed: seed.eval_seed, stage: 'full',
-  });
-  ctx.setUsage((u) => ({ ...u, evaluations: u.evaluations + 1 }));
-  if (evaluation.status === 'failed' && evaluation.failure?.code === 'cancelled') return seed;
-  return { ...seed, evaluation, outcome: 'evaluated' };
+  const run = async (stage: 'screen' | 'full') => {
+    const evaluation = await ctx.kernel.evaluate({
+      runId: ctx.runId, wireId: seed.id, evaluator: { kind: spec.evaluator.kind, config: spec.evaluator.config },
+      program: seed.program, entry: spec.entry, seed: seed.eval_seed, stage,
+    });
+    ctx.setUsage((u) => countEvaluation(u, stage, spec.evaluation.cascade));
+    return evaluation;
+  };
+  const cancelled = (e: DiscoveryEvaluation) => e.status === 'failed' && e.failure?.code === 'cancelled';
+  let screen: DiscoveryEvaluation | null = null;
+  if (spec.evaluation.cascade) {
+    screen = await run('screen');
+    if (cancelled(screen)) return seed;
+    // A seed the screen cannot score stays final: the run fails on it.
+    if (screen.status !== 'scored') return { ...seed, evaluation: screen, screen, outcome: 'evaluated' };
+  }
+  const evaluation = await run('full');
+  if (cancelled(evaluation)) return screen ? { ...seed, screen } : seed;
+  return { ...seed, evaluation, screen, outcome: 'evaluated' };
 }
