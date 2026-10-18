@@ -26,7 +26,11 @@ import {
 } from '../../types/discovery';
 import { bestElite, createArchive, eliteFromEvaluation, axisFromDescriptor, insertElite } from './archive';
 import { findRegion } from './diff';
+import { createAuditClient, type AuditClient } from './kernelAudit';
 import { createKernelEvaluator, type KernelEvaluator } from './kernelEval';
+import { auditIfDue, observeSeed, pendingAudits, rebuildRedQueen, runAudit } from './auditStep';
+import { EMPTY_POLICY, NO_EXPLOIT_MESSAGE, isRedQueen, redQueenConfig } from './redQueen';
+import { buildRedQueenSystemPrompt } from './redQueenPrompt';
 import { awaitBatch, submitBatch } from './batch';
 import { confirmChampion } from './confirmation';
 import { buildSystemPrompt } from './prompt';
@@ -99,6 +103,7 @@ export function runDiscovery(
   const runId = rctx.resumeRunId ?? makeRunId(startedAt, deriveSeed(spec.seed, startedAt.getTime()));
   const emit = (event: RunnerEvent) => opts.onEvent?.(event);
   let kernel: KernelEvaluator | null = null;
+  let auditClient: AuditClient | null = null;
 
   const done = execute().catch((e: unknown): RunRecord => {
     const message = `Discovery run crashed: ${e instanceof Error ? e.message : String(e)}`;
@@ -108,6 +113,7 @@ export function runDiscovery(
   }).finally(() => {
     finished = true;
     kernel?.dispose();
+    auditClient?.dispose();
   });
 
   async function execute(): Promise<RunRecord> {
@@ -151,6 +157,10 @@ export function runDiscovery(
       };
     }
 
+    const redQueen = isRedQueen(spec);
+    if (redQueen && !deps.llm.hasKey()) {
+      return fail('Red Queen mode needs an Anthropic API key: the adversary is an LLM. Add one in Settings, Dirac, or pick another mutator.');
+    }
     if (spec.mutator.kind === 'llm' && !deps.llm.hasKey()) {
       return fail('LLM mutation needs an Anthropic API key. Add one in Settings, Dirac, or switch the mutator to hybrid or ast.');
     }
@@ -169,9 +179,13 @@ export function runDiscovery(
 
     kernel = createKernelEvaluator({ session: deps.session, info: rctx.evaluator, sleep: deps.clock.sleep });
     const k = kernel;
+    auditClient = createAuditClient({ session: deps.session, sleep: deps.clock.sleep });
+    const promptInput = { evaluator: rctx.evaluator, task: spec.description, entry: spec.entry };
     const ctx: RunContext = {
-      spec, runId, evaluator: rctx.evaluator, deps, kernel: k, control,
-      system: buildSystemPrompt({ evaluator: rctx.evaluator, task: spec.description, entry: spec.entry }),
+      spec, runId, evaluator: rctx.evaluator, deps, kernel: k, audits: auditClient,
+      rq: redQueen ? { config: redQueenConfig(spec), policy: EMPTY_POLICY, started: 0, findings: [] } : null,
+      control,
+      system: redQueen ? buildRedQueenSystemPrompt(promptInput) : buildSystemPrompt(promptInput),
       candidates, seenHashes: new Map(), seenProgramKeys: new Map(), rejections: [],
       evalLimit: createLimiter(spec.budget.max_concurrent_evaluations),
       llmLimit: createLimiter(opts.maxLlmConcurrency ?? 4),
@@ -198,6 +212,7 @@ export function runDiscovery(
       if (c.evaluation?.program_key) ctx.seenProgramKeys.set(c.evaluation.program_key, c.id);
       if (c.evaluation?.status === 'rejected' && c.evaluation.rejection) ctx.rejections.push(c.evaluation.rejection);
     }
+    if (rctx.resumeRunId) rebuildRedQueen(ctx, [...candidates.values()]);
     const integrated = new Set(
       [...candidates.values()]
         .filter((c) => c.generation <= (run as RunRecord).generation && c.outcome !== 'pending')
@@ -213,24 +228,30 @@ export function runDiscovery(
     };
     if (paused) onControlChange();
 
+    /** Insert one candidate into the archive; Red Queen mode stores the adversarial fitness (redQueen.ts). */
+    const insertCandidate = (c: CandidateRecord) => {
+      if (c.outcome !== 'evaluated' || !c.evaluation) return;
+      let archive = (run as RunRecord).archive;
+      const evaluation = ctx.rq ? { ...c.evaluation, fitness: c.adversarial_fitness ?? 0 } : c.evaluation;
+      const elite = eliteFromEvaluation(archive, { candidateId: c.id, island: c.island, programHash: c.program_sha256 }, evaluation);
+      if (!elite) return;
+      const targets = c.mutator === 'seed' ? archive.islands.map((_, i) => i) : [c.island];
+      let accepted = false;
+      for (const island of targets) {
+        const res = insertElite(archive, { ...elite, island });
+        archive = res.archive;
+        accepted = accepted || res.accepted;
+      }
+      setRun({ archive });
+      if (accepted) ctx.saveCandidate({ ...c, in_archive: true });
+    };
+
     const integrate = (generation: number) => {
       const batch = [...candidates.values()].filter((c) => c.generation === generation && !integrated.has(c.id));
       for (const c of batch.sort((a, b) => a.id.localeCompare(b.id))) {
         if (c.outcome === 'pending') continue;
         integrated.add(c.id);
-        if (c.outcome !== 'evaluated' || !c.evaluation) continue;
-        let archive = (run as RunRecord).archive;
-        const elite = eliteFromEvaluation(archive, { candidateId: c.id, island: c.island, programHash: c.program_sha256 }, c.evaluation);
-        if (!elite) continue;
-        const targets = c.mutator === 'seed' ? archive.islands.map((_, i) => i) : [c.island];
-        let accepted = false;
-        for (const island of targets) {
-          const res = insertElite(archive, { ...elite, island });
-          archive = res.archive;
-          accepted = accepted || res.accepted;
-        }
-        setRun({ archive });
-        if (accepted) ctx.saveCandidate({ ...c, in_archive: true });
+        insertCandidate(c);
       }
       const best = bestElite((run as RunRecord).archive);
       setRun({ champion_id: best?.candidateId ?? null });
@@ -255,12 +276,20 @@ export function runDiscovery(
       const ev = evaluated.evaluation;
       if (ev?.evaluator.fingerprint) setRun({ evaluator: { ...(run as RunRecord).evaluator, fingerprint: ev.evaluator.fingerprint } });
       integrate(0);
+      observeSeed(ctx, evaluated);
       if (ev?.status !== 'scored') {
         const why = ev?.rejection ? `${ev.rejection.guardrail}: ${ev.rejection.message}` : ev?.failure?.message ?? 'unknown reason';
         return finish('seed_rejected', `The seed program was not scored (${why}). Fix the seed before searching.`);
       }
       setRun({ seed_fitness: ev.fitness });
       persistRun();
+    }
+
+    // ── Resume: send unanswered audits again ──────────────────────────
+    if (rctx.resumeRunId && ctx.rq) {
+      const resent = await Promise.all(pendingAudits(candidates.values()).map((c) => runAudit(ctx, c)));
+      for (const c of resent) if (integrated.has(c.id) && c.audit) insertCandidate(c);
+      if (stopped) return finish('user');
     }
 
     // ── Generations ───────────────────────────────────────────────────
@@ -274,7 +303,7 @@ export function runDiscovery(
       integrate(g);
       const migrated = migrate((run as RunRecord).archive, g, spec.search.migration_interval);
       const best = bestElite(migrated.archive)?.fitness ?? null;
-      const prev = (run as RunRecord).best_fitness_history.at(-1) ?? (run as RunRecord).seed_fitness;
+      const prev = (run as RunRecord).best_fitness_history.at(-1) ?? (ctx.rq ? 0 : (run as RunRecord).seed_fitness);
       const improved = best !== null && (prev === null || best > prev + 1e-12);
       setRun({
         archive: migrated.archive, generation: g,
@@ -328,7 +357,11 @@ export function runDiscovery(
       const batch = await resolveBatch(g, planned, resumeBatch !== null);
       if (batch === 'interrupted') return { interrupted: true, budgetStop };
       const tasks: Array<Promise<unknown>> = [
-        ...requeue.map((c) => evaluateCandidate(ctx, c, thresholdForIsland(spec, frozen, c.island)).then((done) => ctx.saveCandidate(done))),
+        ...requeue.map((c) =>
+          evaluateCandidate(ctx, c, thresholdForIsland(spec, frozen, c.island)).then(async (done) => {
+            ctx.saveCandidate(done);
+            await auditIfDue(ctx, done);
+          })),
         ...planned.map((item) =>
           runProposal(ctx, item, g, batch ? { result: batch.results[item.candidateId], batchId: batch.id } : undefined)),
       ];
@@ -362,10 +395,13 @@ export function runDiscovery(
       const r = run as RunRecord;
       const userStop = reason === 'user';
       const failed = reason === 'seed_rejected';
-      setRun({ status: failed ? 'failed' : userStop ? 'stopped' : 'completed', stop_reason: reason, message });
+      const noExploits = ctx.rq !== null && !userStop && !failed && ![...candidates.values()].some((c) => c.audit?.verdict === 'exploit');
+      setRun({ status: failed ? 'failed' : userStop ? 'stopped' : 'completed', stop_reason: reason, message: noExploits ? NO_EXPLOIT_MESSAGE : message });
+      if (noExploits) ctx.notice(NO_EXPLOIT_MESSAGE);
       if (userStop) k.cancelRun(runId);
       const champion = r.champion_id ? candidates.get(r.champion_id) : undefined;
-      if (champion && !userStop && !failed && spec.confirm.seeds > 0 && champion.evaluation) {
+      // Red Queen champions are chosen by adversarial fitness; confirming their evaluator score on fresh seeds says nothing about robustness.
+      if (champion && !userStop && !failed && !ctx.rq && spec.confirm.seeds > 0 && champion.evaluation) {
         const confirmation = await confirmChampion(ctx, champion, spec.confirm.seeds, 'run');
         setRun({ confirmation });
       }
@@ -399,7 +435,7 @@ export function runDiscovery(
     done,
     pause() { if (!finished && !stopped) { paused = true; onControlChange(); } },
     resume() { if (!finished && paused) { paused = false; releaseGate(); onControlChange(); } },
-    stop() { if (!finished && !stopped) { stopped = true; releaseGate(); kernel?.cancelRun(runId); } },
+    stop() { if (!finished && !stopped) { stopped = true; releaseGate(); kernel?.cancelRun(runId); auditClient?.cancel(runId); } },
     current: () => run,
   };
 }

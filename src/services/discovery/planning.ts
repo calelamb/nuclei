@@ -103,14 +103,15 @@ export function planProposal(input: PlanInput): PlanOutcome {
   if (!parent) return { kind: 'empty' };
 
   const kind = spec.mutator.kind;
-  const asksLlm = kind === 'llm' || (kind === 'hybrid' && wantsLlm);
+  const llmOnly = kind === 'llm' || kind === 'red_queen';
+  const asksLlm = llmOnly || (kind === 'hybrid' && wantsLlm);
   let useLlm = asksLlm;
   let llmFallback: 'no_key' | 'llm_budget' | null = null;
   if (asksLlm && !input.llmAvailable) {
     useLlm = false;
     llmFallback = 'no_key';
   } else if (asksLlm && !input.llmBudgetLeft) {
-    if (kind === 'llm') return { kind: 'stop', reason: 'max_llm_calls' };
+    if (llmOnly) return { kind: 'stop', reason: 'max_llm_calls' };
     useLlm = false;
     llmFallback = 'llm_budget';
   }

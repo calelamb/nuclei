@@ -19,7 +19,9 @@ import {
 import type { DiscoveryEnv, DiscoverySession } from '../services/discovery/env';
 import { fetchEvaluators } from '../services/discovery/evaluatorCatalog';
 import { computeKpis, type DiscoveryKpis } from '../services/discovery/kpis';
+import { auditStoredCandidate, exportExploitFixture, type ExportedFixture } from '../services/discovery/auditActions';
 import { confirmRunChampion, reevaluateCandidate } from '../services/discovery/postRun';
+import { auditStatus, exploitsOf, type AuditStatus } from '../services/discovery/redQueen';
 import { loadCandidates, loadRunRecord, runPaths } from '../services/discovery/records';
 import { createRunView, candidateList, reduceRunEvent, type RunView } from '../services/discovery/runView';
 import {
@@ -34,7 +36,7 @@ import {
   type ScaffoldBudgets,
   type ScaffoldMutator,
 } from '../services/discovery/templates';
-import type { CandidateRecord, DiscoveryEvaluatorInfo, DiscoverySpec, RunRecord } from '../types/discovery';
+import type { CandidateRecord, DiscoveryEvaluatorInfo, DiscoveryExploit, DiscoverySpec, RunRecord } from '../types/discovery';
 
 export type { DiscoveryDefinition, DiscoveryValidationError, DiscoveryKpis, RunView };
 
@@ -90,6 +92,10 @@ export interface DiscoveryState {
   confirmChampion(runId: string): Promise<ActionResult>;
   /** Evaluate one candidate again on a fresh seed. */
   reevaluateCandidate(runId: string, candidateId: string): Promise<ActionResult>;
+  /** Send `discovery_audit` for one candidate (any mode); the verdict is stored on the candidate. */
+  auditCandidate(runId: string, candidateId: string): Promise<ActionResult>;
+  /** Write an exploit as a kernel regression fixture; reports where it went. */
+  exportExploitFixture(runId: string, candidateId: string): Promise<ActionResult<ExportedFixture>>;
   reset(): void;
 }
 
@@ -428,6 +434,29 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => {
       });
     },
 
+    async auditCandidate(runId, candidateId) {
+      return postRun(runId, `audit:${candidateId}`, async (rctx, deps, view) => {
+        const res = await auditStoredCandidate(view.run.spec, rctx, deps, runId, candidateId);
+        if (!res.ok) return res;
+        const updated: CandidateRecord = res.candidate;
+        set((s) => (s.views[runId] ? withView(s, runId, { ...s.views[runId], candidates: { ...s.views[runId].candidates, [candidateId]: updated } }) : s));
+        return { ok: true };
+      });
+    },
+
+    async exportExploitFixture(runId, candidateId) {
+      const state = get();
+      const view = state.views[runId];
+      const candidate = view?.candidates[candidateId];
+      if (!state.projectRoot || !view || !candidate) return fail('That candidate is not loaded.');
+      try {
+        const e = needEnv();
+        return await exportExploitFixture(e.fs, e.join, state.projectRoot, view.run.spec, runId, view.run.definition_file, candidate);
+      } catch (err) {
+        return fail(message(err));
+      }
+    },
+
     reset() {
       for (const { handle, session } of live.values()) {
         handle.stop();
@@ -488,6 +517,14 @@ export function isDiscoveryActive(state: Pick<DiscoveryState, 'liveRunIds'>): bo
 export function selectSelectedView(state: Pick<DiscoveryState, 'selectedRunId' | 'views'>): RunView | null {
   return state.selectedRunId ? state.views[state.selectedRunId] ?? null : null;
 }
+
+/** Exploits recorded on a run's candidates (derived, so they survive reloads). */
+export function selectRunExploits(view: RunView | null): DiscoveryExploit[] {
+  return view ? exploitsOf(view.run.run_id, candidateList(view), view.run.spec) : [];
+}
+
+export { auditStatus };
+export type { AuditStatus };
 
 // ── Activity mirror (status chip + mode-switch guard) ──────────────────
 

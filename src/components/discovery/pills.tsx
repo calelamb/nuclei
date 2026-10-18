@@ -1,7 +1,7 @@
 import { LabPill, type LabTone } from '../lab';
 import { CANDIDATE_KIND_LABEL, type CandidateKind } from '../../services/discovery/candidateView';
 import { EVALUATOR_TITLE, mutatorLabel } from '../../services/discovery/format';
-import type { DiscoveryEvaluatorKind, ModelTier, RunStatus } from '../../types/discovery';
+import type { DiscoveryEvaluatorKind, ModelTier, MutatorKind, RunStatus } from '../../types/discovery';
 
 const RUN_TONE: Record<RunStatus, LabTone> = {
   running: 'quantum',
@@ -60,7 +60,14 @@ export function EvaluatorChip({ kind }: { kind: DiscoveryEvaluatorKind }) {
   );
 }
 
-export function MutatorChip({ kind, breadth, depth }: { kind: 'llm' | 'ast' | 'hybrid'; breadth: ModelTier; depth: ModelTier }) {
+export function MutatorChip({ kind, breadth, depth }: { kind: MutatorKind; breadth: ModelTier; depth: ModelTier }) {
+  if (kind === 'red_queen') {
+    return (
+      <LabPill tone="danger" dot title="Red Queen mode: an LLM adversary tries to find programs the evaluator scores well but an independent audit rejects. Security testing of our own evaluator.">
+        Red Queen
+      </LabPill>
+    );
+  }
   return (
     <LabPill tone="neutral" outline title="Mutator and model ensemble (breadth / depth)">
       {mutatorLabel(kind, breadth, depth)}

@@ -4,6 +4,7 @@
  */
 
 import type { CandidateRecord, ConfirmedObjective, ObjectiveValue, RunRecord } from '../../types/discovery';
+import { summarizeAudits, type AuditSummary } from './redQueen';
 
 export interface CandidateCounts {
   /** Candidates with a program that was proposed (excludes the seed). */
@@ -37,6 +38,8 @@ export interface DiscoveryKpis {
   llmCalls: number;
   evaluations: number;
   wallMs: number;
+  /** Independent audits (Red Queen or manual); `audits.exploits` is the Exploits KPI. */
+  audits: AuditSummary;
 }
 
 export function computeKpis(run: RunRecord | null, candidates: readonly CandidateRecord[]): DiscoveryKpis {
@@ -95,5 +98,6 @@ export function computeKpis(run: RunRecord | null, candidates: readonly Candidat
     llmCalls: usage?.llm_calls ?? 0,
     evaluations: usage?.evaluations ?? 0,
     wallMs: usage?.wall_ms ?? 0,
+    audits: summarizeAudits(candidates),
   };
 }

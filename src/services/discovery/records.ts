@@ -10,7 +10,7 @@
  * the runner works on desktop, web and the e2e fixture bridge.
  */
 
-import { discoveryBaseName, type CandidateRecord, type RunRecord } from '../../types/discovery';
+import { discoveryBaseName, type CandidateRecord, type ExploitRecord, type RunRecord } from '../../types/discovery';
 
 export interface DiscoveryFs {
   mkdir(path: string, options?: { recursive?: boolean }): Promise<void>;
@@ -28,7 +28,10 @@ export interface RunPaths {
   runJson: string;
   candidatesDir: string;
   championPy: string;
+  /** Red Queen exploits (addendum §F): `<runDir>/exploits/<candidateId>.json`. */
+  exploitsDir: string;
   candidateFile(id: string): string;
+  exploitFile(id: string): string;
 }
 
 /** `experiments/<name>/discovery` for a definition file. */
@@ -44,7 +47,9 @@ export function runPaths(join: JoinFn, projectRoot: string, definitionFile: stri
     runJson: join(runDir, 'run.json'),
     candidatesDir,
     championPy: join(runDir, 'champion.py'),
+    exploitsDir: join(runDir, 'exploits'),
     candidateFile: (id) => join(candidatesDir, `${id}.json`),
+    exploitFile: (id) => join(runDir, 'exploits', `${id}.json`),
   };
 }
 
@@ -71,14 +76,21 @@ export function createPersister(fs: DiscoveryFs, paths: RunPaths, onError: (mess
   let tail: Promise<void> = Promise.resolve();
   let ready: Promise<void> | null = null;
 
-  const enqueue = (path: string, content: string) => {
+  let exploitsReady: Promise<void> | null = null;
+
+  const enqueue = (path: string, content: string, dir?: 'exploits') => {
     tail = tail.then(async () => {
       try {
         ready ??= fs.mkdir(paths.candidatesDir, { recursive: true });
         await ready;
+        if (dir === 'exploits') {
+          exploitsReady ??= fs.mkdir(paths.exploitsDir, { recursive: true });
+          await exploitsReady;
+        }
         await fs.writeFile(path, content);
       } catch (e) {
         ready = null;
+        exploitsReady = null;
         onError(`Could not write ${path}: ${e instanceof Error ? e.message : String(e)}`);
       }
     });
@@ -88,6 +100,7 @@ export function createPersister(fs: DiscoveryFs, paths: RunPaths, onError: (mess
     writeRun: (run: RunRecord) => enqueue(paths.runJson, toJson(run)),
     writeCandidate: (c: CandidateRecord) => enqueue(paths.candidateFile(c.id), toJson(c)),
     writeChampion: (program: string) => enqueue(paths.championPy, program),
+    writeExploit: (id: string, record: ExploitRecord) => enqueue(paths.exploitFile(id), toJson(record), 'exploits'),
     flush: () => tail,
   };
 }
