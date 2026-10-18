@@ -142,7 +142,7 @@ export function LaunchBackendStep(props: LaunchBackendStepProps) {
             </Button>
           )}
         >
-          Provider connections and job queues need the local kernel. The browser build runs circuits in Python, in the page.
+          Provider connections and job queues need the desktop app. The browser build runs circuits in Python, in the page.
         </EmptyState>
       </div>
     );

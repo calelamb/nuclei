@@ -29,6 +29,12 @@ describe('HardwarePanel on the web build (rq-r3-13)', () => {
     expect(sim.compareDocumentPosition(ibm) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it('never says kernel on the web build', () => {
+    render(<PlatformProvider bridge={web}><HardwarePanel /></PlatformProvider>);
+    expect(document.body.textContent ?? '').not.toMatch(/kernel/i);
+    expect(screen.getByText('Provider connections and job queues need the desktop app.')).toBeTruthy();
+  });
+
   it('uses the shared desktop-only state with one Download action', () => {
     render(<PlatformProvider bridge={web}><HardwarePanel /></PlatformProvider>);
     expect(screen.getByText('Hardware runs need the desktop app').className).toContain('nuclei-empty__title');
@@ -40,6 +46,17 @@ describe('HardwarePanel on desktop (research-r-04)', () => {
   const desktop = { getPlatform: () => 'desktop' } as unknown as PlatformBridge;
   afterEach(() => useEditorStore.setState({ kernelStatus: 'idle' }));
 
+  it('keeps the Local Simulator first while the kernel is failed or starting', () => {
+    for (const kernelStatus of ['failed', 'connecting'] as const) {
+      useEditorStore.setState({ kernelStatus });
+      const view = render(<PlatformProvider bridge={desktop}><HardwarePanel /></PlatformProvider>);
+      const sim = screen.getByText('Local Simulator');
+      const nvidia = screen.getByText('NVIDIA CUDA-Q');
+      expect(sim.compareDocumentPosition(nvidia) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      view.unmount();
+    }
+  });
+
   it("does not call the Local Simulator Ready when the kernel didn't start, and offers Retry", () => {
     useEditorStore.setState({ kernelStatus: 'failed' });
     render(<PlatformProvider bridge={desktop}><HardwarePanel /></PlatformProvider>);
@@ -49,11 +66,12 @@ describe('HardwarePanel on desktop (research-r-04)', () => {
     expect(within(row).getByRole('button', { name: 'Retry' })).toBeTruthy();
   });
 
-  it('keeps the provider name readable first: wraps the status instead of truncating the name, and offers a Configure icon', () => {
+  it('keeps every provider row to one 32px line with an ellipsised name, and offers a Configure icon', () => {
     render(<PlatformProvider bridge={desktop}><HardwarePanel /></PlatformProvider>);
     const row = screen.getByText('IBM Quantum').parentElement?.parentElement as HTMLElement;
-    expect(row.style.flexWrap).toBe('wrap');
-    expect((screen.getByText('IBM Quantum').parentElement as HTMLElement).style.minWidth).toBe('11ch');
+    expect(row.style.flexWrap).toBe('');
+    expect(row.style.height).toBe('32px');
+    expect((screen.getByText('IBM Quantum').parentElement as HTMLElement).style.minWidth).toBe('0px');
     expect(within(row).getByRole('button', { name: 'Configure IBM Quantum' })).toBeTruthy();
   });
 });
