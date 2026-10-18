@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import platform
 import signal
 import sys
@@ -20,6 +21,8 @@ import websockets
 from kernel.executor import ADAPTER_SPECS, Executor
 from kernel.hardware.manager import HardwareManager
 from kernel.models import KernelError
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_PORT = 9742
 PORT_FALLBACK_RANGE = 20  # Try DEFAULT_PORT .. DEFAULT_PORT + 19
@@ -1059,7 +1062,14 @@ def _lab_context(executor: Executor, websocket) -> "LabContext":
 
     async def _send_json(payload: dict) -> None:
         try:
-            await websocket.send(json.dumps(payload))
+            text = json.dumps(payload)
+        except (TypeError, ValueError) as exc:
+            # A payload that cannot be serialised is a kernel bug; the client must hear about it
+            # instead of waiting forever for a reply that was silently dropped.
+            logger.error("Lab payload %r is not JSON-serialisable: %s", _payload_type(payload), exc)
+            text = json.dumps(_serialization_error(payload, exc))
+        try:
+            await websocket.send(text)
         except Exception:
             # Connection gone mid-job; the job winds down on its own.
             pass
@@ -1072,15 +1082,48 @@ def _lab_context(executor: Executor, websocket) -> "LabContext":
     )
 
 
+def _payload_type(payload) -> str:
+    return str(payload.get("type")) if isinstance(payload, dict) else type(payload).__name__
+
+
+def _lab_phase(msg_type) -> str:
+    return "trainability" if isinstance(msg_type, str) and msg_type.startswith("trainability_") else "discovery"
+
+
+def _lab_error(phase: str, code: str, message: str, msg: dict | None = None) -> dict:
+    """A Lab error envelope carrying the ids (job/run/candidate/request) of the request that caused it."""
+    from kernel.lab_protocol import with_request_id
+
+    payload: dict = {"type": "error", "phase": phase, "code": code, "message": message}
+    for key in ("job_id", "run_id", "candidate_id"):
+        value = (msg or {}).get(key)
+        if isinstance(value, str) and value:
+            payload[key] = value[:200]
+    return with_request_id(payload, msg)
+
+
+def _serialization_error(payload, exc: BaseException) -> dict:
+    ids = payload if isinstance(payload, dict) else {}
+    phase = ids.get("phase") if isinstance(ids.get("phase"), str) else _lab_phase(ids.get("type"))
+    return _lab_error(phase, "serialization_failed",
+                      f"The kernel could not serialise its '{_payload_type(payload)}' reply: {type(exc).__name__}: {exc}"[:500],
+                      ids)
+
+
 async def _route_lab_message(msg: dict, executor: Executor, websocket) -> None:
     msg_type = msg.get("type")
+    phase = _lab_phase(msg_type)
     ctx = _lab_context(executor, websocket)
-    if msg_type.startswith("trainability_"):
-        from kernel.trainability.handlers import handle as handle_trainability
-        await handle_trainability(msg, ctx)
-    else:
-        from kernel.discovery.handlers import handle as handle_discovery
-        await handle_discovery(msg, ctx)
+    try:
+        if phase == "trainability":
+            from kernel.trainability.handlers import handle as handle_trainability
+            await handle_trainability(msg, ctx)
+        else:
+            from kernel.discovery.handlers import handle as handle_discovery
+            await handle_discovery(msg, ctx)
+    except Exception as exc:  # noqa: BLE001 - last resort: one bad Lab message must never close the socket
+        logger.exception("Lab handler for %s failed", msg_type)
+        await ctx.send_json(_lab_error(phase, f"{phase}_internal", f"{type(exc).__name__}: {exc}"[:500], msg))
 
 
 async def _handle_connection(websocket):

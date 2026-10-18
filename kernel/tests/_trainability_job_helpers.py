@@ -51,6 +51,24 @@ FAKE_SOURCE = textwrap.dedent('''
 
     HANG_SEED = 777
     BOOM_SEED = 888
+    GRANDCHILD_SEED = 999
+    CPU_SEED = 555
+
+
+    def _spawn_pipe_holding_grandchild():
+        """A grandchild in its own session that inherits every pipe (so the protocol stdout stays open)."""
+        import os, stat, subprocess, sys
+        fds = []
+        for fd in range(3, 64):
+            try:
+                if stat.S_ISFIFO(os.fstat(fd).st_mode):
+                    os.set_inheritable(fd, True)
+                    fds.append(fd)
+            except OSError:
+                pass
+        subprocess.Popen([sys.executable, "-c", "import time; time.sleep(8)"], pass_fds=fds,
+                         start_new_session=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL)
 
 
     def gradient_statistics(circuit, observable, *, samples, seed, init, method, backend, progress, cancel):
@@ -59,6 +77,11 @@ FAKE_SOURCE = textwrap.dedent('''
             time.sleep(600)
         if seed == BOOM_SEED:
             raise RuntimeError("boom in gradients")
+        if seed == GRANDCHILD_SEED:
+            _spawn_pipe_holding_grandchild()
+        if seed == CPU_SEED:
+            import resource
+            return {"cpu_limit": list(resource.getrlimit(resource.RLIMIT_CPU))}
         return {"samples": samples, "init": init, "method": method, "backend": backend,
                 "n_qubits": circuit.n_qubits, "observable": observable.to_text(), "per_parameter": []}
 

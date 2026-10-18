@@ -20,6 +20,7 @@ import sys
 import threading
 from typing import Any, Callable
 
+from kernel.lab_proc import apply_cpu_limit, start_parent_watch
 from kernel.discovery.conjecture.errors import SpecError
 from kernel.discovery.conjecture.spec import validate_conjecture
 from kernel.trainability._analysis_common import AnalysisCancelled
@@ -79,6 +80,8 @@ def _claim_stdout() -> Emit:
 
 def main() -> int:
     emit = _claim_stdout()
+    start_parent_watch()  # die with the kernel (a SIGKILLed parent never runs release_all)
+    apply_cpu_limit()
     try:
         spec = json.loads(sys.stdin.readline())
         for extra in reversed(spec.get("sys_path") or []):

@@ -359,7 +359,7 @@ def test_progress_is_rate_limited_to_ten_per_second():
 
     manager = TrainabilityJobManager()
     ctx = Ctx()
-    job = jobs._Job("rl", 1, ctx, {})  # type: ignore[arg-type]
+    job = jobs._Job("rl", 1, ctx, request={})  # type: ignore[arg-type]
     for i in range(200):
         manager._handle_line(
             job,
@@ -446,3 +446,16 @@ def test_call_filtered_drops_unsupported_keywords():
         return kw
 
     assert job_worker.call_filtered(wide, 1, progress=3) == {"progress": 3}
+
+
+def test_result_provenance_carries_the_request_params(make_manager):
+    make_manager()
+
+    async def scenario():
+        async with connection() as ws:
+            ws.push(start_msg("pp", params={"n_qubits": 3, "n_layers": 1}))
+            await ws.wait_type("trainability_result")
+            return list(ws.sent)
+
+    sent = run(scenario)
+    assert result_of(sent, "pp")["provenance"]["params"] == {"n_qubits": 3, "n_layers": 1}

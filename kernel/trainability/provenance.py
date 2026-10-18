@@ -69,12 +69,14 @@ def build_provenance(
     observable: str,
     settings: dict[str, Any],
     backend: str,
+    params: dict[str, Any] | None = None,
     created_at: datetime | None = None,
 ) -> dict[str, Any]:
     stamp = (created_at or datetime.now(timezone.utc)).astimezone(timezone.utc)
     return {
         "code_sha256": code_sha256(code),
         "observable": observable,
+        "params": dict(params or {}),
         "settings": settings,
         "kernel": kernel_versions(),
         "analyses_fingerprint": analyses_fingerprint(),

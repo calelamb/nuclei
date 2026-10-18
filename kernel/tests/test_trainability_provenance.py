@@ -60,3 +60,10 @@ def test_build_provenance_document():
     assert doc["created_at"] == "2026-10-18T12:00:00Z"
     assert doc["analyses_fingerprint"] == analyses_fingerprint()
     assert doc["kernel"]["nuclei_protocol"] == "1.3"
+
+
+def test_provenance_records_request_params_for_reproducibility():
+    prov = build_provenance(code="x", observable="Z0", settings={}, backend="numpy",
+                            params={"n_qubits": 4, "theta": 0.5})
+    assert prov["params"] == {"n_qubits": 4, "theta": 0.5}
+    assert build_provenance(code="x", observable="Z0", settings={}, backend="numpy")["params"] == {}

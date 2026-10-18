@@ -304,3 +304,49 @@ def test_result_carries_the_tester_fingerprint() -> None:
     result = partial_result(conj, [], "cancelled", seed=0)
     assert result["fingerprint"] == evaluator_fingerprint()
     assert len(result["fingerprint"]) == 64
+
+
+# --------------------------------------------------- honest n_max_tested (CR contract)
+def _item(n_values, *, errors=(), dla=None, outcome="meets") -> dict:
+    points = [{"n_qubits": n, "variance": 0.01, "interval": [0.01, 0.01], "error": {"code": "x"} if n in errors else None}
+              for n in n_values]
+    return {"circuit_index": 0, "variant_id": "v0", "family_params": {}, "features": {}, "regenerate": {"variant": 0},
+            "points": points, "fit": None, "dla": dla, "quantity": {}, "outcome": outcome, "reason": ""}
+
+
+def test_partial_evidence_reports_the_max_n_actually_tested():
+    claim = validate_conjecture(conjecture(n_range=[8, 64], points=4))
+    planned = qubit_counts(claim["n_range"], claim["points"])
+    assert planned[-1] == 64
+    evidence = [_item(planned[:2])]  # the run stopped after the first two sizes
+    result = tester.assemble_result(claim, evidence, seed=0, ns=planned, resampling={}, stop_reason="cancelled",
+                                    elapsed_ms=1)
+    assert result["n_max_tested"] == planned[1] < 64
+    assert result["n_max_planned"] == 64 and result["n_values"] == planned
+    assert f"up to n = {planned[1]}" in result["summary"] and "n = 64" not in result["summary"]
+
+
+def test_errored_points_do_not_count_as_tested():
+    claim = validate_conjecture(conjecture(n_range=[8, 64], points=4))
+    planned = qubit_counts(claim["n_range"], claim["points"])
+    result = tester.assemble_result(claim, [_item(planned, errors=(planned[-1],))], seed=0, ns=planned,
+                                    resampling={}, stop_reason="x", elapsed_ms=1)
+    assert result["n_max_tested"] == planned[-2]
+
+
+def test_nothing_tested_says_so():
+    claim = validate_conjecture(conjecture())
+    result = tester.partial_result(claim, [], "cancelled", seed=0)
+    assert result["n_max_tested"] == 0 and "at no qubit count" in result["summary"]
+    assert "n = 64" not in result["summary"]
+
+
+def test_dla_only_prediction_reports_the_probe_n():
+    claim = validate_conjecture(conjecture(n_range=[4, 8], points=4, dla_probe_qubits=3,
+                                           prediction={"quantity": "log2_dla_dimension", "op": "<", "value": 20}))
+    result = tester.test_conjecture(claim, seed=3)
+    assert result["verdict"] == "supported"
+    assert result["n_max_tested"] == 3 and "up to n = 3" in result["summary"]
+    assert result["n_max_planned"] == 8
+    failed_dla = _item([4, 8], dla={"probe_n": 3, "log2_interval": None, "error": "boom"})
+    assert tester.tested_n_max(claim, [failed_dla]) == 0
