@@ -102,6 +102,7 @@ export function handleKernelMessage(msg: KernelResponse, connectTimers: ConnectT
       if (!msg.data || msg.data.framework !== 'stim') {
         useQecStore.getState().clear();
       }
+      if (msg.data && msg.data.gates.length > 0) useSimulationStore.getState().setRunNoCircuit(false);
       if (msg.data) {
         // Every parse/execute send is tagged with an explicit `language`,
         // so the kernel can never legitimately return a snapshot whose

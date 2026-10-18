@@ -138,3 +138,17 @@ describe('handleKernelMessage — backend discovery', () => {
     setHardwareBackendsSender(null);
   });
 });
+
+describe('handleKernelMessage — plain-Python note ends when a circuit comes back', () => {
+  it('clears lastRunNoCircuit once a snapshot with gates arrives', () => {
+    useSimulationStore.setState({ lastRunNoCircuit: true });
+    handleKernelMessage({ type: 'snapshot', data: { framework: 'qiskit', qubit_count: 2, classical_bit_count: 0, depth: 1, gates: [{ type: 'H', targets: [0], controls: [], params: [], layer: 0 }] } as never }, {});
+    expect(useSimulationStore.getState().lastRunNoCircuit).toBe(false);
+  });
+
+  it('keeps it while the snapshot is empty', () => {
+    useSimulationStore.setState({ lastRunNoCircuit: true });
+    handleKernelMessage({ type: 'snapshot', data: null }, {});
+    expect(useSimulationStore.getState().lastRunNoCircuit).toBe(true);
+  });
+});
