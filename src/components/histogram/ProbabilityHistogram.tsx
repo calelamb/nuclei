@@ -11,6 +11,7 @@ import { formatPercentTick, probabilityAxis, topOutcomes, MAX_VISIBLE_OUTCOMES, 
 import { useScrollbarInset } from '../../hooks/useScrollbarInset';
 import { TYPOGRAPHY } from '../../styles/tokens';
 import { useThemeStore } from '../../stores/themeStore';
+import { ResultsEmptyState } from '../bloch/ResultsEmptyState';
 import { Button, SegmentedControl, TextInput, type SegmentedOption } from '../ui';
 import './histogram.css';
 const VIEW_OPTIONS: ReadonlyArray<SegmentedOption<HistogramViewMode>> = [
@@ -116,6 +117,7 @@ function HistogramChart({ data, srDescription, scroll = false }: ChartProps) {
           cursor={{ fill: colors.bgElevated }}
           contentStyle={{ background: colors.bgElevated, border: `1px solid ${colors.borderStrong}`, borderRadius: 6, fontSize: 12, fontFamily: TYPOGRAPHY.fontMono }}
           labelStyle={{ color: colors.text }}
+          separator=": "
           itemStyle={{ color: colors.accentText }}
           formatter={(value) => [typeof value === 'number' ? `${(value * 100).toFixed(2)}%` : String(value ?? ''), 'Probability']}
         />
@@ -206,28 +208,8 @@ export function ProbabilityHistogram() {
     );
   }
 
-  if (!result) {
-    return (
-      <div style={{
-        height: '100%',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        flexDirection: 'column', gap: 10,
-      }}>
-        {/* Ghost histogram bars */}
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, opacity: 0.12 }}>
-          {[28, 42, 18, 36].map((h, i) => (
-            <div key={i} style={{
-              width: 16, height: h, background: colors.wire,
-              borderRadius: '3px 3px 0 0',
-            }} />
-          ))}
-        </div>
-        <span style={{ color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>
-          Run a simulation to see results
-        </span>
-      </div>
-    );
-  }
+  // The same empty state the rest of the results zone shows: it says Running… during a run, not "run a simulation".
+  if (!result) return <ResultsEmptyState />;
 
   const allRows = getHistogramData(result, viewMode);
   const view = topOutcomes(allRows, showAll ? Infinity : MAX_VISIBLE_OUTCOMES);

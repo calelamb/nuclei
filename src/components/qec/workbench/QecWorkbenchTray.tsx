@@ -59,7 +59,6 @@ function TrayContent({ client, projectRoot }: { client: QecImportClient | null; 
         <dl className="qec-tray__summary">
           <div><dt>Queued</dt><dd className="qec-mono">{queued}</dd></div>
           <div><dt>Running</dt><dd className="qec-mono">{running}</dd></div>
-          <div><dt>Streams</dt><dd className="qec-mono">0</dd></div>
         </dl>
       </div>
       <ul className="qec-tray__jobs" aria-label="Durable QEC jobs">

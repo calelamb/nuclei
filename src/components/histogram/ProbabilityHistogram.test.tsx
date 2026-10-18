@@ -54,3 +54,17 @@ describe('<ProbabilityHistogram> show all', () => {
     expect(screen.getByTestId('histogram-yaxis').style.paddingBottom).toBe(`${base + SCROLLBAR_PX}px`);
   });
 });
+
+describe('<ProbabilityHistogram> without a result (research-r-03)', () => {
+  it('says Running… while a run is in flight instead of asking for a run', () => {
+    useSimulationStore.getState().setRunning(true);
+    render(<ProbabilityHistogram />);
+    expect(screen.getByText('Running…')).toBeTruthy();
+    expect(screen.queryByText(/Run a simulation to see results/)).toBeNull();
+  });
+
+  it('uses the shared "No results yet" state when idle', () => {
+    render(<ProbabilityHistogram />);
+    expect(screen.getByText('No results yet')).toBeTruthy();
+  });
+});

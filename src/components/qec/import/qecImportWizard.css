@@ -159,8 +159,6 @@
   .qec-import-commit { flex-wrap: wrap; }
   .qec-import-commit > span { flex: 1 1 190px; }
   .qec-import-commit > button { flex: 0 0 auto; }
-  .qec-tray__jobs > li { grid-template-columns: minmax(0, 1fr); }
-  .qec-tray__jobs dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 .qec-import-caption {

@@ -525,6 +525,11 @@
   position: relative; display: flex; min-height: 0; flex: 1; flex-direction: column; overflow: auto;
 }
 
+/* The detector graph's panel fills its card: its canvas absorbs the card's height floor instead of leaving a blank band under the footer. */
+.qec-instrument[data-panel='detector-graph'] > .qec-instrument__body > * {
+  flex: 1 1 auto; min-height: 0; height: auto;
+}
+
 /* Empty instrument: a neutral dotted field and one sentence, never a data-like shape. */
 .qec-instrument__empty {
   display: flex; min-height: 0; flex: 1; flex-direction: column; align-items: center; justify-content: center;
@@ -613,6 +618,7 @@
 }
 
 .qec-tray {
+  container: qec-tray / inline-size;
   display: flex; min-width: 0; flex-direction: column; overflow: hidden;
   border-top: 1px solid var(--qec-border); background: var(--qec-recessed);
 }
@@ -693,6 +699,13 @@
 
 .qec-tray__empty span {
   margin-top: 2px; font-size: var(--font-size-chrome-label);
+}
+
+/* The tray is as wide as the canvas, whatever the viewport: below ~720px the counts sit above the job list, never beside it. */
+@container qec-tray (max-width: 719px) {
+  .qec-tray__content { flex-direction: column; align-items: stretch; gap: 14px; }
+  .qec-tray__content > .qec-tray__lead, .qec-tray__content > .qec-tray__jobs { margin-block: 0; }
+  .qec-tray__jobs dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 .qec-tray__summary {
