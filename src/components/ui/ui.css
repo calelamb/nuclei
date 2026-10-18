@@ -322,7 +322,10 @@
   border: none; background: transparent; cursor: pointer; text-align: left;
   color: var(--color-text-primary); font-family: var(--font-sans); font-size: var(--font-size-chrome-label); line-height: var(--line-height-label);
 }
-.nuclei-menu__item:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring-color); outline-offset: -2px; background: var(--color-surface-overlay); }
+.nuclei-menu__item:focus, .nuclei-menu__item:hover:not(:disabled) { background: var(--color-surface-overlay) !important; }
+/* One highlight: the active row is a filled surface; the ring is a keyboard-only extra. */
+.nuclei-menu__item:focus-visible { outline: none; border-radius: var(--radius-xs); }
+.nuclei-menu[data-modality='keyboard'] .nuclei-menu__item:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring-color); outline-offset: -2px; }
 .nuclei-menu__item:disabled { color: var(--color-text-disabled); }
 .nuclei-menu__item--danger { color: var(--color-danger); }
 .nuclei-menu__slot { display: inline-grid; place-items: center; flex: 0 0 var(--icon-xs); width: var(--icon-xs); color: var(--color-accent-quantum-text); }

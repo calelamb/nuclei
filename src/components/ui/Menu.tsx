@@ -70,11 +70,12 @@ export function Menu({ label, entries, trigger, placement = 'bottom-start', minW
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const pendingFocus = useRef<string | null>(null);
+  const [keyboardNav, setKeyboardNav] = useState(false);
   const menuId = useId();
 
   const setOpen = useCallback((next: boolean) => {
     setOpenState(next);
-    if (!next) { setPos(null); setExpanded(new Set()); }
+    if (!next) { setPos(null); setExpanded(new Set()); setKeyboardNav(false); }
     onOpenChange?.(next);
   }, [onOpenChange]);
 
@@ -169,6 +170,7 @@ export function Menu({ label, entries, trigger, placement = 'bottom-start', minW
   };
 
   const onMenuKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    setKeyboardNav(true);
     const items = focusables();
     const at = items.indexOf(document.activeElement as HTMLElement);
     const focused = items[at];
@@ -222,6 +224,7 @@ export function Menu({ label, entries, trigger, placement = 'bottom-start', minW
     ref: triggerRef,
     onClick: () => setOpen(!open),
     onKeyDown: (e) => {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === ' ') setKeyboardNav(true);
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
         if (!open) setOpen(true);
@@ -239,6 +242,7 @@ export function Menu({ label, entries, trigger, placement = 'bottom-start', minW
       role="menu"
       aria-label={label}
       className="nuclei-menu"
+      data-modality={keyboardNav ? 'keyboard' : 'pointer'}
       onKeyDown={onMenuKeyDown}
       style={{
         left: pos?.left ?? 0,
@@ -269,6 +273,10 @@ export function Menu({ label, entries, trigger, placement = 'bottom-start', minW
             className={cx('nuclei-menu-item', 'nuclei-menu__item', entry.tone === 'danger' && 'nuclei-menu__item--danger')}
             style={depth > 0 ? { paddingLeft: 'calc(var(--space-3) + var(--space-4))' } : undefined}
             onClick={() => select(entry)}
+            onPointerMove={(e) => {
+              if (e.currentTarget !== document.activeElement && !entry.disabled) e.currentTarget.focus({ preventScroll: true });
+              if (keyboardNav) setKeyboardNav(false);
+            }}
           >
             {hasCheckable && (
               <span className="nuclei-menu__slot" aria-hidden="true">
