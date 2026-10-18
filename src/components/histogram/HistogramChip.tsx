@@ -4,6 +4,7 @@ import './histogram.css';
 import { useThemeStore } from '../../stores/themeStore';
 import { useElementSize } from '../../hooks/useElementSize';
 import { chooseChipLayout } from './chipLayout';
+import { formatChipPercent } from './histogramScale';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
 interface HistogramChipProps {
@@ -121,6 +122,13 @@ export function HistogramChip({
         fontFamily: TYPOGRAPHY.fontSans,
       }}
     >
+      {/* Stacked: the expand/dismiss controls ride on a header row above the outcomes (no spare row below). */}
+      {rows && (
+        <div style={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
+          <span style={{ color: colors.textDim, fontSize: 11 }}>Top outcomes</span>
+          {controls}
+        </div>
+      )}
       <div
         style={{
           display: 'flex', flexDirection: rows ? 'column' : 'row', alignItems: rows ? 'stretch' : 'center',
@@ -179,13 +187,13 @@ export function HistogramChip({
               }}
             >
               {hasHw
-                ? `${Math.round(cls * 100)}% · ${Math.round(hw * 100)}%`
-                : `${Math.round(cls * 100)}%`}
+                ? `${formatChipPercent(cls)} · ${formatChipPercent(hw)}`
+                : formatChipPercent(cls)}
             </span>
           </div>
         ))}
       </div>
-      {controls}
+      {!rows && controls}
     </div>
   );
 }

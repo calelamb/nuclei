@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { tabFocusHint } from './tabFocusHint';
+import { compactTabFocusHint, tabFocusHint } from './tabFocusHint';
 
 describe('tabFocusHint', () => {
   it('tells keyboard users how to escape the editor', () => {
@@ -8,5 +8,9 @@ describe('tabFocusHint', () => {
   });
   it('reflects the toggled state', () => {
     expect(tabFocusHint(true, false)).toBe('Tab moves focus · Ctrl+M to indent with Tab');
+  });
+  it('has a compact status-bar form that names the chord from the registry', () => {
+    expect(compactTabFocusHint(false, true)).toBe('⌃M: Tab moves focus');
+    expect(compactTabFocusHint(true, false)).toBe('Tab moves focus · Ctrl+M to indent');
   });
 });

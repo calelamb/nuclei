@@ -1,21 +1,27 @@
-import { useThemeStore } from '../../stores/themeStore';
+import type { PointerEvent } from 'react';
+import './resizeHandle.css';
 
-/* ── Resize Handle ── */
+/* ── Resize Handle ──
+ * A 1px rule with a wider invisible hit area. Hover and drag are drawn by an overlay
+ * (see resizeHandle.css), so the layout never shifts and nothing is written onto the DOM
+ * by hand. The pointer is captured on press, so a drag that leaves the window still ends. */
 export function ResizeHandle({ direction, isDragging, onMouseDown, onDoubleClick }: {
   direction: 'horizontal' | 'vertical'; isDragging: boolean; onMouseDown: () => void; onDoubleClick: () => void;
 }) {
-  const colors = useThemeStore((s) => s.colors);
   const isH = direction === 'horizontal';
+  const press = (e: PointerEvent<HTMLDivElement>) => {
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    onMouseDown();
+  };
   return (
-    <div style={{ [isH ? 'width' : 'height']: isDragging ? 2 : 1, cursor: isH ? 'col-resize' : 'row-resize',
-      backgroundColor: isDragging ? colors.accent : colors.border, flexShrink: 0, position: 'relative',
-      transition: isDragging ? 'none' : 'all 150ms ease' }}
-      onMouseDown={onMouseDown} onDoubleClick={onDoubleClick} role="separator">
-      <div style={{ position: 'absolute', [isH ? 'left' : 'top']: -3, [isH ? 'right' : 'bottom']: -3,
-        [isH ? 'width' : 'height']: 8, [isH ? 'top' : 'left']: 0, [isH ? 'bottom' : 'right']: 0, zIndex: 2 }}
-        onMouseEnter={(e) => { const p = e.currentTarget.parentElement; if (p && !isDragging) { p.style.backgroundColor = colors.accent; p.style[isH ? 'width' : 'height'] = '2px'; } }}
-        onMouseLeave={(e) => { const p = e.currentTarget.parentElement; if (p && !isDragging) { p.style.backgroundColor = colors.border; p.style[isH ? 'width' : 'height'] = '1px'; } }}
-      />
-    </div>
+    <div
+      className={`resize-handle resize-handle--${isH ? 'h' : 'v'}`}
+      data-dragging={isDragging ? 'true' : undefined}
+      role="separator"
+      // A horizontal drag direction means a vertical rule between side-by-side panes.
+      aria-orientation={isH ? 'vertical' : 'horizontal'}
+      onPointerDown={press}
+      onDoubleClick={onDoubleClick}
+    />
   );
 }

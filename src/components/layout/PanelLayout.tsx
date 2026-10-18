@@ -7,6 +7,9 @@ import { KernelBanner } from '../editor/KernelBanner';
 import { Breadcrumbs, ExperimentBreadcrumbs } from '../editor/Breadcrumbs';
 import { VizZone } from '../qec/VizZone';
 import { useQecStore } from '../../stores/qecStore';
+import './vizRail.css';
+import { useDiracPanelStore } from '../../stores/diracPanelStore';
+import { useRoomRetreat } from '../../layout/useRoomRetreat';
 import { useShellLayout } from '../../hooks/useShellLayout';
 import { useUiFeatures } from '../../hooks/useUiFeatures';
 import { useElementSize } from '../../hooks/useElementSize';
@@ -30,7 +33,10 @@ import { useModeSwitchStore } from '../../stores/modeSwitchStore';
 import { useResearchTourStore } from '../../stores/researchTourStore';
 import { DEFAULT_EDITOR_PANE_WIDTH, computeEditorPaneWidth } from './layoutMath';
 import { useDisplaySnapshot } from '../../layout/useDisplaySnapshot';
-import { useSimulationStore } from '../../stores/simulationStore';
+import { useEditorStore } from '../../stores/editorStore';
+import { hasMeaningfulOutput, useSimulationStore } from '../../stores/simulationStore';
+import { sampledProbabilities } from '../histogram/histogramData';
+import { shouldRenderBottomPanel } from '../../layout/bottomPanelPresence';
 import { useThemeStore } from '../../stores/themeStore';
 import { useUIModeStore } from '../../stores/uiModeStore';
 import { useLearnStore } from '../../stores/learnStore';
@@ -125,7 +131,7 @@ export function PanelLayout() {
       preset,
       snapshot,
       result,
-      hasTerminalOutput: terminalOutput.length > 0,
+      hasTerminalOutput: hasMeaningfulOutput(terminalOutput),
       errorActive: lastRunFailed,
       mode: workspaceMode,
       framework: snapshot?.framework ?? null,
@@ -197,7 +203,14 @@ export function PanelLayout() {
   const latticeHasCoords = Boolean(qecSnapshot?.coords.qubits.some((c) => c !== null));
   const vizHasContent = vizColumnHasContent(visible, { latticeHasCoords }, chipShown);
   const vizFits = topSplitSize.width === 0 || topSplitSize.width >= EDITOR_MIN_WIDTH + VIZ_MIN_WIDTH;
-  const showViz = vizHasContent && vizFits;
+  // While Python boots the column is held open (with a placeholder) so the editor does not jump width when it is ready.
+  const kernelStatus = useEditorStore((s) => s.kernelStatus);
+  const booting = isWebBuild() && kernelStatus === 'connecting' && !vizHasContent;
+  const showViz = (vizHasContent || booting) && vizFits;
+
+  const diracOpen = useDiracPanelStore((s) => s.isOpen);
+  const closeDirac = useDiracPanelStore((s) => s.close);
+  useRoomRetreat({ sidebarWidth, vizWanted: vizHasContent, canCollapseSidebar: !editorHidden && !fullViewOwnsArea });
 
   useShellLayout({
     platform,
@@ -479,6 +492,12 @@ export function PanelLayout() {
                   </div>
                 </div>
 
+                {vizHasContent && !vizFits && diracOpen && (
+                  <button type="button" className="viz-rail" onClick={closeDirac} aria-label="Show circuit and results (folds Dirac)">
+                    <span className="viz-rail__label">CIRCUIT</span>
+                  </button>
+                )}
+
                 {showViz && (
                   <>
                     {/* Resize handle between editor and viz */}
@@ -495,11 +514,12 @@ export function PanelLayout() {
                     <div style={{ flex: 1, minWidth: VIZ_MIN_WIDTH, display: 'flex', flexDirection: 'column' }}>
                       <VizZone
                         visible={visible}
+                        booting={booting}
                         chip={
                           <PanelReveal when={chipShown} from="bottom">
                             <div style={{ padding: '6px 10px 10px', flexShrink: 0 }}>
                               <HardwareAwareHistogramChip
-                                simProbabilities={result?.probabilities ?? null}
+                                simProbabilities={result ? sampledProbabilities(result) : null}
                                 onDismiss={dismissChip}
                                 onExpand={expandHistogram}
                               />
@@ -513,7 +533,7 @@ export function PanelLayout() {
               </div>
 
               {/* Bottom panel */}
-              {(showBottomPanel || result) && (
+              {shouldRenderBottomPanel({ panelVisible: showBottomPanel, hasResult: !!result, hasOutput: hasMeaningfulOutput(terminalOutput) }) && (
                 <>
                   {!bottomCollapsed && (
                     <ResizeHandle

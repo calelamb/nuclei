@@ -66,7 +66,7 @@ describe('EditorTabs toolbar gating', () => {
     setTabs(['/proj/a.py'], '/proj/a.py');
     render(<EditorTabs />);
     expect(screen.getByRole('button', { name: /run simulation/i })).toBeTruthy();
-    expect(screen.getByTitle(/^Framework/)).toBeTruthy();
+    expect(screen.getByLabelText(/^Framework/)).toBeTruthy();
   });
 
   it('hides framework, Launch and Run on a non-code file', () => {
@@ -74,7 +74,7 @@ describe('EditorTabs toolbar gating', () => {
     render(<EditorTabs />);
     expect(screen.queryByRole('button', { name: /run simulation/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /launch on hardware/i })).toBeNull();
-    expect(screen.queryByTitle(/^Framework/)).toBeNull();
+    expect(screen.queryByLabelText(/^Framework/)).toBeNull();
   });
 });
 

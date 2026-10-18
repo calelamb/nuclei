@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { useCircuitStore } from '../../stores/circuitStore';
 import { ExportMenu, COPIED_NOTICE_MS } from './ExportMenu';
+import { exportDisabledReason } from './exportDisabledReason';
 
 const copyCode = vi.fn();
 vi.mock('../../hooks/useCircuitExport', () => ({
@@ -47,6 +48,15 @@ describe('ExportMenu', () => {
     expect(screen.getByRole('status').textContent).toBe('');
   });
 
+  it('swaps the trigger label to Copied instead of laying a box over the diagram', async () => {
+    copyCode.mockResolvedValue(undefined);
+    render(<ExportMenu />);
+    await pick('Copy code');
+    expect(screen.getByRole('button', { name: /copied/i })).toBeTruthy();
+    act(() => { vi.advanceTimersByTime(COPIED_NOTICE_MS + 10); });
+    expect(screen.getByRole('button', { name: /export/i })).toBeTruthy();
+  });
+
   it('reports a blocked clipboard instead of swallowing the error', async () => {
     copyCode.mockRejectedValue(new Error('denied'));
     render(<ExportMenu />);
@@ -58,5 +68,17 @@ describe('ExportMenu', () => {
     useCircuitStore.setState({ snapshot: null });
     const { container } = render(<ExportMenu />);
     expect(container.textContent).toBe('');
+  });
+});
+
+describe('exportDisabledReason', () => {
+  it('points at the failing line when there is a code error', () => {
+    expect(exportDisabledReason({ errorLine: 8, previewPaused: false })).toBe('Fix line 8 to export');
+  });
+  it('asks for a Run, not a fix, while the preview is merely paused', () => {
+    expect(exportDisabledReason({ errorLine: null, previewPaused: true })).toBe('Run the code to export');
+  });
+  it('falls back to a generic code-error hint', () => {
+    expect(exportDisabledReason({ errorLine: null, previewPaused: false })).toBe('Fix the code error to export');
   });
 });

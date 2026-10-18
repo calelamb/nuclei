@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatPercentTick, probabilityAxis, topOutcomes, MAX_VISIBLE_OUTCOMES } from './histogramScale';
+import { formatPercentTick, probabilityAxis, topOutcomes, MAX_VISIBLE_OUTCOMES, formatChipPercent } from './histogramScale';
 
 describe('probabilityAxis', () => {
   it('fits the data instead of fixing the axis at 0..1', () => {
@@ -80,5 +80,14 @@ describe('topOutcomes', () => {
     expect(topOutcomes(rows).evenlySpread).toBe(true);
     const skewed = rows.map((r, i) => (i === 0 ? { ...r, probability: 0.5 } : r));
     expect(topOutcomes(skewed).evenlySpread).toBe(false);
+  });
+});
+
+describe('formatChipPercent', () => {
+  it('shows whole percents, two significant figures for small values, and never a bare 0% for a possible outcome', () => {
+    expect(formatChipPercent(0.5)).toBe('50%');
+    expect(formatChipPercent(0.0042)).toBe('0.42%');
+    expect(formatChipPercent(0.00004)).toBe('<0.1%');
+    expect(formatChipPercent(0)).toBe('0%');
   });
 });

@@ -16,6 +16,7 @@ import { useDebugStore } from '../stores/debugStore';
 import { resolveFormat } from '../lib/lintSender';
 import { useLintStore } from '../stores/lintStore';
 import { requestParseNarration, requestResultNarration } from '../services/ambientNarrator';
+import { runSummary } from './runSummary';
 import { rewriteExecutionError } from '../services/errorRewrite';
 
 /** Per-provider "connecting" watchdog timers, owned by the hook. */
@@ -41,6 +42,11 @@ export function getErrorContext(msg: Extract<KernelResponse, { type: 'error' }>)
     line,
     shortMessage: detail.split('\n').filter(Boolean).pop() ?? msg.message,
   };
+}
+
+/** Terminal lines in a chunk of output (a trailing newline does not add one). */
+function countLines(text: string): number {
+  return text.split(/\r?\n/).filter((l, i, all) => l !== '' || i < all.length - 1).length;
 }
 
 /** Route one kernel response into the stores. Pure of React: all state lives in stores. */
@@ -75,6 +81,7 @@ export function handleKernelMessage(msg: KernelResponse, connectTimers: ConnectT
       useSimulationStore.getState().setResult(msg.data);
       useEditorStore.getState().clearErrors();
       if (msg.data) {
+        useSimulationStore.getState().addOutput(runSummary(msg.data), 'summary');
         useDiracStore.getState().clearRewrittenError();
         requestResultNarration(useEditorStore.getState().code, useCircuitStore.getState().snapshot, msg.data);
       }
@@ -135,12 +142,12 @@ export function handleKernelMessage(msg: KernelResponse, connectTimers: ConnectT
       // Live-preview (parse) output is noise from half-typed code: drop it.
       if (msg.phase === 'parse') break;
       useSimulationStore.getState().addOutput(msg.text, 'stdout');
-      useBottomPanelStore.getState().focusTerminal();
+      useBottomPanelStore.getState().noteOutput(countLines(msg.text));
       break;
     case 'stderr':
       if (msg.phase === 'parse') break;
       useSimulationStore.getState().addOutput(msg.text, 'stderr');
-      useBottomPanelStore.getState().focusTerminal();
+      useBottomPanelStore.getState().noteOutput(countLines(msg.text));
       break;
     case 'error': {
       // Resource-estimate failures belong to the Estimator panel, not the
@@ -194,15 +201,14 @@ export function handleKernelMessage(msg: KernelResponse, connectTimers: ConnectT
       // belongs on the editor (marker + circuit panel), never in the Terminal,
       // and it must not cancel a run that happens to be in flight.
       const isParseError = msg.phase === 'parse';
-      // A preview that had to be killed is the one parse event worth saying out loud.
-      if (isParseError && msg.code === 'timeout') {
-        useSimulationStore.getState().addOutput(shortMessage, 'info');
-      }
+      // A preview that had to be killed is not an error and not Terminal output: the circuit
+      // panel says it paused and that Run will execute the code for real.
+      const isPreviewTimeout = isParseError && msg.code === 'timeout';
       if (!isParseError) {
         useSimulationStore.getState().addOutput(`Error: ${detail}`, 'stderr');
         useSimulationStore.getState().setRunning(false);
         useSimulationStore.getState().setRunFailed(true);
-        useBottomPanelStore.getState().focusTerminal();
+        useBottomPanelStore.getState().noteError();
       }
 
       if (!isParseError && useSettingsStore.getState().dirac.autoExplainErrors) {
@@ -221,6 +227,11 @@ export function handleKernelMessage(msg: KernelResponse, connectTimers: ConnectT
           .catch(() => { /* graceful — app still works without a rewrite */ });
       }
 
+      if (isPreviewTimeout) {
+        useCircuitStore.getState().setSnapshot(null);
+        useCircuitStore.getState().setPreviewPaused(true);
+        break;
+      }
       if (msg.phase === 'parse') {
         useCircuitStore.getState().setSnapshot(null);
         useCircuitStore.getState().setError(msg.message);

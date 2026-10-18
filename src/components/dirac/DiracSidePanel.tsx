@@ -20,7 +20,8 @@ import { SlashCommandMenu } from './SlashCommandMenu';
 import { SLASH_COMMANDS, filterSlashCommands, isUnfinishedSlashInput, type SlashCommand } from '../../lib/diracCommands';
 import { formatMessageTime } from '../../lib/formatMessageTime';
 import { ChevronRight, ChevronDown, Plus, ArrowUp } from 'lucide-react';
-import { Button, IconButton, TextArea } from '../ui';
+import { Button, IconButton, TextArea, Tooltip } from '../ui';
+import { shortcutLabel } from '../../config/keybindings';
 import './dirac.css';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
@@ -243,6 +244,23 @@ export function DiracSidePanel() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const isDragging = useRef(false);
   const userScrolledUp = useRef(false);
+  const railRef = useRef<HTMLButtonElement>(null);
+  const collapseRef = useRef<HTMLButtonElement>(null);
+  const wasOpen = useRef(isOpen);
+
+  // Folding or unfolding the panel removes the control that had focus; hand focus to the
+  // counterpart (rail tab / collapse button) rather than letting it fall to <body>. Only when
+  // focus really was lost, so an editor that still has it keeps it.
+  useEffect(() => {
+    if (wasOpen.current === isOpen) return undefined;
+    wasOpen.current = isOpen;
+    const frame = requestAnimationFrame(() => {
+      const active = document.activeElement;
+      if (active && active !== document.body) return;
+      (isOpen ? collapseRef.current : railRef.current)?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [isOpen]);
 
   useEffect(() => {
     if (scrollRef.current && !userScrolledUp.current)
@@ -350,15 +368,17 @@ export function DiracSidePanel() {
 
   if (!isOpen) {
     return (
-      <button
-        type="button"
-        className="dirac-rail"
-        onClick={toggle}
-        title="Open Dirac (⌘+D)"
-        aria-label="Open Dirac panel"
-      >
-        <span className="dirac-rail__label">DIRAC</span>
-      </button>
+      <Tooltip label="Open Dirac" shortcut={shortcutLabel('toggle-dirac')} placement="above">
+        <button
+          ref={railRef}
+          type="button"
+          className="dirac-rail"
+          onClick={toggle}
+          aria-label="Open Dirac panel"
+        >
+          <span className="dirac-rail__label">DIRAC</span>
+        </button>
+      </Tooltip>
     );
   }
 
@@ -390,10 +410,12 @@ export function DiracSidePanel() {
           fontFamily: TYPOGRAPHY.fontSans,
         }}>Dirac</span>
         <div style={{ flex: 1 }} />
-        <Button size="sm" variant="ghost" icon={<Plus size={12} />} onClick={() => clearHistory()} title="New conversation">
-          New
-        </Button>
-        <IconButton size="sm" onClick={toggle} aria-label="Collapse Dirac panel" title="Collapse Dirac (⌘+D)">
+        <Tooltip label="New conversation" placement="below">
+          <Button size="sm" variant="ghost" icon={<Plus size={12} />} onClick={() => clearHistory()}>
+            New
+          </Button>
+        </Tooltip>
+        <IconButton ref={collapseRef} size="sm" onClick={toggle} aria-label="Collapse Dirac panel" tooltip={{ label: 'Collapse Dirac', shortcut: shortcutLabel('toggle-dirac'), placement: 'below' }}>
           <ChevronRight size={14} />
         </IconButton>
       </div>

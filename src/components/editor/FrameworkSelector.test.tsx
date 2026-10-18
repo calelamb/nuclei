@@ -37,7 +37,7 @@ function renderSelector() {
 }
 
 function pickFramework(name: string) {
-  fireEvent.click(screen.getByTitle('Framework'));
+  fireEvent.click(screen.getByLabelText('Framework'));
   // The "Framework" section item is named exactly e.g. 'Q# (QDK)'; the
   // template section item is 'New Q# (QDK) file', so the query is
   // unambiguous.
@@ -132,7 +132,7 @@ describe('FrameworkSelector — compact label', () => {
     );
     const trigger = screen.getByRole('button', { name: /qiskit/i });
     expect(trigger.textContent).toBe('Qiskit');
-    expect(trigger.getAttribute('title')).toBe('Framework: Qiskit (browser subset)');
+    expect(trigger.getAttribute('aria-label')).toBe('Framework: Qiskit (browser subset)');
   });
 
   it('shows the full label when there is room', () => {
@@ -142,6 +142,6 @@ describe('FrameworkSelector — compact label', () => {
         <FrameworkSelector />
       </PlatformProvider>,
     );
-    expect(screen.getByTitle('Framework').textContent).toBe('Qiskit (browser subset)');
+    expect(screen.getByLabelText('Framework').textContent).toBe('Qiskit (browser subset)');
   });
 });

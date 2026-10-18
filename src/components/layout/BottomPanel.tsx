@@ -4,10 +4,11 @@ import { useThemeStore } from '../../stores/themeStore';
 import { useSimulationStore, type TerminalLine } from '../../stores/simulationStore';
 import { useDiracStore } from '../../stores/diracStore';
 import { useEditorStore } from '../../stores/editorStore';
-import { useBottomPanelStore } from '../../stores/bottomPanelStore';
+import { useBottomPanelStore, type BottomPanelTab } from '../../stores/bottomPanelStore';
 import { ProbabilityHistogram } from '../histogram/ProbabilityHistogram';
 import { TYPOGRAPHY } from '../../styles/tokens';
-import { Button, IconButton, Tooltip } from '../ui';
+import { Badge, Button, IconButton, Tabs, Tooltip } from '../ui';
+import './bottomPanel.css';
 
 /* ── Terminal Panel ── */
 
@@ -26,7 +27,7 @@ function lineColor(
   line: TerminalLine,
   colors: ReturnType<typeof useThemeStore.getState>['colors'],
 ): string {
-  if (line.type === 'separator') return colors.textDim;
+  if (line.type === 'separator' || line.type === 'summary') return colors.textDim;
   if (line.type === 'stderr') return colors.error;
   if (line.type === 'info') return colors.textMuted;
   // stdout — but still flag tracebacks/warnings that bubbled through the
@@ -38,21 +39,21 @@ function lineColor(
 
 function ToolbarButton({
   onClick,
-  title,
+  label,
   active,
   children,
 }: {
   onClick: () => void;
-  title: string;
+  label: string;
   active?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <Tooltip label={title} placement="below">
+    <Tooltip label={label} placement="below">
       <button
         type="button"
         onClick={onClick}
-        aria-label={title}
+        aria-label={label}
         aria-pressed={active}
         data-active={active ? 'true' : undefined}
         className="nuclei-toolbtn"
@@ -97,23 +98,23 @@ function TerminalToolbar({
       role="toolbar"
       aria-label="Terminal toolbar"
     >
-      <ToolbarButton onClick={onClear} title="Clear terminal">
+      <ToolbarButton onClick={onClear} label="Clear terminal">
         <Trash2 size={12} />
       </ToolbarButton>
-      <ToolbarButton onClick={onCopy} title={copied ? 'Copied!' : 'Copy all output'}>
+      <ToolbarButton onClick={onCopy} label={copied ? 'Copied!' : 'Copy all output'}>
         <Copy size={12} />
         {copied && <span style={{ fontSize: 11 }}>copied</span>}
       </ToolbarButton>
       <ToolbarButton
         onClick={toggleShowTimestamps}
-        title="Toggle timestamps"
+        label="Toggle timestamps"
         active={showTimestamps}
       >
         <Clock size={12} />
       </ToolbarButton>
       <ToolbarButton
         onClick={toggleAutoScroll}
-        title="Auto-scroll to bottom"
+        label="Auto-scroll to bottom"
         active={autoScroll}
       >
         Auto-scroll
@@ -302,6 +303,7 @@ export function BottomPanel({
   const toggleCollapsed = useBottomPanelStore((s) => s.toggleCollapsed);
   const setCollapsed = useBottomPanelStore((s) => s.setCollapsed);
   const setActiveTab = useBottomPanelStore((s) => s.setActiveTab);
+  const unreadLines = useBottomPanelStore((s) => s.unreadLines);
   const result = useSimulationStore((s) => s.result);
   const colors = useThemeStore((s) => s.colors);
 
@@ -321,7 +323,7 @@ export function BottomPanel({
     }
   }, [showFullHistogram, activeTab, setActiveTab]);
 
-  const tabs: Array<'terminal' | 'histogram'> = showFullHistogram
+  const tabs: Array<BottomPanelTab> = showFullHistogram
     ? ['terminal', 'histogram']
     : ['terminal'];
 
@@ -329,18 +331,18 @@ export function BottomPanel({
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Panel header */}
       <div style={{ height: 28, display: 'flex', alignItems: 'center', borderBottom: collapsed ? 'none' : `1px solid ${colors.border}`, backgroundColor: colors.bg, flexShrink: 0 }}>
-        {tabs.map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => { if (collapsed) setCollapsed(false); setActiveTab(tab); }}
-            className="nuclei-panel-tab"
-            role="tab"
-            aria-selected={!collapsed && activeTab === tab}
-          >
-            {tab}
-          </button>
-        ))}
+        <Tabs
+          aria-label="Bottom panel"
+          className="bottom-panel-tabs"
+          value={activeTab}
+          onChange={(tab) => { if (collapsed) setCollapsed(false); setActiveTab(tab); }}
+          options={tabs.map((tab) => ({
+            value: tab,
+            label: tab === 'terminal'
+              ? <>Terminal{unreadLines > 0 && <Badge tone="accent" aria-label={`${unreadLines} unread lines`}>{unreadLines > 99 ? '99+' : unreadLines}</Badge>}</>
+              : 'Histogram',
+          }))}
+        />
         <div style={{ flex: 1 }} />
         <IconButton size="sm" onClick={toggleCollapsed} aria-label={collapsed ? 'Expand panel' : 'Collapse panel'} tooltip={{ placement: 'above' }} style={{ marginRight: 6 }}>
           {collapsed ? <ChevronUp size={12} /> : <ChevronDown size={12} />}

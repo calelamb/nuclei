@@ -1,5 +1,6 @@
 import { useRef, useCallback, useEffect, useState } from 'react';
 import { useDiracPanelStore } from '../../stores/diracPanelStore';
+import { useHelpOverlayStore } from '../../stores/helpOverlayStore';
 import Editor from '@monaco-editor/react';
 import type { OnMount, Monaco } from '@monaco-editor/react';
 import type * as monaco from 'monaco-editor';
@@ -126,7 +127,7 @@ export function QuantumEditor() {
 
     editor.addAction({
       id: 'inline-edit',
-      label: 'Inline Edit (Cmd+K)',
+      label: 'Inline Edit with Dirac',
       keybindings: [monacoApi.KeyMod.CtrlCmd | monacoApi.KeyCode.KeyK],
       run: () => setShowInlineEdit(true),
     });
@@ -139,7 +140,7 @@ export function QuantumEditor() {
     if (isMacPlatform()) {
       editor.addAction({
         id: 'nuclei.toggleTabFocus',
-        label: 'Toggle Tab Key Moves Focus (Ctrl+M)',
+        label: 'Toggle Tab Key Moves Focus',
         keybindings: [monacoApi.KeyMod.WinCtrl | monacoApi.KeyCode.KeyM],
         run: (ed) => {
           ed.trigger('nuclei', 'editor.action.toggleTabFocusMode', null);
@@ -162,6 +163,24 @@ export function QuantumEditor() {
       label: 'Focus Dirac Input',
       keybindings: [monacoApi.KeyMod.CtrlCmd | monacoApi.KeyCode.KeyL],
       run: () => useDiracPanelStore.getState().focusInput(),
+    });
+
+    // The help sheet and Compose are app-level chords Monaco would otherwise pre-empt
+    // (it owns Cmd+/ for comments and Cmd+I for suggestions), so register them here too.
+    editor.addAction({
+      id: 'nuclei.shortcuts',
+      label: 'Keyboard Shortcuts',
+      keybindings: [
+        monacoApi.KeyMod.CtrlCmd | monacoApi.KeyMod.Shift | monacoApi.KeyCode.Slash,
+        monacoApi.KeyCode.F1,
+      ],
+      run: () => useHelpOverlayStore.getState().toggleShortcuts(),
+    });
+    editor.addAction({
+      id: 'nuclei.compose',
+      label: 'Compose with Dirac',
+      keybindings: [monacoApi.KeyMod.CtrlCmd | monacoApi.KeyCode.KeyI],
+      run: () => useHelpOverlayStore.getState().toggleCompose(),
     });
 
     registerGhostCompletions(monacoApi);

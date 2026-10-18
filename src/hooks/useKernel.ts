@@ -12,6 +12,7 @@ import { CLOSE_UNAUTHENTICATED, KERNEL_AUTH_REJECTED_MESSAGE, KernelAuthRejected
 import type { PyodideKernel } from '../platform/pyodideKernel';
 import type { PyodideRuntimeClient } from '../platform/pyodide/pyodideClient';
 import { KERNEL_NOT_RESPONDING_MESSAGE, normalizeKernelError } from '../lib/kernelErrors';
+import { shouldMarkStaleWhileReparsing, shouldReparseAfterRestart } from './restartReparse';
 import { registerKernelRetry, registerKernelStop } from '../lib/kernelControl';
 import { useHardwareStore } from '../stores/hardwareStore';
 import { useQecStore } from '../stores/qecStore';
@@ -50,6 +51,8 @@ export function useKernel() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
   const retryCountRef = useRef(0);
+  /** A start failure was reported; the next successful boot says so in the Terminal. */
+  const hadFailureRef = useRef(false);
   const explainSeqRef = useRef(0);
   const runtimeSubscriptionsRef = useRef<Array<() => void>>([]);
   // A Run requested before the kernel was ready; fired by the effect after `execute`.
@@ -89,6 +92,7 @@ export function useKernel() {
     useEditorStore.getState().setKernelReady(false);
     useEditorStore.getState().setKernelStatus('failed', message);
     useSimulationStore.getState().addOutput(`Error: ${message}`, 'stderr');
+    hadFailureRef.current = true;
   }, []);
 
   const connect = useCallback(() => {
@@ -163,6 +167,11 @@ export function useKernel() {
 
   const markWebReady = useCallback(() => {
     const editor = useEditorStore.getState();
+    // A Retry that worked: say so, so the earlier failure line is not the last word in the Terminal.
+    if (hadFailureRef.current) {
+      hadFailureRef.current = false;
+      useSimulationStore.getState().addOutput('Python ready', 'info');
+    }
     editor.setKernelConnected(true);
     editor.setKernelReady(true);
     editor.setKernelStatus('ready');
@@ -172,6 +181,7 @@ export function useKernel() {
   const watchRuntime = useCallback((runtime: PyodideRuntimeClient) => {
     runtimeSubscriptionsRef.current.forEach((off) => off());
     let wasReady = runtime.isReady();
+    let restarted = false;
     const offProgress = runtime.onProgress((progress) => {
       if (progress) useEditorStore.getState().setKernelProgress(progress);
     });
@@ -185,9 +195,22 @@ export function useKernel() {
       } else if (state === 'ready') {
         wasReady = true;
         markWebReady();
+        // A killed worker (Stop, runaway Run) forgot the circuit: parse the buffer again so the
+        // diagram matches the code. After a paused preview we do not, or a runaway loop would
+        // restart Python forever.
+        if (restarted && shouldReparseAfterRestart(useCircuitStore.getState().previewPaused)) {
+          const { code, framework, filePath } = useEditorStore.getState();
+          if (code.trim() && shouldMarkStaleWhileReparsing(useCircuitStore.getState().previewPaused)) {
+            useCircuitStore.getState().setSnapshot(null);
+            useCircuitStore.getState().setPreviewPaused(true);
+          }
+          if (code.trim()) void pyodideRef.current?.send({ type: 'parse', code, language: kernelLanguageFor(framework, filePath) });
+        }
+        restarted = false;
       } else if (wasReady) {
         // The worker was killed (runaway code): boot a fresh one right away.
         wasReady = false;
+        restarted = true;
         runtime.ensureStarted().catch((e: unknown) => failKernel(normalizeKernelError(e)));
       }
     });
@@ -352,7 +375,8 @@ export function useKernel() {
           : 'Python is still starting. Your run is queued and will start automatically.',
         'info',
       );
-      useBottomPanelStore.getState().focusTerminal();
+      if (failed) useBottomPanelStore.getState().noteError();
+      else useBottomPanelStore.getState().noteOutput();
       return;
     }
     queuedRunRef.current = false;
@@ -373,9 +397,9 @@ export function useKernel() {
       // clearResult() resets isRunning, so it must come first: setting the
       // flag before it silently re-enabled Run while a run was in flight.
       useSimulationStore.getState().clearResult();
+      useSimulationStore.getState().beginRun(code);
       useSimulationStore.getState().setRunning(true);
       useSimulationStore.getState().addOutput(separator, 'separator');
-      useBottomPanelStore.getState().focusTerminal();
       pyodideRef.current.send({ type: 'execute', code, shots, language });
     } else {
       const ws = wsRef.current;
@@ -387,9 +411,9 @@ export function useKernel() {
       // clearResult() resets isRunning, so it must come first: setting the
       // flag before it silently re-enabled Run while a run was in flight.
       useSimulationStore.getState().clearResult();
+      useSimulationStore.getState().beginRun(code);
       useSimulationStore.getState().setRunning(true);
       useSimulationStore.getState().addOutput(separator, 'separator');
-      useBottomPanelStore.getState().focusTerminal();
       ws.send(JSON.stringify({ type: 'execute', code, shots, language }));
     }
   }, [isWeb]);

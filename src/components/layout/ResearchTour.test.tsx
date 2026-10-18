@@ -30,6 +30,17 @@ describe('ResearchTour', () => {
     expect(useResearchTourStore.getState().active).toBe(true);
   });
 
+  it('puts focus on Next, and pulls it back from a text field that steals it', async () => {
+    const editor = document.createElement('textarea');
+    document.body.appendChild(editor);
+    const { getByText } = render(<ResearchTour />);
+    await act(async () => { await new Promise((r) => requestAnimationFrame(() => r(null))); });
+    expect(document.activeElement).toBe(getByText('Next'));
+    act(() => { editor.focus(); });
+    expect(document.activeElement).toBe(getByText('Next'));
+    editor.remove();
+  });
+
   it('ArrowRight advances and Escape skips', () => {
     render(<ResearchTour />);
     fireEvent.keyDown(document, { key: 'ArrowRight' });

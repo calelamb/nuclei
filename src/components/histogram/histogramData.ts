@@ -16,6 +16,17 @@ export function getProbabilityHistogramData(probabilities: Record<string, number
     .sort((a, b) => a.state.localeCompare(b.state));
 }
 
+/**
+ * The distribution the chip ranks by: what was actually measured (matching the panel's default
+ * Sampled view, so "+N more" agrees with the panel's count), or the ideal one if no shots ran.
+ */
+export function sampledProbabilities(result: SimulationResult): Record<string, number> {
+  const shots = getExecutedShotCount(result);
+  const entries = Object.entries(result.measurements);
+  if (shots <= 0 || entries.length === 0) return result.probabilities;
+  return Object.fromEntries(entries.map(([state, count]) => [state, count / shots]));
+}
+
 export function getHistogramData(result: SimulationResult, viewMode: HistogramViewMode) {
   if (viewMode === 'ideal') {
     return Object.entries(result.probabilities)

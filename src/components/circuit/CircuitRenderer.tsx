@@ -11,7 +11,9 @@ import { computeCircuitGeometry, columnX } from './geometry';
 import { formatAngle } from './formatAngle';
 import { CircuitEmptyState } from './CircuitEmptyState';
 import { ExportMenu } from './ExportMenu';
+import { useEdgeFades } from './edgeFades';
 import { fitCircuitWidth } from './fitCircuit';
+import { Tooltip as UiTooltip } from '../ui';
 import { useElementSize } from '../../hooks/useElementSize';
 import { GateExplorerPopup } from './GateExplorerPopup';
 import type { Gate } from '../../types/quantum';
@@ -30,6 +32,10 @@ interface ContextMenu {
   x: number;
   y: number;
 }
+
+/** The header holds a button on some frames and not others; a floor keeps the diagram from hopping. */
+const CIRCUIT_HEADER_MIN_HEIGHT = 32;
+export const PREVIEW_PAUSED_CAPTION = 'Preview paused: this code runs longer than 5 s. Press Run to execute';
 
 function StepControls() {
   const stepMode = useCircuitStore((s) => s.stepMode);
@@ -148,6 +154,7 @@ function describeCircuit(snapshot: import('../../types/quantum').CircuitSnapshot
 export function CircuitRenderer() {
   const { snapshot, stale } = useDisplaySnapshot();
   const error = useCircuitStore((s) => s.error);
+  const previewPaused = useCircuitStore((s) => s.previewPaused);
   const errorLine = useEditorStore((s) => s.errors[0]?.line ?? null);
   const isRunning = useSimulationStore((s) => s.isRunning);
   const highlights = useCircuitStore((s) => s.highlights);
@@ -158,6 +165,8 @@ export function CircuitRenderer() {
   const colors = useThemeStore((s) => s.colors);
 
   const [measureContainer, containerSize] = useElementSize<HTMLDivElement>();
+  const { ref: fadeRef, onScroll: onContainerScroll, style: fadeStyle } = useEdgeFades<HTMLDivElement>();
+  const setContainerRef = useCallback((el: HTMLDivElement | null) => { measureContainer(el); fadeRef(el); }, [measureContainer, fadeRef]);
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
 
@@ -180,7 +189,7 @@ export function CircuitRenderer() {
   };
 
   if (!snapshot || snapshot.gates.length === 0) {
-    return <CircuitEmptyState error={error} />;
+    return <CircuitEmptyState error={error} paused={previewPaused} />;
   }
 
   const { qubit_count, depth, gates, classical_bit_count } = snapshot;
@@ -195,7 +204,7 @@ export function CircuitRenderer() {
   return (
     // The diagram never takes more than ~40% of the screen height: the Bloch spheres below need room to stay readable, and a tall circuit scrolls inside its own box.
     <div style={{ flex: '1 1 auto', minHeight: 0, maxHeight: '40vh', display: 'flex', flexDirection: 'column' }} role="region" aria-label="Circuit diagram">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 10px 0 12px', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 10px 0 12px', flexShrink: 0, minHeight: CIRCUIT_HEADER_MIN_HEIGHT }}>
         <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
           <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans }}>
             Circuit
@@ -204,9 +213,13 @@ export function CircuitRenderer() {
             {qubit_count} {qubit_count === 1 ? 'qubit' : 'qubits'} · depth {depth}
           </span>
           {stale && (
-            <span role="status" style={{ fontSize: 11, color: colors.warning, fontFamily: TYPOGRAPHY.fontSans, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              Out of date: {errorLine !== null ? `error on line ${errorLine}` : 'the code has an error'}
-            </span>
+            <UiTooltip label={previewPaused ? PREVIEW_PAUSED_CAPTION : 'The diagram shows the last code that parsed.'} placement="below">
+              <span role="status" aria-label={previewPaused ? PREVIEW_PAUSED_CAPTION : undefined} style={{ fontSize: 11, color: colors.warning, fontFamily: TYPOGRAPHY.fontSans, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {previewPaused
+                  ? 'Preview paused · Run to execute'
+                  : `Out of date: ${errorLine !== null ? `error on line ${errorLine}` : 'the code has an error'}`}
+              </span>
+            </UiTooltip>
           )}
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -215,9 +228,10 @@ export function CircuitRenderer() {
         </span>
       </div>
       <div
-        ref={measureContainer}
+        ref={setContainerRef}
+        onScroll={onContainerScroll}
         className="circuit-renderer-container"
-        style={{ flex: 1, minHeight: 0, overflow: 'auto', position: 'relative', padding: '4px 0 6px', opacity: stale ? 0.45 : 1, transition: 'opacity var(--duration-fast) var(--ease-standard)' }}
+        style={{ ...fadeStyle, flex: 1, minHeight: 0, overflow: 'auto', position: 'relative', padding: '4px 0 6px', opacity: stale ? 0.45 : 1, transition: 'opacity var(--duration-fast) var(--ease-standard)' }}
         aria-description={ariaDescription}
       >
         <svg

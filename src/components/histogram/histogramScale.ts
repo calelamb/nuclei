@@ -66,3 +66,14 @@ export function topOutcomes(rows: readonly HistogramRow[], limit: number = MAX_V
     evenlySpread: ranked[0].probability <= ranked[ranked.length - 1].probability * EVEN_SPREAD_RATIO,
   };
 }
+
+/**
+ * A probability for the compact chip. Whole percents above 1%, two significant figures down to
+ * 0.1%, and "<0.1%" below, so a wide register never shows its top outcomes as a bare "0%".
+ */
+export function formatChipPercent(probability: number): string {
+  const percent = probability * 100;
+  if (percent >= 1) return `${Math.round(percent)}%`;
+  if (percent >= 0.1) return `${Number(percent.toPrecision(2))}%`;
+  return percent > 0 ? '<0.1%' : '0%';
+}

@@ -43,6 +43,25 @@ describe('<PanelHeader> (PRD 11 Phase C)', () => {
     expect(onResetLayout).toHaveBeenCalledTimes(1);
   });
 
+  it('moves focus into the menu and returns it to the trigger on Escape', () => {
+    const { getByRole } = render(<PanelHeader title="Plot" onHide={() => {}} helpHref="https://example.test/docs" />);
+    const trigger = getByRole('button', { name: 'Panel options' });
+    fireEvent.click(trigger);
+    expect(getByRole('menu').contains(document.activeElement)).toBe(true);
+    fireEvent.keyDown(getByRole('menu'), { key: 'Escape' });
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it('renders a direct Help button instead of a one-item menu', () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    const { getByRole, queryByRole } = render(<PanelHeader title="Plot" helpHref="https://example.test/docs" />);
+    expect(queryByRole('button', { name: 'Panel options' })).toBeNull();
+    fireEvent.click(getByRole('button', { name: 'Help' }));
+    expect(open).toHaveBeenCalledWith('https://example.test/docs', '_blank', 'noopener,noreferrer');
+    open.mockRestore();
+  });
+
   it('renders a leading slot (e.g. a back button)', () => {
     const { getByText } = render(
       <PanelHeader title="run-123" leading={<button>Back</button>} />,

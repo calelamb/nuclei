@@ -66,3 +66,28 @@ describe('blochGridLayout', () => {
     expect(l.cellWidth).toBeGreaterThanOrEqual(112);
   });
 });
+
+describe('balanced pages and rows', () => {
+  const sizes: Array<[number, number]> = [[300, 400], [300, 300], [300, 220], [250, 250], [420, 300], [316, 180]];
+
+  it('never leaves a lone sphere on the last page: pages share the qubits evenly', () => {
+    for (let count = 2; count <= 14; count += 1) {
+      for (const [width, height] of sizes) {
+        const l = blochGridLayout({ count, width, height });
+        const last = count - (l.pageCount - 1) * l.pageSize;
+        expect(last, `${count} qubits in ${width}x${height}`).toBeGreaterThanOrEqual(l.pageSize - (l.pageCount - 1));
+      }
+    }
+  });
+
+  it('fills the grid without an orphan row: 4 spheres in a three-column rail form 2x2', () => {
+    for (let count = 2; count <= 8; count += 1) {
+      for (const [width, height] of sizes) {
+        const l = blochGridLayout({ count, width, height });
+        expect(l.cols * l.rows).toBeGreaterThanOrEqual(l.pageSize);
+        expect(l.cols * l.rows - l.pageSize, `${count} in ${width}x${height}`).toBeLessThan(l.cols);
+      }
+    }
+    expect(blochGridLayout({ count: 4, width: 420, height: 800 })).toMatchObject({ cols: 2, rows: 2 });
+  });
+});

@@ -50,6 +50,9 @@ interface NavigationState {
   /** Collapse the sidebar when narrow and restore it on grow. `canCollapse` is false
    * while a full-width takeover view is showing (collapsing it would drop the view). */
   applyNarrow: (narrow: boolean, canCollapse: boolean) => void;
+  /** Fold the sidebar because another panel needs the room; `restoreSidebarForRoom` brings it back. */
+  retreatSidebarForRoom: () => void;
+  restoreSidebarForRoom: () => void;
   /** Select a view after a workspace switch without re-opening a sidebar that is
    * folded away for a narrow window: it is parked and restored on grow instead. */
   setViewKeepingViewport: (view: NavView, canCollapse: boolean) => void;
@@ -84,6 +87,12 @@ export const useNavigationStore = create<NavigationState>((set, get) => ({
     }
     get().setActiveView(view);
   },
+  retreatSidebarForRoom: () =>
+    set((s) => (s.activeView === null ? s : { activeView: null, autoCollapsedView: s.activeView })),
+  restoreSidebarForRoom: () =>
+    set((s) => (s.autoCollapsedView !== null && s.activeView === null && s.lastNarrow !== true
+      ? { activeView: s.autoCollapsedView, autoCollapsedView: null }
+      : s)),
   applyNarrow: (narrow, canCollapse) =>
     set((s) => {
       if (s.lastNarrow === narrow) return s;

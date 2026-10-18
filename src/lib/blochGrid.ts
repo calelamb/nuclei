@@ -47,13 +47,17 @@ function capacityFor(minPx: number, width: number, height: number): number {
 
 function layoutFor(safeCount: number, minPx: number, width: number, height: number): BlochGridLayout {
   const maxCols = Math.max(1, Math.floor((width + GAP_PX) / (minPx + GAP_PX)));
-  const pageSize = Math.min(safeCount, capacityFor(minPx, width, height));
-  // Prefer a single row while it fits, otherwise fill columns first.
-  const cols = Math.min(maxCols, pageSize);
-  const rows = Math.ceil(pageSize / cols);
+  const capacity = Math.min(safeCount, capacityFor(minPx, width, height));
+  // Pages share the qubits evenly (6 in pages of 5 would leave a lone sphere on page 2: use 3 + 3).
+  const pageCount = Math.ceil(safeCount / capacity);
+  const pageSize = Math.ceil(safeCount / pageCount);
+  // Prefer a single row while it fits, otherwise fill columns first, then even the rows out so
+  // four spheres in a three-column rail form 2x2, not 3 + 1.
+  const rows = Math.ceil(pageSize / Math.min(maxCols, pageSize));
+  const cols = Math.ceil(pageSize / rows);
   const cellWidth = Math.floor((width - GAP_PX * (cols - 1)) / cols);
   const available = Math.floor((height - GAP_PX * (rows - 1)) / rows);
   // A cell much taller than it is wide only adds dead space around a width-limited sphere.
   const cellHeight = Math.min(available, Math.ceil(cellWidth * MAX_CELL_ASPECT) + CELL_CAPTION_PX);
-  return { cols, rows, pageSize, pageCount: Math.ceil(safeCount / pageSize), cellWidth, cellHeight };
+  return { cols, rows, pageSize, pageCount, cellWidth, cellHeight };
 }

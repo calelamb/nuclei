@@ -1,15 +1,19 @@
 import { useMemo, type ReactNode } from 'react';
 import { LayoutGrid, Grid3x3, Share2, Orbit, Play, Workflow, type LucideIcon } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
+import { useSimulationStore } from '../../stores/simulationStore';
 import { useQecStore } from '../../stores/qecStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useVizZoneStore } from '../../stores/vizZoneStore';
 import { PanelReveal } from '../layout/PanelReveal';
 import { CircuitRenderer } from '../circuit/CircuitRenderer';
-import { Button, Tabs } from '../ui';
+import { Button, EmptyState, Tabs } from '../ui';
+import { useEditorStore } from '../../stores/editorStore';
 import { getExecute } from '../../App';
 import { visibleVizPanelIds } from '../../layout/vizPanels';
 import { shortcutLabel } from '../../config/keybindings';
+import { useResultStale } from '../../hooks/useResultStale';
+import { StaleResultNotice, STALE_RESULT_OPACITY } from '../layout/StaleResultNotice';
 import { BlochRail } from '../layout/BlochRail';
 import { BlochPanel } from '../bloch/BlochPanel';
 import { QecTimelinePanel } from './QecTimelinePanel';
@@ -51,8 +55,11 @@ const MAIN_VIZ_PANELS: VizPanelDef[] = [
 export function VizZone({
   visible,
   chip,
+  booting = false,
 }: {
   visible: VisiblePanels;
+  /** Python is still starting: hold the column open with a placeholder so the editor does not jump when it is ready. */
+  booting?: boolean;
   /** The histogram-chip strip, rendered below the main panels (unchanged). */
   chip: ReactNode;
 }) {
@@ -71,8 +78,21 @@ export function VizZone({
     return MAIN_VIZ_PANELS.filter((p) => ids.includes(p.id));
   }, [visible, qec]);
 
+  const stale = useResultStale();
   const circuitPanel = panels.find((p) => p.id === 'circuit');
   const statePanels = panels.filter((p) => p.id !== 'circuit');
+
+  const progress = useEditorStore((st) => st.kernelProgress);
+  if (booting && panels.length === 0) {
+    const stage = progress && progress.kind !== 'attempts' && progress.total > 0 ? ` · ${progress.step}/${progress.total}` : '';
+    return (
+      <div style={COLUMN_STYLE}>
+        <EmptyState className="viz-empty viz-empty--boot" icon={<Workflow size={20} />} title="Preparing Python">
+          {`Circuit and results appear when Python is ready${stage}.`}
+        </EmptyState>
+      </div>
+    );
+  }
 
   return (
     <div style={COLUMN_STYLE}>
@@ -88,7 +108,11 @@ export function VizZone({
 
       {statePanels.length > 0 && statePanels.length <= 2 && statePanels.map((p) => (
         <PanelReveal key={p.id} when from="right" style={p.fit === 'fill' ? FILL_STYLE : CONTENT_STYLE}>
-          <div style={p.fit === 'fill' ? FILL_BODY_STYLE : CONTENT_BODY_STYLE}>
+          <div
+            className={p.id === 'bloch' && stale ? 'nuclei-stale-results' : undefined}
+            style={p.fit === 'fill' ? FILL_BODY_STYLE : CONTENT_BODY_STYLE}
+          >
+            {p.id === 'bloch' && stale && <StaleResultNotice />}
             {p.render()}
           </div>
         </PanelReveal>
@@ -101,10 +125,11 @@ export function VizZone({
           onSelect={(id) => setActiveTab(projectRoot, id)}
         />
       )}
-      {chip}
+      <div style={stale ? STALE_CHIP_STYLE : undefined} data-stale={stale ? 'true' : undefined}>{chip}</div>
     </div>
   );
 }
+const STALE_CHIP_STYLE = { opacity: STALE_RESULT_OPACITY, flexShrink: 0 } as const;
 
 const COLUMN_STYLE = { width: '100%', height: '100%', minWidth: 0, display: 'flex', flexDirection: 'column' } as const;
 // The circuit grows to its content and only yields space (scrolling inside) when the rail is short.
@@ -121,6 +146,15 @@ const FILL_STYLE = { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'col
  */
 function RunPrompt() {
   const colors = useThemeStore((s) => s.colors);
+  const isRunning = useSimulationStore((s) => s.isRunning);
+  if (isRunning) {
+    return (
+      <div role="status" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24, textAlign: 'center' }}>
+        <Orbit size={28} strokeWidth={1.25} color={colors.accentText} aria-hidden="true" style={{ animation: 'nuclei-heartbeat 1.5s ease infinite' }} />
+        <p style={{ margin: 0, fontSize: 13, color: colors.textMuted, fontFamily: TYPOGRAPHY.fontSans }}>Running&hellip;</p>
+      </div>
+    );
+  }
   return (
     <div style={{
       flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center',

@@ -26,6 +26,8 @@ interface CircuitState {
   lastGood: { snapshot: CircuitSnapshot; key: string } | null;
   isLoading: boolean;
   error: string | null;
+  /** The live preview was stopped for running too long; it is not a code error and Run still works. */
+  previewPaused: boolean;
   // Highlighting
   highlights: GateHighlight[];
   // Step-through mode
@@ -37,6 +39,7 @@ interface CircuitState {
   setSnapshot: (snapshot: CircuitSnapshot | null) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
+  setPreviewPaused: (paused: boolean) => void;
   clear: () => void;
   // Highlight actions
   addHighlight: (h: GateHighlight) => void;
@@ -56,6 +59,7 @@ export const useCircuitStore = create<CircuitState>((set, get) => ({
   lastGood: null,
   isLoading: false,
   error: null,
+  previewPaused: false,
   highlights: [],
   stepMode: false,
   stepIndex: -1,
@@ -73,6 +77,7 @@ export const useCircuitStore = create<CircuitState>((set, get) => ({
         lastGood: latch,
         isLoading: false,
         error: null,
+        previewPaused: false,
         highlights: [],
         stepMode: false,
         stepIndex: -1,
@@ -80,12 +85,14 @@ export const useCircuitStore = create<CircuitState>((set, get) => ({
       };
     }),
   setLoading: (isLoading) => set({ isLoading }),
-  setError: (error) => set({ error, isLoading: false }),
+  setError: (error) => set({ error, isLoading: false, previewPaused: false }),
+  setPreviewPaused: (previewPaused) => set({ previewPaused, isLoading: false }),
   clear: () => set({
     snapshot: null,
     snapshotKey: null,
     lastGood: null,
     error: null,
+    previewPaused: false,
     highlights: [],
     stepMode: false,
     stepIndex: -1,

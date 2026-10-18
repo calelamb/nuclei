@@ -1,0 +1,18 @@
+/* Slim tab standing in for the circuit column while Dirac has taken its room; clicking folds Dirac to bring it back. */
+.viz-rail {
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 28px; height: 100%; padding: 0; cursor: pointer; writing-mode: vertical-rl;
+  border: none; border-left: 1px solid var(--color-border-strong);
+  background: var(--color-surface-raised);
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+.viz-rail:hover { background: var(--color-surface-overlay); }
+.viz-rail__label { color: var(--color-text-secondary); font: var(--font-weight-semibold) var(--font-size-caption) var(--font-sans); letter-spacing: 1px; }
+
+/* Right-rail empty states: balanced line breaks so a lone word never wraps onto its own line. */
+.viz-empty { height: 100%; }
+.viz-empty .nuclei-empty__title, .viz-empty .nuclei-empty__body { text-wrap: pretty; }
+
+/* Boot placeholder: top-aligned where the circuit header will land, so the eye does not jump when Python is ready. */
+.viz-empty--boot { justify-content: flex-start; padding-top: var(--space-6); }
+.viz-empty--boot .nuclei-empty__body { max-width: 36ch; text-wrap: balance; }

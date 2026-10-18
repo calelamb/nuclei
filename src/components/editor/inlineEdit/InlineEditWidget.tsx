@@ -1,4 +1,5 @@
 import { Button } from '../../ui';
+import { shortcutLabel } from '../../../config/keybindings';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import type { Monaco } from '@monaco-editor/react';
 import type * as monaco from 'monaco-editor';
@@ -221,7 +222,7 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
             </pre>
           </div>
           <div style={{ display: 'flex', gap: 6, padding: '6px 10px', borderTop: `1px solid ${colors.border}` }}>
-            <Button size="sm" variant="primary" onClick={handleAccept}>Apply (⌘+Enter)</Button>
+            <Button size="sm" variant="primary" onClick={handleAccept}>Apply ({shortcutLabel('run')})</Button>
             <Button size="sm" onClick={onClose}>Dismiss (Esc)</Button>
           </div>
         </div>

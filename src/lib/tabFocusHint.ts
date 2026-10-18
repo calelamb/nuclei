@@ -1,7 +1,7 @@
-import { isMacPlatform } from '../config/keybindings';
+import { bindingFor, formatKeys, isMacPlatform } from '../config/keybindings';
 
 export function tabFocusToggleLabel(mac: boolean = isMacPlatform()): string {
-  return mac ? '⌃M' : 'Ctrl+M';
+  return formatKeys(bindingFor('tab-focus'), mac);
 }
 
 /**
@@ -13,4 +13,10 @@ export function tabFocusHint(tabMovesFocus: boolean, mac: boolean = isMacPlatfor
   return tabMovesFocus
     ? `Tab moves focus · ${key} to indent with Tab`
     : `Tab indents · ${key} to move focus with Tab`;
+}
+
+/** The status-bar form of the hint: short enough to sit beside the kernel state at any width. */
+export function compactTabFocusHint(tabMovesFocus: boolean, mac: boolean = isMacPlatform()): string {
+  const key = tabFocusToggleLabel(mac);
+  return tabMovesFocus ? `Tab moves focus · ${key} to indent` : `${key}: Tab moves focus`;
 }

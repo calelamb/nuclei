@@ -92,7 +92,11 @@ function AppInner() {
     const store = useHelpOverlayStore.getState();
     store.setPaletteOpen(typeof v === 'function' ? v(store.paletteOpen) : v);
   }, []);
-  const [composeOpen, setComposeOpen] = useState(false);
+  const composeOpen = useHelpOverlayStore((s) => s.composeOpen);
+  const setComposeOpen = useCallback((v: boolean | ((cur: boolean) => boolean)) => {
+    const store = useHelpOverlayStore.getState();
+    store.setComposeOpen(typeof v === 'function' ? v(store.composeOpen) : v);
+  }, []);
   const [isReturningUser, setIsReturningUser] = useState(false);
   const [lastOpenedFile, setLastOpenedFile] = useState<string | undefined>();
   const [daysSinceLastSession, setDaysSinceLastSession] = useState<number | undefined>();
@@ -366,6 +370,12 @@ function AppInner() {
     const handler = (e: KeyboardEvent) => {
       // The first-launch chooser is modal: no global shortcut may act behind it.
       if (showOnboarding) return;
+      // F1 opens the shortcut sheet from anywhere, including the editor.
+      if (e.key === 'F1' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        setShowShortcuts((s) => !s);
+        return;
+      }
       const id = findBindingId(e);
       if (!id) return;
       e.preventDefault();
@@ -420,7 +430,7 @@ function AppInner() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [fileOps, themeToggle, cycleMode, toggleDirac, focusDirac, setShowShortcuts, setShowCommandPalette, showOnboarding]);
+  }, [fileOps, themeToggle, cycleMode, toggleDirac, focusDirac, setShowShortcuts, setShowCommandPalette, setComposeOpen, showOnboarding]);
 
   return (
     <>
