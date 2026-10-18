@@ -2,6 +2,9 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { useModeSwitchStore } from './modeSwitchStore';
 import { useWorkspaceStore } from './workspaceStore';
 import { useExperimentRunStore } from './experimentRunStore';
+import { useLabActivityStore } from './labActivityStore';
+import { useTrainabilityStore } from './trainabilityStore';
+import { jobFixture } from '../services/trainability/fixtures';
 
 const activeRun = {
   experimentName: 'theta-sweep',
@@ -14,6 +17,8 @@ describe('modeSwitchStore (PRD 11 Phase B)', () => {
   beforeEach(() => {
     useWorkspaceStore.setState({ mode: 'learn' });
     useExperimentRunStore.setState({ active: null });
+    useLabActivityStore.setState({ discovery: null });
+    useTrainabilityStore.getState().reset();
     useModeSwitchStore.setState({ pending: null, announcement: '' });
   });
 
@@ -73,5 +78,64 @@ describe('modeSwitchStore (PRD 11 Phase B)', () => {
     useModeSwitchStore.getState().requestToggle();
     expect(useModeSwitchStore.getState().pending?.target).toBe('research');
     expect(useWorkspaceStore.getState().mode).toBe('learn');
+  });
+
+  describe('Quantum AI Lab work (PRD 14 §3.3)', () => {
+    const discovery = (status: 'running' | 'paused') => ({ runId: 'r1', name: 'w-state', status, evaluations: 4, maxEvaluations: 50 });
+
+    beforeEach(() => {
+      useWorkspaceStore.setState({ mode: 'research' });
+    });
+
+    it('stages a confirm that names a running discovery when leaving Research', () => {
+      useLabActivityStore.setState({ discovery: discovery('running') });
+      useModeSwitchStore.getState().requestSwitch('learn');
+      expect(useWorkspaceStore.getState().mode).toBe('research');
+      expect(useModeSwitchStore.getState().pending).toEqual({
+        target: 'learn',
+        runningName: 'Discovery run w-state',
+        panelName: 'Discovery Engine',
+      });
+    });
+
+    it('does not guard a paused discovery run', () => {
+      useLabActivityStore.setState({ discovery: discovery('paused') });
+      useModeSwitchStore.getState().requestSwitch('learn');
+      expect(useWorkspaceStore.getState().mode).toBe('learn');
+    });
+
+    it('stages a confirm for an active trainability job and applies it on confirm', () => {
+      const job = jobFixture({ status: 'running' });
+      useTrainabilityStore.setState({ jobs: { [job.id]: job }, jobOrder: [job.id], activeJobId: job.id });
+      useModeSwitchStore.getState().requestSwitch('learn');
+      expect(useModeSwitchStore.getState().pending).toEqual({
+        target: 'learn',
+        runningName: 'Trainability analysis of hardware_efficient.py',
+        panelName: 'Trainability Lab',
+      });
+      useModeSwitchStore.getState().confirmPending();
+      expect(useWorkspaceStore.getState().mode).toBe('learn');
+    });
+
+    it('a finished trainability job does not block the switch', () => {
+      const job = jobFixture({ status: 'complete' });
+      useTrainabilityStore.setState({ jobs: { [job.id]: job }, jobOrder: [job.id], activeJobId: null });
+      useModeSwitchStore.getState().requestSwitch('learn');
+      expect(useWorkspaceStore.getState().mode).toBe('learn');
+    });
+
+    it('entering Research is never guarded by Lab work', () => {
+      useWorkspaceStore.setState({ mode: 'learn' });
+      useLabActivityStore.setState({ discovery: discovery('running') });
+      useModeSwitchStore.getState().requestSwitch('research');
+      expect(useWorkspaceStore.getState().mode).toBe('research');
+    });
+
+    it('a sweep still takes precedence in the copy', () => {
+      useExperimentRunStore.setState({ active: activeRun });
+      useLabActivityStore.setState({ discovery: discovery('running') });
+      useModeSwitchStore.getState().requestSwitch('learn');
+      expect(useModeSwitchStore.getState().pending?.runningName).toBe('theta-sweep');
+    });
   });
 });

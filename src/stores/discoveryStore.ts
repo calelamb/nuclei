@@ -9,6 +9,7 @@
  */
 
 import { create } from 'zustand';
+import { useLabActivityStore } from './labActivityStore';
 import {
   scanAllRuns,
   scanDefinitions,
@@ -62,7 +63,11 @@ export interface DiscoveryState {
   selectedDefinition: string | null;
   selectedRunId: string | null;
   selectedCandidateId: string | null;
+  /** The New discovery wizard replaces the main area while open. */
+  wizardOpen: boolean;
 
+  openWizard(): void;
+  closeWizard(): void;
   configure(env: DiscoveryEnv | null): void;
   reload(projectRoot: string): Promise<void>;
   loadEvaluators(): Promise<void>;
@@ -139,6 +144,7 @@ const emptyData = {
   selectedDefinition: null,
   selectedRunId: null,
   selectedCandidateId: null,
+  wizardOpen: false,
 };
 
 export const useDiscoveryStore = create<DiscoveryState>((set, get) => {
@@ -205,6 +211,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => {
       selectedDefinition: rctx.definitionFile,
       selectedRunId: runId,
       selectedCandidateId: null,
+      wizardOpen: false,
       error: null,
       ...(initial ? withView(s, runId, initial) : {}),
     }));
@@ -225,6 +232,14 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => {
 
     configure(next) {
       env = next;
+    },
+
+    openWizard() {
+      set({ wizardOpen: true });
+    },
+
+    closeWizard() {
+      set({ wizardOpen: false });
     },
 
     async reload(projectRoot) {
@@ -256,11 +271,11 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => {
     },
 
     selectDefinition(fileName) {
-      set({ selectedDefinition: fileName, selectedRunId: null, selectedCandidateId: null });
+      set({ selectedDefinition: fileName, selectedRunId: null, selectedCandidateId: null, wizardOpen: false });
     },
 
     async selectRun(runId) {
-      set({ selectedRunId: runId, selectedCandidateId: null });
+      set({ selectedRunId: runId, selectedCandidateId: null, wizardOpen: false });
       if (!runId || get().views[runId]) return;
       const file = Object.entries(get().runsByDefinition).find(([, runs]) => runs.some((r) => r.run_id === runId))?.[0];
       if (!file) return;
@@ -295,7 +310,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => {
         }
         await get().reload(root);
         const definitionFile = scaffold.definitionPath.split('/').pop() as string;
-        set({ selectedDefinition: definitionFile, selectedRunId: null });
+        set({ selectedDefinition: definitionFile, selectedRunId: null, wizardOpen: false });
         return { ok: true, definitionFile };
       } catch (err) {
         return fail(message(err));
@@ -473,3 +488,27 @@ export function isDiscoveryActive(state: Pick<DiscoveryState, 'liveRunIds'>): bo
 export function selectSelectedView(state: Pick<DiscoveryState, 'selectedRunId' | 'views'>): RunView | null {
   return state.selectedRunId ? state.views[state.selectedRunId] ?? null : null;
 }
+
+// ── Activity mirror (status chip + mode-switch guard) ──────────────────
+
+/** The live run to show in the status bar, or null when none is alive. */
+export function selectLiveActivity(
+  state: Pick<DiscoveryState, 'liveRunIds' | 'views'>,
+): { runId: string; name: string; status: 'running' | 'paused'; evaluations: number; maxEvaluations: number } | null {
+  const runId = state.liveRunIds[state.liveRunIds.length - 1];
+  if (!runId) return null;
+  const run = state.views[runId]?.run;
+  // A runner can be alive before its first status event reaches the view.
+  if (!run) return { runId, name: 'Discovery run', status: 'running', evaluations: 0, maxEvaluations: 0 };
+  return {
+    runId,
+    name: run.spec.name,
+    status: run.status === 'paused' ? 'paused' : 'running',
+    evaluations: run.usage.evaluations,
+    maxEvaluations: run.spec.budget.max_evaluations,
+  };
+}
+
+useDiscoveryStore.subscribe((state) => {
+  useLabActivityStore.getState().setDiscovery(selectLiveActivity(state));
+});

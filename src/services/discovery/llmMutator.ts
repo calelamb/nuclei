@@ -14,19 +14,17 @@
  * - The thinking shape depends on the model generation: `haiku`/4.5-era ids
  *   take `{type:'enabled', budget_tokens}`; 4.6+ ids (our sonnet and opus)
  *   take `{type:'adaptive'}` because 4.7+ rejects `enabled` with HTTP 400.
+ *   The tier ids live in `models.ts` (default: the 5.5 generation).
  */
 
-import { DIRAC_API_URL, HAIKU_MODEL, OPUS_MODEL, SONNET_MODEL } from '../../config/dirac';
+import { DIRAC_API_URL } from '../../config/dirac';
 import type { GradientMap, LlmUsage, ModelTier } from '../../types/discovery';
 import { applyEdits, type ApplyEditsResult, type Edit } from './diff';
 import { countTouchedDeadLines } from './gradient';
+import { TIER_MODEL_IDS } from './models';
 import type { SystemBlock } from './prompt';
 
-export const TIER_MODEL_IDS: Readonly<Record<ModelTier, string>> = {
-  haiku: HAIKU_MODEL,
-  sonnet: SONNET_MODEL,
-  opus: OPUS_MODEL,
-};
+export { TIER_MODEL_IDS };
 
 export const PROPOSE_TOOL_NAME = 'propose_program_edit';
 export const MAX_RATIONALE = 800;
@@ -160,7 +158,7 @@ export function routeModel(
   return { tier: depth ? models.depth : models.breadth, depth, thinking: depth && models.depth_thinking };
 }
 
-/** 4.6+ models (our sonnet and opus ids) use adaptive thinking; 4.5-era ids use a budget. */
+/** 4.6+ models (including the 5.5 ids) use adaptive thinking; 4.5-era ids use a budget. */
 export function usesAdaptiveThinking(modelId: string): boolean {
   return !/claude-(haiku|sonnet|opus)-4-5/.test(modelId) && !/claude-3/.test(modelId);
 }
