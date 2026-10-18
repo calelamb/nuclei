@@ -315,3 +315,36 @@ def test_walk_expands_u_gate_in_time_order_and_classifies_fixed_gates():
     assert items[-1].names == ("S", "S") and items[2].names == ("S",)   # RZ(pi/2), RZ(pi); RY(0) is dropped
     rot = [i for i in items if isinstance(i, Rotation)]
     assert [r.ref.name for r in rot] == ["b", "a"]           # U = RZ(phi) RY(theta) RZ(lambda): lambda first
+
+
+# ------------------------------------------------ PH-C2: predicted COST variance vs empirical COST variance
+def _su8_xy_zz(layers: int) -> ParamCircuit:
+    b = Builder(3)
+    for _ in range(layers):
+        for q in range(3):
+            b.rot("RX", (q,))
+        for q in range(3):
+            b.rot("RY", (q,))
+        for q in range(2):
+            b.rot("RZZ", (q, q + 1))
+    return b.build()
+
+
+@pytest.mark.parametrize("name,circuit,spec,n", [
+    ("su(8)", _su8_xy_zz(40), "Z0", 3),
+    ("free-fermion so(8)", _free_fermion(4, layers=30), "Z0*Z1", 4),
+])
+def test_predicted_cost_variance_lies_in_the_empirical_cost_variance_ci(name, circuit, spec, n):
+    """The reviewer's su(8) / free-fermion cases: 0.111 vs 0.111 on the cost; the gradient variance is 2x lower."""
+    from kernel.trainability.analyses import gradient_statistics
+    obs = parse_observable(spec, n)
+    pred = lie_algebra(circuit, observable=obs)
+    assert pred["prediction_applicable"] and pred["prediction_quantity"] == "cost_variance", name
+    stats = gradient_statistics(circuit, obs, samples=3000, seed=3, method="sampling")
+    lo, hi = stats["cost_variance_ci95"]
+    assert lo <= stats["cost_variance"] <= hi
+    mid, half = stats["cost_variance"], 0.5 * (hi - lo) * (2.576 / 1.96)     # widen the 95% CI to ~99%: no flaky 1-in-20
+    assert abs(pred["predicted_variance"] - mid) <= half, (name, pred["predicted_variance"], lo, mid, hi)
+    assert abs(stats["cost_variance"] - pred["predicted_variance"]) < 0.15 * pred["predicted_variance"]
+    # the old UI compared against this, a different quantity (ratio 0.48x exactly where the theory is exact)
+    assert stats["variance_mean"] < 0.7 * stats["cost_variance"]

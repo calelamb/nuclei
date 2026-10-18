@@ -377,3 +377,37 @@ def test_uninformative_truncated_interval_has_null_variance():
         lo, hi = row["interval"]
         if lo == 0 < hi:
             assert row["variance"] is None
+
+
+# ---------------------------------------------------------------- PH-C2: cost variance
+def _exact_cost_moments(dense, n_rot, freq_of):
+    sizes = [4 * abs(freq_of[k]) + 1 for k in range(n_rot)]          # C^2 has degree 2|f| in each angle
+    axes = [2 * np.pi * np.arange(m) / m + 0.17 * (i + 1) for i, m in enumerate(sizes)]
+    c = dense.cost(np.array(list(itertools.product(*axes))))
+    return float(c.mean()), float(c.var())
+
+
+@pytest.mark.parametrize("seed,kind", [(0, "local"), (1, "global"), (2, "sum"), (3, "sum"), (4, "local")])
+def test_cost_mean_and_variance_match_exact_quadrature(seed, kind):
+    rng = np.random.default_rng(40 + seed)
+    n, n_rot = 3, 5
+    prog, freq_of = random_program(rng, n, n_rot, freqs=[1, 2, 1], global_prob=0.2)
+    obs = rand_obs(rng, n, kind)
+    res = gradient_variances(prog, n, n_rot, obs)
+    mean, var = _exact_cost_moments(Dense(prog, n, obs), n_rot, freq_of)
+    assert res["cost_mean"] == pytest.approx(mean, abs=1e-10)
+    assert res["cost_variance"] == pytest.approx(var, abs=1e-10)
+
+
+def test_cost_variance_interval_is_valid_when_truncated_and_null_when_uninformative():
+    rng = np.random.default_rng(12)
+    n, n_rot = 4, 6
+    prog, freq_of = random_program(rng, n, n_rot, global_prob=0.3)
+    obs = rand_obs(rng, n, "sum")
+    _, var = _exact_cost_moments(Dense(prog, n, obs), n_rot, {k: 1 for k in range(n_rot)})
+    for budget in ({"max_frontier": 3}, {"max_weight": 1}, {"time_budget_s": 0.0}):
+        res = gradient_variances(prog, n, n_rot, obs, **budget)
+        lo, hi = res["cost_variance_interval"]
+        assert lo - 1e-10 <= var <= hi + 1e-10, (budget, lo, var, hi)
+        if res["cost_variance"] is None:
+            assert not (lo > 0 and hi <= 2 * lo)

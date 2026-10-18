@@ -8,6 +8,11 @@ For a cost ``C(v) = <0|U(v)† O U(v)|0>`` and parameters ``v``:
 * ``per_parameter[k]``: sample mean, *unbiased* sample variance (``ddof=1``) and ``E|g_k|``
   of ``g_k = ∂C/∂v_k``; 95% intervals are a seeded percentile bootstrap (1000 resamples of
   the samples; the bootstrap redraws *whole samples*, so parameters stay correlated).
+* ``cost_mean`` / ``cost_variance`` / ``cost_variance_ci95``: the mean and variance of the **cost**
+  ``C`` itself over the same parameter distribution (sampling: empirical, ``ddof=1``, percentile
+  bootstrap; PPE: the exact ``E[C²] − E[C]²`` with its truncation interval, ``cost_variance`` ``None``
+  when that interval is uninformative).  This is the quantity Ragone et al. predict (``lie.py``); the
+  gradient ``variance_mean`` is a different quantity and must not be compared with it.
 * ``variance_mean``: the mean of the per-parameter variances.  For the PPE it is ``None`` (and the
   uninformative per-parameter variances / ``gate_values`` entries are ``None``) when the run is not
   ``complete`` or an interval is uninformative (``lo == 0 < hi`` or ``hi/lo > 2``); the truncation
@@ -79,17 +84,19 @@ def _chunk_size(program, samples: int) -> int:
     return int(max(1, min(samples, _CHUNK_WORK // work)))
 
 
-def _gradients(program, values: np.ndarray, observable: PauliSum, progress, cancel) -> np.ndarray:
+def _gradients(program, values: np.ndarray, observable: PauliSum, progress, cancel) -> tuple[np.ndarray, np.ndarray]:
+    """Sampled ``(costs (S,), gradients (S, m))`` from the same batched adjoint sweep."""
     samples = values.shape[0]
     chunk = _chunk_size(program, samples)
     out = np.empty_like(values)
+    cost = np.empty(samples)
     for lo in range(0, samples, chunk):
         check_cancel(cancel)
         hi = min(lo + chunk, samples)
-        _, g = program.value_and_grad(values[lo:hi], observable)
-        out[lo:hi] = g
+        c, g = program.value_and_grad(values[lo:hi], observable)
+        out[lo:hi], cost[lo:hi] = g, c
         report(progress, hi / samples, f"sampled {hi}/{samples} gradients")
-    return out
+    return cost, out
 
 
 def _bootstrap_variance(g: np.ndarray, rng: np.random.Generator) -> tuple[np.ndarray, np.ndarray]:
@@ -102,6 +109,14 @@ def _bootstrap_variance(g: np.ndarray, rng: np.random.Generator) -> tuple[np.nda
     return var_b, var_b.mean(axis=1)
 
 
+def _bootstrap_cost_variance(c: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+    """Percentile bootstrap (same scheme as the gradient variances) of the cost variance."""
+    s = c.shape[0]
+    counts = rng.multinomial(s, np.full(s, 1.0 / s), size=BOOTSTRAP_RESAMPLES).astype(float)
+    s1, s2 = counts @ c, counts @ (c * c)
+    return np.percentile(np.maximum((s2 - s1 * s1 / s) / (s - 1), 0.0), [2.5, 97.5])
+
+
 def _percentile(a: np.ndarray, axis: int = 0) -> np.ndarray:
     return np.percentile(a, [2.5, 97.5], axis=axis)
 
@@ -111,7 +126,7 @@ def _sampling_result(circuit, observable, samples, seed, init, backend, progress
     m = len(circuit.parameters)
     rng = np.random.default_rng(seed)
     values = _draw_values(rng, samples, m, init)
-    g = _gradients(program, values, observable, progress, cancel)
+    cost, g = _gradients(program, values, observable, progress, cancel)
     mean = g.mean(axis=0)
     var = g.var(axis=0, ddof=1)
     abs_mean = np.abs(g).mean(axis=0)
@@ -125,7 +140,11 @@ def _sampling_result(circuit, observable, samples, seed, init, backend, progress
         for k in range(m)
     ]
     norms = np.linalg.norm(g, axis=1)
+    cost_ci = _bootstrap_cost_variance(cost, rng)
     return {
+        # Var_θ[C] itself (PH-C2): the quantity the Ragone/Lie prediction is about, not the gradient variance.
+        "cost_mean": float(cost.mean()), "cost_variance": float(cost.var(ddof=1)),
+        "cost_variance_ci95": [float(cost_ci[0]), float(cost_ci[1])],
         "samples": samples, "init": init, "method": "sampling", "backend": program.backend,
         "interval_kind": "bootstrap",
         "interval": {"kind": "bootstrap", "resamples": BOOTSTRAP_RESAMPLES, "level": 0.95,
@@ -167,6 +186,10 @@ def _ppe_result(circuit, observable, init, budget, progress, cancel) -> dict[str
     # it is None and only the truncation interval is real.
     headline = res["variance_mean"] if res["status"] == "complete" else None
     return {
+        "cost_mean": float(res["cost_mean"]),
+        "cost_variance": None if res["status"] != "complete" or res["cost_variance"] is None
+        else float(res["cost_variance"]),
+        "cost_variance_ci95": [float(res["cost_variance_interval"][0]), float(res["cost_variance_interval"][1])],
         "samples": None, "init": init, "method": "ppe", "backend": "numpy", "interval_kind": "truncation",
         "interval": {"kind": "truncation", "variance_mean": vm_ci, "ppe_method": res["method"],
                      "status": res["status"], "frontier_peak": res["frontier_peak"],
@@ -244,7 +267,8 @@ def gradient_statistics(
 ) -> dict[str, Any]:
     """Gradient statistics of ``C = <O>`` (see the module docstring).
 
-    Returns ``{"samples", "init", "method": "sampling"|"ppe", "backend", "interval_kind":
+    Also returns ``cost_mean``, ``cost_variance`` (``None`` for an unresolved PPE) and
+    ``cost_variance_ci95``.  Returns ``{"samples", "init", "method": "sampling"|"ppe", "backend", "interval_kind":
     "bootstrap"|"truncation", "interval": {...}, "per_parameter": [{"name", "mean", "variance",
     "abs_mean", "variance_ci95"} (+ "dead", "dead_reason" for the PPE)], "variance_mean",
     "variance_mean_ci95", "gradient_norm_mean", "gradient_norm_rms", "gate_values": [{"source_index",
