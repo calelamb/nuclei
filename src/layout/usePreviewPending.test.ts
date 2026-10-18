@@ -47,6 +47,15 @@ describe('usePreviewPending', () => {
     expect(result.current).toBe(false);
   });
 
+  it('stays false when the snapshot arrives inside the delay window', () => {
+    const { result } = renderHook(() => usePreviewPending());
+    act(() => { useEditorStore.setState({ code: 'qc = 2' }); });
+    act(() => { vi.advanceTimersByTime(350); });
+    act(() => { useCircuitStore.getState().setSnapshot(snap(1)); });
+    act(() => { vi.advanceTimersByTime(PREVIEW_PENDING_DELAY_MS + 200); });
+    expect(result.current).toBe(false);
+  });
+
   it('never claims an update is coming while the kernel is not ready', () => {
     useEditorStore.setState({ kernelReady: false });
     const { result } = renderHook(() => usePreviewPending());

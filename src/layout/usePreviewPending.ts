@@ -13,6 +13,15 @@ interface Answer {
   previewPaused: boolean;
 }
 
+function readAnswer(): Answer {
+  const { snapshot, error, previewPaused } = useCircuitStore.getState();
+  return { snapshot, error, previewPaused };
+}
+
+function sameAnswer(a: Answer, b: Answer): boolean {
+  return a.snapshot === b.snapshot && a.error === b.error && a.previewPaused === b.previewPaused;
+}
+
 /**
  * True when the code has changed but no snapshot (or error, or pause) for it has arrived yet, so the circuit
  * on screen still describes the previous code. Only claimed while the kernel is ready (before that no update
@@ -32,15 +41,14 @@ export function usePreviewPending(): boolean {
     const edited = lastCode.current !== code;
     lastCode.current = code;
     if (!edited || !kernelReady || code.trim() === '') return undefined;
-    // Read the answer on screen when the timer fires, not when the edit happened.
+    // The answer on screen at edit time: if it has already changed when the timer fires, the update arrived.
+    const atEdit = readAnswer();
     const timer = setTimeout(() => {
-      const { snapshot: current, error: currentError, previewPaused: paused } = useCircuitStore.getState();
-      setWaitingOn({ snapshot: current, error: currentError, previewPaused: paused });
+      if (sameAnswer(atEdit, readAnswer())) setWaitingOn(atEdit);
     }, PREVIEW_PENDING_DELAY_MS);
     return () => clearTimeout(timer);
   }, [code, kernelReady]);
 
-  const unchanged = waitingOn !== null
-    && waitingOn.snapshot === snapshot && waitingOn.error === error && waitingOn.previewPaused === previewPaused;
+  const unchanged = waitingOn !== null && sameAnswer(waitingOn, { snapshot, error, previewPaused });
   return unchanged && kernelReady && snapshot !== null;
 }
