@@ -2,15 +2,14 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { LessonCodeEditor } from './LessonCodeEditor';
 import { useLearnStore } from '../../stores/learnStore';
 import { useEditorStore } from '../../stores/editorStore';
-import { usePlatform } from '../../platform/PlatformProvider';
-import { KERNEL_WS_URL } from '../../config/kernel';
-import { openAuthenticatedKernelSocket } from '../../services/kernelSocket';
 import type { Framework, CircuitSnapshot, SimulationResult, KernelResponse } from '../../types/quantum';
-import { Play, RotateCcw, ExternalLink, Terminal, BarChart3 } from 'lucide-react';
+import { RotateCcw, ExternalLink, Terminal, BarChart3 } from 'lucide-react';
 import { Button, SegmentedControl, type SegmentedOption } from '../ui';
 import { isQuantumCode } from './exerciseValidation';
 import { UnsupportedNotice } from './UnsupportedNotice';
 import { OutcomeResults } from './OutcomeResults';
+import { DESKTOP_KERNEL_UNAVAILABLE, useLessonKernel } from './useLessonKernel';
+import { LessonRunButton } from './LessonRunButton';
 import { formatCircuitMeta } from './outcomeDistribution';
 import './demo.css';
 
@@ -26,8 +25,6 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
   const exitLearnMode = useLearnStore((s) => s.exitLearnMode);
   const setEditorCode = useEditorStore((s) => s.setCode);
   const setEditorFramework = useEditorStore((s) => s.setFramework);
-  const platform = usePlatform();
-  const isWeb = platform.getPlatform() === 'web';
 
   const [localCode, setLocalCode] = useState(initialCode);
   const [snapshot, setSnapshot] = useState<CircuitSnapshot | null>(null);
@@ -37,9 +34,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
   const [error, setError] = useState<string | null>(null);
   const [unsupported, setUnsupported] = useState<string | null>(null);
   const [showOutput, setShowOutput] = useState(false);
-  const wsRef = useRef<WebSocket | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const pyodideRef = useRef<any>(null);
+  const localCodeRef = useRef(initialCode);
 
   const handleMessage = useCallback((msg: KernelResponse) => {
     switch (msg.type) {
@@ -78,65 +73,21 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
     }
   }, []);
 
-  // Connect to kernel with retry
-  useEffect(() => {
-    if (isWeb) {
-      import('../../platform/pyodideKernel').then(({ PyodideKernel }) => {
-        const k = new PyodideKernel((msg) => handleMessage(msg as KernelResponse));
-        k.init().then(
-          () => { pyodideRef.current = k; },
-          (e: unknown) => setError(e instanceof Error ? e.message : String(e)),
-        );
-      });
-      return;
-    }
+  const kernel = useLessonKernel({
+    onMessage: handleMessage,
+    onInitError: (message) => { setError(message); setIsRunning(false); },
+    onReady: () => sendParse(localCodeRef.current),
+  });
+  const { send: kernelSend } = kernel;
 
-    let ws: WebSocket | null = null;
-    let cancelled = false;
-    let retries = 0;
-    const maxRetries = 3;
-
-    function connect() {
-      void openAuthenticatedKernelSocket(
-        KERNEL_WS_URL,
-        platform.getKernelAuthToken?.bind(platform),
-      ).then((socket) => {
-        if (cancelled) { socket.close(); return; }
-        ws = socket;
-        attach(socket);
-      });
-    }
-    function attach(ws: WebSocket) {
-      ws.onopen = () => { wsRef.current = ws; retries = 0; };
-      ws.onmessage = (ev) => {
-        try { handleMessage(JSON.parse(ev.data)); } catch { /* noop */ }
-      };
-      ws.onclose = () => {
-        wsRef.current = null;
-        if (retries < maxRetries) {
-          retries++;
-          setTimeout(connect, 1000 * retries);
-        }
-      };
-      ws.onerror = () => ws?.close();
-    }
-
-    connect();
-    return () => { cancelled = true; ws?.close(); };
-  }, [handleMessage, isWeb, platform]);
-
-  const sendParse = useCallback((c: string) => {
+  function sendParse(c: string) {
     if (!isQuantumCode(c)) {
       setSnapshot(null);
       return;
     }
     // Learning content is Python-only today, so the language is fixed.
-    if (isWeb && pyodideRef.current) {
-      pyodideRef.current.send({ type: 'parse', code: c, language: 'python' });
-    } else if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'parse', code: c, language: 'python' }));
-    }
-  }, [isWeb]);
+    void kernelSend({ type: 'parse', code: c, language: 'python' });
+  }
 
   const handleRun = () => {
     setIsRunning(true);
@@ -154,17 +105,22 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
       setSnapshot(null);
     }
 
-    if (isWeb && pyodideRef.current) {
-      pyodideRef.current.send(message);
-    } else if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(message));
-    } else {
-      setError('Kernel not connected. Make sure the Python kernel is running.');
-      setIsRunning(false);
-    }
+    kernelSend(message).then(
+      (sent) => {
+        if (!sent) {
+          setError(DESKTOP_KERNEL_UNAVAILABLE);
+          setIsRunning(false);
+        }
+      },
+      (e: unknown) => {
+        setError(e instanceof Error ? e.message : String(e));
+        setIsRunning(false);
+      },
+    );
   };
 
   const handleReset = () => {
+    localCodeRef.current = initialCode;
     setLocalCode(initialCode);
     setResult(null);
     setSnapshot(null);
@@ -184,6 +140,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
 
   const handleCodeChange = (value: string | undefined) => {
     const v = value ?? '';
+    localCodeRef.current = v;
     setLocalCode(v);
     setUnsupported(null);
     sendParse(v);
@@ -217,9 +174,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
       </div>
 
       <div className={hasBelow ? 'demo__actions demo__actions--divided' : 'demo__actions'}>
-        <Button variant="primary" onClick={handleRun} loading={isRunning} icon={<Play size={12} fill="currentColor" aria-hidden="true" />}>
-          {isRunning ? 'Running...' : 'Run'}
-        </Button>
+        <LessonRunButton isRunning={isRunning} pythonLoading={kernel.loading} stage={kernel.stage} onRun={handleRun} />
         <Button onClick={handleReset} icon={<RotateCcw size={12} aria-hidden="true" />}>Reset</Button>
 
         {viewOptions.length > 1 && (
