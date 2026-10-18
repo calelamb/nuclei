@@ -21,7 +21,7 @@ interface BottomPanelState {
   setFilter: (filter: string) => void;
   focusTerminal: () => void;
   /** Ordinary output: never re-opens a Terminal the user collapsed; counts it as unread instead. */
-  noteOutput: () => void;
+  noteOutput: (lines?: number) => void;
   /** An error the user must see: forces the Terminal open. */
   noteError: () => void;
 }
@@ -49,7 +49,7 @@ export const useBottomPanelStore = create<BottomPanelState>((set, get) => ({
     if (layout.overrides.terminal === false) layout.clearPanelOverride('terminal');
     set({ collapsed: false, activeTab: 'terminal', unreadLines: 0 });
   },
-  noteOutput: () =>
-    set((s) => (s.collapsed || s.activeTab !== 'terminal' ? { unreadLines: s.unreadLines + 1 } : s)),
+  noteOutput: (lines = 1) =>
+    set((s) => (s.collapsed || s.activeTab !== 'terminal' ? { unreadLines: s.unreadLines + Math.max(1, lines) } : s)),
   noteError: () => get().focusTerminal(),
 }));

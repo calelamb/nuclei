@@ -44,6 +44,11 @@ export function getErrorContext(msg: Extract<KernelResponse, { type: 'error' }>)
   };
 }
 
+/** Terminal lines in a chunk of output (a trailing newline does not add one). */
+function countLines(text: string): number {
+  return text.split(/\r?\n/).filter((l, i, all) => l !== '' || i < all.length - 1).length;
+}
+
 /** Route one kernel response into the stores. Pure of React: all state lives in stores. */
 export function handleKernelMessage(msg: KernelResponse, connectTimers: ConnectTimers): void {
   switch (msg.type) {
@@ -137,12 +142,12 @@ export function handleKernelMessage(msg: KernelResponse, connectTimers: ConnectT
       // Live-preview (parse) output is noise from half-typed code: drop it.
       if (msg.phase === 'parse') break;
       useSimulationStore.getState().addOutput(msg.text, 'stdout');
-      useBottomPanelStore.getState().noteOutput();
+      useBottomPanelStore.getState().noteOutput(countLines(msg.text));
       break;
     case 'stderr':
       if (msg.phase === 'parse') break;
       useSimulationStore.getState().addOutput(msg.text, 'stderr');
-      useBottomPanelStore.getState().noteOutput();
+      useBottomPanelStore.getState().noteOutput(countLines(msg.text));
       break;
     case 'error': {
       // Resource-estimate failures belong to the Estimator panel, not the

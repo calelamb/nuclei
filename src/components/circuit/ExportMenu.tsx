@@ -84,8 +84,8 @@ export function ExportMenu() {
         entries={entries}
         onOpenChange={(open) => { if (open) flash(null, 0); }}
         trigger={(p) => (
-          <Button {...p} size="sm" icon={<ChevronDown size={12} />} className="nuclei-export-btn">
-            {notice && !failed ? <><Check size={12} aria-hidden="true" />Copied</> : 'Export'}
+          <Button {...p} size="sm" icon={notice && !failed ? <Check size={12} aria-hidden="true" /> : <ChevronDown size={12} />} className="nuclei-export-btn">
+            {notice && !failed ? 'Copied' : 'Export'}
           </Button>
         )}
       />

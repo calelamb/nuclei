@@ -13,6 +13,7 @@ import { CircuitEmptyState } from './CircuitEmptyState';
 import { ExportMenu } from './ExportMenu';
 import { useEdgeFades } from './edgeFades';
 import { fitCircuitWidth } from './fitCircuit';
+import { Tooltip as UiTooltip } from '../ui';
 import { useElementSize } from '../../hooks/useElementSize';
 import { GateExplorerPopup } from './GateExplorerPopup';
 import type { Gate } from '../../types/quantum';
@@ -212,11 +213,13 @@ export function CircuitRenderer() {
             {qubit_count} {qubit_count === 1 ? 'qubit' : 'qubits'} · depth {depth}
           </span>
           {stale && (
-            <span role="status" style={{ fontSize: 11, color: colors.warning, fontFamily: TYPOGRAPHY.fontSans, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {previewPaused
-                ? PREVIEW_PAUSED_CAPTION
-                : `Out of date: ${errorLine !== null ? `error on line ${errorLine}` : 'the code has an error'}`}
-            </span>
+            <UiTooltip label={previewPaused ? PREVIEW_PAUSED_CAPTION : 'The diagram shows the last code that parsed.'} placement="below">
+              <span role="status" aria-label={previewPaused ? PREVIEW_PAUSED_CAPTION : undefined} style={{ fontSize: 11, color: colors.warning, fontFamily: TYPOGRAPHY.fontSans, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {previewPaused
+                  ? 'Preview paused · Run to execute'
+                  : `Out of date: ${errorLine !== null ? `error on line ${errorLine}` : 'the code has an error'}`}
+              </span>
+            </UiTooltip>
           )}
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

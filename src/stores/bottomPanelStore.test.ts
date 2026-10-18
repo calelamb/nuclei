@@ -16,6 +16,12 @@ describe('bottomPanelStore output surfacing', () => {
     expect(s.unreadLines).toBe(2);
   });
 
+  it('counts every line of a multi-line chunk', () => {
+    useBottomPanelStore.getState().setCollapsed(true);
+    useBottomPanelStore.getState().noteOutput(3);
+    expect(useBottomPanelStore.getState().unreadLines).toBe(3);
+  });
+
   it('counts unread when another tab is showing, without stealing the tab', () => {
     useBottomPanelStore.getState().setActiveTab('histogram');
     useBottomPanelStore.getState().noteOutput();
