@@ -319,7 +319,7 @@ def _scored(
         descriptors={"parameters": n_params, "two_qubit_gates": costs["two_qubit_gates"]},
         metrics=metrics,
         guardrails=records,
-        compute={"backend": "numpy", "method": "statevector_sampling"},
+        compute={"backend": "numpy", "method": "statevector_exact"},
     )
 
 
