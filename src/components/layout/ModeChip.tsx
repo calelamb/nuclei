@@ -1,4 +1,5 @@
-import { modeChipTint } from './modeChipTint';
+import { modeChipHoverTint, modeChipTint } from './modeChipTint';
+import './modeChip.css';
 import { GraduationCap, FlaskConical } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useWorkspaceStore, type WorkspaceMode } from '../../stores/workspaceStore';
@@ -62,6 +63,7 @@ export function ModeChip() {
         <Tooltip label="Switch workspace mode" shortcut={shortcutLabel('switch-workspace')} placement="above">
           <button
             {...p}
+            className="mode-chip"
             aria-label="Switch workspace mode"
             data-tour-target="mode-chip"
             style={{
@@ -70,7 +72,9 @@ export function ModeChip() {
               gap: 5,
               height: 20,
               padding: '0 8px',
-              background: modeChipTint(accent),
+              ['--mode-chip-accent' as string]: accent,
+              ['--mode-chip-rest' as string]: modeChipTint(accent),
+              ['--mode-chip-hover' as string]: modeChipHoverTint(accent),
               border: `1px solid ${accent}`,
               borderRadius: 4,
               cursor: 'pointer',
