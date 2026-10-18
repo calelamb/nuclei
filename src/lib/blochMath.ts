@@ -111,8 +111,7 @@ export type BlochAudience = 'learn' | 'research';
 export function blochCaption(readout: BlochReadout, audience: BlochAudience, compact: boolean): string | null {
   if (audience === 'research') return compact ? readout.short : readout.summary;
   if (readout.kind === 'pure') return null;
-  if (readout.kind === 'mixed') return 'Entangled';
-  return compact ? readout.short : readout.summary;
+  return 'Entangled';
 }
 
 /** Every qubit in |0>: the Bloch vectors a circuit has before it runs. */

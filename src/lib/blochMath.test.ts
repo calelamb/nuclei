@@ -71,6 +71,8 @@ describe('blochCaption', () => {
     expect(blochCaption(pure, 'learn', false)).toBeNull();
     expect(blochCaption(mixed, 'learn', true)).toBe('Entangled');
     expect(blochCaption(mixed, 'learn', false)).toBe('Entangled');
-    expect(blochCaption(bell, 'learn', false)).toBe('Entangled · no single-qubit Bloch vector');
+    expect(blochCaption(bell, 'learn', false)).toBe('Entangled');
+    expect(blochCaption(bell, 'learn', true)).toBe('Entangled');
+    expect(blochCaption(bell, 'research', false)).toBe('Entangled · no single-qubit Bloch vector');
   });
 });
