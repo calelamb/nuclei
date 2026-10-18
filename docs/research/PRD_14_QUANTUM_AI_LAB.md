@@ -623,7 +623,9 @@ than 4 distinct n values.
   the projection residual is < 1e-9).
 - **Known-result tests are required:**
   - {Xᵢ} ∪ {ZᵢZᵢ₊₁} on an open chain: dim = n(2n−1) for n = 2..6.
-  - A real hardware-efficient ansatz (RY + CZ ladder, n = 3): dim = 28 (so(8)).
+  - A real hardware-efficient ansatz (RY + **brickwork** CZ, n = 3): dim = 28 (so(8)).
+    (Corrected after review: a plain *repeated* CZ ladder squares to the identity, so
+    only two effective-generator sets exist and dim = 12; both cases are tested.)
   - {Xᵢ, Yᵢ} ∪ {ZᵢZᵢ₊₁}, n = 3: dim = 63.
   - A single Z generator: dim = 1.
   - The QAOA ring with shared parameters (general path): a nontrivial value
