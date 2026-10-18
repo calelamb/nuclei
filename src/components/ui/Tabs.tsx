@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { cx } from './cx';
+import { Tooltip } from './Tooltip';
 
 export interface TabOption<T extends string> {
   value: T;
@@ -13,6 +14,8 @@ export interface TabOption<T extends string> {
   title?: string;
   /** Full accessible name when the visible label is an abbreviation ("3B1B" -> "3Blue1Brown"). */
   ariaLabel?: string;
+  /** Shared-Tooltip label for icon-only tabs (opens on hover and keyboard focus); replaces a native `title`. */
+  tooltip?: string;
 }
 
 export interface TabsProps<T extends string> {
@@ -86,9 +89,9 @@ export function Tabs<T extends string>({ value, options, onChange, 'aria-label':
     >
       {options.map((o) => {
         const selected = o.value === value;
-        return (
+        const tab = (
           <button
-            key={o.value}
+            key={o.tooltip ? undefined : o.value}
             type="button"
             role="tab"
             id={`${baseId}-${o.value}`}
@@ -107,6 +110,7 @@ export function Tabs<T extends string>({ value, options, onChange, 'aria-label':
             {o.count !== undefined && <span className="nuclei-tabs__count">{o.count}</span>}
           </button>
         );
+        return o.tooltip ? <Tooltip key={o.value} label={o.tooltip} placement="below">{tab}</Tooltip> : tab;
       })}
     </div>
   );

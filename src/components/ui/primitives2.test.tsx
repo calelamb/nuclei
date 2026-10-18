@@ -43,6 +43,32 @@ function Harness({ onChange }: { onChange?: (v: string) => void }) {
   );
 }
 
+describe('Tabs tooltip option', () => {
+  it('names an icon-only tab through the shared Tooltip on keyboard focus, with no native title', () => {
+    vi.useFakeTimers();
+    try {
+      render(
+        <Tabs
+          aria-label="Sections"
+          value="a"
+          onChange={() => undefined}
+          options={[
+            { value: 'a', label: <span aria-hidden="true">A</span>, ariaLabel: 'Alpha', tooltip: 'Alpha' },
+            { value: 'b', label: <span aria-hidden="true">B</span>, ariaLabel: 'Beta', tooltip: 'Beta' },
+          ]}
+        />,
+      );
+      const tab = screen.getByRole('tab', { name: 'Beta' });
+      expect(tab.getAttribute('title')).toBeNull();
+      act(() => { tab.focus(); });
+      act(() => { vi.advanceTimersByTime(500); });
+      expect(screen.getByRole('tooltip').textContent).toContain('Beta');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe('Tabs', () => {
   it('marks the active tab selected with a roving tab stop', () => {
     render(<Harness />);

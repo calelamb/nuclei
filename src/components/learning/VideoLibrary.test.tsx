@@ -7,16 +7,26 @@ import { CURATED_VIDEOS } from '../../data/videos/curatedLibrary';
 afterEach(cleanup);
 
 describe('VideoLibrary rail', () => {
-  it('uses the shared Tabs for creators and names the abbreviated tab in full', () => {
+  it('filters creators with a Select (chips were clipped at "Qiskit") and keeps every creator reachable', () => {
     render(<VideoLibrary />);
-    const tablist = screen.getByRole('tablist', { name: 'Creator' });
-    expect(tablist.className).toContain('nuclei-tabs');
-    expect(screen.getByRole('tab', { name: '3Blue1Brown' })).toBeTruthy();
+    const select = screen.getByRole('combobox', { name: 'Creator' });
+    const options = Array.from(select.querySelectorAll('option')).map((o) => o.textContent);
+    expect(options).toEqual(['All creators', '3Blue1Brown', 'IBM', 'NVIDIA', 'Qiskit']);
+    expect(screen.queryByRole('tablist')).toBeNull();
+  });
+
+  it('shows each video as a compact row: thumbnail, a two-line title and the creator, no description', () => {
+    render(<VideoLibrary />);
+    const row = document.querySelector('.vrow') as HTMLElement;
+    expect(row.querySelector('.vrow__thumb')).toBeTruthy();
+    expect(row.querySelector('.vrow__title')?.textContent).toBeTruthy();
+    expect(row.querySelector('.vrow__creator')?.textContent).toBeTruthy();
+    expect(row.querySelector('.vrow__desc')).toBeNull();
   });
 
   it('shares the creator and level filters with the chooser shelf', () => {
     render(<VideoLibrary />);
-    fireEvent.click(screen.getByRole('tab', { name: 'NVIDIA' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Creator' }), { target: { value: 'nvidia' } });
     const nvidia = CURATED_VIDEOS.filter((v) => v.creator === 'nvidia');
     expect(screen.getByText(`${nvidia.length} video${nvidia.length === 1 ? '' : 's'}`)).toBeTruthy();
     fireEvent.change(screen.getByRole('combobox', { name: 'Difficulty' }), { target: { value: 'advanced' } });

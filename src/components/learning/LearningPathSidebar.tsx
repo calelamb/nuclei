@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { ChevronRight, ChevronDown, CheckCircle2, Circle, CircleDot, Maximize2, BookOpen, Network, Trophy, Library } from 'lucide-react';
+import { lazy, Suspense, useState, type ReactNode } from 'react';
+import { ChevronRight, ChevronDown, CheckCircle2, Circle, CircleDot, Maximize2, BookOpen, Network, Trophy, Library, PlayCircle } from 'lucide-react';
 import { useLearnStore } from '../../stores/learnStore';
 import { TRACKS } from '../../data/lessons/tracks';
 import { ConceptSummary } from './ConceptSummary';
@@ -9,14 +9,25 @@ import { Button, Tabs, type TabOption } from '../ui';
 import { useLearnSectionStore } from './learnSectionStore';
 import './learnSidebar.css';
 
-type TabKey = 'tracks' | 'concepts' | 'capstones' | 'glossary';
+const VideoLibrary = lazy(async () => ({ default: (await import('./VideoLibrary')).VideoLibrary }));
 
-/** Icon tabs below 280px: the label stays in the DOM for assistive tech and the tooltip. */
+type TabKey = 'tracks' | 'concepts' | 'capstones' | 'glossary' | 'videos';
+
+function tab(value: TabKey, label: string, icon: ReactNode): TabOption<TabKey> {
+  return {
+    value,
+    tooltip: label,
+    label: <span className="lpath__tab-inner">{icon}<span className="lpath__tab-label">{label}</span></span>,
+  };
+}
+
+/** One strip for every section. Icon-only below 340px: the label stays in the DOM and in the shared tooltip. */
 const TAB_OPTIONS: ReadonlyArray<TabOption<TabKey>> = [
-  { value: 'tracks', label: <span className="lpath__tab-inner" title="Tracks"><BookOpen size={14} aria-hidden="true" /><span className="lpath__tab-label">Tracks</span></span> },
-  { value: 'concepts', label: <span className="lpath__tab-inner" title="Concepts"><Network size={14} aria-hidden="true" /><span className="lpath__tab-label">Concepts</span></span> },
-  { value: 'capstones', label: <span className="lpath__tab-inner" title="Capstones"><Trophy size={14} aria-hidden="true" /><span className="lpath__tab-label">Capstones</span></span> },
-  { value: 'glossary', label: <span className="lpath__tab-inner" title="Glossary"><Library size={14} aria-hidden="true" /><span className="lpath__tab-label">Glossary</span></span> },
+  tab('tracks', 'Tracks', <BookOpen size={14} aria-hidden="true" />),
+  tab('concepts', 'Concepts', <Network size={14} aria-hidden="true" />),
+  tab('capstones', 'Capstones', <Trophy size={14} aria-hidden="true" />),
+  tab('glossary', 'Glossary', <Library size={14} aria-hidden="true" />),
+  tab('videos', 'Videos', <PlayCircle size={14} aria-hidden="true" />),
 ];
 
 /**
@@ -116,6 +127,7 @@ export function LearningPathSidebar() {
         {activeTab === 'concepts' && <ConceptSummary />}
         {activeTab === 'capstones' && <CapstonesPanel />}
         {activeTab === 'glossary' && <Glossary />}
+        {activeTab === 'videos' && <Suspense fallback={null}><VideoLibrary /></Suspense>}
       </div>
 
       {activeTab === 'concepts' && (

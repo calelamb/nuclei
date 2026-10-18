@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useRef, useCallback, useMemo } from 'react';
+import { lazy, Suspense, useRef, useCallback, useMemo } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 import { FileExplorer } from '../explorer/FileExplorer';
 import { OpenFilesSection } from '../explorer/OpenFilesSection';
@@ -12,9 +12,6 @@ import { TYPOGRAPHY } from '../../styles/tokens';
 import { TextInput } from '../ui';
 const LearningPathSidebar = lazy(async () => ({
   default: (await import('../learning/LearningPathSidebar')).LearningPathSidebar,
-}));
-const VideoLibrary = lazy(async () => ({
-  default: (await import('../learning/VideoLibrary')).VideoLibrary,
 }));
 const PluginMarketplace = lazy(async () => ({
   default: (await import('../plugins/PluginMarketplace')).PluginMarketplace,
@@ -114,58 +111,6 @@ const VIEW_TITLES: Record<ActivityView, string> = {
   transpiler: 'Transpiler',
 };
 
-type LearningTab = 'tracks' | 'videos';
-
-function LearningSidebarTabs() {
-  const colors = useThemeStore((s) => s.colors);
-  const [activeTab, setActiveTab] = useState<LearningTab>('tracks');
-
-  const tabs: { key: LearningTab; label: string }[] = [
-    { key: 'tracks', label: 'Tracks' },
-    { key: 'videos', label: 'Videos' },
-  ];
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      <div style={{
-        display: 'flex',
-        borderBottom: `1px solid ${colors.border}`,
-        flexShrink: 0,
-      }}>
-        {tabs.map((tab) => {
-          const isActive = activeTab === tab.key;
-          return (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              style={{
-                flex: 1,
-                padding: '5px 0',
-                background: 'transparent',
-                border: 'none',
-                borderBottom: isActive ? `2px solid ${colors.accent}` : '2px solid transparent',
-                color: isActive ? colors.accentText : colors.textDim,
-                fontSize: 11,
-                fontWeight: 600,
-                fontFamily: TYPOGRAPHY.fontSans,
-                textTransform: 'uppercase',
-                letterSpacing: 0.3,
-                cursor: 'pointer',
-                transition: 'color 150ms, border-color 150ms',
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
-      <div style={{ flex: 1, overflow: 'hidden' }}>
-        {activeTab === 'tracks' ? <LearningPathSidebar /> : <VideoLibrary />}
-      </div>
-    </div>
-  );
-}
-
 export function Sidebar({ view, width, onWidthChange }: SidebarProps) {
   const colors = useThemeStore((s) => s.colors);
   const platform = usePlatform();
@@ -222,7 +167,7 @@ export function Sidebar({ view, width, onWidthChange }: SidebarProps) {
         {view === 'circuit' && <CircuitInfoPanel />}
         {view === 'learning' && (
           <SidebarSuspense>
-            <LearningSidebarTabs />
+            <LearningPathSidebar />
           </SidebarSuspense>
         )}
         {view === 'plugins' && (

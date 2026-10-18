@@ -2,34 +2,26 @@ import { useState } from 'react';
 import { CURATED_VIDEOS } from '../../data/videos/curatedLibrary';
 import type { CuratedVideo } from '../../data/videos/curatedLibrary';
 import { Play } from 'lucide-react';
-import { Badge, Select, Tabs, type TabOption } from '../ui';
+import { Select } from '../ui';
 import { CREATOR_FILTERS, CREATOR_LABEL, DIFFICULTY_FILTERS, filterVideos, type CreatorFilter, type DifficultyFilter } from './videoFilters';
-import { VIDEO_LEVEL_TONE } from './levelTone';
 import { VideoThumb } from './VideoThumb';
 import { openExternal, buildYouTubeWatchUrl } from '../../lib/openExternal';
 import './learnSidebar.css';
-
-const RAIL_CREATOR_TABS: ReadonlyArray<TabOption<CreatorFilter>> = CREATOR_FILTERS.map((f) => ({
-  value: f.value,
-  label: f.value === '3blue1brown' ? '3B1B' : f.label,
-  ariaLabel: f.value === '3blue1brown' ? CREATOR_LABEL['3blue1brown'] : undefined,
-}));
 
 function VideoRow({ video, onPlay }: { video: CuratedVideo; onPlay: (video: CuratedVideo) => void }) {
   return (
     <button type="button" className="vrow" onClick={() => onPlay(video)}>
       <div className="vrow__thumb">
-        <VideoThumb youtubeId={video.youtubeId} quality="mqdefault" className="vrow__img" width={120} height={68} />
-        <span className="vrow__play"><Play size={20} fill="currentColor" aria-hidden="true" /></span>
+        <VideoThumb youtubeId={video.youtubeId} quality="mqdefault" className="vrow__img" width={96} height={54} />
+        <span className="vrow__play"><Play size={16} fill="currentColor" aria-hidden="true" /></span>
         <span className="vrow__duration">{video.duration}</span>
       </div>
       <div className="vrow__info">
         <div className="vrow__title">{video.title}</div>
-        <div className="vrow__tags">
-          <Badge>{CREATOR_LABEL[video.creator]}</Badge>
-          <Badge tone={VIDEO_LEVEL_TONE[video.difficulty]} style={{ textTransform: 'capitalize' }}>{video.difficulty}</Badge>
+        <div className="vrow__meta">
+          <span className="vrow__creator">{CREATOR_LABEL[video.creator]}</span>
+          <span className="vrow__level">{video.difficulty}</span>
         </div>
-        <div className="vrow__desc">{video.description}</div>
       </div>
     </button>
   );
@@ -47,9 +39,10 @@ export function VideoLibrary() {
 
   return (
     <div className="vlib">
-      <Tabs className="vlib__tabs" aria-label="Creator" value={creatorFilter} options={RAIL_CREATOR_TABS} onChange={setCreatorFilter} />
-
-      <div className="vlib__levels">
+ <div className="vlib__filters">
+        <Select size="sm" aria-label="Creator" value={creatorFilter} onChange={(e) => setCreatorFilter(e.target.value as CreatorFilter)}>
+          {CREATOR_FILTERS.map((f) => <option key={f.value} value={f.value}>{f.value === 'all' ? 'All creators' : f.label}</option>)}
+        </Select>
         <Select size="sm" aria-label="Difficulty" value={difficultyFilter} onChange={(e) => setDifficultyFilter(e.target.value as DifficultyFilter)}>
           {DIFFICULTY_FILTERS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
         </Select>
