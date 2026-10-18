@@ -68,6 +68,17 @@ describe('Onboarding as a modal dialog', () => {
   });
 });
 
+describe('Learn level step Back button', () => {
+  it('offers a visible Back that returns to the chooser with focus on the first card', () => {
+    render(<Onboarding onComplete={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Learn quantum computing' }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: "I'm brand new" }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByRole('dialog', { name: 'Welcome to Nuclei' })).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Learn quantum computing' }));
+  });
+});
+
 describe('returning-user screen', () => {
   it('Continue completes WITHOUT choosing a path, so the stored UI mode is kept', () => {
     const onComplete = vi.fn();

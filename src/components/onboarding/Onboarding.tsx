@@ -3,7 +3,8 @@ import { useThemeStore } from '../../stores/themeStore';
 import { QuantumPlayground } from './QuantumPlayground';
 import { EASING, DURATION, prefersReducedMotion } from '../../lib/animations';
 
-import { TYPOGRAPHY } from '../../styles/tokens';
+import { ArrowLeft } from 'lucide-react';
+import { ICON_SIZE, TYPOGRAPHY } from '../../styles/tokens';
 import { Button, ChoiceCard } from '../ui';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { isWebBuild } from '../../platform/buildTarget';
@@ -188,6 +189,16 @@ function WelcomeScreen({ onSelect, onBack }: { onSelect: (path: OnboardingPath) 
             />
           ))}
         </div>
+
+        {/* After the cards in the DOM so focus still opens on the first level; placed top left by CSS. */}
+        <Button
+          variant="ghost"
+          icon={<ArrowLeft size={ICON_SIZE.sm} aria-hidden="true" />}
+          onClick={onBack}
+          style={{ position: 'absolute', top: 24, left: 24 }}
+        >
+          Back
+        </Button>
       </>
     </DialogFrame>
   );
