@@ -740,7 +740,7 @@
   }
 
   /* The leading instrument hosts the readable analysis and fills the canvas; an empty one stays a short card. */
-  .qec-investigation__panels > .qec-instrument--primary:not([data-empty='true']) {
+  .qec-investigation__panels > .qec-instrument--primary[data-panel='campaign-center']:not([data-empty='true']) {
     /* A definite height lets the plot inside measure its card and fill it. */
     height: max(520px, calc(100cqh - 24px));
   }
@@ -788,6 +788,11 @@
 .qec-investigation__rail { display: flex; min-width: 0; flex-direction: column; gap: 10px; }
 .qec-investigation__rail > .qec-instrument { flex: none; min-height: 0; }
 
+/* A figure with a natural size gives its card that height whatever the layout: the body never shrinks below its content. */
+.qec-investigation__panels[data-railed='true'] > .qec-instrument--primary:not([data-panel='campaign-center']) > .qec-instrument__body {
+  flex: 1 0 auto;
+}
+
 /* Below ~1080px the rail would be narrower than its figures: stack the instruments instead. */
 @container qec-canvas (max-width: 1079px) {
   .qec-investigation__panels[data-railed='true'] {
@@ -795,7 +800,12 @@
   }
 
   .qec-investigation__panels[data-railed='true'] > .qec-instrument--primary {
-    position: static; height: max(520px, calc(100cqh - 24px)); grid-column: 1 / -1;
+    position: static; max-height: none; grid-column: 1 / -1;
+  }
+
+  /* The analysis fills a screen-sized card; a figure with a natural size (the timeline) keeps all of it. */
+  .qec-investigation__panels[data-railed='true'] > .qec-instrument--primary[data-panel='campaign-center'] {
+    height: max(520px, calc(100cqh - 24px));
   }
 
   .qec-investigation__panels[data-railed='true'] > .qec-investigation__rail { display: contents; }

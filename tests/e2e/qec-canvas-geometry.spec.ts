@@ -155,7 +155,7 @@ async function silentlyClippedScrollers(page: Page): Promise<string[]> {
   }));
 }
 
-const DATA_VIEWPORTS = [{ width: 1440, height: 900 }, { width: 1920, height: 1080 }];
+const DATA_VIEWPORTS = [{ width: 1440, height: 900 }, { width: 1100, height: 800 }, { width: 1920, height: 1080 }];
 
 for (const viewport of DATA_VIEWPORTS) {
   for (const preset of ['Analyze', 'Build'] as const) {
@@ -175,6 +175,7 @@ for (const viewport of DATA_VIEWPORTS) {
       expect(leading.h, `${preset}: leading card height`).toBeLessThanOrEqual(viewport.height);
       expect(await emptyShare(page, leading.id), `${preset}: empty share of ${leading.id}`).toBeLessThan(0.25);
       expect(overlaps(boxes)).toEqual([]);
+      for (const box of boxes) expect(box.clipped, `${preset}: ${box.id} is cut off by its own card`).toBeLessThanOrEqual(1);
       // A side rail is never narrower than its figures need.
       for (const box of boxes.slice(1).filter((b) => b.x > leading.x + leading.w - 1)) {
         expect(box.w, `${preset}: rail card ${box.id} width`).toBeGreaterThanOrEqual(340);
