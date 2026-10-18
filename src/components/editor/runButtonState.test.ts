@@ -16,8 +16,42 @@ describe('getRunButtonState', () => {
       kernelStatus: 'connecting',
       kernelProgress: { step: 2, total: 3, label: 'Loading NumPy', fraction: 0.6 },
     });
-    expect(state).toMatchObject({ kind: 'loading', label: 'Loading 2/3', disabled: true });
-    expect(state.title).toBe('Loading NumPy (step 2 of 3)');
+    expect(state).toMatchObject({ kind: 'loading', label: 'Loading 2/3', queueable: true });
+    expect(state.title).toBe('Loading NumPy (step 2 of 3). Click to run as soon as Python is ready.');
+  });
+
+  it('is clickable while loading: a press queues the run instead of being swallowed', () => {
+    const state = getRunButtonState({
+      ...base,
+      kernelStatus: 'connecting',
+      kernelProgress: { step: 1, total: 3, label: 'Loading Python', fraction: 0.2 },
+    });
+    expect(state).toMatchObject({ kind: 'loading', disabled: false, queueable: true, queued: false });
+    expect(state.title).toContain('Click to run as soon as Python is ready');
+  });
+
+  it('once queued, the slot says Queued with the step and a second click cancels', () => {
+    const state = getRunButtonState({
+      ...base,
+      kernelStatus: 'connecting',
+      kernelProgress: { step: 2, total: 3, label: 'Loading NumPy', fraction: 0.6 },
+      runQueued: true,
+    });
+    expect(state).toMatchObject({ kind: 'loading', label: 'Queued · 2/3', disabled: false, queued: true });
+    expect(state.title).toBe('Runs as soon as Python is ready. Click to cancel.');
+  });
+
+  it('queued without a step count (desktop connect attempts, or before the first stage) carries no number', () => {
+    const attempts = getRunButtonState({
+      ...base, kernelStatus: 'connecting', runQueued: true,
+      kernelProgress: { step: 2, total: 15, kind: 'attempts', label: 'Starting kernel', fraction: 0.13 },
+    });
+    expect(attempts.label).toBe('Queued');
+    expect(getRunButtonState({ ...base, kernelStatus: 'connecting', runQueued: true }).label).toBe('Queued');
+  });
+
+  it('a failed kernel stays a disabled neutral status even if a stale queue flag lingers', () => {
+    expect(getRunButtonState({ ...base, kernelStatus: 'failed', runQueued: true })).toMatchObject({ kind: 'failed', disabled: true });
   });
 
   it('does not show connect attempts as n/m on desktop', () => {
@@ -26,7 +60,7 @@ describe('getRunButtonState', () => {
       kernelStatus: 'connecting',
       kernelProgress: { step: 2, total: 15, kind: 'attempts', label: 'Starting kernel', fraction: 0.13 },
     });
-    expect(state).toMatchObject({ kind: 'loading', label: 'Starting kernel…', disabled: true });
+    expect(state).toMatchObject({ kind: 'loading', label: 'Starting kernel…', queueable: true });
     expect(state.label).not.toMatch(/\d/);
   });
 

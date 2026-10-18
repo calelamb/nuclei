@@ -3,6 +3,7 @@ import { Play, Loader2, Rocket, AlertTriangle, Square } from 'lucide-react';
 import { useEditorStore } from '../../stores/editorStore';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useHardwareStore } from '../../stores/hardwareStore';
+import { useRunQueueStore } from '../../stores/runQueueStore';
 import { getExecute } from '../../App';
 import { canStopKernelRun, stopKernelRun } from '../../lib/kernelControl';
 import { shortcutLabel } from '../../config/keybindings';
@@ -24,6 +25,7 @@ export function RunControls({ density }: { density: TabBarDensity }) {
   const kernelError = useEditorStore((s) => s.kernelError);
   const kernelProgress = useEditorStore((s) => s.kernelProgress);
   const isRunning = useSimulationStore((s) => s.isRunning);
+  const runQueued = useRunQueueStore((s) => s.queued);
   const features = useUiFeatures();
   const compact = density !== 'full';
   const tight = density === 'tight';
@@ -34,7 +36,7 @@ export function RunControls({ density }: { density: TabBarDensity }) {
   }, [isRunning]);
 
   const platform = usePlatform();
-  const runState = getRunButtonState({ kernelReady, kernelStatus, kernelProgress, kernelError, isRunning, canStop: canStopKernelRun(), engine: platform.getPlatform() === 'web' ? 'Python' : 'Kernel' });
+  const runState = getRunButtonState({ kernelReady, kernelStatus, kernelProgress, kernelError, isRunning, runQueued, canStop: canStopKernelRun(), engine: platform.getPlatform() === 'web' ? 'Python' : 'Kernel' });
   const canRun = runState.kind === 'ready';
   const showFailed = runState.kind === 'failed';
 
@@ -42,6 +44,12 @@ export function RunControls({ density }: { density: TabBarDensity }) {
     if (runState.stoppable) {
       if (isAccidentalStop(e.detail, runStartedAt.current, performance.now())) return;
       stopKernelRun();
+      return;
+    }
+    if (runState.queueable) {
+      // Still starting: the first click queues the run (the same path as the shortcut), the second cancels it.
+      if (runState.queued) useRunQueueStore.getState().setQueued(false);
+      else getExecute()?.();
       return;
     }
     if (!canRun) return;

@@ -10,6 +10,10 @@ export interface RunButtonState {
   disabled: boolean;
   /** Clicking stops the running program instead of starting a run. */
   stoppable?: boolean;
+  /** Still starting: a click queues a run that fires the moment the kernel is ready. */
+  queueable?: boolean;
+  /** A run is already queued; a second click cancels it. */
+  queued?: boolean;
 }
 
 interface RunButtonInput {
@@ -22,6 +26,8 @@ interface RunButtonInput {
   canStop?: boolean;
   /** Names the engine in the failed label so the pill, status bar and banner share one name. */
   engine?: 'Python' | 'Kernel';
+  /** A run was requested (button or shortcut) while the kernel was still starting. */
+  runQueued?: boolean;
 }
 
 /** One truthful label for the toolbar's Run slot across every kernel state. */
@@ -49,18 +55,38 @@ export function getRunButtonState(input: RunButtonInput): RunButtonState {
       disabled: true,
     };
   }
+  return loadingState(input);
+}
+
+/** Still starting: Run is clickable (it queues), and shows what it is waiting on once queued. */
+function loadingState(input: RunButtonInput): RunButtonState {
+  const queued = Boolean(input.runQueued);
   // The toolbar is narrow, so the button carries the step count and the full
   // stage text lives in the tooltip and the status bar chip.
   const progress = input.kernelProgress;
-  if (progress?.kind === 'attempts') {
-    // Desktop connect retries are not stages; keep the count out of the label.
-    return { kind: 'loading', label: 'Starting kernel…', title: progress.label, disabled: true };
+  // Desktop connect retries are not stages; keep the count out of the label.
+  const counted = progress && progress.kind !== 'attempts' ? progress : null;
+  const ready = 'as soon as Python is ready';
+  if (queued) {
+    return {
+      kind: 'loading',
+      label: counted ? `Queued · ${counted.step}/${counted.total}` : 'Queued',
+      title: `Runs ${ready}. Click to cancel.`,
+      disabled: false,
+      queueable: true,
+      queued: true,
+    };
   }
+  const stage = counted
+    ? `${counted.label} (step ${counted.step} of ${counted.total})`
+    : progress?.label ?? 'Waiting for the Python kernel';
   return {
     kind: 'loading',
-    label: progress ? `Loading ${progress.step}/${progress.total}` : 'Starting…',
-    title: progress ? `${progress.label} (step ${progress.step} of ${progress.total})` : 'Waiting for the Python kernel',
-    disabled: true,
+    label: counted ? `Loading ${counted.step}/${counted.total}` : progress ? 'Starting kernel…' : 'Starting…',
+    title: `${stage}. Click to run ${ready}.`,
+    disabled: false,
+    queueable: true,
+    queued: false,
   };
 }
 

@@ -3,6 +3,7 @@ import { usePlatform } from '../platform/PlatformProvider';
 import { useEditorStore } from '../stores/editorStore';
 import { useCircuitStore } from '../stores/circuitStore';
 import { useSimulationStore } from '../stores/simulationStore';
+import { useRunQueueStore } from '../stores/runQueueStore';
 import { useBottomPanelStore } from '../stores/bottomPanelStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { kernelLanguageFor } from '../types/quantum';
@@ -375,6 +376,7 @@ export function useKernel() {
       // While Python is still starting, a Run is remembered and fires the
       // moment the kernel is ready (see the effect below), instead of being dropped.
       queuedRunRef.current = !failed;
+      useRunQueueStore.getState().setQueued(!failed);
       useSimulationStore.getState().addOutput(
         failed
           ? `The kernel is not running (${kernelError ?? 'start failed'}). Use Retry in the editor toolbar.`
@@ -386,6 +388,7 @@ export function useKernel() {
       return;
     }
     queuedRunRef.current = false;
+    useRunQueueStore.getState().setQueued(false);
 
     const { code } = useEditorStore.getState();
     const { shots } = useSimulationStore.getState();
@@ -431,9 +434,17 @@ export function useKernel() {
         queuedRunRef.current = false;
         execute();
       }
-      if (state.kernelStatus === 'failed') queuedRunRef.current = false;
+      if (state.kernelStatus === 'failed') {
+        queuedRunRef.current = false;
+        useRunQueueStore.getState().setQueued(false);
+      }
     });
   }, [execute]);
+
+  // The toolbar can cancel a queued run (second click on the Queued slot): drop the deferred run with it.
+  useEffect(() => useRunQueueStore.subscribe((state) => {
+    if (!state.queued) queuedRunRef.current = false;
+  }), []);
 
   // Send a hardware request over the desktop WebSocket. No-ops on web since
   // there's no local kernel process to talk to there.
