@@ -92,16 +92,15 @@
 }
 .nuclei-runs-row__cell[data-numeric='true'] { text-align: right; }
 
-/* stdout / stderr switch in run detail */
-.nuclei-output-tab {
-  height: var(--control-height-sm); padding: 0 var(--space-3); cursor: pointer;
-  border: 1px solid var(--color-border-strong); border-radius: var(--radius-soft); background: transparent;
-  color: var(--color-text-secondary); font-family: var(--font-sans); font-size: var(--font-size-caption);
-  font-weight: var(--font-weight-semibold); text-transform: uppercase; letter-spacing: 0.04em;
-  transition: background-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
+/* stdout / stderr switch in run detail (ui/Tabs) */
+.nuclei-output-tabs { margin-bottom: var(--space-2); }
+
+/* A quiet in-text action, e.g. "View traceback" beside an error summary. */
+.nuclei-link-button {
+  padding: 0; border: 0; background: transparent; cursor: pointer; flex: none;
+  color: var(--color-accent-quantum-text); font-family: var(--font-sans); font-size: var(--font-size-caption);
 }
-.nuclei-output-tab:hover { background: var(--color-surface-overlay); color: var(--color-text-primary); }
-.nuclei-output-tab[aria-selected='true'] { background: var(--color-surface-overlay); border-color: var(--color-accent-quantum); color: var(--color-text-primary); }
+.nuclei-link-button:hover { text-decoration: underline; }
 
 /* Noise model list rows */
 .nuclei-noise-row {

@@ -15,7 +15,7 @@ import { PanelHeader } from '../layout/PanelHeader';
 import type { CircuitSnapshot, SimulationResult } from '../../types/quantum';
 import type { RunRecord } from '../../types/experiment';
 import { TYPOGRAPHY, ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
-import { Button, IconButton } from '../ui';
+import { Button, IconButton, Tabs } from '../ui';
 import './experiments.css';
 
 type OutputTab = 'stdout' | 'stderr';
@@ -72,7 +72,7 @@ type RowValue =
   | { kind: 'text'; text: string }
   | { kind: 'chips'; chips: string[] }
   | { kind: 'copy'; text: string }
-  | { kind: 'error'; text: string };
+  | { kind: 'error'; summary: string };
 
 interface ManifestRowData {
   label: string;
@@ -87,7 +87,7 @@ function copyToClipboard(value: string): void {
   });
 }
 
-function ManifestRow({ row }: { row: ManifestRowData }) {
+function ManifestRow({ row, onViewTraceback }: { row: ManifestRowData; onViewTraceback?: () => void }) {
   const colors = useThemeStore((s) => s.colors);
   const { value } = row;
   const mono = { color: colors.text, fontSize: 11, fontFamily: TYPOGRAPHY.fontMono };
@@ -116,16 +116,22 @@ function ManifestRow({ row }: { row: ManifestRowData }) {
           </span>
         )}
         {value.kind === 'error' && (
-          <pre style={{
-            ...mono, margin: 0, padding: 8, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-            color: colors.error, background: `${colors.error}14`, border: `1px solid ${colors.error}`, borderRadius: 'var(--radius-xs)',
-          }}>
-            {value.text}
-          </pre>
+          <span style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
+            <span style={{ ...mono, color: colors.error, wordBreak: 'break-word' }}>{value.summary}</span>
+            {onViewTraceback && (
+              <button type="button" className="nuclei-link-button" onClick={onViewTraceback}>View traceback ↓</button>
+            )}
+          </span>
         )}
       </dd>
     </div>
   );
+}
+
+/** The last non-empty line of a traceback: the exception itself, without the stack above it. */
+function lastErrorLine(error: string): string {
+  const lines = error.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
+  return lines[lines.length - 1] ?? error;
 }
 
 function manifestRows(run: RunRecord, decimals: ReadonlyMap<string, number>): ManifestRowData[] {
@@ -144,8 +150,9 @@ function manifestRows(run: RunRecord, decimals: ReadonlyMap<string, number>): Ma
     { label: 'Versions', value: { kind: 'chips', chips: toChips(m.versions) } },
     { label: 'Started at', value: text(formatStartedAt(m.started_at)) },
     { label: 'Duration', value: text(`${m.duration_ms.toLocaleString()} ms`) },
-    { label: 'Error', value: m.error ? { kind: 'error', text: m.error } : text('—') },
   ];
+  // A complete run has no error to show; only failed runs get the row.
+  if (m.error) rows.push({ label: 'Error', value: { kind: 'error', summary: lastErrorLine(m.error) } });
   if (Object.keys(run.metrics).length > 0) {
     rows.push({ label: 'Metrics', value: { kind: 'chips', chips: toMetricChips(run.metrics, decimals) } });
   }
@@ -167,6 +174,7 @@ export function RunDetail() {
     : null;
 
   const backRef = useRef<HTMLButtonElement>(null);
+  const outputRef = useRef<HTMLElement>(null);
   const siblingRuns = selectedFileName ? runsByExperiment[selectedFileName] : undefined;
   const decimals = useMemo(() => metricDecimals(siblingRuns ?? []), [siblingRuns]);
 
@@ -248,7 +256,14 @@ export function RunDetail() {
           </div>
           <dl style={{ margin: 0 }}>
             {manifestRows(run, decimals).map((row) => (
-              <ManifestRow key={row.label} row={row} />
+              <ManifestRow
+                key={row.label}
+                row={row}
+                onViewTraceback={() => {
+                  setTab('stderr');
+                  outputRef.current?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+                }}
+              />
             ))}
           </dl>
         </section>
@@ -272,22 +287,15 @@ export function RunDetail() {
           </>
         )}
 
-        <section>
-          <div role="tablist" aria-label="Run output" style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
-            {(['stdout', 'stderr'] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                className="nuclei-output-tab"
-                onClick={() => setTab(t)}
-                role="tab"
-                aria-selected={tab === t}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-          <pre style={{
+        <section ref={outputRef}>
+          <Tabs
+            aria-label="Run output"
+            value={tab}
+            onChange={setTab}
+            options={[{ value: 'stdout', label: 'stdout' }, { value: 'stderr', label: 'stderr' }]}
+            className="nuclei-output-tabs"
+          />
+          <pre role="tabpanel" aria-label={tab} style={{
             margin: 0, padding: 12, background: colors.bgPanel, border: `1px solid ${colors.border}`,
             borderRadius: 'var(--radius-soft)', color: tab === 'stderr' ? colors.error : colors.text,
             fontSize: 11, fontFamily: TYPOGRAPHY.fontMono, whiteSpace: 'pre-wrap',
