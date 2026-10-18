@@ -48,6 +48,14 @@ describe('Transpiler Explorer platform honesty', () => {
     expect(useTranspileStore.getState().error).toBe("The kernel isn't connected. Check the status bar, then try again.");
   });
 
+  it('after a failed start, Transpile points at the failed start, not a dropped connection (research-r-03)', () => {
+    platform.web = false;
+    useEditorStore.setState({ kernelStatus: 'failed' });
+    render(<TranspilerControls />);
+    fireEvent.click(screen.getByRole('button', { name: /Transpile/ }));
+    expect(useTranspileStore.getState().error).toBe("Kernel didn't start. Check the status bar, then retry.");
+  });
+
   it('shows an engine failure as an alert with Retry that restarts the kernel', () => {
     platform.web = false;
     const retry = vi.fn();
