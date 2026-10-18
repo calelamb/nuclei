@@ -59,6 +59,8 @@ __all__ = ["lie_algebra", "ints_to_ops", "generator_label"]
 _COEFF_TOL = 1e-12
 _IN_ALGEBRA_TOL = 1e-9
 _ABELIAN_CHECK_LIMIT = 400
+#: skip g-purities on the Pauli-sum path when the basis has more nonzeros than this (pure-Python loops).
+_MAX_SUM_NNZ = 1_500_000
 _LETTER = {(1, 0): "X", (0, 1): "Z", (1, 1): "Y"}
 _GOH = "𝔤-sim, Goh et al. 2023 (arXiv:2308.01432)"
 
@@ -322,7 +324,8 @@ def lie_algebra(
         check_cancel(lambda: True)
     obs_terms = _conjugate_observable(observable, frame, n) if observable is not None else []
     purity, pred, abelian = None, None, False
-    if closure["status"] == "complete":
+    sum_too_big = path == "pauli_sums" and sum(len(v) for v in closure["basis"]) > _MAX_SUM_NNZ
+    if closure["status"] == "complete" and not sum_too_big:
         raw = (lie_core.g_purities(closure["basis"], obs_terms, n) if path == "pauli_strings"
                else _sum_purities(closure["basis"], obs_terms, n))
         purity = {"initial_state": raw["purity_state"],
@@ -331,7 +334,11 @@ def lie_algebra(
                   "state_in_algebra": raw["state_in_algebra"]}
         abelian = _is_abelian(gens, closure["dimension"], n)
         pred = _prediction(purity, closure["dimension"], abelian) if observable is not None else None
-    return _assemble(n, max_dimension, closure, gens, fixed, purity, path, shared, t0, abelian, pred)
+    out = _assemble(n, max_dimension, closure, gens, fixed, purity, path, shared, t0, abelian, pred)
+    if sum_too_big:
+        out["assumptions"].append("The Pauli-sum basis is too large for g-purities; purities and the prediction "
+                                  "are not computed.")
+    return out
 
 
 def _dense(items, circuit, observable, max_dimension, time_budget_s, cancel, fixed, shared, t0) -> dict:
