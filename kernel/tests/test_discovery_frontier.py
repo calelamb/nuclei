@@ -71,20 +71,22 @@ def test_registered_spec_contract():
     assert EVALUATORS["trainability_frontier"] is SPEC
     assert SPEC.task == "quantum_circuit" and SPEC.default_entry == "build"
     assert SPEC.entry_signature.startswith("build(n_qubits: int, n_layers: int)")
-    assert [o["key"] for o in SPEC.objectives] == ["beta", "estimation_hardness"]
-    assert [d["key"] for d in SPEC.descriptors] == ["log2_dla_dimension", "two_qubit_gates_per_layer"]
+    assert [o["key"] for o in SPEC.objectives] == ["beta", "pp_exact_cost"]
+    assert [o["label"] for o in SPEC.objectives][1] == "Pauli-propagation exact cost (log10 strings)"
+    assert [d["key"] for d in SPEC.descriptors] == [
+        "dla_fill_fraction", "light_cone_qubits", "two_qubit_gates_per_layer", "log2_dla_dimension"]
     defaults = normalize_config(SPEC, {})
     assert defaults["qubits"] == [8, 16, 32, 64] and defaults["n_layers"] == 4
     assert defaults["observable"] == "preset:local_z" and defaults["dla_probe_qubits"] == [4, 5, 6]
     assert defaults["max_parameters_per_qubit"] == 24
-    assert defaults["weights"] == {"trainability": 1.0, "hardness": 0.5}
+    assert defaults["weights"] == {"trainability": 1.0, "pp_cost": 0.5}
     assert defaults["estimation"]["target_width"] == 0.02 and defaults["estimation"]["max_frontier"] == 200000
 
 
 @pytest.mark.parametrize("bad", [
     {"qubits": [8]}, {"qubits": [2, 8]}, {"qubits": [8, 200]}, {"qubits": [4, 6, 8, 10, 12, 14, 16]},
     {"qubits": [16, 8]}, {"qubits": [8, 8]}, {"n_layers": 0}, {"unknown": 1}, {"observable": "Q1"},
-    {"observable": "Z40"}, {"estimation": {"max_frontier": 5}}, {"weights": {"speed": 1}},
+    {"observable": "Z40"}, {"estimation": {"max_frontier": 5}}, {"weights": {"speed": 1}}, {"weights": {"hardness": 1}},
     {"dla_probe_qubits": 12}, {"dla_probe_qubits": [4]}, {"dla_probe_qubits": [5, 4]}, {"dla_probe_qubits": [4, 12]},
     {"dla_probe_qubits": [4, 5, 6, 7]},
 ])
@@ -315,52 +317,53 @@ def test_scored_shape(scored):
     assert scored["status"] == "scored"
     assert [g["id"] for g in scored["guardrails"]] == IDS
     assert all(g["status"] == "pass" for g in scored["guardrails"])
-    assert set(scored["descriptors"]) == {"log2_dla_dimension", "two_qubit_gates_per_layer"}
+    assert set(scored["descriptors"]) == {
+        "dla_fill_fraction", "light_cone_qubits", "two_qubit_gates_per_layer", "log2_dla_dimension"}
     assert 0 <= scored["descriptors"]["log2_dla_dimension"] <= 12
+    assert scored["descriptors"]["dla_fill_fraction"] == pytest.approx(1.0, abs=1e-3)  # the brick fills su(64) at n = 6
+    assert scored["descriptors"]["light_cone_qubits"] == scored["metrics"]["light_cone"]["width"]
     assert scored["descriptors"]["two_qubit_gates_per_layer"] == pytest.approx(5.0)  # largest probe n=6 brick: 5 CZ per layer
     assert scored["compute"] == {"backend": "numpy", "method": "pauli_propagation_exact"}
     m = scored["metrics"]
     assert m["honesty"] == HONESTY
-    assert HONESTY.startswith("Hardness is resistance to *this* Pauli-propagation estimator under *this* budget.")
+    assert "*Pauli propagation*" in HONESTY and "not that the circuit is classically hard" in HONESTY
+    assert "It is not a proof of classical hardness." in HONESTY
     assert [p["n_qubits"] for p in m["variance_points"]] == SIZES
     assert all(p["method"] == "pauli_propagation_exact" and p["variance_ci95"][0] <= p["variance"] * (1 + 1e-12) for p in m["variance_points"])
     assert m["dla"]["dimension"] == 4095 and m["dla"]["classification"]["label"] == "su(64)"  # largest probe n = 6
     assert m["features"]["n_qubits"] == SIZES[-1] and m["features"]["entangler"] == "cz"
-    assert m["censored"] is m["hardness"]["censored"]
+    assert m["censored"] is m["pp_exact_cost"]["censored"]
 
 
 def test_fitness_is_the_documented_combination(scored):
     m, w = scored["metrics"], scored["metrics"]["settings"]["weights"]
     fit = m["fit"]
     assert fit["trainability_term"] == -min(fit["decay_per_doubling"], TRAIN_PENALTY_CAP)
-    expected = w["trainability"] * fit["trainability_term"] + w["hardness"] * m["hardness"]["hardness_lower"]
+    hardness = m["hardness"]
+    assert hardness["value"] == pytest.approx(min(hardness["pp_log10_strings"], m["light_cone"]["width"] * 0.30103))
+    expected = w["trainability"] * fit["trainability_term"] + w["pp_cost"] * hardness["value"]
     assert scored["fitness"] == pytest.approx(expected - m["exactness"]["penalty"])
     beta = scored["objectives"]["beta"]
     assert beta["direction"] == "minimize" and beta["fit_method"] == "weighted_log_fit"
     assert beta["ci95"][1] == pytest.approx(fit["beta_upper95"])
-    assert scored["objectives"]["estimation_hardness"]["direction"] == "maximize"
-    assert scored["objectives"]["estimation_hardness"]["value"] == m["hardness"]["hardness_lower"]
+    cost = scored["objectives"]["pp_exact_cost"]
+    assert cost["direction"] == "maximize" and cost["value"] == m["pp_exact_cost"]["log10_strings_lower"]
+    assert "estimation_hardness" not in scored["objectives"]
 
 
-def test_hardness_probe_is_pessimistic_over_three_points(scored):
-    hardness = scored["metrics"]["hardness"]
-    assert hardness["n_qubits"] == SIZES[-1] and len(hardness["points"]) == 3
-    assert hardness["hardness_lower"] == min(p["hardness"] for p in hardness["points"])
-    for point in hardness["points"]:
-        widths = [c["width"] for c in point["curve"]]
-        sizes = [c["max_frontier"] for c in point["curve"]]
-        assert sizes == sorted(sizes) and sizes[0] == 100
-        if not point["censored"]:
-            assert widths[-1] <= hardness["target_width"] and point["frontier_needed"] == sizes[-1]
-
-
-def test_censored_probe_reports_the_cap_not_a_measurement():
-    result = run(seed_like, {"estimation": {"max_frontier": 10000, "target_width": 1e-4}, "n_layers": 4})
-    hardness = result["metrics"]["hardness"]
-    assert result["status"] == "scored"
-    if hardness["censored"]:  # the lower bound on hardness is the cap itself
-        assert hardness["frontier_needed_lower"] == 10000 and hardness["hardness_lower"] == pytest.approx(4.0)
-        assert result["metrics"]["censored"] is True
+def test_exact_cost_is_the_untruncated_frontier_peak_at_the_largest_size(scored):
+    cost = scored["metrics"]["pp_exact_cost"]
+    assert cost["n_qubits"] == SIZES[-1] and len(cost["points"]) == 3
+    assert cost["log10_strings_lower"] == min(p["log10_strings"] for p in cost["points"])
+    assert cost["strings_lower"] == min(p["frontier_peak"] for p in cost["points"])
+    assert cost["censored"] is False and all(p["exact"] and not p["censored"] for p in cost["points"])
+    assert "needed" in cost["statement"] and "strings to compute <O> exactly" in cost["statement"]
+    l1 = SIZES[-1]  # term-normalised local_z: sum of n unit coefficients
+    assert all(-l1 <= p["interval"][0] <= p["interval"][1] <= l1 for p in cost["points"])
+    curve = cost["diagnostics"]["bound_width_curve"]
+    assert curve["role"] == "diagnostic_only" and curve["l1_bound"] == l1
+    sizes = [c["max_frontier"] for c in curve["curve"]]
+    assert sizes == sorted(sizes) and sizes[0] == 100
 
 
 def test_local_observable_may_scale_polynomially_and_still_score():
@@ -419,14 +422,14 @@ def test_deterministic_per_seed_and_independent_across_seeds(scored):
     assert again == scored
     other = run(seed_like, seed=4)
     assert other["metrics"]["variance_points"] == scored["metrics"]["variance_points"]  # exact PPE: no randomness
-    values = lambda r: [c["value"] for p in r["metrics"]["hardness"]["points"] for c in p["curve"]]  # noqa: E731
+    values = lambda r: [p["value"] for p in r["metrics"]["pp_exact_cost"]["points"]]  # noqa: E731
     assert values(other) != values(scored)
 
 
 def test_confirm_uses_an_independent_probe_stream_with_identical_variances(scored):
     confirm = run(seed_like, seed=3, stage="confirm")
     assert confirm["metrics"]["variance_points"] == scored["metrics"]["variance_points"]
-    values = lambda r: [c["value"] for p in r["metrics"]["hardness"]["points"] for c in p["curve"]]  # noqa: E731
+    values = lambda r: [p["value"] for p in r["metrics"]["pp_exact_cost"]["points"]]  # noqa: E731
     assert values(confirm) != values(scored)
     assert confirm["metrics"]["settings"]["stage"] == "confirm"
 

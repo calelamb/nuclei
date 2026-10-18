@@ -6,7 +6,7 @@ The stage rules of the addendum are split between this module and the scorer:
   probe) and ``max_frontier`` is divided by ``SCREEN_FRONTIER_DIVISOR`` inside the scorer
   (a static stage override cannot divide a user-chosen number).
 * ``full``: every qubit size.
-* ``confirm``: identical config; the scorer draws the hardness-probe parameter points from
+* ``confirm``: identical config; the scorer draws the cost-probe parameter points from
   an independent random stream (see ``STAGE_STREAM`` in ``_frontier_probe``).
 
 ``estimation.time_budget_s`` defaults to 20 (the addendum's 8 s is too tight: the seed's
@@ -38,7 +38,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "estimation": {"target_width": 0.02, "max_frontier": 200000, "time_budget_s": 20},
     "dla_probe_qubits": [4, 5, 6],
     "max_parameters_per_qubit": 24,
-    "weights": {"trainability": 1.0, "hardness": 0.5},
+    "weights": {"trainability": 1.0, "pp_cost": 0.5},
     "max_sizes": MAX_QUBIT_SIZES,
 }
 
@@ -56,7 +56,7 @@ CONFIG_SCHEMA: dict[str, Any] = {
         "estimation": {
             "type": "object", "additionalProperties": False,
             "properties": {
-                "target_width": {"type": "number", "minimum": 1e-6, "maximum": 1},
+                "target_width": {"type": "number", "minimum": 1e-6, "maximum": 1, "description": "diagnostics only"},
                 "max_frontier": {"type": "integer", "minimum": MIN_FRONTIER, "maximum": 5000000},
                 "time_budget_s": {"type": "number", "minimum": 0.05, "maximum": 120},
             },
@@ -70,7 +70,7 @@ CONFIG_SCHEMA: dict[str, Any] = {
             "type": "object", "additionalProperties": False,
             "properties": {
                 "trainability": {"type": "number", "minimum": 0, "maximum": 100},
-                "hardness": {"type": "number", "minimum": 0, "maximum": 100},
+                "pp_cost": {"type": "number", "minimum": 0, "maximum": 100},
             },
         },
         "max_sizes": {"type": "integer", "minimum": 2, "maximum": MAX_QUBIT_SIZES},
@@ -88,7 +88,7 @@ def validate_extra(config: dict[str, Any]) -> str | None:
     """Cross-field rules: ascending distinct sizes, and an observable valid at every size."""
     sizes = config["qubits"]
     if any(b <= a for a, b in zip(sizes, sizes[1:])):
-        return "qubits must be strictly ascending (the scaling fit and the hardness probe use the largest)"
+        return "qubits must be strictly ascending (the scaling fit and the exact-cost probe use the largest)"
     probes = config["dla_probe_qubits"]
     if any(b <= a for a, b in zip(probes, probes[1:])):
         return "dla_probe_qubits must be strictly ascending (the algebra is checked at every probe size)"

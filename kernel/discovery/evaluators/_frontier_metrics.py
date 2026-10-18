@@ -100,6 +100,19 @@ def structure_problem(
     return None
 
 
+def dla_fill_fraction(probe: dict[str, Any]) -> float:
+    """``log2(dim g) / log2(4^n - 1)`` at the probe size: how much of su(2^n) the ansatz generates.
+
+    ``n = 4`` saturates su(16) for nearly every rich ansatz, so the descriptor is read at the
+    largest probe (n = 6 by default), where poly-dimensional algebras (free fermions, XY-type
+    chains) separate cleanly from the full algebra: 1.0 is the full algebra, ~0.5 a quadratic one.
+    A closure that did not finish reports its lower bound.
+    """
+    n = probe["probe_qubits"]
+    dimension = probe["dimension"] if probe["dimension"] is not None else probe["dimension_lower_bound"]
+    return min(math.log2(max(dimension or 1, 1)) / math.log2(4 ** n - 1), 1.0)
+
+
 def two_qubit_gates_per_layer(features: dict[str, Any]) -> float:
     return float(features.get("two_qubit_gates_per_layer", 0.0))
 

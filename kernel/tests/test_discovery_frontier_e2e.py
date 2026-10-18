@@ -83,13 +83,15 @@ async def test_seed_passes_every_guardrail_at_the_default_config():
     assert all(g["status"] == "pass" for g in ev["guardrails"])
     assert elapsed < 120
     assert ev["evaluator"]["kind"] == "trainability_frontier" and ev["compute"]["method"] == "pauli_propagation_exact"
-    assert set(ev["descriptors"]) == {"log2_dla_dimension", "two_qubit_gates_per_layer"}
+    assert set(ev["descriptors"]) == {
+        "dla_fill_fraction", "light_cone_qubits", "two_qubit_gates_per_layer", "log2_dla_dimension"}
     m = ev["metrics"]
     assert [p["n_qubits"] for p in m["variance_points"]] == [8, 16, 32, 64]
-    assert m["dla"]["dimension"] == 4095 and m["hardness"]["censored"] is False
-    assert m["hardness"]["frontier_needed_lower"] == 10_000
+    assert m["dla"]["dimension"] == 4095 and m["pp_exact_cost"]["censored"] is False
+    assert 9_000 < m["pp_exact_cost"]["strings_lower"] < 11_000  # PP needs ~9.8k strings to compute <O> exactly
+    assert m["light_cone"]["width"] <= 13 and ev["objectives"]["pp_exact_cost"]["value"] == pytest.approx(3.99, abs=0.05)
     assert ev["fitness"] == pytest.approx(
-        m["terms"]["trainability"] + m["terms"]["hardness"] + m["terms"]["inexact_penalty"])
+        m["terms"]["trainability"] + m["terms"]["pp_cost"] + m["terms"]["inexact_penalty"])
     assert ev["fitness"] > 0 and ev["objectives"]["beta"]["ci95"][1] < 0.5
     # Candidate-line gradient map: the RY / RZ loops of the seed (recovered by trace_gate_lines).
     seed_lines = read_seed().splitlines()
@@ -134,5 +136,5 @@ def test_audit_agrees_on_the_seed_at_the_default_config():
     evaluation = SPEC.score(cfg, arts, 7, None, None, stage="full").to_dict()
     assert evaluation["status"] == "scored"
     report = frontier_audit.audit(cfg, arts, 7, evaluation=evaluation)
-    assert [c["status"] for c in report["checks"]] == ["pass"] * 7, report["checks"]
-    assert report["audit_fitness"] == pytest.approx(evaluation["fitness"], abs=0.6)
+    assert [c["status"] for c in report["checks"]] == ["pass"] * 9, report["checks"]
+    assert report["audit_fitness"] == pytest.approx(evaluation["fitness"], abs=0.35)

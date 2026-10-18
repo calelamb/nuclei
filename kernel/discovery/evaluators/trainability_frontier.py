@@ -2,24 +2,28 @@
 
 Cerezo et al. (arXiv:2312.09121) conjecture that every provably barren-plateau-free ansatz
 is classically simulable. This evaluator scores a candidate ansatz family ``build(n, L)`` on
-two axes that the conjecture says cannot both be good:
+two axes that the conjecture says cannot both be good (revised after the adversarial physics
+review; see addendum B):
 
-* **trainability**: the exact Pauli-propagation (PPE) gradient variance at each size, fitted
-  as ``Var ~ 2^(-beta n)``. The fitness term is ``-max(beta_upper95, 0)`` (upper 95% bound
-  of beta even when a polynomial law is preferred; flat or growing variance earns 0).
-* **estimation hardness**: how large a PPE frontier is needed to pin ``<O>`` to
-  ``target_width`` at the largest size (``log10``, pessimistic over 3 seeded points).
+* **trainability**: the exact Pauli-propagation (PPE) gradient variance of a term-normalised
+  observable at each size, fitted as a power law and as ``2^(-beta n)``. The fitness term is the
+  scaling-law penalty in bits of variance lost per doubling of n (``alpha_upper95`` for a power
+  law, ``beta_upper95 * n_max / 2`` for an exponential, capped), see ``_frontier_trainability``.
+* **Pauli-propagation exact cost** (``pp_exact_cost``): ``log10`` of the number of Pauli strings an
+  untruncated PPE run needs to compute ``<O>`` exactly at the largest size (censored at the budget),
+  capped in the fitness by the observable's light-cone brute-force cost, see ``_frontier_cost``.
 
-Honesty (mandatory): hardness is resistance to *this* Pauli-propagation estimator under
-*this* budget. It is not a proof of classical hardness. A high score is a lead to
-investigate, not a counterexample. Both numbers carry intervals and method labels, and a
-probe that exhausts the budget is reported as censored, never as a measured value.
+Honesty (mandatory): a high cost means *Pauli propagation* is expensive. It does not mean the
+circuit is classically hard: tensor networks, light-cone simulation and other methods may still
+be cheap. A high score is a lead to investigate, not a counterexample. Every number carries a
+method label, and a run that exhausts the budget is censored, never reported as a measurement.
 
 Guardrails (first-fail, in order): ``ir_conversion``, ``ppe_class``, ``qubit_count``,
-``parameter_budget``, ``nontrivial_variance`` (stops "beta = 0 because nothing depends on
-theta"), ``nontrivial_algebra`` (DLA dimension > 2n and no tensor-product structure: stops
-trivially trainable *and* trivially simulable product circuits) and ``exactness`` (WARN
-only: inexact variance points subtract ``INEXACT_PENALTY`` times their fraction).
+``parameter_budget``, ``nontrivial_variance`` (an *exact* smallest-n point with a non-negligible
+variance), ``nontrivial_algebra`` (no tensor-product structure at any size once gates that are
+trivial on |0...0> are removed, structural consistency across sizes, and a DLA above 4n^2 at every
+probe size) and ``exactness`` (WARN only: stopped, missing or wide variance points subtract
+``INEXACT_PENALTY`` times their fraction).
 """
 
 from __future__ import annotations
@@ -44,20 +48,17 @@ from kernel.discovery.evaluators._frontier_config import (
 )
 from kernel.discovery.evaluators._frontier_metrics import (
     algebra_verdict,
+    dla_fill_fraction,
     dla_probe,
     ppe_gradient_map,
     structure_problem,
     two_qubit_gates_per_layer,
 )
-from kernel.discovery.evaluators._frontier_structure import strip_trivial_prefix
+from kernel.discovery.evaluators._frontier_structure import LIGHT_CONE_SIMULABLE, light_cone_width, strip_trivial_prefix
 from kernel.discovery.evaluators._frontier_fitness import INEXACT_PENALTY, fitness_terms, inexact_sizes
 from kernel.discovery.evaluators._frontier_observable import frontier_observable
-from kernel.discovery.evaluators._frontier_probe import (
-    hardness_probe,
-    is_exact_point,
-    public_point,
-    variance_point,
-)
+from kernel.discovery.evaluators._frontier_cost import pp_exact_cost, scored_hardness
+from kernel.discovery.evaluators._frontier_probe import is_exact_point, public_point, variance_point
 from kernel.discovery.evaluators._frontier_trainability import fit_trainability
 from kernel.discovery.evaluators.base import EvaluationCore, EvaluatorSpec
 from kernel.discovery.evaluators.guardrails import FAIL, PASS, WARN, CheckResult, Guardrail, run_guardrails
@@ -71,7 +72,9 @@ KIND = "trainability_frontier"
 VERSION = "1.0.0"
 MIN_VARIANCE = 1e-6
 HONESTY = (
-    "Hardness is resistance to *this* Pauli-propagation estimator under *this* budget. "
+    "Cost is the number of Pauli strings *Pauli propagation* needed to compute <O> exactly (log10, "
+    "censored at the budget). A high cost means this estimator is expensive, not that the circuit is "
+    "classically hard: tensor networks, light-cone simulation and other methods may still be cheap. "
     "It is not a proof of classical hardness. A high score is a lead to investigate, not a counterexample."
 )
 
@@ -227,15 +230,15 @@ def _cancelled() -> EvaluationCore:
     )
 
 
-def _objectives(fit: dict[str, Any], hardness: dict[str, Any]) -> dict[str, Any]:
+def _objectives(fit: dict[str, Any], cost: dict[str, Any]) -> dict[str, Any]:
     return {
         "beta": {
             "value": fit["beta"], "ci95": fit["beta_ci95"], "fit_method": fit["fit_method"],
             "direction": "minimize", "label": "Barren-plateau exponent beta",
         },
-        "estimation_hardness": {
-            "value": hardness["hardness_lower"], "direction": "maximize",
-            "label": "Estimation hardness (log10 frontier)",
+        "pp_exact_cost": {
+            "value": cost["log10_strings_lower"], "direction": "maximize", "censored": cost["censored"],
+            "label": "Pauli-propagation exact cost (log10 strings)",
         },
     }
 
@@ -267,50 +270,55 @@ def _scored(
     config, est = run.config, run.config["estimation"]
     points = [run.point(n) for n in run.sizes]
     if progress is not None:
-        progress(0.5, "estimation hardness probe")
-    largest = run.circuit(run.sizes[-1])
-    hardness = hardness_probe(
-        largest, run.observable(largest, run.sizes[-1]), seed=seed, stage=run.stage,
-        target_width=est["target_width"], max_frontier=run.max_frontier,
-        time_budget_s=est["time_budget_s"], cancel=run.cancel,
+        progress(0.5, "Pauli-propagation exact-cost probe")
+    n_max = run.sizes[-1]
+    largest = run.circuit(n_max)
+    observable = run.observable(largest, n_max)
+    cost = pp_exact_cost(
+        largest, observable, seed=seed, stage=run.stage, max_frontier=run.max_frontier,
+        time_budget_s=est["time_budget_s"], target_width=est["target_width"], cancel=run.cancel,
     )
+    cone = light_cone_width(strip_trivial_prefix(largest), observable)
+    hardness = scored_hardness(cost, cone["width"])
     fit = fit_trainability(points, seed)
     weights = config["weights"]
+    terms = fitness_terms(weights, fit["trainability_term"], hardness["value"], points)
     inexact = inexact_sizes(points)
-    terms = fitness_terms(weights, fit["trainability_term"], hardness["hardness_lower"], points)
-    penalty = -terms["inexact_penalty"]
     fitness = sum(terms.values())
     features = extract_features(largest, n_layers=config["n_layers"])
     probe_features = extract_features(run.probe_circuit(len(run.probes) - 1), n_layers=config["n_layers"])
     dla = run.dla
-    assert dla is not None
-    smallest = run.circuit(run.sizes[0])
     exact = all(p["method"] == "pauli_propagation_exact" for p in points)
     metrics = {
         "variance_points": [public_point(p) for p in points],
         "fit": dict(fit),
-        "hardness": hardness,
-        "censored": hardness["censored"],
+        "pp_exact_cost": cost,
+        "hardness": {**hardness, "weight": weights["pp_cost"], "n_qubits": n_max},
+        "light_cone": {**cone, "simulable_threshold_qubits": LIGHT_CONE_SIMULABLE, "n_qubits": n_max},
+        "censored": cost["censored"],
         "dla": dla,
+        "dla_probes": run.dlas,
         "features": features,
-        "gradient_map": ppe_gradient_map(smallest, points[0], config["observable"]),
+        "gradient_map": ppe_gradient_map(run.circuit(run.sizes[0]), points[0], config["observable"]),
         "terms": terms,
-        "exactness": {"inexact_sizes": inexact, "penalty": penalty},
+        "exactness": {"inexact_sizes": inexact, "penalty": -terms["inexact_penalty"]},
         "settings": {
             "stage": run.stage, "sizes": run.sizes, "n_layers": config["n_layers"],
-            "observable": config["observable"], "max_frontier": run.max_frontier,
-            "time_budget_s": est["time_budget_s"], "target_width": est["target_width"],
-            "dla_probe_qubits": run.probes, "weights": dict(weights),
+            "observable": config["observable"], "observable_normalisation": "largest coefficient = 1",
+            "max_frontier": run.max_frontier, "time_budget_s": est["time_budget_s"],
+            "target_width": est["target_width"], "dla_probe_qubits": run.probes, "weights": dict(weights),
         },
         "honesty": HONESTY,
     }
     return EvaluationCore(
         status="scored",
         fitness=float(fitness),
-        objectives=_objectives(fit, hardness),
+        objectives=_objectives(fit, cost),
         descriptors={
-            "log2_dla_dimension": round(dla["log2_dimension"], 4),
+            "dla_fill_fraction": round(dla_fill_fraction(dla), 4),
+            "light_cone_qubits": cone["width"],
             "two_qubit_gates_per_layer": round(two_qubit_gates_per_layer(probe_features), 4),
+            "log2_dla_dimension": round(dla["log2_dimension"], 4),
         },
         metrics=metrics,
         guardrails=records,
@@ -326,19 +334,24 @@ SPEC = EvaluatorSpec(
     version=VERSION,
     title="Trainability frontier",
     description=(
-        "Search for ansatzes that stay trainable (low barren-plateau exponent, exact at 8-64 qubits via "
-        "Pauli propagation) yet resist that estimator. A high score is a lead to investigate, not a "
+        "Search for ansatzes that stay trainable (flat or polynomial gradient variance, exact at 8-64 qubits via "
+        "Pauli propagation) yet need many Pauli strings to evaluate exactly. A high score is a lead to investigate, not a "
         "counterexample to the Cerezo et al. simulability conjecture (arXiv:2312.09121)."
     ),
     task="quantum_circuit",
     entry_signature="build(n_qubits: int, n_layers: int) -> QuantumCircuit | cirq.Circuit",
     objectives=[
         {"key": "beta", "label": "Barren-plateau exponent beta", "direction": "minimize"},
-        {"key": "estimation_hardness", "label": "Estimation hardness (log10 frontier)", "direction": "maximize"},
+        {"key": "pp_exact_cost", "label": "Pauli-propagation exact cost (log10 strings)", "direction": "maximize"},
     ],
     descriptors=[
-        {"key": "log2_dla_dimension", "label": "log2 DLA dimension", "min": 0, "max": 12, "default_bins": 8},
+        {"key": "dla_fill_fraction", "label": "DLA fill fraction (log2 dim / log2 (4^n - 1))",
+         "min": 0, "max": 1, "default_bins": 8},
+        {"key": "light_cone_qubits", "label": "Observable light-cone width (qubits)",
+         "min": 0, "max": 64, "default_bins": 8},
         {"key": "two_qubit_gates_per_layer", "label": "Two-qubit gates per layer", "min": 0, "max": 64, "default_bins": 8},
+        {"key": "log2_dla_dimension", "label": "log2 DLA dimension (largest probe)", "min": 0, "max": 12,
+         "default_bins": 8},
     ],
     config_schema=CONFIG_SCHEMA,
     default_config=DEFAULT_CONFIG,

@@ -1,13 +1,12 @@
-"""PPE-backed measurements for ``trainability_frontier``: variance points and the hardness probe.
+"""PPE-backed variance points and probe-point sampling for ``trainability_frontier``.
 
 Everything here is a measurement with an explicit method label; none of it is a proof.
-The trainability fit lives in ``_frontier_trainability``.
+The trainability fit lives in ``_frontier_trainability``, the exact-cost probe in ``_frontier_cost``.
 """
 
 from __future__ import annotations
 
 import math
-import time
 from typing import Any, Callable
 
 import numpy as np
@@ -15,7 +14,7 @@ import numpy as np
 from kernel.discovery.evaluators._frontier_config import MIN_FRONTIER
 from kernel.trainability.ir import ParamCircuit
 from kernel.trainability.pauli import PauliSum
-from kernel.trainability.pauliprop import ppe_frontier_curve, ppe_gradient_variances
+from kernel.trainability.pauliprop import ppe_gradient_variances
 
 PROBE_POINTS = 3
 FRONTIER_BASE = 100
@@ -24,8 +23,6 @@ EXACT_REL_WIDTH = 0.10
 INFORMATIVE_RATIO = 2.0
 #: Independent random streams per stage so ``confirm`` never reuses ``full``'s points.
 STAGE_STREAM = {"screen": 1, "full": 2, "confirm": 3}
-#: Per-point probe cap, as a multiple of ``time_budget_s`` (each frontier size gets one budget).
-PROBE_BUDGET_FACTOR = 2.0
 
 Cancel = Callable[[], bool] | None
 
@@ -98,56 +95,3 @@ def probe_points(n_params: int, seed: int, stage: str, count: int = PROBE_POINTS
     """``count`` seeded parameter points ~ U[0, 2pi), shape ``(count, n_params)``."""
     rng = np.random.default_rng([abs(int(seed)), STAGE_STREAM.get(stage, 2)])
     return rng.uniform(0.0, 2.0 * math.pi, (count, n_params))
-
-
-def hardness_of_point(
-    circuit: ParamCircuit, observable: PauliSum, values: np.ndarray, *, target_width: float,
-    max_frontier: int, time_budget_s: float, cancel: Cancel = None,
-) -> dict[str, Any]:
-    """Walk the frontier grid until the interval width reaches ``target_width`` (or the grid ends)."""
-    deadline = time.monotonic() + PROBE_BUDGET_FACTOR * time_budget_s
-    curve: list[dict[str, Any]] = []
-    needed: int | None = None
-    for size in frontier_grid(max_frontier):
-        remaining = deadline - time.monotonic()
-        if remaining <= 0 and curve:
-            break
-        step = ppe_frontier_curve(
-            circuit, observable, values, frontier_sizes=[size],
-            time_budget_s=max(min(time_budget_s, remaining), 0.05), cancel=cancel,
-        )[0]
-        curve.append({
-            "max_frontier": int(step["max_frontier"]), "width": float(step["width"]),
-            "value": float(step["value"]), "interval": [float(x) for x in step["interval"]],
-            "method": step["method"],
-        })
-        if step["width"] <= target_width:
-            needed = int(size)
-            break
-    censored = needed is None
-    frontier_needed = int(max_frontier) if censored else needed
-    return {
-        "curve": curve, "frontier_needed": frontier_needed, "censored": censored,
-        "hardness": math.log10(frontier_needed),
-    }
-
-
-def hardness_probe(
-    circuit: ParamCircuit, observable: PauliSum, *, seed: int, stage: str, target_width: float,
-    max_frontier: int, time_budget_s: float, cancel: Cancel = None,
-) -> dict[str, Any]:
-    """The 3-point probe at the largest size; ``hardness_lower`` is the pessimistic minimum."""
-    values = probe_points(len(circuit.parameters), seed, stage)
-    points = [
-        hardness_of_point(
-            circuit, observable, row, target_width=target_width, max_frontier=max_frontier,
-            time_budget_s=time_budget_s, cancel=cancel,
-        ) | {"index": i}
-        for i, row in enumerate(values)
-    ]
-    worst = min(points, key=lambda p: p["hardness"])
-    return {
-        "n_qubits": circuit.n_qubits, "points": points, "hardness_lower": float(worst["hardness"]),
-        "frontier_needed_lower": int(worst["frontier_needed"]), "censored": bool(worst["censored"]),
-        "target_width": target_width, "max_frontier": int(max_frontier),
-    }

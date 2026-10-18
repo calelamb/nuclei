@@ -18,10 +18,10 @@ def inexact_sizes(points: list[dict[str, Any]]) -> list[int]:
 def fitness_terms(
     weights: dict[str, float], trainability_term: float, hardness_value: float, points: list[dict[str, Any]],
 ) -> dict[str, float]:
-    """``{"trainability", "hardness", "inexact_penalty"}``; fitness is their sum."""
+    """``{"trainability", "pp_cost", "inexact_penalty"}``; fitness is their sum."""
     penalty = INEXACT_PENALTY * len(inexact_sizes(points)) / len(points)
     return {
         "trainability": weights["trainability"] * trainability_term,
-        "hardness": weights["hardness"] * hardness_value,
+        "pp_cost": weights["pp_cost"] * hardness_value,
         "inexact_penalty": -penalty,
     }
