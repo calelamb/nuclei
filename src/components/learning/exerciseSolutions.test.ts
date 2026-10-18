@@ -48,6 +48,7 @@ describe('exercise grading accepts honest solutions and rejects near misses', ()
   it('12.4 and 8.1 accept a real solution', () => {
     const t = 'qc.h(0)\nqc.ccx(0,1,3)\nqc.cx(0,3)\nqc.cx(1,2)\nt = transpile(qc, backend, optimization_level=3)\nprint(qc.depth(), t.depth())\n';
     expect(grade('12.4-ex1', t, ['orig 3 4', 't 14 22']).success).toBe(true);
+    expect(grade('12.4-ex1', t, ['depth 14']).success).toBe(false);
     const eve = 'ev = 1\nif eve_bases[i] == "X":\n    qc.h(0)\nqc.measure(0, 0)\nqc.measure(0, 0)\n';
     expect(grade('8.1-ex1', eve, ['Error rate: 22.2%']).success).toBe(true);
   });
