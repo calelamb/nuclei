@@ -1,0 +1,2 @@
+/* The bottom panel's tab strip sits inside its own bordered header, so the strip drops its own rule. */
+.nuclei-tabs.bottom-panel-tabs { border-bottom: none; overflow: visible; }

@@ -4,10 +4,11 @@ import { useThemeStore } from '../../stores/themeStore';
 import { useSimulationStore, type TerminalLine } from '../../stores/simulationStore';
 import { useDiracStore } from '../../stores/diracStore';
 import { useEditorStore } from '../../stores/editorStore';
-import { useBottomPanelStore } from '../../stores/bottomPanelStore';
+import { useBottomPanelStore, type BottomPanelTab } from '../../stores/bottomPanelStore';
 import { ProbabilityHistogram } from '../histogram/ProbabilityHistogram';
 import { TYPOGRAPHY } from '../../styles/tokens';
-import { Button, IconButton, Tooltip } from '../ui';
+import { Badge, Button, IconButton, Tabs, Tooltip } from '../ui';
+import './bottomPanel.css';
 
 /* ── Terminal Panel ── */
 
@@ -302,6 +303,7 @@ export function BottomPanel({
   const toggleCollapsed = useBottomPanelStore((s) => s.toggleCollapsed);
   const setCollapsed = useBottomPanelStore((s) => s.setCollapsed);
   const setActiveTab = useBottomPanelStore((s) => s.setActiveTab);
+  const unreadLines = useBottomPanelStore((s) => s.unreadLines);
   const result = useSimulationStore((s) => s.result);
   const colors = useThemeStore((s) => s.colors);
 
@@ -321,7 +323,7 @@ export function BottomPanel({
     }
   }, [showFullHistogram, activeTab, setActiveTab]);
 
-  const tabs: Array<'terminal' | 'histogram'> = showFullHistogram
+  const tabs: Array<BottomPanelTab> = showFullHistogram
     ? ['terminal', 'histogram']
     : ['terminal'];
 
@@ -329,18 +331,18 @@ export function BottomPanel({
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Panel header */}
       <div style={{ height: 28, display: 'flex', alignItems: 'center', borderBottom: collapsed ? 'none' : `1px solid ${colors.border}`, backgroundColor: colors.bg, flexShrink: 0 }}>
-        {tabs.map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => { if (collapsed) setCollapsed(false); setActiveTab(tab); }}
-            className="nuclei-panel-tab"
-            role="tab"
-            aria-selected={!collapsed && activeTab === tab}
-          >
-            {tab}
-          </button>
-        ))}
+        <Tabs
+          aria-label="Bottom panel"
+          className="bottom-panel-tabs"
+          value={activeTab}
+          onChange={(tab) => { if (collapsed) setCollapsed(false); setActiveTab(tab); }}
+          options={tabs.map((tab) => ({
+            value: tab,
+            label: tab === 'terminal'
+              ? <>Terminal{unreadLines > 0 && <Badge tone="accent" aria-label={`${unreadLines} unread lines`}>{unreadLines > 99 ? '99+' : unreadLines}</Badge>}</>
+              : 'Histogram',
+          }))}
+        />
         <div style={{ flex: 1 }} />
         <IconButton size="sm" onClick={toggleCollapsed} aria-label={collapsed ? 'Expand panel' : 'Collapse panel'} tooltip={{ placement: 'above' }} style={{ marginRight: 6 }}>
           {collapsed ? <ChevronUp size={12} /> : <ChevronDown size={12} />}

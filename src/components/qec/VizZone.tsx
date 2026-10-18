@@ -1,6 +1,7 @@
 import { useMemo, type ReactNode } from 'react';
 import { LayoutGrid, Grid3x3, Share2, Orbit, Play, Workflow, type LucideIcon } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
+import { useSimulationStore } from '../../stores/simulationStore';
 import { useQecStore } from '../../stores/qecStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useVizZoneStore } from '../../stores/vizZoneStore';
@@ -129,6 +130,15 @@ const FILL_STYLE = { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'col
  */
 function RunPrompt() {
   const colors = useThemeStore((s) => s.colors);
+  const isRunning = useSimulationStore((s) => s.isRunning);
+  if (isRunning) {
+    return (
+      <div role="status" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24, textAlign: 'center' }}>
+        <Orbit size={28} strokeWidth={1.25} color={colors.accentText} aria-hidden="true" style={{ animation: 'nuclei-heartbeat 1.5s ease infinite' }} />
+        <p style={{ margin: 0, fontSize: 13, color: colors.textMuted, fontFamily: TYPOGRAPHY.fontSans }}>Running&hellip;</p>
+      </div>
+    );
+  }
   return (
     <div style={{
       flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center',
