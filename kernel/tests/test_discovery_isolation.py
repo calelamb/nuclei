@@ -243,7 +243,7 @@ def test_python_read_roots_cover_the_interpreter_and_kernel_but_not_home():
 
 
 def test_bwrap_argv_binds_only_what_is_needed_read_only():
-    argv = iso._bwrap_wrap(["python", "-I", "w.py"], ["/venv", "/repo/kernel"])
+    argv = iso._bwrap_wrap(["python", "-I", "w.py"], "/tmp/nuclei-cand-abc", ["/venv", "/repo/kernel"])
     assert argv[:4] == ["bwrap", "--unshare-net", "--unshare-pid", "--die-with-parent"]
     binds = [argv[i + 1] for i, a in enumerate(argv) if a == "--ro-bind"]
     assert binds == ["/venv", "/repo/kernel"]
@@ -254,6 +254,12 @@ def test_bwrap_argv_binds_only_what_is_needed_read_only():
         assert private not in argv
     assert argv[-3:] == ["python", "-I", "w.py"]
     assert "--tmpfs" in argv and "--dev" in argv
+    # The scratch dir is the only writable bind, and comes after the private /tmp.
+    i = argv.index("--bind")
+    assert argv[i + 1 : i + 3] == ["/tmp/nuclei-cand-abc", "/tmp/nuclei-cand-abc"]
+    assert i > argv.index("--tmpfs")
+    assert [a for a in argv if a == "--bind"] == ["--bind"]
+    assert iso.IsolationInfo(iso.MODE_BWRAP, iso._bwrap_wrap, scratch_aware=True).command(["x"], "/tmp/s")[-1] == "x"
 
 
 def test_isolation_detail_is_honest_about_reads():

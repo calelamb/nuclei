@@ -141,21 +141,28 @@ def repo_root() -> str:
     return _real(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 
-def _bwrap_wrap(cmd: list[str], roots: list[str] | None = None) -> list[str]:
-    """``bwrap`` argv that binds ONLY what the worker needs, read-only (RT-H2, Linux)."""
+def _bwrap_wrap(cmd: list[str], scratch: str | None = None, roots: list[str] | None = None) -> list[str]:
+    """``bwrap`` argv that binds ONLY what the worker needs, read-only (RT-H2, Linux).
+
+    The host root is no longer mounted: the worker sees the system library dirs, the
+    interpreter prefixes, site-packages and ``kernel/`` (read-only), a private ``/tmp``
+    and, when given, its writable per-evaluation ``scratch`` directory.
+    """
     argv = ["bwrap", "--unshare-net", "--unshare-pid", "--die-with-parent"]
     for system in _LINUX_SYSTEM_RO:
         argv += ["--ro-bind-try", system, system]
-    # Paths under /usr that are symlinks on merged-usr systems.
-    argv += ["--symlink", "usr/lib", "/lib", "--symlink", "usr/lib64", "/lib64", "--symlink", "usr/bin", "/bin"]
     for root in roots if roots is not None else python_read_roots():
         argv += ["--ro-bind", root, root]
-    argv += ["--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp", *cmd]
-    return argv
+    argv += ["--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp"]
+    if scratch is not None:
+        argv += ["--bind", scratch, scratch]
+    return [*argv, *cmd]
 
+
+_bwrap_wrap.scratch_aware = True  # type: ignore[attr-defined]
 
 # System directories the dynamic loader, libc and the zoneinfo/locale lookups need.
-_LINUX_SYSTEM_RO = ("/usr", "/etc/ld.so.cache", "/etc/localtime", "/etc/ssl/certs", "/usr/share/zoneinfo")
+_LINUX_SYSTEM_RO = ("/usr", "/lib", "/lib64", "/bin", "/sbin", "/etc/ld.so.cache", "/etc/ld.so.conf", "/etc/ld.so.conf.d", "/etc/localtime")
 
 
 def mac_profile(scratch: str | None, roots: list[str]) -> tuple[str, list[str]]:
