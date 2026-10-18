@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { render, cleanup } from '@testing-library/react';
+import { render, cleanup, fireEvent } from '@testing-library/react';
 import { StatusBar } from './StatusBar';
 import { PlatformProvider } from '../../platform/PlatformProvider';
 import type { PlatformBridge } from '../../platform/bridge';
@@ -10,6 +10,7 @@ import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useExperimentRunStore } from '../../stores/experimentRunStore';
 import { useLearnStore } from '../../stores/learnStore';
+import { useUIModeStore } from '../../stores/uiModeStore';
 import { useNavigationStore } from '../../stores/navigationStore';
 
 const bridge: PlatformBridge = {
@@ -192,11 +193,23 @@ describe('StatusBar controls', () => {
   it('offers the UI-mode control in Learn but not in Research', () => {
     useWorkspaceStore.setState({ mode: 'learn' });
     const learn = renderStatusBar();
-    expect(learn.getByRole('button', { name: /^UI mode:/ })).toBeTruthy();
+    expect(learn.getByRole('button', { name: /^Level:/ })).toBeTruthy();
     learn.unmount();
 
     useWorkspaceStore.setState({ mode: 'research' });
     const research = renderStatusBar();
-    expect(research.queryByRole('button', { name: /^UI mode:/ })).toBeNull();
+    expect(research.queryByRole('button', { name: /^Level:/ })).toBeNull();
+  });
+
+  it('opens a level menu instead of cycling blindly on click', () => {
+    useWorkspaceStore.setState({ mode: 'learn' });
+    useUIModeStore.setState({ mode: 'intermediate' });
+    const { getByRole, getAllByRole } = renderStatusBar();
+    fireEvent.click(getByRole('button', { name: 'Level: Intermediate' }));
+    const items = getAllByRole('menuitemradio');
+    expect(items).toHaveLength(3);
+    expect(useUIModeStore.getState().mode).toBe('intermediate');
+    fireEvent.click(items[0]);
+    expect(useUIModeStore.getState().mode).toBe('beginner');
   });
 });

@@ -10,7 +10,5 @@ export function tabFocusToggleLabel(mac: boolean = isMacPlatform()): string {
  */
 export function tabFocusHint(tabMovesFocus: boolean, mac: boolean = isMacPlatform()): string {
   const key = tabFocusToggleLabel(mac);
-  return tabMovesFocus
-    ? `Tab moves focus · ${key} to indent with Tab`
-    : `Tab indents · ${key} to move focus with Tab`;
+  return tabMovesFocus ? `Tab moves focus · ${key} to indent` : `${key}: Tab moves focus`;
 }

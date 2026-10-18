@@ -5,14 +5,14 @@ import { useSimulationStore } from '../../stores/simulationStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { TYPOGRAPHY } from '../../styles/tokens';
-import { useUIModeStore } from '../../stores/uiModeStore';
+import { useUIModeStore, type UIMode } from '../../stores/uiModeStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useExperimentRunStore } from '../../stores/experimentRunStore';
 import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 import { useExerciseStore } from '../../stores/exerciseStore';
 import { useLayoutStore, type LayoutPreset } from '../../stores/layoutStore';
 import { ModeChip } from './ModeChip';
-import { IconButton, Select, Tooltip } from '../ui';
+import { IconButton, Menu, Select, Tooltip, type MenuEntry } from '../ui';
 import { shortcutLabel } from '../../config/keybindings';
 import { useEditorFocusStore } from '../../stores/editorFocusStore';
 import { tabFocusHint } from '../../lib/tabFocusHint';
@@ -32,6 +32,45 @@ import { useMainAreaTakeover } from '../../layout/takeover';
  * (`StatusBar.test.tsx`) proves the extracted component matches the pre-
  * extraction output.
  */
+
+/* ── Learn level picker ── */
+const LEVEL_OPTIONS: ReadonlyArray<{ value: UIMode; label: string; hint: string }> = [
+  { value: 'beginner', label: 'Beginner', hint: 'Editor and results only' },
+  { value: 'intermediate', label: 'Intermediate', hint: 'Adds Explorer and hardware' },
+  { value: 'advanced', label: 'Advanced', hint: 'Adds the Dirac agent' },
+];
+
+function UiLevelMenu() {
+  const uiMode = useUIModeStore((s) => s.mode);
+  const setMode = useUIModeStore((s) => s.setMode);
+  const label = LEVEL_OPTIONS.find((o) => o.value === uiMode)?.label ?? uiMode;
+  const entries: MenuEntry[] = LEVEL_OPTIONS.map((o) => ({
+    id: o.value, label: o.label, hint: o.hint, checked: o.value === uiMode, onSelect: () => setMode(o.value),
+  }));
+  const cycleKeys = shortcutLabel('cycle-ui-mode');
+  return (
+    <Menu
+      label="Level"
+      placement="top-end"
+      entries={entries}
+      trigger={(p) => (
+        <Tooltip label="Change level" shortcut={cycleKeys} placement="above">
+          <button
+            {...p}
+            aria-label={`Level: ${label}`}
+            className="nuclei-quiet"
+            style={{
+              padding: '0 8px', height: 20, background: 'transparent', border: 'none', borderRadius: 4,
+              cursor: 'pointer', fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, fontWeight: 500,
+            }}
+          >
+            Level: {label}
+          </button>
+        </Tooltip>
+      )}
+    />
+  );
+}
 
 /* ── Layout Preset Switcher ── */
 function LayoutPresetSwitcher() {
@@ -85,8 +124,6 @@ export function StatusBar() {
   const kernelError = useEditorStore((s) => s.kernelError);
   const kernelProgress = useEditorStore((s) => s.kernelProgress);
   const colors = useThemeStore((s) => s.colors);
-  const uiMode = useUIModeStore((s) => s.mode);
-  const cycleMode = useUIModeStore((s) => s.cycleMode);
   const features = useUiFeatures();
   const editorFocused = useEditorFocusStore((s) => s.focused);
   const tabMovesFocus = useEditorFocusStore((s) => s.tabMovesFocus);
@@ -249,22 +286,7 @@ export function StatusBar() {
           <span>Commands</span>
         </button>
       </Tooltip>
-      {workspaceMode === 'learn' && (
-        <Tooltip label="Cycle UI mode" shortcut={shortcutLabel('cycle-ui-mode')}>
-          <button
-            onClick={cycleMode}
-            aria-label={`UI mode: ${uiMode}. Click to change`}
-            className="nuclei-quiet"
-            style={{
-              padding: '0 8px', height: 20, background: 'transparent', border: 'none', borderRadius: 4,
-              cursor: 'pointer', fontSize: 11, fontFamily: TYPOGRAPHY.fontSans,
-              fontWeight: 500, textTransform: 'capitalize',
-            }}
-          >
-            {uiMode}
-          </button>
-        </Tooltip>
-      )}
+      {workspaceMode === 'learn' && <UiLevelMenu />}
       <Tooltip label={`Switch to ${themeMode === 'dark' ? 'light' : 'dark'} theme`} shortcut={shortcutLabel('toggle-theme')}>
         <button
           onClick={themeToggle}
