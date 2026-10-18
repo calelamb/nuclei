@@ -1,4 +1,4 @@
-import { Badge, type BadgeTone } from '../ui';
+import { Badge, Checkbox, type BadgeTone } from '../ui';
 import { formatRunLabel, isNumericColumn, getRunValue, type RunColumn } from './runsTableColumns';
 import type { RunRecord, RunStatus } from '../../types/experiment';
 import { ROW_NAV_KEYS } from './runsTableNavigation';
@@ -84,11 +84,10 @@ export function RunsTableRow({
         className="nuclei-runs-row__check"
         onClick={(e) => e.stopPropagation()}
       >
-        <input
-          type="checkbox"
+        <Checkbox
           checked={compareSelected}
           tabIndex={active ? 0 : -1}
-          onChange={() => onToggleCompare(run.dir)}
+          onCheckedChange={() => onToggleCompare(run.dir)}
           aria-label={`Select ${run.dir} for comparison`}
         />
       </div>
