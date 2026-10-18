@@ -112,18 +112,17 @@ export function createKernelEvaluator({ session, info, sleep, timeoutMs = DEFAUL
   function attempt(request: EvalRequest): Promise<DiscoveryEvaluation> {
     const key = keyOf(request.runId, request.wireId);
     return new Promise((resolve) => {
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      const settle = (evaluation: DiscoveryEvaluation) => {
-        if (waiters.get(key)?.settle !== settle) return;
-        waiters.delete(key);
-        if (timer) clearTimeout(timer);
-        resolve(evaluation);
-      };
-      waiters.set(key, { request, settle });
-      timer = setTimeout(
+      const timer = setTimeout(
         () => settle(syntheticFailure(request, info, 'eval_timeout', `No answer from the kernel within ${Math.round(timeoutMs / 1000)} s.`)),
         timeoutMs,
       );
+      function settle(evaluation: DiscoveryEvaluation) {
+        if (waiters.get(key)?.settle !== settle) return;
+        waiters.delete(key);
+        clearTimeout(timer);
+        resolve(evaluation);
+      }
+      waiters.set(key, { request, settle });
       try {
         void Promise.resolve(
           session.send({

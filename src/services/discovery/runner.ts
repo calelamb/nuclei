@@ -120,7 +120,7 @@ export function runDiscovery(
     const axes = resolveAxes(spec, rctx.evaluator);
     const candidates = new Map<string, CandidateRecord>();
     let rng: Rng = createRng(spec.seed);
-    let segmentStart = deps.clock.now().getTime();
+    const segmentStart = deps.clock.now().getTime();
     let priorWall = 0;
 
     // ── Load or create the run record ─────────────────────────────────

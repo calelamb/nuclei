@@ -3,7 +3,7 @@ import type { CandidateRecord, RunRecord } from '../../types/discovery';
 import { runDiscovery, type DiscoveryRunContext, type RunnerEvent } from './runner';
 import {
   SEED_PROGRAM, TOY_EVALUATOR, createFakeKernel, createFakeLlm, createManualClock, createMemoryFs, defaultScorer,
-  improveValue, joinPath, makeSpec, testHash, type FakeKernel, type FakeLlm, type Scorer,
+  improveValue, joinPath, makeSpec, testHash, type FakeKernel, type Scorer,
 } from './testkit';
 
 const ctx: DiscoveryRunContext = {

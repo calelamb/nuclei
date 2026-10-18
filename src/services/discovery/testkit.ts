@@ -162,7 +162,9 @@ export function createFakeKernel(options: { scorer?: Scorer; latencyMs?: number;
   const session: FakeKernel['session'] = {
     send(message: KernelMessage) {
       sent.push(message);
-      if (message.type === 'discovery_evaluate') respond(message);
+      if (message.type === 'discovery_evaluators') {
+        setTimeout(() => emit({ type: 'discovery_evaluators_result', evaluators: [TOY_EVALUATOR] }), 0);
+      } else if (message.type === 'discovery_evaluate') respond(message);
       else if (message.type === 'discovery_mutate') {
         const mutations = mutate(message.program, message.seed);
         setTimeout(() => emit({ type: 'discovery_mutations', mutations }), 0);
