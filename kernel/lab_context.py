@@ -8,7 +8,9 @@ that fire when the owning connection closes.
 from __future__ import annotations
 
 import asyncio
+import itertools
 import threading
+import weakref
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 
@@ -16,6 +18,27 @@ SendJson = Callable[[dict], Awaitable[None]]
 
 _owner_lock = threading.Lock()
 _owner_hooks: dict[int, dict[str, Callable[[], None]]] = {}
+# Owners come from a monotonic counter, never ``id(websocket)``: CPython reuses ids of freed
+# objects, so a new connection could inherit (and cancel or see) a dead connection's jobs.
+_owner_counter = itertools.count(1)
+_owner_by_connection: "weakref.WeakKeyDictionary[Any, int]" = weakref.WeakKeyDictionary()
+
+
+def owner_for_connection(connection: Any) -> int:
+    """The stable, never-reused owner id of ``connection`` (assigned on first use)."""
+    with _owner_lock:
+        try:
+            existing = _owner_by_connection.get(connection)
+        except TypeError:
+            existing = getattr(connection, "_nuclei_lab_owner", None)
+        if existing is not None:
+            return existing
+        owner = next(_owner_counter)
+        try:
+            _owner_by_connection[connection] = owner
+        except TypeError:
+            connection._nuclei_lab_owner = owner
+        return owner
 
 
 @dataclass
