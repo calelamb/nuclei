@@ -367,6 +367,25 @@ describe('framework affinity', () => {
 
 // ── Overrides ──
 
+describe('a temporary histogram expansion (research-r-03)', () => {
+  it('shows the Histogram tab and hides the chip without touching the preset', () => {
+    const v = resolveVisiblePanels(ctx({ preset: 'clean', result: RESULT, histogramExpanded: true }));
+    expect(v.histogramFull).toBe(true);
+    expect(v.histogramChip).toBe(false);
+  });
+
+  it('brings the chip back when the expansion ends', () => {
+    const v = resolveVisiblePanels(ctx({ preset: 'clean', result: RESULT, histogramExpanded: false }));
+    expect(v.histogramFull).toBe(false);
+    expect(v.histogramChip).toBe(true);
+  });
+
+  it('leaves an explicit user override in charge', () => {
+    const v = resolveVisiblePanels(ctx({ result: RESULT, histogramExpanded: true }), { histogramFull: false });
+    expect(v.histogramFull).toBe(false);
+  });
+});
+
 describe('resolveVisiblePanels overrides', () => {
   it('an explicit override wins over the reveal rule', () => {
     const base = ctx({ preset: 'clean' }); // everything hidden

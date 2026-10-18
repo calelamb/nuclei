@@ -77,6 +77,8 @@ const QecWorkbench = lazy(async () => ({
 }));
 
 const DEFAULT_BOTTOM_HEIGHT = 200;
+/** The full histogram opened from the chip needs room for the plot, not a strip. */
+const EXPANDED_HISTOGRAM_HEIGHT = 280;
 const DEFAULT_SIDEBAR_WIDTH = 240;
 
 /* ── Main Layout ── */
@@ -116,6 +118,8 @@ export function PanelLayout() {
 
   const preset = useLayoutStore((s) => s.preset);
   const setPreset = useLayoutStore((s) => s.setPreset);
+  const histogramExpanded = useLayoutStore((s) => s.histogramExpanded);
+  const setHistogramExpanded = useLayoutStore((s) => s.setHistogramExpanded);
   const chipDismissed = useLayoutStore((s) => s.histogramChipDismissed);
   const dismissChip = useLayoutStore((s) => s.dismissHistogramChip);
   const resetRunArtifacts = useLayoutStore((s) => s.resetRunArtifacts);
@@ -135,6 +139,7 @@ export function PanelLayout() {
       errorActive: lastRunFailed,
       mode: workspaceMode,
       framework: snapshot?.framework ?? null,
+      histogramExpanded,
     },
     panelOverrides,
   );
@@ -195,10 +200,24 @@ export function PanelLayout() {
   // "+N more" on the chip opens the full histogram: the Full preset puts it in the bottom panel.
   const setBottomTab = useBottomPanelStore((s) => s.setActiveTab);
   const expandHistogram = useCallback(() => {
-    setPreset('full');
     setBottomCollapsed(false);
     setBottomTab('histogram');
-  }, [setPreset, setBottomCollapsed, setBottomTab]);
+    setBottomHeight((h) => Math.max(h, EXPANDED_HISTOGRAM_HEIGHT));
+    setHistogramExpanded(true);
+  }, [setBottomCollapsed, setBottomTab, setHistogramExpanded]);
+  const bottomTab = useBottomPanelStore((s) => s.activeTab);
+  // The expansion is temporary: collapsing the panel or leaving the Histogram tab hands the rail its chip back.
+  useEffect(() => {
+    if (histogramExpanded && (bottomCollapsed || bottomTab !== 'histogram')) setHistogramExpanded(false);
+  }, [histogramExpanded, bottomCollapsed, bottomTab, setHistogramExpanded]);
+  // The chip that had focus is gone: land on the Histogram tab instead of <body>.
+  useEffect(() => {
+    if (!histogramExpanded) return undefined;
+    const frame = requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>('.bottom-panel-tabs [role="tab"][aria-selected="true"]')?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [histogramExpanded]);
   const chipShown = visible.histogramChip && !chipDismissed;
   const latticeHasCoords = Boolean(qecSnapshot?.coords.qubits.some((c) => c !== null));
   const vizHasContent = vizColumnHasContent(visible, { latticeHasCoords }, chipShown);
