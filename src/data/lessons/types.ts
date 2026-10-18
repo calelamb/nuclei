@@ -12,7 +12,7 @@ export type ContentBlock =
   | { type: 'text'; markdown: string }
   | { type: 'video'; youtubeId: string; title: string; creator: string; startTime?: number; endTime?: number }
   | { type: 'demo'; code: string; framework: Framework; description: string; explorationPrompt?: string }
-  | { type: 'exercise'; id: string; title: string; description: string; starterCode: string; framework: Framework; expectedProbabilities?: Record<string, number>; expectedMeasurements?: Record<string, number>; tolerancePercent: number; hints: string[]; successMessage: string }
+  | { type: 'exercise'; id: string; title: string; description: string; starterCode: string; framework: Framework; expectedProbabilities?: Record<string, number>; expectedMeasurements?: Record<string, number>; expectedOutput?: string[]; requiredCode?: string[]; tolerancePercent: number; hints: string[]; successMessage: string }
   | { type: 'quiz'; questions: QuizQuestion[] }
   | { type: 'concept-card'; title: string; visual: 'bloch' | 'circuit' | 'histogram' | 'custom-svg'; explanation: string; interactiveProps?: Record<string, unknown> }
   | { type: 'interactive-bloch'; initialTheta?: number; initialPhi?: number; availableGates?: string[]; challenge?: { targetTheta: number; targetPhi: number; description: string } };

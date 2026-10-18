@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 import { TRACKS } from './lessons/tracks';
 import { QUANTUM_CHALLENGES } from './challenges';
+import { hasAnyExpectation, stripPythonComments } from '../components/learning/exerciseValidation';
 
 interface Snippet {
   where: string;
@@ -87,5 +88,34 @@ describe('lesson and challenge content integrity', () => {
       c.hints.forEach((t, i) => prose.push([`challenge ${c.id} hint ${i}`, t]));
     }
     expect(prose.filter(([, text]) => LITERAL_UNICODE_ESCAPE.test(text)).map(([where]) => where)).toEqual([]);
+  });
+
+  describe('exercise grading', () => {
+    const exercises = TRACKS.flatMap((t) => t.lessons.flatMap((l) => l.contentBlocks.flatMap((b) => (
+      b.type === 'exercise' ? [{ where: `${t.id}/${l.id} ${b.id}`, block: b }] : []
+    ))));
+
+    it('every exercise declares a real expectation, so Run alone can never pass it', () => {
+      const ungraded = exercises.filter(({ block }) => !hasAnyExpectation(block)).map((e) => e.where);
+      expect(ungraded).toEqual([]);
+    });
+
+    it('every expectation pattern is a valid regular expression', () => {
+      const bad: string[] = [];
+      for (const { where, block } of exercises) {
+        for (const pattern of [...(block.expectedOutput ?? []), ...(block.requiredCode ?? [])]) {
+          try { new RegExp(pattern, 'i'); } catch { bad.push(`${where}: ${pattern}`); }
+        }
+      }
+      expect(bad).toEqual([]);
+    });
+
+    it('an untouched starter fails the code checks of every exercise that declares them', () => {
+      const passing = exercises
+        .filter(({ block }) => (block.requiredCode?.length ?? 0) > 0)
+        .filter(({ block }) => block.requiredCode!.every((p) => new RegExp(p, 'i').test(stripPythonComments(block.starterCode))))
+        .map((e) => e.where);
+      expect(passing).toEqual([]);
+    });
   });
 });

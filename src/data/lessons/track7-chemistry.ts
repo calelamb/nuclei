@@ -233,7 +233,7 @@ print(f"Exact H2 ground state: -1.8573 Ha")`,
         type: 'exercise',
         id: '7.3-ex1',
         title: 'Build a VQE Ansatz for H2',
-        description: 'Build a 2-qubit ansatz (2+ RY gates, 1 CNOT). Find parameters giving energy below -1.05 Ha (beat Hartree-Fock).',
+        description: 'Build a 2-qubit ansatz (2+ RY gates, 1 CNOT). Find parameters giving an energy below -1.07 Ha. The untouched |00⟩ state, the Hartree-Fock reference, sits at -1.0635 Ha.',
         starterCode: `from qiskit import QuantumCircuit
 from qiskit.quantum_info import SparsePauliOp, Statevector
 
@@ -247,7 +247,8 @@ qc = QuantumCircuit(2)
 sv = Statevector.from_instruction(qc)
 print(f"Energy: {sv.expectation_value(h2_op).real:.4f} Ha")`,
         framework: 'qiskit',
-        expectedProbabilities: {},
+        requiredCode: ['\\.ry\\(', '\\.cx\\('],
+        expectedOutput: ['Energy:\\s*-(1\\.(0[7-9]|[1-9])|[2-9]\\.)'],
         tolerancePercent: 5,
         hints: [
           'Start with RY(theta, 0) and RY(theta, 1) to rotate both qubits.',

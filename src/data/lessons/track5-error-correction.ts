@@ -1715,8 +1715,8 @@ H_X_A = np.array([
     [0, 0, 0, 0, 1, 1],
 ])
 H_Z_A = np.array([
-    [1, 0, 1, 0, 1, 0],
-    [0, 1, 0, 1, 0, 1],
+    [1, 1, 1, 1, 0, 0],
+    [0, 0, 1, 1, 1, 1],
 ])
 
 # Pair B:
@@ -1725,8 +1725,8 @@ H_X_B = np.array([
     [0, 0, 1, 1, 0, 0],
 ])
 H_Z_B = np.array([
-    [1, 0, 0, 1, 0, 0],   # Z_0 Z_3 — commutes with both X pairs
-    [0, 1, 0, 0, 1, 0],   # Z_1 Z_4 — overlap of 1 with X_X_B row 0 → anticommutes!
+    [1, 0, 0, 1, 0, 0],   # Z_0 Z_3 overlaps each X row on exactly one qubit
+    [0, 1, 0, 0, 1, 0],   # Z_1 Z_4 overlaps X row 0 on one qubit, so it anticommutes
 ])
 
 # TODO: compute H_X · H_Z^T mod 2 for each pair, and print which is CSS-valid.
@@ -1737,12 +1737,13 @@ H_Z_B = np.array([
 # A correct answer prints exactly one line: "Valid CSS pair: A" or "Valid CSS pair: B".
 `,
         framework: 'qiskit',
-        expectedProbabilities: {},
+        requiredCode: ['%\\s*2', '@|np\\.dot|matmul'],
+        expectedOutput: ['Valid CSS pair:\\s*A'],
         tolerancePercent: 100,
         hints: [
           'For each pair, multiply the X-type matrix by the transpose of the Z-type matrix, modulo 2.',
           'Pair A: (H_X_A @ H_Z_A.T) % 2 should be all zeros.',
-          'Pair B: the product should contain a 1, because H_Z_B row 2 overlaps with H_X_B row 0 on exactly one qubit.',
+          'Pair B: the product contains a 1, because the first row of H_Z_B overlaps the first row of H_X_B on exactly one qubit.',
           'The valid CSS pair is A — each Z operator has an even number of overlapping qubits with every X operator.',
         ],
         successMessage:
@@ -2451,9 +2452,8 @@ This is the reason "we have the algorithms, we just need the hardware" is both t
 # Verify for d = 3:
 
 def surface_stabilizer_count(d):
-    n = d * d
-    k = 1
-    return n - k
+    # TODO: return n - k, with n = d * d data qubits and k = 1 logical qubit
+    pass
 
 print(f"d=3 surface code has {surface_stabilizer_count(3)} stabilizer generators.")
 print(f"d=5 surface code has {surface_stabilizer_count(5)} stabilizer generators.")
@@ -2463,7 +2463,7 @@ print(f"d=7 surface code has {surface_stabilizer_count(7)} stabilizer generators
 # d=3 surface code has 8 stabilizer generators.
 `,
         framework: 'qiskit',
-        expectedProbabilities: {},
+        expectedOutput: ['d=3 surface code has 8 stabilizer generators'],
         tolerancePercent: 100,
         hints: [
           'n = 9 (3x3 grid), k = 1, so n − k = 8 generators.',
@@ -2678,7 +2678,8 @@ for c in [3, 5, 50, 100]:
 # c =  50  →  threshold ≈ 0.0200
 `,
         framework: 'qiskit',
-        expectedProbabilities: {},
+        requiredCode: ['return\\s+1\\s*/\\s*c'],
+        expectedOutput: ['c\\s*=\\s*50\\s.*0\\.0200'],
         tolerancePercent: 100,
         hints: [
           'The crossover equation is: c * p² = p, which has solutions p = 0 and p = 1/c.',
@@ -2901,11 +2902,8 @@ def rounds_to_target(p_start, p_target, c=35):
     """
     p = p_start
     rounds = 0
-    while p > p_target:
-        p = c * p ** 3
-        rounds += 1
-        if rounds > 100:  # safety
-            raise RuntimeError("Not converging — maybe above threshold?")
+    # TODO: while p is above p_target, apply p = c * p ** 3 and count the round.
+    # Stop with an error after 100 rounds in case the code never converges.
     return rounds, p
 
 r, p_final = rounds_to_target(1e-3, 1e-10)
@@ -2915,7 +2913,8 @@ print(f"Final error rate: {p_final:.3e}")
 # Expected answer: 2-3 rounds, P_final near 10^-10 or better.
 `,
         framework: 'qiskit',
-        expectedProbabilities: {},
+        requiredCode: ['while\\s+p\\s*>', 'c\\s*\\*\\s*p\\s*\\*\\*\\s*3'],
+        expectedOutput: ['Rounds needed:\\s*2\\b'],
         tolerancePercent: 100,
         hints: [
           'Round 1: p = 35 * (10⁻³)³ = 35 * 10⁻⁹ = 3.5e-8.',
@@ -3136,8 +3135,8 @@ But: the gap narrows as $p$ drops. If physical error rates reach $p = 10^{-4}$, 
     ancillas for syndrome extraction. Factor of 2 overhead for redundancy
     and factories (crude estimate).
     """
-    per_logical = 2 * d * d + 4 * d
-    return N_logical * per_logical * 2
+    # TODO: compute per_logical = 2 * d * d + 4 * d, then scale by N_logical and the factor of 2
+    return 0
 
 print(f"{'N_logical':>10}  {'d=9':>10}  {'d=15':>12}  {'d=27':>14}")
 for N in [100, 1000, 4096, 10000]:
@@ -3152,7 +3151,7 @@ for N in [100, 1000, 4096, 10000]:
 # logical error rate ~10^-5, not enough for deep algorithms.
 `,
         framework: 'qiskit',
-        expectedProbabilities: {},
+        expectedOutput: ['12,828,672'],
         tolerancePercent: 100,
         hints: [
           'Per logical qubit: 2d² data + 4d ancillas = ~2d² for large d.',
