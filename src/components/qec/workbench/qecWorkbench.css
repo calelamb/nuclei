@@ -452,7 +452,7 @@
 .qec-investigation__panels {
   display: grid; min-width: 0; min-height: 0; flex: 1;
   grid-auto-rows: minmax(150px, 1fr); grid-template-columns: minmax(0, 1.55fr) minmax(190px, 0.85fr); gap: 10px; overflow: auto;
-  padding: 12px; background: var(--qec-field);
+  padding: 12px; background: var(--qec-field); container-type: size;
 }
 
 .qec-instrument {
@@ -500,7 +500,7 @@
 .qec-instrument__hint { max-width: 280px; color: var(--qec-text-muted); font-size: 12px; line-height: 1.45; }
 
 /* No circuit yet: a short card, not a 640px dotted field. */
-.qec-instrument[data-empty='true'] { align-self: start; min-height: 0; }
+.qec-instrument[data-empty='true'] { min-height: 0; }
 .qec-instrument[data-empty='true'] .qec-instrument__body { flex: none; overflow: visible; }
 .qec-instrument[data-empty='true'] .qec-instrument__empty { min-height: 140px; flex: none; }
 
@@ -721,8 +721,12 @@
 
   /* The leading instrument hosts the readable analysis and fills the canvas; an empty one stays a short card. */
   .qec-investigation__panels > .qec-instrument--primary:not([data-empty='true']) {
-    min-height: max(520px, calc(100cqh - 24px));
+    /* A definite height lets the plot inside measure its card and fill it. */
+    height: max(520px, calc(100cqh - 24px));
   }
+
+  /* A single column has no hole to fill: every card takes its own row. */
+  .qec-investigation__panels > .qec-instrument { grid-column: 1 / -1 !important; }
 
   /* Auto rows of overflow-hidden cards collapse to their borders, so an empty card names its own height: header + empty field. */
   .qec-investigation__panels > .qec-instrument[data-empty='true'] {

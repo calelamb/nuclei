@@ -19,6 +19,8 @@ import { QEC_RESEARCH_INSPECTOR_ID } from './QecResearchInspector';
 import { QecPanelPinButton } from './QecPanelPinButton';
 import { orderCanvasPanels } from './orderCanvasPanels';
 import { circuitHint } from './circuitHint';
+import { canvasGrid, isInstrumentEmpty } from './canvasGrid';
+import { useQecCampaignStore } from '../../../stores/qecCampaignStore';
 
 const PANEL_ICONS: Partial<Readonly<Record<QecWorkbenchPanelId, LucideIcon>>> = {
   timeline: Clock3, lattice: Grid3x3, 'detector-graph': Share2,
@@ -156,12 +158,20 @@ function InstrumentActions({ panelId }: { panelId: QecWorkbenchPanelId }): React
   );
 }
 
-function CanvasInstrument({ panel, primary, rowSpan }: { panel: QecWorkbenchPanelDef; primary: boolean; rowSpan: number }): ReactElement {
+interface CanvasInstrumentProps {
+  panel: QecWorkbenchPanelDef;
+  primary: boolean;
+  rowSpan: number;
+  empty: boolean;
+  fullWidth: boolean;
+}
+
+function CanvasInstrument({ panel, primary, rowSpan, empty, fullWidth }: CanvasInstrumentProps): ReactElement {
   const Icon = PANEL_ICONS[panel.id] ?? Activity;
   const context = useInstrumentContext(panel.id);
-  const hasCircuit = useQecStore((state) => state.snapshot !== null);
-  const empty = CIRCUIT_PANELS.has(panel.id) && !hasCircuit;
-  const style: CSSProperties | undefined = primary ? { gridRow: `span ${rowSpan}` } : undefined;
+  const style: CSSProperties | undefined = primary || fullWidth
+    ? { ...(primary ? { gridRow: `span ${rowSpan}` } : {}), ...(fullWidth ? { gridColumn: '1 / -1' } : {}) }
+    : undefined;
   return (
     <section
       className={`qec-instrument qec-instrument--${primary ? 'primary' : 'secondary'}`}
@@ -188,16 +198,29 @@ export function InvestigationCanvas(props: InvestigationCanvasProps): ReactEleme
   const preset = useQecWorkbenchStore((state) => state.preset);
   const pinnedPanelIds = useQecWorkbenchStore((state) => state.pinnedPanelIds);
   const panels = orderCanvasPanels(preset, resolveQecPanels(preset, 'canvas', pinnedPanelIds));
-  const rows = Math.max(1, panels.length - 1);
-  // With no circuit every instrument is a short card: let rows size to their content instead of stretching.
   const hasCircuit = useQecStore((state) => state.snapshot !== null);
-  const compact = !hasCircuit && panels.every((panel) => CIRCUIT_PANELS.has(panel.id));
-  const rowSize = compact ? 'max-content' : 'minmax(150px, 1fr)';
+  const hasCampaignData = useQecCampaignStore((state) => Object.keys(state.rowsByStrongId).length > 0);
+  const empties = panels.map((panel) => isInstrumentEmpty(panel.id, { hasCircuit, hasCampaignData }));
+  // With nothing to draw every instrument is a short card: rows size to their content instead of stretching.
+  const grid = canvasGrid(panels.length, empties.every(Boolean));
   return (
     <main className="qec-investigation" aria-label="QEC investigation canvas">
       <CanvasHeader {...props} />
-      <div className="qec-investigation__panels" style={{ gridTemplateRows: `repeat(${rows}, ${rowSize})`, alignContent: compact ? 'start' : undefined }}>
-        {panels.map((panel, index) => <CanvasInstrument key={panel.id} panel={panel} primary={index === 0} rowSpan={rows} />)}
+      <div
+        className="qec-investigation__panels"
+        data-compact={grid.compact ? 'true' : undefined}
+        style={{ gridTemplateRows: grid.gridTemplateRows, alignContent: grid.compact ? 'start' : undefined }}
+      >
+        {panels.map((panel, index) => (
+          <CanvasInstrument
+            key={panel.id}
+            panel={panel}
+            primary={index === 0}
+            rowSpan={grid.primaryRowSpan}
+            empty={empties[index]}
+            fullWidth={grid.fullWidthIndex === index}
+          />
+        ))}
       </div>
     </main>
   );

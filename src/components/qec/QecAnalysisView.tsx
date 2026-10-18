@@ -136,6 +136,7 @@ export function QecAnalysisView({ embedded = false, actionsInHeader = false }: {
               ? 'Open or drop a sinter stats CSV to see logical error rate vs physical error and compare decoders.'
               : 'Open or drop a sinter stats CSV, or run a QEC campaign from Experiments, to see logical error rate vs physical error and compare decoders.'}
             docsHref={QEC_PLOT_CSV_DOCS}
+            align={embedded ? 'top' : 'center'}
           >
             {!csvSource && <QecCsvDropZone />}
           </QecEmptyState>
