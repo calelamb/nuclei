@@ -55,6 +55,18 @@
   --lab-seq-7: #9ec5f4;
   --lab-seq-8: #cde2fb;
 
+  /* Label ink for text drawn ON a sequential step, chosen by luminance so it
+     keeps >= 4.5:1 against the step (pinned by labContrast.test.ts). */
+  --lab-seq-ink-0: #ffffff;
+  --lab-seq-ink-1: #ffffff;
+  --lab-seq-ink-2: #ffffff;
+  --lab-seq-ink-3: #ffffff;
+  --lab-seq-ink-4: #ffffff;
+  --lab-seq-ink-5: #000000;
+  --lab-seq-ink-6: #000000;
+  --lab-seq-ink-7: #000000;
+  --lab-seq-ink-8: #000000;
+
   /* Diverging (polarity): blue <-> red, neutral gray midpoint. */
   --lab-div-neg: #3987e5;
   --lab-div-mid: #383835;
@@ -95,6 +107,16 @@
   --lab-seq-6: #1c5cab;
   --lab-seq-7: #104281;
   --lab-seq-8: #0d366b;
+
+  --lab-seq-ink-0: #000000;
+  --lab-seq-ink-1: #000000;
+  --lab-seq-ink-2: #000000;
+  --lab-seq-ink-3: #000000;
+  --lab-seq-ink-4: #000000;
+  --lab-seq-ink-5: #000000;
+  --lab-seq-ink-6: #ffffff;
+  --lab-seq-ink-7: #ffffff;
+  --lab-seq-ink-8: #ffffff;
 
   --lab-div-neg: #2a78d6;
   --lab-div-mid: #f0efec;
@@ -801,3 +823,21 @@ textarea.lab-input { height: auto; padding: 8px 10px; resize: vertical; line-hei
 .lab-error__details { max-width: 60ch; width: 100%; text-align: left; font-size: 12px; }
 .lab-error__details summary { cursor: pointer; min-height: 28px; display: flex; align-items: center; }
 .lab-error__details pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* ── Scroll affordance (LabScrollArea) ───────────────────────────────── */
+
+.lab-scroll { position: relative; min-width: 0; }
+.lab-scroll__viewport { overflow: auto; }
+.lab-scroll__fade {
+  position: absolute;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+.lab-scroll__fade--right { top: 0; bottom: 0; right: 0; width: 28px; background: linear-gradient(90deg, transparent, var(--lab-surface-2)); }
+.lab-scroll__fade--left { top: 0; bottom: 0; left: 0; width: 28px; background: linear-gradient(270deg, transparent, var(--lab-surface-2)); }
+.lab-scroll__fade--bottom { left: 0; right: 0; bottom: 0; height: 28px; background: linear-gradient(180deg, transparent, var(--lab-surface-2)); }
+.lab-scroll[data-more-right='true'] .lab-scroll__fade--right,
+.lab-scroll[data-more-left='true'] .lab-scroll__fade--left,
+.lab-scroll[data-more-bottom='true'] .lab-scroll__fade--bottom { opacity: 1; }
+.lab-scroll__hint { margin-top: var(--space-1); font-size: 11px; color: var(--color-text-secondary); }

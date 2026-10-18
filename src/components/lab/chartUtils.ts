@@ -105,6 +105,12 @@ export function seqColor(t: number): string {
   return `var(--lab-seq-${Math.round(clamped * (SEQ_STEPS - 1))})`;
 }
 
+/** Label ink (CSS var) to draw on `seqColor(t)`: black or white by luminance, >= 4.5:1. */
+export function seqInk(t: number): string {
+  const clamped = Number.isFinite(t) ? Math.min(1, Math.max(0, t)) : 0;
+  return `var(--lab-seq-ink-${Math.round(clamped * (SEQ_STEPS - 1))})`;
+}
+
 /**
  * Categorical color by FIXED slot (identity, never rank). Slots past 8 fold
  * into a neutral "other" ink rather than generating a new hue.

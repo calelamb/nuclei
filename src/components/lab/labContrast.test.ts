@@ -55,6 +55,12 @@ describe.each(['dark', 'light'] as const)('Lab contrast tokens (%s)', (theme) =>
     }
   });
 
+  it('keeps label ink legible on every sequential step', () => {
+    for (let step = 0; step < 9; step += 1) {
+      expect(ratio(tokens, `--lab-seq-ink-${step}`, `--lab-seq-${step}`), `ink on step ${step}`).toBeGreaterThanOrEqual(AA);
+    }
+  });
+
   it('keeps the neutral pill, field errors and button inks legible', () => {
     expect(ratio(tokens, '--color-text-secondary', '--lab-surface-3')).toBeGreaterThanOrEqual(AA);
     expect(ratio(tokens, '--color-danger', '--lab-surface-1')).toBeGreaterThanOrEqual(AA);
