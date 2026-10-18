@@ -88,44 +88,54 @@ class PauliFrontier:
 
 ## B. Invention 1 — the Frontier evaluator (`trainability_frontier`)
 
+> **Revised after the adversarial physics review (PH-C1, PH-H2, PH-H3, PH-M2, PH-M4, CR-M5).** The first version could be gamed (a program that was rich only at n = 4; a product circuit behind a no-op CZ chain), its "hardness" measured how loose the truncation bound was rather than how hard the problem is, and its trainability term mostly measured the 1/n of `local_z`. Everything below describes the corrected evaluator; the changes are listed at the end of the section.
+
 **The question it serves:** Cerezo et al. (arXiv:2312.09121) conjecture that every provably barren-plateau-free ansatz is also classically simulable. Nobody has a tool that searches for counterexamples. Nuclei can be that tool. The Discovery Engine evolves ansatzes, and the PPE scores them **exactly at 8 to 64 qubits**.
 
 - **Entry:** `build(n_qubits: int, n_layers: int)` returns a parameterized Qiskit or Cirq circuit.
 - **Config:**
-  - `qubits` (int[], default `[8, 16, 32, 64]`, each 4–128, ≤ 6 values)
+  - `qubits` (int[], default `[8, 16, 32, 64]`, each 4–128, ≤ 6 values; four sizes are needed for the scaling fit)
   - `n_layers` (default 4)
-  - `observable` (default `preset:local_z`)
-  - `estimation: {target_width: 0.02, max_frontier: 200000, time_budget_s: 8}`
-  - `dla_probe_qubits` (default 4)
+  - `observable` (default `preset:local_z`). The parsed observable is rescaled so its **largest coefficient is 1** (`local_z` becomes ΣZᵢ), so the preset's 1/n normalisation cannot masquerade as a trainability signal. The l1 norm of the rescaled observable bounds |⟨O⟩|.
+  - `estimation: {max_frontier: 200000, time_budget_s: 20, target_width: 0.02}`; `target_width` now only feeds a secondary diagnostic.
+  - `dla_probe_qubits` (int[2..3], strictly ascending, default `[4, 5, 6]`)
   - `max_parameters_per_qubit` (default 24)
-  - `weights: {trainability: 1.0, hardness: 0.5}`
+  - `weights: {trainability: 1.0, pp_cost: 0.5}`
 - **Stages:**
   - `screen` uses `qubits[:2]`, with `max_frontier` reduced 10×.
   - `full` uses every qubit size.
-  - `confirm` re-runs `full` with an independent parameter seed for the estimation probe.
+  - `confirm` re-runs `full` with an independent parameter seed for the cost probe.
 - **Guardrails, in order:**
-  1. `ir_conversion` — the circuit converts for every n.
+  1. `ir_conversion` — the circuit converts for every n and every probe size.
   2. `ppe_class` — every rotation is a single-Pauli rotation with its own independent parameter (no shared or affine parameters), and every fixed gate is Clifford. `ppe_applicable` must be true for each n.
   3. `qubit_count` — the circuit has exactly n qubits for each n.
   4. `parameter_budget` — at most `max_parameters_per_qubit · n` parameters.
-  5. `nontrivial_variance` — the PPE `variance_mean` at the smallest n is ≥ 1e-6. This stops "β = 0 because nothing depends on θ".
-  6. `nontrivial_algebra` — at `dla_probe_qubits`, the DLA dimension is > 2n. Product and near-free ansatzes are rejected, because a constant-variance product circuit is trivially trainable and trivially simulable.
-  7. `exactness` — every PPE variance point has interval width ≤ 10% of the estimate. Otherwise the result is a `warn` and the point is down-weighted.
+  5. `nontrivial_variance` — the PPE point at the **smallest n must be exact** (completed, interval within 10% of the value) and its `variance_mean` ≥ 1e-6. A stopped or uninformative point is never read as a variance; the guardrail rejects rather than guessing.
+  6. `nontrivial_algebra` — three structural tests, all necessary properties of an honest `build(n, L)` family:
+     - **Trivial-prefix stripping.** Gates that are phases or basis permutations on known basis states (diagonal gates on qubits still in |0⟩/|1⟩, `X`/`Y`, `CX`/`CY`/`CCX` with known controls, `SWAP`/`ISWAP` on known bits) are removed before any graph is built. A CZ chain, `S`, `Z` or `CP` at the front of a product circuit therefore buys nothing.
+     - **Blocks at every size.** The interaction graph of the stripped circuit is connected at every scored n and every probe n, not only at the smallest.
+     - **Structural consistency across sizes.** Over all scored and probe sizes the stripped circuits share the entangler pattern class (ladder/brick/nearest-neighbour are one class), the entangler gate, the rotation axes, and per-qubit densities of two-qubit gates, parametric gates and parameters within a max/min ratio of 1.6. Open chains give (n−1)/n bonds per qubit (ratio ≤ 1.34 from n = 4); a switch on n gives an infinite ratio. This closes "rich at n = 4, product elsewhere" and any subtler n-dependent switch.
+     - **Algebra size.** At *every* probe size the DLA dimension (a valid lower bound if the closure is truncated) must exceed **4n²**, the Lab's own g-sim feasibility cap. Product circuits (3n) and free-fermion/matchgate circuits (n(2n−1) < 2n²) sit below it; so does anything the Lab already calls `g_sim_feasible`. The old threshold, 2n, admitted su(2)ⁿ.
+  7. `exactness` — every PPE variance point has interval width ≤ 10% of the estimate and a value. Otherwise a `warn`, and the point is charged `1.0 × (fraction of such sizes)`.
 - **Scoring:**
-  - **Trainability:** compute the exact PPE gradient variance at each n and fit `Var ∝ 2^(−β n)` with the spec's §5.5 fitter (`scaling.py`). Lower β is better, and fitness uses β's **upper** 95% bound.
-  - **Estimation hardness probe:** at the largest n, run `ppe_expectation_bounds` at 3 seeded random parameter points. The probe asks for the smallest frontier at which the bound width reaches `target_width`. If the budget runs out first, record `≥ max_frontier` and mark the value censored.
-    - `hardness = log10(frontier_needed)`.
-    - Fitness uses the **lower** (pessimistic) value across the 3 points.
-- **Fitness** = `weights.trainability · (−β_upper95) + weights.hardness · hardness_lower`.
+  - **Trainability.** Fit the exact gradient variance (informative points only: a value, a positive lower bound, hi/lo ≤ 2) with `fit_scaling`, both `2^(−β n)` and `n^(−α)`. Reduce the preferred law to one scale, **bits of variance lost per doubling of n at the largest scored size**: `α_upper95` for a power law, `β_upper95 · n_max/2` for an exponential, the larger of the two when the verdict is inconclusive. The term is `−min(D, 6)`. With fewer than four informative sizes the pessimistic **secant** over the interval extremes is used and labelled `fit_method: "secant"` with `ci95: null`; with fewer than two, the maximum penalty (`fit_method: "unavailable"`).
+  - **Pauli-propagation exact cost** (`pp_exact_cost`). At the largest n and three seeded random parameter points, run an **untruncated** PPE evaluation of ⟨O⟩ (`min_weight_abs = 0`) within `max_frontier` strings and `time_budget_s`. If it completes, `cost = log10(frontier_peak)` (uncensored): the statement "Pauli propagation needed N strings to compute ⟨O⟩ exactly". If not, the value is `log10` of the peak reached and the point is **censored**. The aggregate is the minimum over the three points. Intervals are clipped to ±Σ|cⱼ|. The bound-width curve is retained as a secondary diagnostic only.
+  - **Light-cone cap.** The backward light cone of each observable term is computed on the stripped circuit (a diagonal gate cannot spread a Z-only string). A state vector on a cone of width w costs 2^w amplitudes, so the scored hardness is `min(log10 strings, w·log10 2)`; any candidate with w ≤ 12 is brute-force simulable and capped at 3.6 whatever Pauli propagation does. The raw PP cost remains the reported objective.
+- **Fitness** = `weights.trainability · trainability_term + weights.pp_cost · min(pp_exact_cost, light_cone_cost) − inexact_penalty`.
 - **Objectives:**
-  - `beta` (minimize; value plus CI)
-  - `estimation_hardness` (maximize; censored flag in metrics)
+  - `beta` (minimize; value, CI or `null`, `fit_method`)
+  - `pp_exact_cost` — label "Pauli-propagation exact cost (log10 strings)" (maximize; censored flag)
 - **Descriptors:**
-  - `log2_dla_dimension` (0..2·probe_n, 8 bins)
-  - `two_qubit_gates_per_layer` (0..64, 8 bins)
-- **Honesty (mandatory UI and metrics text):** "Hardness is resistance to *this* Pauli-propagation estimator under *this* budget. It is not a proof of classical hardness. A high score is a lead to investigate, not a counterexample."
-  - `metrics` carries the per-n variances with intervals, the β fit, the per-point frontier curve (width vs frontier size), and the DLA dimension and classification at the probe size.
-- **Template:** `trainability-frontier` is a seed program for a hardware-efficient RY/RZ + CZ-brick ansatz on the open chain, with `build(n_qubits, n_layers)` in the evolve block.
+  - `dla_fill_fraction` = log₂(dim 𝔤)/log₂(4ⁿ−1) at the largest probe (0..1; n = 4 saturates su(16) for nearly everything, so the fraction is read at n = 6 where polynomial algebras separate from the full one)
+  - `light_cone_qubits` (0..64)
+  - `two_qubit_gates_per_layer` (0..64)
+  - `log2_dla_dimension` (legacy, now read at the largest probe, 0..12)
+- **Honesty (mandatory UI and metrics text):** "Cost is the number of Pauli strings *Pauli propagation* needed to compute <O> exactly (log10, censored at the budget). A high cost means this estimator is expensive, not that the circuit is classically hard: tensor networks, light-cone simulation and other methods may still be cheap. It is not a proof of classical hardness. A high score is a lead to investigate, not a counterexample."
+  - `metrics` carries the per-n variances with intervals and `exact`/`informative` flags, the scaling fit (β, α, verdict, D and its basis), `pp_exact_cost` (per-point peaks, statement, diagnostics), `hardness` (the capped value), `light_cone`, and `dla`/`dla_probes`.
+- **Audit:** an independent recomputation with its own random stream: PPE variances (`ppe_reproducible`, `ppe_vs_sampling` against the compiled sampler), the structure tests on re-parsed IR (`structure_recheck`), the DLA at every probe (`dla_recheck`), the exact cost on fresh points (`hardness_recheck`: ≤ 0.1 decade pass, ≤ 0.5 warn, else fail; a censored lower bound that the audit beats by finishing, or an uncensored cost it cannot reproduce, fails), the light-cone width (`light_cone_recheck`), interval nesting and the fitness gap.
+- **Template:** `trainability-frontier` is a seed program for a hardware-efficient RY/RZ + CZ-brick ansatz on the open chain, with `build(n_qubits, n_layers)` in the evolve block. At the default config it scores about 1.70 (trainability −0.11, cost term +1.81 of 3.99 capped to 3.61 by its width-12 light cone) and is flagged brute-force simulable: an honest "not a counterexample" baseline.
+
+**What changed, and why.** (1) *Guard bypasses (PH-H2):* the checks ran on `build(4, L)` only; the stripping, per-size blocks, consistency rule and 4n² threshold above replace them. (2) *Hardness (PH-H3):* the unclipped L1 bound reaching a target width measured looseness (the seed scored 4.0 although it is exact with 10⁴ strings; a trivially simulable dense brick got the censored maximum). It is replaced by the exact-simulation cost, the light-cone cap and a rename (`estimation_hardness` → `pp_exact_cost`); the 0.5-step grid quantisation is gone. (3) *Trainability (PH-M2):* the term was `−β_upper95` of the mean variance of `(1/n)ΣZᵢ`, which is ≈ n⁻² for every shallow circuit; it is now the scaling-law penalty on a term-normalised observable. (4) *Stopped PPE runs (PH-C1):* a `None` or uninformative variance is not exact, never enters the fit, and costs the exactness penalty. (5) *Secant (CR-M5):* a two-point slope carries no confidence interval, so none is shown. (6) *Descriptors (PH-M4):* see above.
 
 ## C. Invention 2 — Microscope-in-the-loop mutation
 
