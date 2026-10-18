@@ -114,7 +114,9 @@
         "resampling": {
           "attempts": 13,
           "accepted": 5,
-          "rejected": 8,
+          "rejected": 6,
+          "distinct": "<any>",
+          "duplicates": "<any>",
           "cap": 125
         },
         "seed": 11,

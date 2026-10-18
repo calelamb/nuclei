@@ -129,6 +129,9 @@
           "<approx:0.046296296296296:0.00000462962963>"
         ],
         "gradient_norm_mean": null,
+        "cost_mean": "<any>",
+        "cost_variance": "<any>",
+        "cost_variance_ci95": "<any>",
         "gradient_norm_rms": "<approx:0.52704627669473:0.000052704627669>",
         "gate_values": [
           {
@@ -191,6 +194,8 @@
         "dimension": 12,
         "dimension_lower_bound": 12,
         "max_dimension": 4096,
+        "ideals": "<any>",
+        "prediction_note": "<any>",
         "classification": {
           "label": "other",
           "family": "other",
@@ -224,13 +229,13 @@
         "abelian": false,
         "assumptions": [
           "Deep-circuit regime: the circuit is an approximate 2-design over e^𝔤 (not guaranteed for shallow circuits).",
-          "𝔤 treated as simple; for reductive 𝔤 this is the leading term.",
+          "𝔤 = centre (dim 0) ⊕ 2 simple ideal(s) (connected components of the anticommutation graph); the centre is excluded and the ideals' variances add, each ideal assumed Haar-random.",
           "The predicted quantity is the variance of the cost C over the group, not of a single gradient component.",
           "Initial state |0…0⟩; fixed gates are pushed to the end of the circuit."
         ],
         "simulability": {
           "kind": "g_sim_feasible",
-          "summary": "dim 𝔤 = 12 (≤ 4n² = 36). Expectations are classically simulable in poly(dim 𝔤) time when the observable or the initial state lies in 𝔤 (𝔤-sim, Goh et al. 2023 (arXiv:2308.01432)). Observable in 𝔤: no; initial state in 𝔤: no."
+          "summary": "dim 𝔤 = 12 (≤ 4n² = 36). Expectations are classically simulable in poly(dim 𝔤) time when the observable or the initial state lies in 𝔤 (𝔤-sim, Goh et al. 2023 (arXiv:2308.01432)); a polynomial dimension does not by itself bound the purities or guarantee trainability. Observable in 𝔤: no; initial state in 𝔤: no."
         },
         "elapsed_ms": "<any>"
       }
@@ -337,6 +342,9 @@
             "<approx:0.046296296296296:0.00000462962963>"
           ],
           "gradient_norm_mean": null,
+          "cost_mean": "<any>",
+          "cost_variance": "<any>",
+          "cost_variance_ci95": "<any>",
           "gradient_norm_rms": "<approx:0.52704627669473:0.000052704627669>",
           "gate_values": [
             {
@@ -393,6 +401,8 @@
           "n_qubits": 3,
           "dimension": 12,
           "dimension_lower_bound": 12,
+          "ideals": "<any>",
+          "prediction_note": "<any>",
           "max_dimension": 4096,
           "classification": {
             "label": "other",
@@ -427,13 +437,13 @@
           "abelian": false,
           "assumptions": [
             "Deep-circuit regime: the circuit is an approximate 2-design over e^𝔤 (not guaranteed for shallow circuits).",
-            "𝔤 treated as simple; for reductive 𝔤 this is the leading term.",
+            "𝔤 = centre (dim 0) ⊕ 2 simple ideal(s) (connected components of the anticommutation graph); the centre is excluded and the ideals' variances add, each ideal assumed Haar-random.",
             "The predicted quantity is the variance of the cost C over the group, not of a single gradient component.",
             "Initial state |0…0⟩; fixed gates are pushed to the end of the circuit."
           ],
           "simulability": {
             "kind": "g_sim_feasible",
-            "summary": "dim 𝔤 = 12 (≤ 4n² = 36). Expectations are classically simulable in poly(dim 𝔤) time when the observable or the initial state lies in 𝔤 (𝔤-sim, Goh et al. 2023 (arXiv:2308.01432)). Observable in 𝔤: no; initial state in 𝔤: no."
+            "summary": "dim 𝔤 = 12 (≤ 4n² = 36). Expectations are classically simulable in poly(dim 𝔤) time when the observable or the initial state lies in 𝔤 (𝔤-sim, Goh et al. 2023 (arXiv:2308.01432)); a polynomial dimension does not by itself bound the purities or guarantee trainability. Observable in 𝔤: no; initial state in 𝔤: no."
           },
           "elapsed_ms": "<any>"
         }
