@@ -158,7 +158,9 @@ describe('cascade', () => {
         expect(files.find((c) => c.id === elite.candidateId)!.evaluation?.stage).toBe('full');
       }
     }
-    expect(run.usage.evaluations).toBe(4);
+    // Both stages count (CR-M2): the seed ran screen + full, three children screened, two promoted.
+    expect(run.usage.evaluations).toBe(7);
+    expect(run.usage.evaluations).toBe(evaluates(kernel).length);
   });
 
   it('promotes everything with promote_if: always', async () => {

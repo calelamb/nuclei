@@ -336,7 +336,7 @@ export function runDiscovery(
         const r = run as RunRecord;
         const view = {
           usage: r.usage, wallMs: wall(),
-          plannedEvaluations: planned.length + requeue.length,
+          plannedEvaluations: (planned.length + requeue.length) * (spec.evaluation.cascade ? 2 : 1),
           plannedLlmCalls: planned.filter((p) => p.mutator === 'llm').length,
         };
         budgetStop = exhaustedBudget(spec, view);
@@ -453,7 +453,7 @@ async function evaluateSeed(ctx: RunContext, seed: CandidateRecord): Promise<Can
       runId: ctx.runId, wireId: seed.id, evaluator: { kind: spec.evaluator.kind, config: spec.evaluator.config },
       program: seed.program, entry: spec.entry, seed: seed.eval_seed, stage,
     });
-    ctx.setUsage((u) => countEvaluation(u, stage, spec.evaluation.cascade));
+    ctx.setUsage(countEvaluation);
     return evaluation;
   };
   const cancelled = (e: DiscoveryEvaluation) => e.status === 'failed' && e.failure?.code === 'cancelled';

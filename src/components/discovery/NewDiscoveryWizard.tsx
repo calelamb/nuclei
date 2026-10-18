@@ -141,7 +141,7 @@ export function NewDiscoveryWizard() {
           <LabField label="Name" htmlFor={nameId} error={nameError} hint={slug ? `Writes experiments/${slug}.discovery.yaml` : undefined}>
             <LabInput id={nameId} value={name} placeholder="w-state-fewer-cx" aria-invalid={!!nameError} onChange={(e) => setName(e.target.value)} />
           </LabField>
-          <LabField label="Max evaluations" htmlFor="wiz-evals" hint="1 to 5000">
+          <LabField label="Max evaluations" htmlFor="wiz-evals" hint="1 to 5000; each screen and each full run counts">
             <LabNumber id="wiz-evals" value={evaluations} min={1} max={5000} onCommit={setEvaluations} width="100%" />
           </LabField>
           <LabField label="Max LLM calls" htmlFor="wiz-llm" hint="0 to 5000">

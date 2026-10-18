@@ -92,6 +92,24 @@ describe('cascade compares like with like (CR-C1)', () => {
   });
 });
 
+describe('max_evaluations counts screen and full runs (CR-M2)', () => {
+  it('never sends more kernel evaluations than the budget when every candidate is promoted', async () => {
+    let n = 0;
+    const { deps, kernel } = setup(qecScorer, (p) => [{ program: p.replace(/IMPROVE = -?\d+/, `IMPROVE = ${(n += 1)}`), operators: ['x'], description: '' }]);
+    const run = await runDiscovery(
+      makeSpec({
+        evaluation: { cascade: true, promote_if: 'always' }, budget: { max_evaluations: 8, max_concurrent_evaluations: 2 },
+        search: { generations: 10, candidates_per_generation: 2, islands: 1 }, confirm: { seeds: 0 },
+      }),
+      ctx, deps,
+    ).done;
+    const sent = kernel.sent.filter((m) => m.type === 'discovery_evaluate').length;
+    expect(run.stop_reason).toBe('max_evaluations');
+    expect(sent).toBeLessThanOrEqual(8);
+    expect(run.usage.evaluations).toBe(sent);
+  });
+});
+
 describe('cascade helpers', () => {
   const screened = (lo: number, hi: number, direction: 'minimize' | 'maximize' = 'minimize') =>
     makeEvaluation({ stage: 'screen', fitness: 3.7, objectives: { err: { value: 0, ci95: [lo, hi], direction, label: 'Error' } } });

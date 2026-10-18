@@ -170,9 +170,13 @@ async function produceWithAst(ctx: RunContext, item: PlanItem, parent: Candidate
   return { kind: 'ok', produced: { program: m.program, llm: null, astOps: m.operators, regionWarning: false } };
 }
 
-/** Usage after one kernel evaluation of `stage`. */
-export function countEvaluation(usage: RunUsage, stage: DiscoveryStage, cascade: boolean): RunUsage {
-  return stage === 'full' && cascade ? usage : { ...usage, evaluations: usage.evaluations + 1 };
+/**
+ * Usage after one kernel evaluation. `max_evaluations` is an honest compute
+ * budget (CR-M2): every screen run and every full run counts, so a promoted
+ * candidate costs two.
+ */
+export function countEvaluation(usage: RunUsage): RunUsage {
+  return { ...usage, evaluations: usage.evaluations + 1 };
 }
 
 /** Evaluate through the cascade; returns the updated record (still `pending` if cancelled). */
@@ -195,7 +199,7 @@ export async function evaluateCandidate(
     ctx.evalLimit(async () => {
       if (ctx.control.stopped) return syntheticFailure(request(stage), ctx.evaluator, 'cancelled', 'Run stopped.');
       ctx.activity(candidate.id, stage === 'screen' ? 'screening' : 'evaluating');
-      ctx.setUsage((u) => countEvaluation(u, stage, spec.evaluation.cascade));
+      ctx.setUsage(countEvaluation);
       return ctx.kernel.evaluate(request(stage));
     });
 
