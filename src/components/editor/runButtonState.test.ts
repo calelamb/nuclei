@@ -70,12 +70,12 @@ describe('getRunButtonState', () => {
 
   it('is a neutral status when the kernel failed (the banner owns Retry)', () => {
     const state = getRunButtonState({ ...base, kernelStatus: 'failed', kernelError: 'Port 8742 is already in use' });
-    expect(state).toMatchObject({ kind: 'failed', label: 'Kernel failed', disabled: true });
+    expect(state).toMatchObject({ kind: 'failed', label: "Kernel didn't start", disabled: true });
     expect(state.title).toContain('Port 8742 is already in use');
   });
 
   it('names the engine like the status bar does on the web build', () => {
-    expect(getRunButtonState({ ...base, kernelStatus: 'failed', engine: 'Python' }).label).toBe('Python failed');
+    expect(getRunButtonState({ ...base, kernelStatus: 'failed', engine: 'Python' }).label).toBe("Python didn't start");
   });
 
   it('becomes a Stop action while running when the runtime can interrupt', () => {

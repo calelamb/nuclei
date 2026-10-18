@@ -1,4 +1,5 @@
 import type { KernelProgress, KernelStatus } from '../../stores/editorStore';
+import { kernelStartFailureTitle } from '../../lib/kernelErrors';
 
 export type RunButtonKind = 'ready' | 'running' | 'loading' | 'failed';
 
@@ -50,7 +51,7 @@ export function getRunButtonState(input: RunButtonInput): RunButtonState {
   if (input.kernelStatus === 'failed') {
     return {
       kind: 'failed',
-      label: `${input.engine ?? 'Kernel'} failed`,
+      label: kernelStartFailureTitle(input.engine === 'Python'),
       title: `${(input.kernelError ?? 'The kernel did not start').replace(/[.\s]+$/, '')}. Use Retry in the banner below.`,
       disabled: true,
     };
