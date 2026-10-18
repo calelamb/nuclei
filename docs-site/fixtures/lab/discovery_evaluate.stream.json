@@ -60,6 +60,9 @@
           ],
           "optimized": false,
           "n_parameters": 0,
+          "parameter_names": [],
+          "best_theta": [],
+          "n_fixed_nonclifford_angles": 0,
           "cost_kind": "two_qubit_gates",
           "costs": {
             "two_qubit_gates": 2,
@@ -115,6 +118,7 @@
         "program_key": "<any>",
         "cache_hit": false,
         "isolation": "<any>",
+        "isolation_detail": "<any>",
         "compute": "<any>"
       }
     }

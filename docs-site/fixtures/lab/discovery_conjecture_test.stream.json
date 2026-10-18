@@ -108,6 +108,7 @@
           32
         ],
         "n_max_tested": 32,
+        "n_max_planned": 32,
         "counterexamples": "<any>",
         "evidence": "<any>",
         "resampling": {

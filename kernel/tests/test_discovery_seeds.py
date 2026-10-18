@@ -80,7 +80,7 @@ async def test_w_state_seed_passes_every_guardrail_and_prepares_w():
     assert ev["metrics"]["fidelity"] == pytest.approx(1.0, abs=1e-9)
     assert ev["descriptors"] == {"two_qubit_gates": 12, "depth": 17}  # 3 (n - 1) two-qubit gates
     assert ev["fitness"] == pytest.approx(10 - 0.1 * 12)
-    assert ev["evaluator"]["kind"] == "state_synthesis" and ev["compute"]["method"] == "statevector_sampling"
+    assert ev["evaluator"]["kind"] == "state_synthesis" and ev["compute"]["method"] == "statevector_exact"
     assert ev["failure"] is None and ev["rejection"] is None
 
 

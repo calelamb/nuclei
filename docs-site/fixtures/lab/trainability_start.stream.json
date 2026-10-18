@@ -443,6 +443,9 @@
       "provenance": {
         "code_sha256": "e0fe018aba5c0bffca76d586a1e5a98df1798ebd451d6817e3cecc73672eafd9",
         "observable": "0.3333333333333333*Z0 + 0.3333333333333333*Z1 + 0.3333333333333333*Z2",
+        "params": {
+          "n_qubits": 3
+        },
         "settings": {
           "samples": 64,
           "seed": 7,
