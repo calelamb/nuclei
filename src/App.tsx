@@ -367,6 +367,7 @@ function AppInner() {
     developerViews: experimentalFeatures,
     experiments: experiments.map((e) => ({ fileName: e.fileName, name: e.spec.name })),
     hasSelectedRun: selectedRunDir !== null,
+    framework,
   });
 
   // Global keyboard shortcuts. Dispatch is by id from the single keybinding

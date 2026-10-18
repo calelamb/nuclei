@@ -11,10 +11,12 @@ import {
   leftPanelsForMode,
   bottomLeftPanelsForMode,
   leftPanelLabel,
+  panelPassesFramework,
   type PanelId,
   type LeftPanelId,
 } from '../../layout/panelRegistry';
 import type { WorkspaceMode } from '../../stores/workspaceStore';
+import type { Framework } from '../../types/quantum';
 import type { LayoutPreset } from '../../stores/layoutStore';
 import { rankCommands } from './rankCommands';
 import { shortcutLabel, isMacPlatform, bindingLabel } from '../../config/keybindings';
@@ -233,6 +235,8 @@ export interface CommandContext {
   experiments: ReadonlyArray<{ fileName: string; name: string }>;
   /** Whether a run is selected (enables "Open run folder"). */
   hasSelectedRun: boolean;
+  /** Active framework; panels whose affinity excludes it are not offered. Omit/null = offer all. */
+  framework?: Framework | null;
   /** Render shortcut hints as glyphs (Mac) or words (Ctrl+...). Defaults to the host platform. */
   mac?: boolean;
 }
@@ -303,6 +307,7 @@ export function buildCommands(actions: CommandActions, context: CommandContext):
   // Toggle <panel> — every viz/bottom panel this mode offers.
   for (const panel of PANEL_REGISTRY) {
     if (!panel.modes.includes(context.mode)) continue;
+    if (!panelPassesFramework(panel, context.framework ?? null)) continue;
     commands.push({
       id: `toggle-panel-${panel.id}`,
       label: panelToggleLabel(panel.title),
