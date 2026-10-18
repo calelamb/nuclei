@@ -326,8 +326,21 @@ export function DiracSidePanel() {
   }, [isLoading, sendMessage, clearHistory]);
 
   const submit = (raw: string) => {
-    if (dispatch(raw)) setInput('');
+    if (dispatch(raw)) {
+      setInput('');
+      // Clicking Send unmounts the button (input is now empty); keep the keyboard in the message box.
+      inputRef.current?.focus();
+    }
   };
+
+  // A reply finishing must never leave the keyboard on <body>.
+  const wasLoading = useRef(false);
+  useEffect(() => {
+    if (wasLoading.current && !isLoading && document.activeElement === document.body) {
+      inputRef.current?.focus();
+    }
+    wasLoading.current = isLoading;
+  }, [isLoading]);
 
   const handleSend = () => submit(input);
 
@@ -530,7 +543,8 @@ export function DiracSidePanel() {
             aria-label="Message Dirac"
             aria-controls={showSlashMenu ? 'dirac-slash-menu' : undefined}
             aria-activedescendant={showSlashMenu ? `dirac-slash-menu-${Math.min(slashActive, slashCommands.length - 1)}` : undefined}
-            disabled={isLoading}
+            readOnly={isLoading}
+            aria-busy={isLoading || undefined}
             rows={1}
             className="dirac-input"
             onInput={(e) => {
