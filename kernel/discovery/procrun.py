@@ -16,6 +16,13 @@ import threading
 import time
 from dataclasses import dataclass
 
+from kernel.lab_proc import (  # noqa: F401 - kill_process_group re-exported for compatibility
+    STRICT_ENV_DEFAULTS,
+    STRICT_PASSTHROUGH_ENV,
+    kill_process_group,
+    minimal_env as _shared_minimal_env,
+)
+
 POLL_SECONDS = 0.05
 STDERR_KEEP_BYTES = 4096
 STDERR_HARD_CAP_BYTES = 1 << 20
@@ -28,20 +35,8 @@ _UNSET: object = object()
 
 
 def minimal_env(extra: dict[str, str] | None = None) -> dict[str, str]:
-    env = {
-        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-        "LANG": os.environ.get("LANG", "C.UTF-8"),
-        "PYTHONNOUSERSITE": "1",
-        "PYTHONHASHSEED": "0",
-        "OPENBLAS_NUM_THREADS": "1",
-        "OMP_NUM_THREADS": "1",
-        "MKL_NUM_THREADS": "1",
-        "NUMEXPR_NUM_THREADS": "1",
-        "RAYON_NUM_THREADS": "1",
-    }
-    if extra:
-        env.update(extra)
-    return env
+    """The strict launch environment: PATH and LANG only (with fixed defaults), pinned threads, then ``extra``."""
+    return _shared_minimal_env(extra, passthrough=STRICT_PASSTHROUGH_ENV, defaults=STRICT_ENV_DEFAULTS)
 
 
 @dataclass(frozen=True)
@@ -54,17 +49,6 @@ class ProcResult:
     spawn_error: str | None = None
     output_overflow: bool = False
     memory_exceeded: bool = False
-
-
-def kill_process_group(proc: subprocess.Popen) -> None:
-    """SIGKILL the worker's whole process group (it leads its own session)."""
-    try:
-        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-    except (ProcessLookupError, PermissionError, OSError):
-        try:
-            proc.kill()
-        except (ProcessLookupError, OSError):
-            pass
 
 
 def _kill_group_by_id(pgid: int) -> None:

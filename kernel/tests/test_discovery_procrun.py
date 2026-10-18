@@ -104,3 +104,60 @@ def test_memory_limit_env_override(monkeypatch):
     assert memory_limit_bytes() == 300 * 1024 * 1024
     monkeypatch.setenv("NUCLEI_DISCOVERY_MAX_RSS_MB", "junk")
     assert memory_limit_bytes() == DEFAULT_MEMORY_LIMIT_BYTES
+
+
+# The pre-switch-over environment of ``procrun.minimal_env`` (sandbox and scorer launches), frozen as a literal.
+_LEGACY_STRICT_KEYS = {
+    "PATH", "LANG", "PYTHONNOUSERSITE", "PYTHONHASHSEED", "OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS",
+    "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS", "RAYON_NUM_THREADS",
+}
+
+
+def _legacy_minimal_env(extra=None):
+    env = {
+        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+        "LANG": os.environ.get("LANG", "C.UTF-8"),
+        "PYTHONNOUSERSITE": "1",
+        "PYTHONHASHSEED": "0",
+        "OPENBLAS_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+        "NUMEXPR_NUM_THREADS": "1",
+        "RAYON_NUM_THREADS": "1",
+    }
+    if extra:
+        env.update(extra)
+    return env
+
+
+def test_minimal_env_matches_the_pre_lab_proc_environment(monkeypatch):
+    from kernel.discovery.procrun import minimal_env
+
+    monkeypatch.setenv("PATH", "/opt/bin:/usr/bin")
+    monkeypatch.setenv("LANG", "en_US.UTF-8")
+    for secret in ("HOME", "TMPDIR", "ANTHROPIC_API_KEY", "LC_ALL"):
+        monkeypatch.setenv(secret, "leak")
+    scratch = {"TMPDIR": "/scratch", "HOME": "/scratch", "NUCLEI_X": "1"}
+    for extra in (None, scratch):
+        new, old = minimal_env(extra), _legacy_minimal_env(extra)
+        # The only addition is the shared PYTHONDONTWRITEBYTECODE=1 (stricter; nothing may write bytecode).
+        assert {k: v for k, v in new.items() if k != "PYTHONDONTWRITEBYTECODE"} == old
+        assert new["PYTHONDONTWRITEBYTECODE"] == "1"
+    assert set(minimal_env()) == _LEGACY_STRICT_KEYS | {"PYTHONDONTWRITEBYTECODE"}
+    assert "ANTHROPIC_API_KEY" not in minimal_env(scratch)
+
+
+def test_minimal_env_defaults_when_parent_has_no_path_or_lang(monkeypatch):
+    from kernel.discovery.procrun import minimal_env
+
+    monkeypatch.delenv("PATH", raising=False)
+    monkeypatch.delenv("LANG", raising=False)
+    env = minimal_env()
+    assert (env["PATH"], env["LANG"]) == ("/usr/bin:/bin", "C.UTF-8")
+
+
+def test_procrun_uses_the_shared_kill_helper():
+    from kernel import lab_proc
+    from kernel.discovery import procrun
+
+    assert procrun.kill_process_group is lab_proc.kill_process_group
