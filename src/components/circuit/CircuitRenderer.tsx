@@ -227,6 +227,14 @@ export function CircuitRenderer() {
               {qubit_count} {qubit_count === 1 ? 'qubit' : 'qubits'} · depth {depth}
             </span>
           )}
+          {stalePill && (
+            <StaleResultNotice
+              inline
+              label={stalePill.label}
+              tooltip={stalePill.tooltip}
+              onActivate={stalePill.line !== null ? () => revealLine(stalePill.line as number) : undefined}
+            />
+          )}
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {isRunning && <span role="status" style={{ fontSize: 11, color: colors.textMuted, fontFamily: TYPOGRAPHY.fontSans }}>Running…</span>}
@@ -234,14 +242,6 @@ export function CircuitRenderer() {
         </span>
       </div>
       <div style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-      {stalePill && (
-        <StaleResultNotice
-          overlay
-          label={stalePill.label}
-          tooltip={stalePill.tooltip}
-          onActivate={stalePill.line !== null ? () => revealLine(stalePill.line as number) : undefined}
-        />
-      )}
       <div
         ref={setContainerRef}
         onScroll={handleScroll}

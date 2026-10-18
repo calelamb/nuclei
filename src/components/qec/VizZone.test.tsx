@@ -133,10 +133,16 @@ describe('<VizZone> results empty state (shell-r3-05/07)', () => {
     expect(getByRole('button', { name: /Run again/ })).toBeTruthy();
   });
 
-  it('a clean run with no circuit says there is nothing to simulate', () => {
+  it('a clean run with no circuit says so', () => {
     useSimulationStore.setState({ lastRunNoCircuit: true });
     const { container } = render(<VizZone visible={visible({ circuit: true })} chip={null} />);
-    expect(container.textContent).toContain('Nothing to simulate');
+    expect(container.textContent).toContain('No circuit in this file');
+  });
+
+  it('keeps the column for a plain-Python run even when no panel is visible', () => {
+    useSimulationStore.setState({ lastRunNoCircuit: true });
+    const { container } = render(<VizZone visible={visible({})} chip={null} noCircuit />);
+    expect(container.textContent).toContain('No circuit in this file');
   });
 
   it('keeps the running variant', () => {

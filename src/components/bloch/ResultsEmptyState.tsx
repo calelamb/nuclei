@@ -56,10 +56,10 @@ export function ResultsEmptyState() {
         <EmptyState
           className="viz-empty"
           icon={<Orbit size={20} />}
-          title="Nothing to simulate"
+          title="No circuit in this file"
           action={<Button variant="secondary" size="sm" icon={<Play size={12} />} onClick={run}>{runLabel}</Button>}
         >
-          The code ran as plain Python and did not define a circuit.
+          It ran as plain Python. Define a circuit to see it here.
         </EmptyState>
       </div>
     );

@@ -60,12 +60,15 @@ export function VizZone({
   chip,
   booting = false,
   startFailed = false,
+  noCircuit = false,
 }: {
   visible: VisiblePanels;
   /** Python is still starting: hold the column open with a placeholder so the editor does not jump when it is ready. */
   booting?: boolean;
   /** Python failed to start: keep the column and offer Retry, so the editor does not change width when it recovers. */
   startFailed?: boolean;
+  /** The last run finished as plain Python: keep the column and say there was no circuit to draw. */
+  noCircuit?: boolean;
   /** The histogram-chip strip, rendered below the main panels (unchanged). */
   chip: ReactNode;
 }) {
@@ -109,6 +112,10 @@ export function VizZone({
         </EmptyState>
       </div>
     );
+  }
+
+  if (noCircuit && panels.length === 0) {
+    return <div style={COLUMN_STYLE}><ResultsEmptyState /></div>;
   }
 
   if (startFailed && panels.length === 0) {

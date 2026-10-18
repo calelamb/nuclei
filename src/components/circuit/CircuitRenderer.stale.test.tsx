@@ -66,7 +66,7 @@ describe('CircuitRenderer during a transient syntax error', () => {
     expect(screen.getByText('Out of date · line 7')).toBeTruthy();
   });
 
-  it('puts the caption in a pill over the diagram, not in the header row, and drops the stale qubit/depth meta', () => {
+  it('puts the caption in a pill in the header row in place of the stale qubit/depth meta, so it never covers the diagram or hops the layout', () => {
     render(<CircuitRenderer />);
     act(() => { useCircuitStore.getState().setSnapshot(snap); });
     expect(screen.getByText(/2 qubits · depth 1/)).toBeTruthy();
@@ -76,8 +76,9 @@ describe('CircuitRenderer during a transient syntax error', () => {
       useEditorStore.getState().setErrors([{ line: 9, message: 'invalid syntax' }]);
     });
     const pill = screen.getByTestId('stale-result-notice');
-    const header = screen.getByText('Circuit').parentElement as HTMLElement;
-    expect(header.contains(pill)).toBe(false);
+    const header = screen.getByText('Circuit').closest('.nuclei-pane-header') as HTMLElement;
+    expect(header.contains(pill)).toBe(true);
+    expect(screen.getByRole('img').closest('svg')?.parentElement?.contains(pill)).toBe(false);
     expect(screen.queryByText(/qubits · depth/)).toBeNull();
   });
 

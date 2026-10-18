@@ -207,7 +207,8 @@ export function PanelLayout() {
   const kernelStatus = useEditorStore((s) => s.kernelStatus);
   // A failed start keeps the column too (with a Retry), so the editor does not jump when the kernel recovers.
   const kernelReady = useEditorStore((s) => s.kernelReady);
-  const placeholder = vizPlaceholder({ hasContent: vizHasContent, kernelStatus, kernelReady, isWeb: isWebBuild() });
+  const lastRunNoCircuit = useSimulationStore((s) => s.lastRunNoCircuit);
+  const placeholder = vizPlaceholder({ hasContent: vizHasContent, kernelStatus, kernelReady, isWeb: isWebBuild(), lastRunNoCircuit });
   const booting = placeholder === 'booting';
   const startFailed = placeholder === 'failed';
   const showViz = (vizHasContent || placeholder !== null) && vizFits;
@@ -520,6 +521,7 @@ export function PanelLayout() {
                         visible={visible}
                         booting={booting}
                         startFailed={startFailed}
+                        noCircuit={placeholder === 'noCircuit'}
                         chip={
                           <PanelReveal when={chipShown} from="bottom">
                             <div style={{ padding: '6px 10px 10px', flexShrink: 0 }}>

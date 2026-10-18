@@ -50,6 +50,11 @@ describe('vizPlaceholder (the column is held open while Python boots or has fail
     expect(vizPlaceholder({ ...base, kernelStatus: 'failed', isWeb: false })).toBe('failed');
   });
 
+  it('keeps the column after a run that finished without a circuit, so the plain-Python result has somewhere to say so', () => {
+    expect(vizPlaceholder({ ...base, kernelStatus: 'ready', kernelReady: true, lastRunNoCircuit: true })).toBe('noCircuit');
+    expect(vizPlaceholder({ ...base, kernelStatus: 'ready', kernelReady: true })).toBeNull();
+  });
+
   it('steps aside as soon as the column has real content', () => {
     expect(vizPlaceholder({ ...base, hasContent: true, kernelStatus: 'failed' })).toBeNull();
   });

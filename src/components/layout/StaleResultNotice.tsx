@@ -13,8 +13,8 @@ interface StaleResultNoticeProps {
   tooltip?: string;
   /** Makes the pill a button (for example "jump to the line with the error"). */
   onActivate?: () => void;
-  /** Overlay the pill on the content below instead of taking a row in the flow. */
-  overlay?: boolean;
+  /** Sit inline inside a header row (shrinks with ellipsis) instead of taking a row of its own. */
+  inline?: boolean;
 }
 
 /**
@@ -22,7 +22,7 @@ interface StaleResultNoticeProps {
  * sits in the flow, above the cards, so it never covers what it describes; `overlay` floats it
  * over a diagram so appearing does not move anything.
  */
-export function StaleResultNotice({ label, tooltip, onActivate, overlay = false }: StaleResultNoticeProps = {}) {
+export function StaleResultNotice({ label, tooltip, onActivate, inline = false }: StaleResultNoticeProps = {}) {
   const colors = useThemeStore((s) => s.colors);
   const run = shortcutLabel('run');
   const text = label ?? `From last run · code changed${run ? ` · Run ${run}` : ''}`;
@@ -36,12 +36,12 @@ export function StaleResultNotice({ label, tooltip, onActivate, overlay = false 
   ) : (
     <div role="status" style={pillStyle}>{text}</div>
   );
-  const wrapStyle = overlay
-    ? { position: 'absolute', top: 6, left: 0, right: 0, zIndex: 2, display: 'flex', justifyContent: 'center', padding: '0 8px', minWidth: 0, pointerEvents: 'none' } as const
+  const wrapStyle = inline
+    ? { display: 'flex', minWidth: 0, flex: '0 1 auto' } as const
     : { flex: '0 0 auto', display: 'flex', justifyContent: 'center', padding: '6px 8px 0', minWidth: 0 } as const;
   return (
     <div data-testid="stale-result-notice" style={wrapStyle}>
-      <span style={{ display: 'inline-flex', maxWidth: '100%', pointerEvents: 'auto' }}>
+      <span style={{ display: 'inline-flex', maxWidth: '100%', minWidth: 0 }}>
         {tooltip ? <Tooltip label={tooltip} placement="below">{pill}</Tooltip> : pill}
       </span>
     </div>
