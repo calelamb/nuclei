@@ -124,9 +124,14 @@
 .nuclei-choice-card:hover { background: var(--color-surface-raised); border-color: var(--choice-accent); }
 /* Keyboard focus draws the ring and the accent stripe as one shape; the border does not shift colour underneath it. */
 .nuclei-choice-card:focus-visible {
-  outline: none; border-color: var(--color-border-subtle);
-  box-shadow: inset 3px 0 0 var(--choice-accent), 0 0 0 var(--focus-ring-width) var(--focus-ring-color);
+  /* The 1px border takes the ring colour and the outer shadow supplies the rest of the ring's width, so the ring is one
+     unbroken band and the accent stripe sits flush against it (no pale gap, no doubled left edge). */
+  outline: none; border-color: var(--focus-ring-color);
+  box-shadow: inset 3px 0 0 var(--choice-accent), 0 0 0 calc(var(--focus-ring-width) - 1px) var(--focus-ring-color);
 }
+/* In the light theme the sunken surface reads as disabled; resting cards sit on the raised surface and lift to white. */
+:root[data-theme='light'] .nuclei-choice-card { background: var(--color-surface-raised); }
+:root[data-theme='light'] .nuclei-choice-card:hover { background: var(--color-surface-base); }
 .nuclei-choice-card__title { color: var(--color-text-primary); font-size: var(--font-size-heading); font-weight: var(--font-weight-semibold); }
 .nuclei-choice-card__desc { margin-top: var(--space-1); color: var(--color-text-secondary); font-size: var(--font-size-code); line-height: 1.5; }
 
@@ -348,7 +353,7 @@
 .nuclei-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-1); padding: var(--space-6) var(--space-4); text-align: center; font-family: var(--font-sans); }
 .nuclei-empty__icon { display: inline-flex; margin-bottom: var(--space-1); color: var(--color-text-tertiary); }
 .nuclei-empty__title { margin: 0; font-size: var(--font-size-code); font-weight: var(--font-weight-semibold); line-height: var(--line-height-label); color: var(--color-text-primary); }
-.nuclei-empty__body { margin: 0; max-width: 32ch; font-size: var(--font-size-chrome-label); font-weight: var(--font-weight-regular); line-height: 1.5; color: var(--color-text-secondary); text-wrap: pretty; }
+.nuclei-empty__body { margin: 0; max-width: 32ch; font-size: var(--font-size-chrome-label); font-weight: var(--font-weight-regular); line-height: 1.5; color: var(--color-text-secondary); text-wrap: balance; }
 .nuclei-empty__action { margin-top: var(--space-3); }
 
 /* Horizontal scroll strips (editor file tabs): fade the clipped edge so hidden tabs are discoverable. */

@@ -96,4 +96,16 @@ describe('design guards', () => {
     expect(block(/:root,\s*:root\[data-theme='dark'\]/)).toMatch(/color-scheme:\s*dark\s*;/);
     expect(block(/:root\[data-theme='light'\]/)).toMatch(/color-scheme:\s*light\s*;/);
   });
+
+  it('draws a focused choice card as one band: the border takes the ring colour, no pale border between ring and accent stripe', () => {
+    const css = files.find((f) => f.rel === 'components/ui/ui.css')?.text ?? '';
+    const rule = css.match(/\.nuclei-choice-card:focus-visible\s*\{([^}]*)\}/)?.[1] ?? '';
+    expect(rule).toMatch(/border-color:\s*var\(--focus-ring-color\)/);
+    expect(rule).not.toMatch(/border-color:\s*var\(--color-border-subtle\)/);
+  });
+
+  it('balances the lines of centred empty-state copy', () => {
+    const css = files.find((f) => f.rel === 'components/ui/ui.css')?.text ?? '';
+    expect(css.match(/\.nuclei-empty__body\s*\{([^}]*)\}/)?.[1] ?? '').toMatch(/text-wrap:\s*balance/);
+  });
 });

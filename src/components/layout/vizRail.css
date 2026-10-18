@@ -9,9 +9,9 @@
 .viz-rail:hover { background: var(--color-surface-overlay); }
 .viz-rail__label { color: var(--color-text-secondary); font: var(--font-weight-semibold) var(--font-size-caption) var(--font-sans); letter-spacing: 1px; }
 
-/* Right-rail empty states: balanced line breaks so a lone word never wraps onto its own line. */
+/* Right-rail empty states: balanced line breaks so a lone word never wraps onto its own line (centred copy of a few lines). */
 .viz-empty { height: 100%; }
-.viz-empty .nuclei-empty__title, .viz-empty .nuclei-empty__body { text-wrap: pretty; }
+.viz-empty .nuclei-empty__title, .viz-empty .nuclei-empty__body { text-wrap: balance; }
 
 /* Boot placeholder: top-aligned where the circuit header will land, so the eye does not jump when Python is ready. */
 .viz-empty--boot { justify-content: flex-start; padding-top: var(--space-6); }
