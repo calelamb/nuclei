@@ -9,6 +9,11 @@ The stage rules of the addendum are split between this module and the scorer:
 * ``confirm``: identical config; the scorer draws the hardness-probe parameter points from
   an independent random stream (see ``STAGE_STREAM`` in ``_frontier_probe``).
 
+``estimation.time_budget_s`` defaults to 20 (the addendum's 8 s is too tight: the seed's
+64-qubit point takes ~3 s idle but exhausted 8 s under machine load, silently turning an
+exact result into a bounded one). Results are deterministic only while no budget is hit;
+a hit budget always shows up as ``status: budget_exhausted`` and a ``warn`` on ``exactness``.
+
 ``max_sizes`` is not in the addendum's config list: it is the mechanism that lets a static
 stage override express "the first two sizes". Its default (6) never truncates ``qubits``.
 """
@@ -28,7 +33,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "qubits": [8, 16, 32, 64],
     "n_layers": 4,
     "observable": "preset:local_z",
-    "estimation": {"target_width": 0.02, "max_frontier": 200000, "time_budget_s": 8},
+    "estimation": {"target_width": 0.02, "max_frontier": 200000, "time_budget_s": 20},
     "dla_probe_qubits": 4,
     "max_parameters_per_qubit": 24,
     "weights": {"trainability": 1.0, "hardness": 0.5},

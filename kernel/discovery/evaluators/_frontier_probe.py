@@ -64,8 +64,7 @@ def variance_point(
         "n_qubits": circuit.n_qubits, "n_layers": n_layers, "variance": mean,
         "variance_ci95": [low, high], "method": result["method"], "status": result["status"],
         "relative_width": (high - low) / mean if mean > 0 else None,
-        "frontier_peak": int(result["frontier_peak"]), "elapsed_ms": float(result["elapsed_ms"]),
-        "per_parameter": result["per_parameter"],
+        "frontier_peak": int(result["frontier_peak"]), "per_parameter": result["per_parameter"],
     }
 
 
@@ -78,7 +77,10 @@ def is_exact_point(point: dict[str, Any]) -> bool:
 
 
 def public_point(point: dict[str, Any]) -> dict[str, Any]:
-    """The JSON-facing fields of a variance point (drops the per-parameter rows)."""
+    """The JSON-facing fields of a variance point (drops the per-parameter rows).
+
+    Wall-clock timings are deliberately absent from every metric so a re-run is bit-identical.
+    """
     return {k: v for k, v in point.items() if k != "per_parameter"} | {"exact": is_exact_point(point)}
 
 
@@ -152,7 +154,7 @@ def hardness_of_point(
         curve.append({
             "max_frontier": int(step["max_frontier"]), "width": float(step["width"]),
             "value": float(step["value"]), "interval": [float(x) for x in step["interval"]],
-            "method": step["method"], "elapsed_ms": float(step["elapsed_ms"]),
+            "method": step["method"],
         })
         if step["width"] <= target_width:
             needed = int(size)
