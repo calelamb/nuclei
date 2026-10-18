@@ -70,8 +70,10 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
     requestAnimationFrame(() => editor.focus());
   }, [onClose, editor]);
 
-  const closeAndRefocusRef = useRef((_refocus: boolean) => {});
-  closeAndRefocusRef.current = (refocus: boolean) => (refocus ? closeAndRefocus() : onClose());
+  const closeAndRefocusRef = useRef<(refocus: boolean) => void>(() => undefined);
+  useEffect(() => {
+    closeAndRefocusRef.current = (refocus) => (refocus ? closeAndRefocus() : onClose());
+  }, [closeAndRefocus, onClose]);
 
   // Get position below selection
   const selection = editor.getSelection();
