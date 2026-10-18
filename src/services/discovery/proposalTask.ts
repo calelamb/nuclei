@@ -6,7 +6,7 @@
 
 import type { CandidateLlmInfo, CandidateRecord, DiscoveryEvaluation, DiscoveryStage, RunUsage } from '../../types/discovery';
 import { optimisticFitness, shouldPromote } from './cascade';
-import { isCancelled, syntheticFailure } from './kernelEval';
+import { isCancelled, isTransportFailure, syntheticFailure } from './kernelEval';
 import { resolveProposal, type LlmResult } from './llmMutator';
 import type { PlanItem } from './planning';
 import { auditIfDue } from './auditStep';
@@ -207,7 +207,7 @@ export async function evaluateCandidate(
     });
 
   const first = await run(spec.evaluation.cascade ? 'screen' : 'full');
-  if (isCancelled(first)) return candidate;
+  if (isCancelled(first) || isTransportFailure(first)) return candidate;
   const known = first.program_key ? ctx.seenProgramKeys.get(first.program_key) : undefined;
   if (known && known !== candidate.id) {
     ctx.setUsage((u) => ({ ...u, proposals: { ...u.proposals, duplicate: u.proposals.duplicate + 1 } }));
@@ -224,7 +224,7 @@ export async function evaluateCandidate(
 
   await ctx.control.gate();
   const full = await run('full');
-  if (isCancelled(full)) return { ...candidate, screen: first };
+  if (isCancelled(full) || isTransportFailure(full)) return { ...candidate, screen: first };
   noteRejection(ctx, full);
   return { ...candidate, screen: first, evaluation: full, outcome: 'evaluated' };
 }

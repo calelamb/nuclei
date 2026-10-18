@@ -36,6 +36,11 @@ export interface KernelEvaluator {
   evaluate(request: EvalRequest): Promise<DiscoveryEvaluation>;
   /** Ask the kernel to cancel everything of the run; pending promises resolve as cancelled. */
   cancelRun(runId: string): void;
+  /**
+   * Called once when the session closes or a send fails: the run cannot go on.
+   * Fires before the affected promises settle.
+   */
+  onFatal(handler: (message: string) => void): () => void;
   dispose(): void;
 }
 
@@ -46,6 +51,13 @@ export const CANCELLED_CODE = 'cancelled';
 
 export function isCancelled(evaluation: DiscoveryEvaluation): boolean {
   return evaluation.status === 'failed' && evaluation.failure?.code === CANCELLED_CODE;
+}
+
+/** The kernel connection itself is gone (CR-H7): not a verdict about the candidate. */
+export const TRANSPORT_FAILURE_CODES = ['session_closed', 'send_failed'] as const;
+
+export function isTransportFailure(evaluation: DiscoveryEvaluation): boolean {
+  return evaluation.status === 'failed' && TRANSPORT_FAILURE_CODES.some((code) => code === evaluation.failure?.code);
 }
 
 export function syntheticFailure(
@@ -88,6 +100,13 @@ export function createKernelEvaluator({ session, info, sleep, timeoutMs = DEFAUL
 
   let pendingMutate: ((result: MutateResult) => void) | null = null;
   let mutateTail: Promise<unknown> = Promise.resolve();
+  const fatalHandlers = new Set<(message: string) => void>();
+  let fatalMessage: string | null = null;
+  const raiseFatal = (message: string) => {
+    if (fatalMessage !== null) return;
+    fatalMessage = message;
+    for (const handler of [...fatalHandlers]) handler(message);
+  };
 
   const unsubscribe = session.subscribe((message: KernelResponse) => {
     if (message.type === 'discovery_mutations') {
@@ -104,6 +123,8 @@ export function createKernelEvaluator({ session, info, sleep, timeoutMs = DEFAUL
     }
   });
   const offClose = session.onClose?.(() => {
+    raiseFatal('The kernel session closed.');
+    pendingMutate?.({ ok: false, message: 'The kernel session closed.' });
     for (const waiter of [...waiters.values()]) {
       waiter.settle(syntheticFailure(waiter.request, info, 'session_closed', 'The kernel session closed.'));
     }
@@ -111,6 +132,7 @@ export function createKernelEvaluator({ session, info, sleep, timeoutMs = DEFAUL
 
   function attempt(request: EvalRequest): Promise<DiscoveryEvaluation> {
     const key = keyOf(request.runId, request.wireId);
+    if (fatalMessage !== null) return Promise.resolve(syntheticFailure(request, info, 'session_closed', fatalMessage));
     return new Promise((resolve) => {
       const timer = setTimeout(
         () => settle(syntheticFailure(request, info, 'eval_timeout', `No answer from the kernel within ${Math.round(timeoutMs / 1000)} s.`)),
@@ -135,9 +157,14 @@ export function createKernelEvaluator({ session, info, sleep, timeoutMs = DEFAUL
             seed: request.seed,
             stage: request.stage,
           }),
-        ).catch((e: unknown) => settle(syntheticFailure(request, info, 'send_failed', e instanceof Error ? e.message : String(e))));
+        ).catch((e: unknown) => sendFailed(e));
       } catch (e) {
-        settle(syntheticFailure(request, info, 'send_failed', e instanceof Error ? e.message : String(e)));
+        sendFailed(e);
+      }
+      function sendFailed(e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        raiseFatal(`Could not reach the kernel: ${message}`);
+        settle(syntheticFailure(request, info, 'send_failed', message));
       }
     });
   }
@@ -175,6 +202,11 @@ export function createKernelEvaluator({ session, info, sleep, timeoutMs = DEFAUL
         if (evaluation.failure?.code !== 'discovery_busy' || tries >= BUSY_RETRIES) return evaluation;
         await sleep(BUSY_BACKOFF_MS * (tries + 1));
       }
+    },
+    onFatal(handler) {
+      fatalHandlers.add(handler);
+      if (fatalMessage !== null) handler(fatalMessage);
+      return () => fatalHandlers.delete(handler);
     },
     cancelRun(runId) {
       for (const waiter of [...waiters.values()]) {

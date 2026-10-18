@@ -28,7 +28,7 @@ import {
 import { bestElite, createArchive, eliteFromEvaluation, axisFromDescriptor, insertElite } from './archive';
 import { findRegion } from './diff';
 import { createAuditClient, type AuditClient } from './kernelAudit';
-import { createKernelEvaluator, type KernelEvaluator } from './kernelEval';
+import { createKernelEvaluator, isTransportFailure, type KernelEvaluator } from './kernelEval';
 import { auditIfDue, observeSeed, pendingAudits, rebuildRedQueen, runAudit } from './auditStep';
 import { EMPTY_POLICY, NO_EXPLOIT_MESSAGE, isRedQueen, redQueenConfig } from './redQueen';
 import { buildRedQueenSystemPrompt } from './redQueenPrompt';
@@ -90,6 +90,8 @@ export function runDiscovery(
 ): DiscoveryRunHandle {
   let paused = false;
   let stopped = false;
+  /** Set when the kernel connection is lost: the run ends as failed (CR-H7). */
+  let fatal: string | null = null;
   let finished = false;
   const llmAbort = new AbortController();
   let run: RunRecord | null = null;
@@ -97,9 +99,9 @@ export function runDiscovery(
   const gateWaiters: Array<() => void> = [];
   const releaseGate = () => gateWaiters.splice(0).forEach((resolve) => resolve());
   const control: RunControl = {
-    get stopped() { return stopped; },
+    get stopped() { return stopped || fatal !== null; },
     get paused() { return paused; },
-    gate: () => (paused && !stopped ? new Promise<void>((resolve) => gateWaiters.push(resolve)) : Promise.resolve()),
+    gate: () => (paused && !stopped && fatal === null ? new Promise<void>((resolve) => gateWaiters.push(resolve)) : Promise.resolve()),
   };
   const startedAt = deps.clock.now();
   const runId = rctx.resumeRunId ?? makeRunId(startedAt, deriveSeed(spec.seed, startedAt.getTime()));
@@ -181,6 +183,14 @@ export function runDiscovery(
 
     kernel = createKernelEvaluator({ session: deps.session, info: rctx.evaluator, sleep: deps.clock.sleep });
     const k = kernel;
+    k.onFatal((message) => {
+      if (fatal !== null || finished) return;
+      fatal = `${message} The run ended because evaluations can no longer be sent; resume it once the kernel is back.`;
+      llmAbort.abort();
+      releaseGate();
+    });
+    /** How a halted run ends: failed on a lost kernel, otherwise a user stop. */
+    const haltFinish = () => (fatal !== null ? finish('error', fatal) : finish('user'));
     auditClient = createAuditClient({ session: deps.session, sleep: deps.clock.sleep });
     const promptInput = { evaluator: rctx.evaluator, task: spec.description, entry: spec.entry };
     const ctx: RunContext = {
@@ -225,7 +235,7 @@ export function runDiscovery(
     onControlChange = () => {
       if (finished || !run) return;
       const r = run as RunRecord;
-      if (stopped || (paused ? 'paused' : 'running') === r.status) return;
+      if (stopped || fatal !== null || (paused ? 'paused' : 'running') === r.status) return;
       setRun({ status: paused ? 'paused' : 'running' });
       persistRun();
     };
@@ -274,7 +284,7 @@ export function runDiscovery(
     if (seedRecord && seedRecord.outcome === 'pending') {
       persistRun();
       const evaluated = await evaluateSeed(ctx, seedRecord);
-      if (evaluated.outcome === 'pending') return finish('user');
+      if (evaluated.outcome === 'pending') return haltFinish();
       ctx.saveCandidate(evaluated);
       const ev = evaluated.evaluation;
       if (ev?.evaluator.fingerprint) setRun({ evaluator: { ...(run as RunRecord).evaluator, fingerprint: ev.evaluator.fingerprint } });
@@ -292,14 +302,14 @@ export function runDiscovery(
     if (rctx.resumeRunId && ctx.rq) {
       const resent = await Promise.all(pendingAudits(candidates.values()).map((c) => runAudit(ctx, c)));
       for (const c of resent) if (integrated.has(c.id) && c.audit) insertCandidate(c);
-      if (stopped) return finish('user');
+      if (control.stopped) return haltFinish();
     }
 
     // ── Generations ───────────────────────────────────────────────────
     let stopReason: StopReason | null = null;
-    while (!stopped && !stopReason && (run as RunRecord).generation < spec.search.generations) {
+    while (!control.stopped && !stopReason && (run as RunRecord).generation < spec.search.generations) {
       await control.gate();
-      if (stopped) break;
+      if (control.stopped) break;
       const g = (run as RunRecord).generation + 1;
       const outcome = await runGeneration(g);
       if (outcome.interrupted) break;
@@ -318,7 +328,7 @@ export function runDiscovery(
       const patience = spec.search.early_stop_patience;
       if (!stopReason && patience > 0 && (run as RunRecord).stale_generations >= patience) stopReason = 'early_stop';
     }
-    if (stopped) return finish('user');
+    if (control.stopped) return haltFinish();
     return finish(stopReason ?? 'generations');
 
     // ── Generation ────────────────────────────────────────────────────
@@ -369,7 +379,7 @@ export function runDiscovery(
           runProposal(ctx, item, g, batch ? { result: batch.results[item.candidateId], batchId: batch.id } : undefined)),
       ];
       await Promise.all(tasks);
-      return { interrupted: stopped, budgetStop };
+      return { interrupted: control.stopped, budgetStop };
     }
 
     async function resolveBatch(g: number, planned: PlanItem[], resuming: boolean) {
@@ -397,7 +407,7 @@ export function runDiscovery(
     async function finish(reason: StopReason, message: string | null = null): Promise<RunRecord> {
       const r = run as RunRecord;
       const userStop = reason === 'user';
-      const failed = reason === 'seed_rejected';
+      const failed = reason === 'seed_rejected' || reason === 'error';
       const noExploits = ctx.rq !== null && !userStop && !failed && ![...candidates.values()].some((c) => c.audit?.verdict === 'exploit');
       setRun({ status: failed ? 'failed' : userStop ? 'stopped' : 'completed', stop_reason: reason, message: noExploits ? NO_EXPLOIT_MESSAGE : message });
       if (noExploits) ctx.notice(NO_EXPLOIT_MESSAGE);
@@ -458,7 +468,7 @@ async function evaluateSeed(ctx: RunContext, seed: CandidateRecord): Promise<Can
     ctx.setUsage(countEvaluation);
     return evaluation;
   };
-  const cancelled = (e: DiscoveryEvaluation) => e.status === 'failed' && e.failure?.code === 'cancelled';
+  const cancelled = (e: DiscoveryEvaluation) => (e.status === 'failed' && e.failure?.code === 'cancelled') || isTransportFailure(e);
   let screen: DiscoveryEvaluation | null = null;
   if (spec.evaluation.cascade) {
     screen = await run('screen');
