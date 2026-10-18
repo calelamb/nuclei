@@ -1,19 +1,24 @@
-import { Badge, Button, Select } from '../ui';
-import { useState, useCallback } from 'react';
-import { ChevronDown, ChevronRight, Play, Trash2 } from 'lucide-react';
+import { Badge, Button, EmptyState, Select } from '../ui';
+import { useEffect, useState } from 'react';
+import { ChevronDown, ChevronRight, Download, Rocket, Trash2 } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useHardwareStore } from '../../stores/hardwareStore';
 import { hasActiveJobForBackend } from '../../lib/hardwareJobs';
-import { useEditorStore } from '../../stores/editorStore';
+import { requestHardwareBackends } from '../../lib/hardwareBackendsSender';
+import { openExternal } from '../../lib/openExternal';
+import { DESKTOP_DOWNLOAD_URL } from '../../config/docsLinks';
+import { useFrameworksStore } from '../../stores/frameworksStore';
+import { usePlatform } from '../../platform/PlatformProvider';
+import { ProviderStatusBadge } from './ProviderStatusBadge';
+import { providerNeedsToken, providerStatus } from './launchGating';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { JobTracker } from './JobTracker';
 import { ConnectivityMap } from './ConnectivityMap';
 import { ResultsComparison } from './ResultsComparison';
 import { CredentialSetup } from './CredentialSetup';
-import type { HardwareProviderType, BackendInfo } from '../../types/hardware';
+import type { HardwareProviderType } from '../../types/hardware';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
-import { SUCCESS_TEXT } from '../../lib/semanticText';
 /* ── Section (local copy matching SettingsPanel pattern) ── */
 
 function Section({
@@ -86,50 +91,6 @@ const PROVIDER_LABELS: Record<HardwareProviderType, string> = {
   simulator: 'Local Simulator',
 };
 
-// Providers whose kernel adapters are stubs (raise NotImplementedError)
-const STUB_PROVIDERS: ReadonlySet<HardwareProviderType> = new Set(['google', 'xanadu', 'dwave']);
-
-/* ── Mock backends for demo ── */
-
-const MOCK_BACKENDS: BackendInfo[] = [
-  {
-    name: 'ibm_brisbane',
-    provider: 'ibm',
-    qubitCount: 127,
-    connectivity: [
-      [0, 1], [1, 2], [2, 3], [3, 4],
-      [0, 5], [5, 6], [6, 7], [7, 8],
-    ],
-    queueLength: 12,
-    averageErrorRate: 0.0032,
-    gateSet: ['CX', 'ID', 'RZ', 'SX', 'X'],
-    status: 'online',
-  },
-  {
-    name: 'ibm_osaka',
-    provider: 'ibm',
-    qubitCount: 127,
-    connectivity: [
-      [0, 1], [1, 2], [2, 3],
-      [0, 4], [4, 5], [5, 6],
-    ],
-    queueLength: 3,
-    averageErrorRate: 0.0028,
-    gateSet: ['CX', 'ID', 'RZ', 'SX', 'X'],
-    status: 'online',
-  },
-  {
-    name: 'aer_simulator',
-    provider: 'simulator',
-    qubitCount: 32,
-    connectivity: [],
-    queueLength: 0,
-    averageErrorRate: 0,
-    gateSet: ['All'],
-    status: 'online',
-  },
-];
-
 /* ── Main HardwarePanel ── */
 
 export function HardwarePanel() {
@@ -140,53 +101,25 @@ export function HardwarePanel() {
   const jobs = useHardwareStore((s) => s.jobs);
   const results = useHardwareStore((s) => s.results);
   const showCredentialSetup = useHardwareStore((s) => s.showCredentialSetup);
-  const setBackends = useHardwareStore((s) => s.setBackends);
   const selectBackend = useHardwareStore((s) => s.selectBackend);
-  const addJob = useHardwareStore((s) => s.addJob);
   const clearJobs = useHardwareStore((s) => s.clearJobs);
   const setShowCredentialSetup = useHardwareStore((s) => s.setShowCredentialSetup);
+  const openLaunch = useHardwareStore((s) => s.openLaunch);
 
-  const code = useEditorStore((s) => s.code);
-  const shots = useSimulationStore((s) => s.shots);
   const simResult = useSimulationStore((s) => s.result);
+  const isWeb = usePlatform().getPlatform() === 'web';
+  const cudaqInstalled = useFrameworksStore((s) => s.status?.installed.includes('cuda-q') ?? false);
 
   const anyConnected = providers.some((p) => p.connected);
+  const connectedKey = providers.filter((p) => p.connected).map((p) => p.name).join(',');
 
-  // Populate backends from connected providers (use mocks for now)
-  const availableBackends =
-    backends.length > 0
-      ? backends
-      : MOCK_BACKENDS.filter((b) =>
-          providers.some((p) => p.name === b.provider && p.connected)
-        );
+  // Backends are only ever what the kernel reports for connected providers.
+  useEffect(() => {
+    if (!isWeb) requestHardwareBackends();
+  }, [isWeb, connectedKey]);
 
-  // If store backends are empty but we have mocks, set them
-  if (backends.length === 0 && availableBackends.length > 0) {
-    // Use setTimeout to avoid setState during render
-    setTimeout(() => setBackends(availableBackends), 0);
-  }
-
+  const availableBackends = backends;
   const selectedBackendInfo = availableBackends.find((b) => b.name === selectedBackend);
-
-  const handleRunOnHardware = useCallback(() => {
-    if (!selectedBackend || !code) return;
-    // Don't queue a duplicate if this backend already has an in-flight job —
-    // otherwise repeated clicks fabricate a new job each time.
-    if (hasActiveJobForBackend(jobs, selectedBackend)) return;
-
-    const job = {
-      id: `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      provider: selectedBackendInfo?.provider ?? 'simulator',
-      backend: selectedBackend,
-      submittedAt: new Date().toISOString(),
-      status: 'queued' as const,
-      queuePosition: selectedBackendInfo?.queueLength ?? null,
-      shots,
-    };
-
-    addJob(job);
-  }, [selectedBackend, code, selectedBackendInfo, shots, addJob, jobs]);
-
   const backendBusy = hasActiveJobForBackend(jobs, selectedBackend ?? null);
 
   // Get simulator probabilities for comparison
@@ -206,7 +139,22 @@ export function HardwarePanel() {
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
         {/* ── Providers ── */}
         <Section title="Providers" defaultOpen>
-          {providers.map((p) => (
+          {isWeb && (
+            <EmptyState
+              icon={<Download size={20} />}
+              title="Hardware runs need the desktop app"
+              action={(
+                <Button size="sm" variant="primary" onClick={() => { void openExternal(DESKTOP_DOWNLOAD_URL); }}>
+                  Download Nuclei
+                </Button>
+              )}
+            >
+              Provider connections and job queues need the local kernel.
+            </EmptyState>
+          )}
+          {providers.map((p) => {
+            const status = providerStatus({ provider: p.name, connected: p.connected, isWeb, cudaqInstalled });
+            return (
             <div
               key={p.name}
               style={{
@@ -217,52 +165,33 @@ export function HardwarePanel() {
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div
-                  style={{
-                    width: 7,
-                    height: 7,
-                    borderRadius: '50%',
-                    background: p.connected ? colors.success : colors.textDim,
-                    flexShrink: 0,
-                  }}
-                />
                 <span style={{ fontSize: 11, color: colors.text, ...font }}>
                   {PROVIDER_LABELS[p.name]}
                 </span>
               </div>
 
-              {!p.connected && p.name !== 'simulator' && STUB_PROVIDERS.has(p.name) && (
-                <span
-                  style={{
-                    fontSize: 11,
-                    color: colors.textDim,
-                    fontStyle: 'italic',
-                    ...font,
-                  }}
-                >
-                  Coming Soon
-                </span>
-              )}
-
-              {!p.connected && p.name !== 'simulator' && !STUB_PROVIDERS.has(p.name) && (
-                <Button size="sm" variant="secondary" onClick={() => setShowCredentialSetup(p.name)}>
-                  Configure
-                </Button>
-              )}
-
-              {p.connected && (
-                <span style={{ fontSize: 11, color: SUCCESS_TEXT, ...font }}>
-                  Connected
-                </span>
-              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {status.kind === 'needs-setup' && providerNeedsToken(p.name) && (
+                  <Button size="sm" variant="secondary" onClick={() => setShowCredentialSetup(p.name)}>
+                    Configure
+                  </Button>
+                )}
+                <ProviderStatusBadge status={status} />
+              </div>
             </div>
-          ))}
+            );
+          })}
         </Section>
 
         {/* ── Backend Selection ── */}
-        {anyConnected && (
+        {anyConnected && !isWeb && (
           <Section title="Backend" defaultOpen>
-            <Select
+            {availableBackends.length === 0 && (
+              <EmptyState title="No live backends yet">
+                Backends and queue lengths appear here once the kernel lists them for a connected provider.
+              </EmptyState>
+            )}
+            {availableBackends.length > 0 && <Select
               aria-label="Backend"
               value={selectedBackend ?? ''}
               onChange={(e) => selectBackend(e.target.value)}
@@ -273,7 +202,7 @@ export function HardwarePanel() {
                   {`${b.name} · ${PROVIDER_LABELS[b.provider]} · ${b.qubitCount}q${b.status === 'online' ? '' : ' (offline)'}`}
                 </option>
               ))}
-            </Select>
+            </Select>}
 
             {/* Selected backend detail card */}
             {selectedBackendInfo && (
@@ -360,16 +289,15 @@ export function HardwarePanel() {
               </div>
             )}
 
-            {/* Run button */}
+            {/* Launching goes through the Launch dialog, which talks to the kernel; the panel never fabricates a job. */}
             <Button
               variant="primary"
               style={{ width: '100%', marginTop: 10 }}
-              onClick={handleRunOnHardware}
-              disabled={!selectedBackend || backendBusy}
-              title={backendBusy ? 'This backend already has a job in the queue' : undefined}
-              icon={<Play size={12} />}
+              onClick={() => openLaunch()}
+              disabled={backendBusy}
+              icon={<Rocket size={12} />}
             >
-              {backendBusy ? 'Job in queue' : 'Run on Hardware'}
+              {backendBusy ? 'Job in queue' : 'Run on hardware'}
             </Button>
           </Section>
         )}
