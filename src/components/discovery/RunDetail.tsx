@@ -30,7 +30,7 @@ export function RunDetail({ view, kpis, initialTab = 'overview' }: { view: RunVi
     <div className="lab-stack">
       <RunHeader view={view} />
       <RunNotices view={view} />
-      <RunKpis kpis={kpis} />
+      <RunKpis kpis={kpis} redQueen={view.run.spec.mutator.kind === 'red_queen'} />
       <LabSegmented<RunTab>
         label="Run sections"
         idPrefix={PREFIX}

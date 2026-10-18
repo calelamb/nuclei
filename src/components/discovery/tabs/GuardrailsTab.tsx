@@ -3,8 +3,9 @@ import { ChartFrame, LabButton, LabCallout, LabCard, LabEmptyState, formatPct } 
 import { guardrailPassRates, isolationNote, isolationUsed, rejectionReasons, type GuardrailPassRate, type RejectionReason } from '../../../services/discovery/guardrailStats';
 import { SANDBOX_HONESTY } from '../../../services/discovery/honesty';
 import { candidateList, type RunView } from '../../../services/discovery/runView';
+import { summarizeAudits } from '../../../services/discovery/redQueen';
+import { selectRunExploits, useDiscoveryStore } from '../../../stores/discoveryStore';
 import { ExploitsFoundLane } from '../ExploitsFoundLane';
-import type { DiscoveryExploit } from '../../../types/discovery';
 
 function ReasonsChart({ reasons }: { reasons: RejectionReason[] }) {
   const n = reasons.length;
@@ -75,11 +76,15 @@ function PassRateRow({ row }: { row: GuardrailPassRate }) {
 }
 
 /** The reward-hacking log: why candidates were rejected, guardrail pass rates, and the isolation actually used. */
-export function GuardrailsTab({ view, onOpen, exploits }: { view: RunView; onOpen: (id: string) => void; exploits?: readonly DiscoveryExploit[] }) {
+export function GuardrailsTab({ view, onOpen }: { view: RunView; onOpen: (id: string) => void }) {
+  const exportFixture = useDiscoveryStore((s) => s.exportExploitFixture);
   const list = useMemo(() => candidateList(view), [view]);
   const reasons = useMemo(() => rejectionReasons(list), [list]);
   const rates = useMemo(() => guardrailPassRates(list), [list]);
   const isolation = useMemo(() => isolationUsed(list), [list]);
+  const exploits = useMemo(() => selectRunExploits(view), [view]);
+  const audits = useMemo(() => summarizeAudits(list), [list]);
+  const runId = view.run.run_id;
   return (
     <div className="disc-tabpanel">
       <div className="disc-two-col">
@@ -129,7 +134,14 @@ export function GuardrailsTab({ view, onOpen, exploits }: { view: RunView; onOpe
         )}
       </LabCard>
 
-      <ExploitsFoundLane exploits={exploits} onSelectCandidate={onOpen} />
+      <ExploitsFoundLane
+        exploits={exploits}
+        summary={audits}
+        redQueen={view.run.spec.mutator.kind === 'red_queen'}
+        runStatus={view.run.status}
+        onSelectCandidate={onOpen}
+        onExport={(candidateId) => exportFixture(runId, candidateId)}
+      />
     </div>
   );
 }

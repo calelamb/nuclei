@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { ExternalLink, FileOutput, RefreshCw } from 'lucide-react';
+import { ExternalLink, FileOutput, RefreshCw, ShieldCheck } from 'lucide-react';
 import { LabButton, LabCallout, LabCode, LabDrawer, formatSci } from '../lab';
 import { candidateKind, primaryEvaluation } from '../../services/discovery/candidateView';
 import { useDiscoveryStore, type RunView } from '../../stores/discoveryStore';
 import { useNavigationStore } from '../../stores/navigationStore';
 import { useProjectStore } from '../../stores/projectStore';
 import type { CandidateRecord } from '../../types/discovery';
+import { AuditSection } from './AuditSection';
 import { GradientStrip } from './GradientStrip';
 import { CandidateKindPill } from './pills';
 import { ProgramDiff } from './ProgramDiff';
@@ -18,7 +19,9 @@ function useDrawerActions(view: RunView, candidate: CandidateRecord) {
   const live = useDiscoveryStore((s) => s.liveRunIds.includes(runId));
   const reevaluating = useDiscoveryStore((s) => !!s.pendingActions[`${runId}:reeval:${candidate.id}`]);
   const promote = useDiscoveryStore((s) => s.promoteCandidate);
+  const auditing = useDiscoveryStore((s) => !!s.pendingActions[`${runId}:audit:${candidate.id}`]);
   const reevaluate = useDiscoveryStore((s) => s.reevaluateCandidate);
+  const audit = useDiscoveryStore((s) => s.auditCandidate);
   const [notice, setNotice] = useState<Notice>(null);
 
   const doPromote = async () => {
@@ -37,7 +40,11 @@ function useDrawerActions(view: RunView, candidate: CandidateRecord) {
     const res = await reevaluate(runId, candidate.id);
     setNotice(res.ok ? { tone: 'success', text: 'Re-evaluated on a fresh seed; the new result replaced the old one.' } : { tone: 'danger', text: res.error });
   };
-  return { live, reevaluating, notice, doPromote, openAsFile, doReevaluate };
+  const doAudit = async () => {
+    const res = await audit(runId, candidate.id);
+    setNotice(res.ok ? { tone: 'success', text: 'The independent audit finished; see the Audit section.' } : { tone: 'danger', text: res.error });
+  };
+  return { live, reevaluating, auditing, notice, doPromote, openAsFile, doReevaluate, doAudit };
 }
 
 /** Slide-over with everything the engine knows about one candidate. */
@@ -48,12 +55,13 @@ export function CandidateDrawer({ view, candidateId, onClose, onSelect }: { view
 }
 
 function DrawerBody({ view, candidate, onClose, onSelect }: { view: RunView; candidate: CandidateRecord; onClose: () => void; onSelect: (id: string) => void }) {
-  const { live, reevaluating, notice, doPromote, openAsFile, doReevaluate } = useDrawerActions(view, candidate);
+  const { live, reevaluating, auditing, notice, doPromote, openAsFile, doReevaluate, doAudit } = useDrawerActions(view, candidate);
   const kind = candidateKind(candidate);
   const evaluation = candidate.evaluation;
   const shown = primaryEvaluation(candidate);
   const parent = candidate.parent_id ? view.candidates[candidate.parent_id] : undefined;
   const map = shown?.metrics.gradient_map;
+  const canAudit = !live && !auditing && evaluation?.status === 'scored';
   const canReevaluate = !live && !reevaluating && evaluation !== null && kind !== 'duplicate';
 
   return (
@@ -75,6 +83,9 @@ function DrawerBody({ view, candidate, onClose, onSelect }: { view: RunView; can
           <LabButton size="md" icon={FileOutput} onClick={() => void doPromote()}>Promote</LabButton>
           <LabButton size="md" icon={RefreshCw} disabled={!canReevaluate} title={live ? 'Wait for the run to finish or stop it first' : evaluation === null ? 'Only evaluated candidates can be re-evaluated' : undefined} onClick={() => void doReevaluate()}>
             {reevaluating ? 'Re-evaluating…' : 'Re-evaluate'}
+          </LabButton>
+          <LabButton size="md" icon={ShieldCheck} disabled={!canAudit} title={live ? 'Wait for the run to finish or stop it first' : evaluation?.status !== 'scored' ? 'Only scored candidates can be audited' : undefined} onClick={() => void doAudit()}>
+            {auditing ? 'Auditing…' : 'Run audit'}
           </LabButton>
         </>
       }
@@ -104,6 +115,7 @@ function DrawerBody({ view, candidate, onClose, onSelect }: { view: RunView; can
             <Section title="Guardrails"><GuardrailChecklist evaluation={shown} /></Section>
             {map && <GradientStrip map={map} totalLines={candidate.program.split('\n').length} />}
             <Section title="Evaluation"><EvaluationFacts evaluation={shown} /></Section>
+            <AuditSection candidate={candidate} running={auditing} />
             <Section title="Output"><OutputBlocks evaluation={shown} /></Section>
           </>
         )}

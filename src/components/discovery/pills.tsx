@@ -1,6 +1,7 @@
 import { LabPill, type LabTone } from '../lab';
 import { CANDIDATE_KIND_LABEL, type CandidateKind } from '../../services/discovery/candidateView';
 import { EVALUATOR_TITLE, mutatorLabel } from '../../services/discovery/format';
+import type { AuditStatus } from '../../services/discovery/redQueen';
 import type { DiscoveryEvaluatorKind, ModelTier, MutatorKind, RunStatus } from '../../types/discovery';
 
 const RUN_TONE: Record<RunStatus, LabTone> = {
@@ -71,6 +72,42 @@ export function MutatorChip({ kind, breadth, depth }: { kind: MutatorKind; bread
   return (
     <LabPill tone="neutral" outline title="Mutator and model ensemble (breadth / depth)">
       {mutatorLabel(kind, breadth, depth)}
+    </LabPill>
+  );
+}
+
+const AUDIT_TONE: Record<AuditStatus, LabTone> = {
+  none: 'neutral',
+  pending: 'quantum',
+  consistent: 'success',
+  exploit: 'danger',
+  inconclusive: 'warning',
+  error: 'warning',
+};
+
+const AUDIT_LABEL: Record<AuditStatus, string> = {
+  none: 'Not audited',
+  pending: 'Audit pending',
+  consistent: 'Consistent',
+  exploit: 'Exploit',
+  inconclusive: 'Inconclusive',
+  error: 'Audit failed',
+};
+
+const AUDIT_HINT: Record<AuditStatus, string> = {
+  none: 'No independent audit has been run for this candidate.',
+  pending: 'The audit was sent to the kernel and has not answered yet.',
+  consistent: 'The independent audit agrees with the evaluator.',
+  exploit: 'The evaluator scored this program well, but the independent audit rejects it.',
+  inconclusive: 'The audit could not decide: treat the score as unverified.',
+  error: 'The audit request failed; see the candidate for the reason.',
+};
+
+/** Verdict of an independent audit (addendum §F). */
+export function AuditVerdictPill({ status }: { status: AuditStatus }) {
+  return (
+    <LabPill tone={AUDIT_TONE[status]} dot live={status === 'pending'} outline={status === 'none'} title={AUDIT_HINT[status]}>
+      {AUDIT_LABEL[status]}
     </LabPill>
   );
 }

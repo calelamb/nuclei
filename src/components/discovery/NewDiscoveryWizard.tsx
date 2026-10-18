@@ -13,11 +13,16 @@ import {
   LabSelect,
 } from '../lab';
 import { DISCOVERY_TEMPLATES, slugifyName, type DiscoveryTemplate } from '../../services/discovery/templates';
-import { FRONTIER_HONESTY, FRONTIER_QUESTION } from '../../services/discovery/honesty';
+import { FRONTIER_HONESTY, FRONTIER_QUESTION, RED_QUEEN_EXPLAINER } from '../../services/discovery/honesty';
+import { DEFAULT_RED_QUEEN } from '../../services/discovery/redQueen';
 import { useDiscoveryStore } from '../../stores/discoveryStore';
-import { MODEL_TIERS, type ModelTier } from '../../types/discovery';
+import { AUDIT_EVERY_MODES, MODEL_TIERS, type AuditEvery, type ModelTier, type MutatorKind } from '../../types/discovery';
 
-type MutatorKind = 'llm' | 'ast' | 'hybrid';
+const AUDIT_EVERY_LABEL: Record<AuditEvery, string> = {
+  improvement: 'Every improvement (new best or new cell)',
+  all: 'Every scored candidate',
+  top_k: 'Top k by evaluator fitness',
+};
 
 const DEFAULTS = {
   evaluations: 200,
@@ -79,6 +84,9 @@ export function NewDiscoveryWizard() {
   const [depthSharePct, setDepthSharePct] = useState(DEFAULTS.depthSharePct);
   const [thinking, setThinking] = useState(true);
   const [batchMode, setBatchMode] = useState(false);
+  const [auditEvery, setAuditEvery] = useState<AuditEvery>(DEFAULT_RED_QUEEN.audit_every);
+  const [topK, setTopK] = useState(DEFAULT_RED_QUEEN.top_k);
+  const [maxAudits, setMaxAudits] = useState(DEFAULT_RED_QUEEN.max_audits);
   const [submitting, setSubmitting] = useState(false);
   const [attempted, setAttempted] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,7 +105,10 @@ export function NewDiscoveryWizard() {
       templateId,
       name,
       { max_evaluations: evaluations, max_llm_calls: usesLlm ? llmCalls : 0, max_wall_minutes: wallMinutes, max_concurrent_evaluations: concurrency },
-      { kind, llm_share: llmSharePct / 100, breadth, depth, depth_share: depthSharePct / 100, depth_thinking: thinking, batch_mode: batchMode },
+      {
+        kind, llm_share: llmSharePct / 100, breadth, depth, depth_share: depthSharePct / 100, depth_thinking: thinking, batch_mode: batchMode,
+        ...(kind === 'red_queen' ? { red_queen: { audit_every: auditEvery, top_k: topK, max_audits: maxAudits } } : {}),
+      },
     );
     setSubmitting(false);
     if (!result.ok) setError(result.error);
@@ -155,8 +166,27 @@ export function NewDiscoveryWizard() {
               { id: 'hybrid', label: 'Hybrid' },
               { id: 'llm', label: 'LLM only' },
               { id: 'ast', label: 'AST only (no API key)' },
+              { id: 'red_queen', label: 'Red Queen (audit the evaluator)' },
             ]}
           />
+          {kind === 'red_queen' && (
+            <div className="lab-stack" data-testid="red-queen-options">
+              <LabCallout tone="danger" title="Red Queen mode">{RED_QUEEN_EXPLAINER}</LabCallout>
+              <div className="lab-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))' }}>
+                <LabField label="Audit when" htmlFor="wiz-audit-every">
+                  <LabSelect id="wiz-audit-every" value={auditEvery} onChange={(e) => setAuditEvery(e.target.value as AuditEvery)}>
+                    {AUDIT_EVERY_MODES.map((m) => <option key={m} value={m}>{AUDIT_EVERY_LABEL[m]}</option>)}
+                  </LabSelect>
+                </LabField>
+                <LabField label="Top k" htmlFor="wiz-top-k" hint="Used when auditing the top k">
+                  <LabNumber id="wiz-top-k" value={topK} min={1} max={100} disabled={auditEvery !== 'top_k'} onCommit={setTopK} width="100%" />
+                </LabField>
+                <LabField label="Max audits" htmlFor="wiz-max-audits" hint="1 to 5000">
+                  <LabNumber id="wiz-max-audits" value={maxAudits} min={1} max={5000} onCommit={setMaxAudits} width="100%" />
+                </LabField>
+              </div>
+            </div>
+          )}
           <div className="lab-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))' }}>
             <LabField label="Breadth model" htmlFor="wiz-breadth">
               <LabSelect id="wiz-breadth" value={breadth} disabled={!usesLlm} onChange={(e) => setBreadth(e.target.value as ModelTier)}>
