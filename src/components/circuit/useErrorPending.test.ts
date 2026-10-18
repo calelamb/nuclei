@@ -28,7 +28,7 @@ describe('useErrorPending (interaction-r-07)', () => {
     act(() => { useEditorStore.setState({ code: 'fixed' }); });
     act(() => { vi.advanceTimersByTime(PREVIEW_PENDING_DELAY_MS + 10); });
     expect(result.current).toBe(true);
-    act(() => { useCircuitStore.setState({ error: null }); useEditorStore.setState({ errors: [] }); });
+    act(() => { useCircuitStore.getState().setSnapshot(null); useEditorStore.setState({ errors: [] }); });
     expect(result.current).toBe(false);
   });
 
@@ -38,6 +38,17 @@ describe('useErrorPending (interaction-r-07)', () => {
     const { result } = renderHook(() => useErrorPending());
     act(() => { useEditorStore.setState({ code: 'other' }); });
     act(() => { vi.advanceTimersByTime(PREVIEW_PENDING_DELAY_MS + 10); });
+    expect(result.current).toBe(false);
+  });
+
+  it('ends when the kernel answers with the very same error (regression: stuck on Updating)', () => {
+    const { result } = renderHook(() => useErrorPending());
+    act(() => { useEditorStore.setState({ code: 'qc.h(0\n# comment' }); });
+    act(() => { vi.advanceTimersByTime(PREVIEW_PENDING_DELAY_MS + 10); });
+    expect(result.current).toBe(true);
+    act(() => { useCircuitStore.getState().setSnapshot(null); useCircuitStore.getState().setError('bad'); });
+    expect(result.current).toBe(false);
+    act(() => { vi.advanceTimersByTime(5000); });
     expect(result.current).toBe(false);
   });
 });
