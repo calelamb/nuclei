@@ -1,4 +1,4 @@
-import { Database, ExternalLink, FileCode2, FlaskConical, FolderInput, FolderTree, LoaderCircle, TriangleAlert } from 'lucide-react';
+import { Database, ExternalLink, FileCode2, FlaskConical, FolderInput, FolderTree, LoaderCircle, PanelLeftClose, PanelLeftOpen, TriangleAlert } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { KeyboardEvent, ReactElement } from 'react';
 import { resolveQecPanels } from '../../../layout/qecPanelRegistry';
@@ -21,14 +21,25 @@ const SOURCE_ICONS: Readonly<Record<QecStudySource['kind'], LucideIcon>> = {
   experiment: FlaskConical, noise: Database, session: Database,
 };
 
-function SourcesHeading(): ReactElement {
+function SourcesToggle({ collapsed, onToggle }: SourcesToggleProps): ReactElement {
+  const label = collapsed ? 'Show sources' : 'Hide sources';
+  return (
+    <IconButton aria-label={label} aria-expanded={!collapsed} tooltip={{ label, placement: collapsed ? 'right' : 'below' }} onClick={onToggle}>
+      {collapsed ? <PanelLeftOpen aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} /> : <PanelLeftClose aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} />}
+    </IconButton>
+  );
+}
+
+function SourcesHeading({ collapsed, onToggle }: SourcesToggleProps): ReactElement {
   return (
     <header className="qec-zone-heading">
       <div><span className="qec-zone-heading__eyebrow">Study workspace</span><h2>Sources / Data</h2></div>
-      <FolderTree aria-hidden="true" size={16} strokeWidth={1.7} />
+      <SourcesToggle collapsed={collapsed} onToggle={onToggle} />
     </header>
   );
 }
+
+interface SourcesToggleProps { collapsed: boolean; onToggle(): void }
 
 function LoadingStudies(): ReactElement {
   return <div className="qec-zone-empty" role="status" aria-label="Loading QEC Studies"><LoaderCircle aria-hidden="true" size={20} /><strong>Loading Studies…</strong><span>Parsing and validating Study manifests.</span></div>;
@@ -221,23 +232,32 @@ function SourcesFooter({ count, issueCount, active }: { count: number; issueCoun
   const statusClass = issueCount > 0 ? 'qec-status qec-status--warning' : active
     ? 'qec-status qec-status--ready'
     : 'qec-status qec-status--neutral';
-  return <footer className="qec-sources__footer"><span>{count} referenced {count === 1 ? 'file' : 'files'}</span><span className={statusClass}>{status}</span></footer>;
+  return <footer className="qec-sources__footer"><span>{count} {count === 1 ? 'file' : 'files'}</span><span className={statusClass}>{status}</span></footer>;
 }
 
 function validationIssueCount(errors: readonly QecStudyValidationError[]): number {
   return errors.reduce((total, entry) => total + entry.errors.length, 0);
 }
 
-export function QecSourcesPanel(): ReactElement {
+export function QecSourcesPanel({ collapsed = false, onToggle = () => undefined }: Partial<SourcesToggleProps> = {}): ReactElement {
   const studies = useQecStudyStore((state) => state.studies);
   const errors = useQecStudyStore((state) => state.validationErrors);
   const loading = useQecStudyStore((state) => state.loading);
   const activeStudyId = useQecStudyUiStore((state) => state.activeStudyId);
   const preset = useQecWorkbenchStore((state) => state.preset);
   const study = studies.find((entry) => entry.study.id === activeStudyId)?.study ?? null;
+  if (collapsed) {
+    return (
+      <nav className="qec-sources qec-sources--rail" aria-label="QEC sources and data">
+        <SourcesToggle collapsed onToggle={onToggle} />
+        <FolderTree aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} className="qec-sources__rail-icon" />
+        <span className="qec-sources__rail-count qec-mono" aria-label={`${study?.sources.length ?? 0} files`}>{study?.sources.length ?? 0}</span>
+      </nav>
+    );
+  }
   return (
     <nav className="qec-sources" aria-label="QEC sources and data">
-      <SourcesHeading />
+      <SourcesHeading collapsed={false} onToggle={onToggle} />
       {loading ? <LoadingStudies /> : <SourcesContent study={study} preset={preset} errors={errors} hasStudies={studies.length > 0} />}
       {!loading && <SourcesFooter count={study?.sources.length ?? 0} issueCount={validationIssueCount(errors)} active={study !== null} />}
     </nav>

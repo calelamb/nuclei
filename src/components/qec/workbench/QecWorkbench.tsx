@@ -12,6 +12,7 @@ import { QecSourcesPanel } from './QecSourcesPanel';
 import { QecWorkbenchTray } from './QecWorkbenchTray';
 import { QecWorkbenchResizeHandle } from './QecWorkbenchResizeHandle';
 import { useQecTrayIdle } from './useQecTrayIdle';
+import { useSourcesRail } from './useSourcesRail';
 import { Button } from '../../ui';
 
 type WorkbenchStyle = CSSProperties & Record<
@@ -76,6 +77,7 @@ export function QecWorkbench(): ReactElement {
   const setTrayHeight = useQecWorkbenchStore((state) => state.setTrayHeight);
   const persistenceIssue = useQecWorkbenchStore((state) => state.persistenceIssue);
   const drawer = useInspectorDrawer();
+  const sources = useSourcesRail();
   const trayIdle = useQecTrayIdle() && !trayCollapsed;
   const style: WorkbenchStyle = {
     '--qec-source-width': `${sourceWidth}px`,
@@ -83,7 +85,7 @@ export function QecWorkbench(): ReactElement {
     '--qec-tray-height': `${trayHeight}px`,
   };
   return (
-    <section className={`qec-workbench qec-workbench--${preset} qec-workbench--inspector-${drawer.open ? 'open' : 'closed'} qec-workbench--tray-${trayCollapsed ? 'collapsed' : 'open'}${trayIdle ? ' qec-workbench--tray-idle' : ''}`} aria-label="QEC Workbench" style={style}>
+    <section className={`qec-workbench qec-workbench--${preset} qec-workbench--inspector-${drawer.open ? 'open' : 'closed'}${sources.collapsed ? ' qec-workbench--sources-collapsed' : ''} qec-workbench--tray-${trayCollapsed ? 'collapsed' : 'open'}${trayIdle ? ' qec-workbench--tray-idle' : ''}`} aria-label="QEC Workbench" style={style}>
       <div className="qec-workbench__header">
         <QecResearchBar />
         {persistenceIssue && (
@@ -96,7 +98,7 @@ export function QecWorkbench(): ReactElement {
         )}
       </div>
       <div className="qec-workbench__body">
-        <QecSourcesPanel />
+        <QecSourcesPanel collapsed={sources.collapsed} onToggle={sources.toggle} />
         <QecWorkbenchResizeHandle
           label="Resize sources panel"
           orientation="vertical"

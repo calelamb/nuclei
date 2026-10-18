@@ -499,10 +499,12 @@
 }
 
 .qec-instrument h2 {
-  display: inline; font-size: var(--font-size-code); font-weight: 600;
+  display: block; min-width: 0; overflow: hidden; font-size: var(--font-size-code); font-weight: 600;
+  text-overflow: ellipsis; white-space: nowrap;
 }
 
-.qec-instrument > header > div { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; }
+/* A card title is one line: it truncates before it wraps under its own actions. */
+.qec-instrument > header > div { display: flex; flex-wrap: nowrap; align-items: baseline; column-gap: 8px; }
 
 .qec-instrument__context {
   white-space: nowrap; color: var(--qec-text-muted); font-size: var(--font-size-chrome-label);

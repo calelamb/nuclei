@@ -183,3 +183,23 @@ for (const viewport of DATA_VIEWPORTS) {
     });
   }
 }
+
+test('@qec at 900px the sources fold to a rail so the canvas keeps the width and card titles stay on one line', async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 700 });
+  await installEngineStub(page);
+  await page.goto(FIXTURE_URL);
+  await page.getByRole('button', { name: 'QEC Workbench' }).click();
+  await page.getByRole('radio', { name: 'Analyze' }).click();
+  await page.setInputFiles('input[type=file]', CSV_FIXTURE);
+  await expect(page.getByLabel('CSV column mapping')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Show sources' })).toBeVisible();
+  const { canvas, body } = await page.evaluate(() => ({
+    canvas: document.querySelector('.qec-investigation')?.getBoundingClientRect().width ?? 0,
+    body: document.querySelector('.qec-workbench__body')?.getBoundingClientRect().width ?? 1,
+  }));
+  expect(canvas / body, 'canvas share of the workbench').toBeGreaterThan(0.85);
+  const titleHeights = await page.$$eval('.qec-instrument h2', (nodes) => nodes.map((n) => n.getBoundingClientRect().height));
+  for (const height of titleHeights) expect(height, 'card title is one line').toBeLessThan(24);
+  await page.getByRole('button', { name: 'Show sources' }).click();
+  await expect(page.getByRole('heading', { name: 'Sources / Data' })).toBeVisible();
+});
