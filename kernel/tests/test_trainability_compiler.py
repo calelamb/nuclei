@@ -270,3 +270,46 @@ def test_large_fixed_gate_set_all_fixed_1q_equivalence():
         c = circ(2, [IrGate("H", (0,)), IrGate(name, (0,)), IrGate("CX", (0, 1)), IrGate(name, (1,))])
         got = compile_circuit(c).states(np.zeros((1, 0)))[0]
         assert np.abs(got - reference_state(c, np.zeros(0))).max() < 1e-12
+
+
+@pytest.mark.parametrize("seed", range(4))
+def test_value_and_grad_costate_pauli_is_identical_to_value_and_grad(seed):
+    rng = np.random.default_rng(300 + seed)
+    n = int(rng.integers(2, 7))
+    c = random_circuit(rng, n, 30, 5)
+    obs = random_observable(rng, n)
+    values = rng.uniform(-3, 3, size=(3, 5))
+    prog = compile_circuit(c)
+    plan = prog._plan(obs)
+
+    def costate(psi):
+        lam = plan.apply(prog._bk, psi)
+        return (psi.real * lam.real + psi.imag * lam.imag).sum(axis=1), lam
+
+    v0, g0 = prog.value_and_grad(values, obs)
+    v1, g1 = prog.value_and_grad_costate(values, costate)
+    assert np.array_equal(v0, v1) and np.array_equal(g0, g1)
+
+
+def test_value_and_grad_costate_custom_objective_matches_finite_differences():
+    rng = np.random.default_rng(11)
+    n = 3
+    c = random_circuit(rng, n, 24, 4)
+    prog = compile_circuit(c)
+    values = rng.uniform(-3, 3, size=(2, 4))
+    # objective: probability of basis state |0..0>; costate lam = <0|psi> |0>
+    def costate(psi):
+        amp = psi[:, 0]
+        lam = np.zeros_like(psi)
+        lam[:, 0] = amp
+        return np.abs(amp) ** 2, lam
+
+    val, grad = prog.value_and_grad_costate(values, costate)
+    assert grad.shape == (2, 4)
+    eps = 1e-6
+    for j in range(4):
+        up, dn = values.copy(), values.copy()
+        up[:, j] += eps
+        dn[:, j] -= eps
+        fd = (np.abs(prog.states(up)[:, 0]) ** 2 - np.abs(prog.states(dn)[:, 0]) ** 2) / (2 * eps)
+        assert np.allclose(grad[:, j], fd, atol=1e-7)
