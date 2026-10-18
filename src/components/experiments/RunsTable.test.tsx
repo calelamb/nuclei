@@ -220,9 +220,10 @@ describe('RunsTable', () => {
   it('calls a still-booting kernel starting, not a failed run (research-r-07)', () => {
     useEditorStore.setState({ kernelStatus: 'connecting' });
     useExperimentRunStore.setState({ lastError: 'Failed to connect to kernel' });
-    const { getByRole } = render(<RunsTable />);
+    const { getByRole, queryByRole } = render(<RunsTable />);
     expect(getByRole('status').textContent).toContain('still starting');
     expect(getByRole('status').textContent).not.toContain('Run failed');
+    expect(queryByRole('button', { name: 'Retry' })).toBeNull();
   });
 
   it('shows how many of the runs a filter keeps (research-r-11)', () => {
@@ -357,6 +358,13 @@ describe('RunsTable', () => {
       expect(getAllByRole('button', { name: /^Run( sweep)?$/ })).toHaveLength(1);
       expect(getByText(/theta × 3/)).toBeTruthy();
       expect((getByRole('tab', { name: 'Sweep plot' }) as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    it('hides Export CSV and Compare until a run exists', () => {
+      useExperimentStore.setState({ runsByExperiment: { [FILE_NAME]: [] } });
+      const { queryByRole } = render(<RunsTable />);
+      expect(queryByRole('button', { name: /Export CSV/ })).toBeNull();
+      expect(queryByRole('button', { name: /^Compare/ })).toBeNull();
     });
 
     it('keeps the swept parameter as a column before any run exists (research-r-14)', () => {

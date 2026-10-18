@@ -55,6 +55,7 @@ export function BrokenExperimentCard({ projectRoot, fileName, errors }: Props) {
         type="button"
         className="nuclei-broken-experiment__head"
         aria-expanded={open}
+        aria-label={`${fileName}, ${problemCountLabel(errors.length)}`}
         onClick={() => setOpen((v) => !v)}
       >
         <Chevron size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} aria-hidden="true" />

@@ -272,7 +272,7 @@ function RunsTableBody() {
         )}
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-          {mainTab === 'runs' && (
+          {mainTab === 'runs' && !hasNoRuns && (
             <>
               <Button
                 size="sm"

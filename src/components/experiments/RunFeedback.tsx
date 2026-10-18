@@ -69,7 +69,7 @@ export function RunFeedback({ compact = false }: { compact?: boolean }) {
   const tone = stillStarting ? colors.warning : isError || hasFailures ? colors.error : colors.success;
   // Retry re-runs the open experiment; hardware sweeps keep their confirm step on the Run button.
   const retryTarget = experiments.find((e) => e.fileName === selectedFileName);
-  const canRetry = isError && !compact && projectRoot !== null && retryTarget !== undefined
+  const canRetry = isError && !compact && !stillStarting && projectRoot !== null && retryTarget !== undefined
     && retryTarget.spec.type !== 'qec_campaign' && retryTarget.spec.backend.provider === 'simulator';
   const handleRetry = () => {
     if (!retryTarget || !projectRoot) return;

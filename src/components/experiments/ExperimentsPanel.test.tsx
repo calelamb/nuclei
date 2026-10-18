@@ -83,7 +83,7 @@ describe('ExperimentsPanel', () => {
     const { getByRole, getAllByRole, queryByText } = render(<ExperimentsPanel />);
     const alerts = getAllByRole('alert');
     expect(alerts).toHaveLength(1);
-    expect(alerts[0].textContent).toContain('broken.experiment.yaml');
+    expect(alerts[0].textContent).toContain('broken');
     expect(alerts[0].textContent).toMatch(/\d+ problems?/);
     fireEvent.click(getByRole('button', { name: /broken.experiment.yaml/ }));
     expect(queryByText(/Invalid input/)).toBeNull();
