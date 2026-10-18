@@ -12,7 +12,7 @@ from typing import Any, Iterator
 
 import stim
 
-from kernel.discovery.distance import DistanceResult, fault_distance
+from kernel.discovery.distance import CONFIRM_BUDGET_SECONDS, DistanceResult, exact_search, fault_distance
 from kernel.discovery.evaluators.guardrails import FAIL, PASS, WARN, Guardrail, across
 from kernel.discovery.noise import apply_noise
 
@@ -31,6 +31,7 @@ class Case:
     noisy: stim.Circuit | None = None
     dem: stim.DetectorErrorModel | None = None
     fault: DistanceResult | None = None
+    distance_verified: bool = False  # the fault distance is exactly known and >= the requested distance
 
     @property
     def tag(self) -> str:
@@ -176,18 +177,44 @@ def check_nontrivial_observable(case: Case):
     return FAIL, f"{case.tag}: no error mechanism can flip the logical observable (it is trivial)."
 
 
-def check_fault_distance(case: Case, noise: dict[str, Any], cache_dir: str | None, cancel):
-    result = fault_distance(_ensure_noisy(case, noise), case.distance, cache_dir=cache_dir, cancel_event=cancel)
+def check_fault_distance(case: Case, noise: dict[str, Any], cache_dir: str | None, cancel, stage: str = "full"):
+    noisy = _ensure_noisy(case, noise)
+    result = fault_distance(noisy, case.distance, cache_dir=cache_dir, cancel_event=cancel)
     case.fault = result
+    case.distance_verified = False
     if result.weight is not None and result.weight < case.distance:
         return FAIL, (
             f"Requested d={case.distance} but an undetectable logical error of weight {result.weight} exists."
         )
+    if stage == "confirm" and not result.complete:
+        return _confirm_exact(case, noisy, result, cancel)
+    case.distance_verified = result.complete and result.weight is not None
     if result.weight is None:
         return WARN, f"{case.tag}: no undetectable logical error found within the search bounds; distance unverified."
     if not result.complete:
-        return WARN, f"{case.tag}: distance verified only up to the search bounds."
+        return WARN, f"{case.tag}: distance verified only up to the search bounds (fitness penalized)."
     return PASS, None
+
+
+def _confirm_exact(case: Case, noisy: stim.Circuit, bounded: DistanceResult, cancel):
+    """``confirm``: exact search with a long budget. Lower-weight logical -> FAIL; incomplete -> WARN."""
+    exact = exact_search(str(noisy), CONFIRM_BUDGET_SECONDS, cancel)
+    if exact.complete and exact.weight is not None:
+        case.fault = DistanceResult(
+            min(exact.weight, bounded.weight) if bounded.weight is not None else exact.weight,
+            "exact_confirm", True, exact.elapsed_s, exact.note, exact.max_degree,
+        )
+        if exact.weight < case.distance:
+            return FAIL, (
+                f"Requested d={case.distance} but the confirm-stage exact search found an undetectable "
+                f"logical error of weight {exact.weight}."
+            )
+        case.distance_verified = True
+        return PASS, None
+    return WARN, (
+        f"{case.tag}: exact confirmation incomplete ({exact.note or 'no result'}); "
+        "distance verified only up to the search bounds (fitness penalty kept)."
+    )
 
 
 def build_guardrails(
@@ -209,7 +236,7 @@ def build_guardrails(
         Guardrail(
             "fault_distance",
             "Fault distance is at least the requested distance",
-            each(lambda c: check_fault_distance(c, noise, cache_dir, cancel)),
+            each(lambda c: check_fault_distance(c, noise, cache_dir, cancel, stage)),
             skip_reason=DEFERRED_DETAIL if stage == "screen" else None,
         ),
     ]

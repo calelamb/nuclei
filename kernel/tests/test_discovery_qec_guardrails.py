@@ -149,8 +149,8 @@ def test_fault_distance_result_is_cached_by_noisy_circuit(tmp_path):
 
 
 def test_bounded_search_for_large_distance_is_a_warning_not_a_pass():
-    core = run([str(stim.Circuit.generated("surface_code:rotated_memory_z", distance=7, rounds=2))],
-               {"distances": [7], "rounds": 2, "shots": {"min": 1000, "max": 1000, "max_errors": 5}})
+    core = run([str(stim.Circuit.generated("surface_code:rotated_memory_z", distance=7, rounds=7))],
+               {"distances": [7], "rounds": 7, "shots": {"min": 1000, "max": 1000, "max_errors": 5}})
     record = next(g for g in core.guardrails if g["id"] == "fault_distance")
     assert record["status"] == "warn"
     assert "verified only up to the search bounds" in record["detail"]
