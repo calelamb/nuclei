@@ -127,12 +127,15 @@ export function NewExperimentForm({ projectRoot, existing, dirtyRef: sharedDirty
     setTouched((prev) => (prev.has(field) ? prev : new Set([...prev, field])));
   };
   // The form takes focus when it opens and hands it back to whatever opened it when it closes.
+  const formRef = useRef<HTMLFormElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const openerRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
+    // Strict-mode re-runs this effect after focus has already moved into the form: keep the first capture.
     const active = document.activeElement;
-    openerRef.current = active instanceof HTMLElement && active !== document.body ? active : null;
+    const outside = active instanceof HTMLElement && active !== document.body && !formRef.current?.contains(active);
+    if (outside) openerRef.current = active;
     nameRef.current?.focus();
   }, []);
   const finish = () => {
@@ -280,6 +283,7 @@ export function NewExperimentForm({ projectRoot, existing, dirtyRef: sharedDirty
   };
   return (
     <form
+      ref={formRef}
       onSubmit={(e) => { void handleSubmit(e); }}
       onKeyDown={handleKeyDown}
       style={{

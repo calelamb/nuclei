@@ -20,7 +20,7 @@ import { TYPOGRAPHY } from '../../styles/tokens';
 /** Opening the mapping editor must never squeeze the figure below this; the column scrolls instead. */
 const PLOT_MIN_HEIGHT = 320;
 /** About eight decoder rows plus the sticky header: below this the column scrolls instead of crushing the table. */
-const TABLE_MIN_HEIGHT = 320;
+const TABLE_MIN_HEIGHT = 390;
 type AnalysisTab = 'plot' | 'lambda' | 'decoders';
 const ANALYSIS_TABS = [
   { value: 'plot', label: 'Plot' },

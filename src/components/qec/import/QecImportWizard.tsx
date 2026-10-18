@@ -301,7 +301,7 @@ function ImportProgress({ job, client }: { job: QecJobRecord; client: QecImportC
   const cancelJob = useQecJobStore((state) => state.cancelJob);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => { ref.current?.focus(); }, []);
-  return <div ref={ref} tabIndex={-1} className="qec-import-progress" role="progressbar" aria-label="QEC data import" aria-valuetext={job.message}><LoaderCircle className="nuclei-spin" aria-hidden="true" size={16} /><strong>{job.message}</strong><CopyJobId id={job.id} />{['running', 'starting'].includes(job.status) && <Button size="sm" aria-label={`Cancel import ${job.id}`} onClick={() => void cancelJob(client, job.id)}>Cancel</Button>}</div>;
+  return <div ref={ref} tabIndex={-1} className="qec-import-progress" role="progressbar" aria-label="QEC data import" aria-valuetext={job.message}><LoaderCircle className="nuclei-spin" aria-hidden="true" size={16} /><strong>{job.message}</strong><span className="qec-import-progress__id"><CopyJobId id={job.id} /></span>{['running', 'starting'].includes(job.status) && <Button size="sm" aria-label={`Cancel import ${job.id}`} onClick={() => void cancelJob(client, job.id)}>Cancel</Button>}</div>;
 }
 
 function nextAllowed(stage: number, probe: ImportProbeResult | null, adapterId: string, mappingReady: boolean, valid: boolean, sessionId: string): boolean {
