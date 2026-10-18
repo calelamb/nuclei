@@ -379,7 +379,7 @@ export function DiracSidePanel() {
 
   if (!isOpen) {
     return (
-      <Tooltip label="Open Dirac" shortcut={shortcutLabel('toggle-dirac')} placement="above">
+      <Tooltip label="Open Dirac" shortcut={shortcutLabel('toggle-dirac')} placement="left">
         <button
           ref={railRef}
           type="button"

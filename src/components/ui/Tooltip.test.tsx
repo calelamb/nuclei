@@ -2,8 +2,10 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup, act } from '@testing-library/react';
 import { Tooltip, TOOLTIP_OPEN_DELAY_MS, TOOLTIP_CLOSE_DELAY_MS } from './Tooltip';
+import { resetTooltipSingleton, TOOLTIP_WARMUP_MS } from './tooltipSingleton';
+import { anchorTooltip, nudgeIntoView } from './tooltipPlacement';
 
-beforeEach(() => vi.useFakeTimers());
+beforeEach(() => { vi.useFakeTimers(); resetTooltipSingleton(); });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 const setup = () => render(
@@ -133,5 +135,80 @@ describe('Tooltip', () => {
       const left = parseFloat(screen.getByRole('tooltip').style.left);
       expect(left - 110).toBeGreaterThanOrEqual(8);
     });
+  });
+});
+
+describe('one tooltip at a time', () => {
+  const pair = () => render(
+    <>
+      <Tooltip label="Explorer"><button>one</button></Tooltip>
+      <Tooltip label="Challenges"><button>two</button></Tooltip>
+    </>,
+  );
+
+  it('closes the hover tooltip when keyboard focus opens another (never two on screen)', () => {
+    pair();
+    fireEvent.mouseEnter(screen.getByText('two'));
+    act(() => { vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS + 10); });
+    expect(screen.getAllByRole('tooltip')).toHaveLength(1);
+    fireEvent.focus(screen.getByText('one'));
+    act(() => { vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS + 10); });
+    const tips = screen.getAllByRole('tooltip');
+    expect(tips).toHaveLength(1);
+    expect(tips[0].textContent).toContain('Explorer');
+  });
+
+  it('opens the neighbour straight away while moving along a row of triggers', () => {
+    pair();
+    fireEvent.mouseEnter(screen.getByText('one'));
+    act(() => { vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS + 10); });
+    fireEvent.mouseLeave(screen.getByText('one'));
+    fireEvent.mouseEnter(screen.getByText('two'));
+    act(() => { vi.advanceTimersByTime(20); });
+    expect(screen.getAllByRole('tooltip').map((t) => t.textContent)).toEqual(['Challenges']);
+  });
+
+  it('waits the full delay again once the pointer has been away longer than the warm-up window', () => {
+    pair();
+    fireEvent.mouseEnter(screen.getByText('one'));
+    act(() => { vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS + 10); });
+    fireEvent.mouseLeave(screen.getByText('one'));
+    act(() => { vi.advanceTimersByTime(TOOLTIP_CLOSE_DELAY_MS + 10); });
+    act(() => { vi.advanceTimersByTime(TOOLTIP_WARMUP_MS + 50); });
+    fireEvent.mouseEnter(screen.getByText('two'));
+    act(() => { vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS - 50); });
+    expect(screen.queryByRole('tooltip')).toBeNull();
+  });
+});
+
+describe('side placement on a tall trigger', () => {
+  const VIEW = { width: 900, height: 700 };
+  const tall = { left: 860, right: 888, top: 24, bottom: 676 };
+
+  it('anchors a left tooltip beside the pointer, not at the far edge of a full-height rail tab', () => {
+    const pos = anchorTooltip(tall, 'left', VIEW, 100);
+    expect(pos).toEqual({ left: 860 - 6, top: 100, placement: 'left' });
+  });
+
+  it('centres on the trigger when there is no pointer (keyboard focus)', () => {
+    expect(anchorTooltip(tall, 'left', VIEW, null).top).toBe(350);
+  });
+
+  it('keeps a left tooltip inside the viewport vertically', () => {
+    expect(anchorTooltip({ ...tall, top: 0 }, 'left', VIEW, 2).top).toBeGreaterThanOrEqual(8 + 14);
+    expect(anchorTooltip(tall, 'left', VIEW, 699).top).toBeLessThanOrEqual(700 - 8 - 14);
+  });
+
+  it('nudges a rendered tip that overflows the bottom or right edge back inside', () => {
+    expect(nudgeIntoView({ left: 800, right: 920, top: 690, bottom: 716 }, VIEW)).toEqual({ dx: -28, dy: -24 });
+    expect(nudgeIntoView({ left: 2, right: 100, top: 2, bottom: 30 }, VIEW)).toEqual({ dx: 6, dy: 6 });
+    expect(nudgeIntoView({ left: 100, right: 200, top: 100, bottom: 130 }, VIEW)).toEqual({ dx: 0, dy: 0 });
+  });
+
+  it('renders a left tooltip with the matching transform', () => {
+    render(<Tooltip label="Open Dirac" placement="left"><button>rail</button></Tooltip>);
+    fireEvent.mouseEnter(screen.getByText('rail'));
+    act(() => { vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS + 10); });
+    expect(screen.getByRole('tooltip').style.transform).toBe('translate(-100%, -50%)');
   });
 });

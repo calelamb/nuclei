@@ -24,6 +24,7 @@ import { useElementSize } from '../../hooks/useElementSize';
 import { useResultStale } from '../../hooks/useResultStale';
 import { StaleResultNotice, STALE_RESULT_OPACITY } from '../layout/StaleResultNotice';
 import { BlochRail } from '../layout/BlochRail';
+import { VIZ_LANDING_ATTR } from '../layout/focusViz';
 import { BlochPanel } from '../bloch/BlochPanel';
 import { ResultsEmptyState } from '../bloch/ResultsEmptyState';
 import { QecTimelinePanel } from './QecTimelinePanel';
@@ -169,7 +170,7 @@ export function VizZone({
     <div ref={measureColumn} style={COLUMN_STYLE}>
       {circuitPanel && (
         <PanelReveal when from="right" style={circuitRevealStyle}>
-          <section aria-label={circuitPanel.title} style={{ borderBottom: `1px solid ${colors.border}`, display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+          <section aria-label={circuitPanel.title} {...{ [VIZ_LANDING_ATTR]: '' }} tabIndex={-1} style={{ borderBottom: `1px solid ${colors.border}`, display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
             {circuitPanel.render(renderCtx)}
           </section>
         </PanelReveal>

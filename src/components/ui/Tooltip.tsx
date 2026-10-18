@@ -2,25 +2,18 @@ import { cloneElement, useCallback, useEffect, useId, useLayoutEffect, useRef, u
 import { createPortal } from 'react-dom';
 import { useThemeStore } from '../../stores/themeStore';
 import { TYPOGRAPHY } from '../../styles/tokens';
+import { anchorTooltip, nudgeIntoView, TOOLTIP_TRANSFORMS, type TooltipPosition, type TooltipSide } from './tooltipPlacement';
+import { claimTooltip, releaseTooltip, tooltipIsWarm } from './tooltipSingleton';
 
 export const TOOLTIP_OPEN_DELAY_MS = 400;
 export const TOOLTIP_CLOSE_DELAY_MS = 100;
-const GAP = 6;
-const EDGE = 8;
-const TRANSFORMS = {
-  above: 'translate(-50%, -100%)',
-  below: 'translate(-50%, 0)',
-  right: 'translate(0, -50%)',
-} as const;
-
-interface Position { left: number; top: number; placement: 'above' | 'below' | 'right' }
 
 export interface TooltipProps {
   label: string;
   /** Shortcut in glyph form (use `shortcutLabel`); rendered as a kbd chip. */
   shortcut?: string;
-  /** Preferred side; flips when there is no room. Default: above. */
-  placement?: 'above' | 'below' | 'right';
+  /** Preferred side; above/below flip when there is no room, left/right follow the pointer along a tall trigger. Default: above. */
+  placement?: TooltipSide;
   /** The single trigger element. It keeps its own handlers; the tooltip adds aria-describedby. */
   children: ReactElement<Record<string, unknown>>;
 }
@@ -54,7 +47,8 @@ export function Tooltip({ label, shortcut, placement = 'above', children }: Tool
   const shadow = useThemeStore((s) => s.shadow);
   const id = useId();
   useEffect(trackPointerDown, []);
-  const [pos, setPos] = useState<Position | null>(null);
+  const [pos, setPos] = useState<TooltipPosition | null>(null);
+  const pointerY = useRef<number | null>(null);
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLSpanElement>(null);
   const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -78,42 +72,45 @@ export function Tooltip({ label, shortcut, placement = 'above', children }: Tool
   const measure = useCallback(() => {
     const target = wrapRef.current?.firstElementChild;
     if (!target) return;
-    const r = target.getBoundingClientRect();
-    if (placement === 'right') {
-      setPos({ left: r.right + GAP, top: r.top + r.height / 2, placement: 'right' });
-      return;
-    }
-    const wantBelow = placement === 'below' || r.top < 40;
-    setPos({
-      left: Math.min(Math.max(r.left + r.width / 2, EDGE + 60), window.innerWidth - EDGE - 60),
-      top: wantBelow ? r.bottom + GAP : r.top - GAP,
-      placement: wantBelow ? 'below' : 'above',
-    });
+    setPos(anchorTooltip(target.getBoundingClientRect(), placement, { width: window.innerWidth, height: window.innerHeight }, pointerY.current));
   }, [placement]);
 
-  // Clamp the rendered tooltip into the viewport: its real width is only known after layout,
+  // Clamp the rendered tooltip into the viewport: its real size is only known after layout,
   // so measure at the natural position and nudge the DOM node (no extra render).
   useLayoutEffect(() => {
     const tip = tipRef.current;
     if (!open || !pos || !tip) return;
     tip.style.left = `${pos.left}px`;
+    tip.style.top = `${pos.top}px`;
     const r = tip.getBoundingClientRect();
     if (r.width === 0) return;
-    let dx = 0;
-    if (r.right > window.innerWidth - EDGE) dx = window.innerWidth - EDGE - r.right;
-    if (r.left + dx < EDGE) dx = EDGE - r.left;
+    const { dx, dy } = nudgeIntoView(r, { width: window.innerWidth, height: window.innerHeight });
     if (dx !== 0) tip.style.left = `${pos.left + dx}px`;
+    if (dy !== 0) tip.style.top = `${pos.top + dy}px`;
   }, [open, pos]);
+
+  // One tooltip at a time: opening claims the slot and closes whichever tip was showing.
+  const closeNow = useCallback(() => {
+    if (openTimer.current) { clearTimeout(openTimer.current); openTimer.current = null; }
+    if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; }
+    setOpen(false);
+  }, []);
+  useEffect(() => {
+    if (!open) return undefined;
+    claimTooltip(closeNow);
+    return () => releaseTooltip(closeNow);
+  }, [open, closeNow]);
 
   const show = () => {
     if (suppressed.current) return;
     if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; }
     if (open || openTimer.current) return;
+    // Moving along a row of icons (or while another tip is up) opens the next one straight away.
     openTimer.current = setTimeout(() => {
       openTimer.current = null;
       measure();
       setOpen(true);
-    }, TOOLTIP_OPEN_DELAY_MS);
+    }, tooltipIsWarm() ? 0 : TOOLTIP_OPEN_DELAY_MS);
   };
 
   const hide = (immediate = false) => {
@@ -130,8 +127,9 @@ export function Tooltip({ label, shortcut, placement = 'above', children }: Tool
     <span
       ref={wrapRef}
       style={{ display: 'contents' }}
-      onMouseEnter={show}
-      onMouseLeave={() => { suppressed.current = false; hide(); }}
+      onMouseEnter={(e) => { pointerY.current = e.clientY; show(); }}
+      onMouseMove={(e) => { if (!open) pointerY.current = e.clientY; }}
+      onMouseLeave={() => { suppressed.current = false; pointerY.current = null; hide(); }}
       onFocus={() => { if (!pointerFocus.current && !focusFollowsPointer()) show(); }}
       onBlur={() => hide(true)}
       onMouseDown={() => {
@@ -152,7 +150,7 @@ export function Tooltip({ label, shortcut, placement = 'above', children }: Tool
             position: 'fixed',
             left: pos.left,
             top: pos.top,
-            transform: TRANSFORMS[pos.placement],
+            transform: TOOLTIP_TRANSFORMS[pos.placement],
             zIndex: 6000,
             pointerEvents: 'none',
             display: 'flex', alignItems: 'center', gap: 8,
