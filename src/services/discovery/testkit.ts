@@ -120,7 +120,7 @@ export interface FakeKernel {
   maxInFlight(): number;
 }
 
-export function createFakeKernel(options: { scorer?: Scorer; mutate?: (program: string, seed: number) => AstMutation[] } = {}): FakeKernel {
+export function createFakeKernel(options: { scorer?: Scorer; latencyMs?: number; mutate?: (program: string, seed: number) => AstMutation[] } = {}): FakeKernel {
   const scorer = options.scorer ?? defaultScorer;
   const handlers = new Set<(m: KernelResponse) => void>();
   const sent: KernelMessage[] = [];
@@ -156,7 +156,7 @@ export function createFakeKernel(options: { scorer?: Scorer; mutate?: (program: 
       });
     };
     if (hold.value) held.push(reply);
-    else setTimeout(reply, 0);
+    else setTimeout(reply, options.latencyMs ?? 0);
   };
 
   const session: FakeKernel['session'] = {
