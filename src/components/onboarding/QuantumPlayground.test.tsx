@@ -2,6 +2,7 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { QuantumPlayground } from './QuantumPlayground';
+import { useThemeStore } from '../../stores/themeStore';
 
 beforeAll(() => {
   window.matchMedia = ((query: string) => ({
@@ -62,5 +63,31 @@ describe('QuantumPlayground', () => {
     click('Continue'); click('Apply H Gate'); click('Measure');
     const histogram = screen.getByRole('img', { name: /Measurement results/ });
     expect(histogram.innerHTML).not.toContain('rgb(123, 45, 142)');
+  });
+
+  it('draws a visible qubit outline with the pole labels outside the circle', () => {
+    const { container } = render(<QuantumPlayground onComplete={vi.fn()} onBridgeToIDE={vi.fn()} />);
+    const svg = container.querySelector('svg[role="img"]')!;
+    const circle = svg.querySelector('circle')!;
+    expect(circle.getAttribute('opacity')).toBeNull();
+    expect(circle.getAttribute('stroke')).toBe(useThemeStore.getState().colors.borderStrong);
+
+    const cy = Number(circle.getAttribute('cy'));
+    const r = Number(circle.getAttribute('r'));
+    const labels = Array.from(svg.querySelectorAll('text'));
+    const top = labels.find((t) => t.textContent === '|0⟩')!;
+    const bottom = labels.find((t) => t.textContent === '|1⟩')!;
+    expect(Number(top.getAttribute('y'))).toBeLessThan(cy - r);
+    // Baseline of the lower label sits below the circle, and the label stays inside the viewBox.
+    expect(Number(bottom.getAttribute('y'))).toBeGreaterThan(cy + r);
+    const height = Number(svg.getAttribute('viewBox')!.split(' ')[3]);
+    expect(Number(bottom.getAttribute('y'))).toBeLessThanOrEqual(height);
+  });
+
+  it('puts a baseline under the histogram bars', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.9);
+    render(<QuantumPlayground onComplete={vi.fn()} onBridgeToIDE={vi.fn()} />);
+    click('Continue'); click('Apply H Gate'); click('Measure');
+    expect(document.querySelectorAll('[data-bar-baseline]').length).toBeGreaterThan(0);
   });
 });
