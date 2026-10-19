@@ -49,6 +49,12 @@ values as `"<approx:value:tolerance>"`.
 
 ## Conventions
 
+- **Authenticate first** (protocol v2). Every Lab connection begins with
+  `{"type": "authenticate", "token": "<token>"}` and waits for
+  `{"type": "authenticated"}`; see [Authentication](/docs/kernel-api/overview/#authentication).
+  The examples below show the messages that follow the handshake, and the
+  replay tests send the handshake through the real authentication gate before
+  every fixture.
 - Replies are flat `{"type": ...}` objects. Failures are
   `{"type": "error", "phase": "trainability" | "discovery", "code", "message"}`
   plus `job_id`, `run_id`, `candidate_id`, `path` or `column` where they apply.

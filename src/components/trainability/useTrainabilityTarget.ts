@@ -21,14 +21,15 @@ export function runTrainabilityAnalyses(): void {
  * simulator run, so it is never claimed here).
  */
 export function useTrainabilityTarget(): void {
-  const platform = usePlatform().getPlatform();
+  const bridge = usePlatform();
+  const platform = bridge.getPlatform();
   const code = useEditorStore((s) => s.code);
   const framework = useEditorStore((s) => s.framework);
   const filePath = useEditorStore((s) => s.filePath);
 
   useEffect(() => {
-    useTrainabilityStore.getState().setPlatform(platform);
-  }, [platform]);
+    useTrainabilityStore.getState().setPlatform(platform, bridge.getKernelAuthToken?.bind(bridge));
+  }, [platform, bridge]);
 
   useEffect(() => {
     const timer = setTimeout(() => {

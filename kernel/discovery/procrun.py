@@ -88,6 +88,7 @@ def group_rss_bytes(pgid: int) -> int:
     try:
         out = subprocess.run(
             ["ps", "-ax", "-o", "pgid=,rss="], capture_output=True, text=True, timeout=5, check=False,
+            env=minimal_env(),
         ).stdout
     except (OSError, subprocess.SubprocessError):
         return 0

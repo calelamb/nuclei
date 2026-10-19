@@ -16,7 +16,9 @@ import type { DiscoveryEvaluatorInfo } from '../../src/types/discovery';
  * length; every seventh program is rejected by a guardrail). With no API key in
  * the e2e browser, the hybrid mutator falls back to AST and says so.
  */
-const FIXTURE_URL = '/?e2eProject=lab-project&workspace=research&labKernel=ws://127.0.0.1:9778';
+/** Session token the stub kernel expects in the authenticate frame (DEV `labKernelToken`). */
+const E2E_KERNEL_TOKEN = 'e2e-lab-kernel-token';
+const FIXTURE_URL = `/?e2eProject=lab-project&workspace=research&labKernel=ws://127.0.0.1:9778&labKernelToken=${E2E_KERNEL_TOKEN}`;
 
 /** Catalogue entry for the Frontier evaluator (descriptor keys match the kernel). */
 const FRONTIER_EVALUATOR: DiscoveryEvaluatorInfo = {
@@ -42,10 +44,11 @@ const FRONTIER_EVALUATOR: DiscoveryEvaluatorInfo = {
 
 async function installStubKernel(page: Page): Promise<void> {
   await page.addInitScript(
-    ({ evaluator, frontier, conjectureSchema, conjectureEvidence, conjectureResult }) => {
+    ({ token: e2eToken, evaluator, frontier, conjectureSchema, conjectureEvidence, conjectureResult }) => {
       type Listener = (event: Event | MessageEvent<string>) => void;
       class StubKernelSocket {
         readyState = 0;
+        private authenticated = false;
         private readonly listeners = new Map<string, Listener[]>();
         constructor() {
           queueMicrotask(() => {
@@ -62,6 +65,22 @@ async function installStubKernel(page: Page): Promise<void> {
           this.emit('close', new Event('close'));
         }
         send(serialized: string): void {
+          // Protocol v2: the first frame must carry the session token. Anything
+          // else is refused with 4401, exactly like the real kernel.
+          if (!this.authenticated) {
+            const first = JSON.parse(serialized) as { type?: string; token?: string };
+            if (first.type === 'authenticate' && first.token === e2eToken) {
+              this.authenticated = true;
+              setTimeout(
+                () => this.emit('message', new MessageEvent('message', { data: JSON.stringify({ type: 'authenticated' }) })),
+                0,
+              );
+            } else {
+              this.readyState = 3;
+              this.emit('close', Object.assign(new Event('close'), { code: 4401 }));
+            }
+            return;
+          }
           const m = JSON.parse(serialized) as {
             type: string; run_id: string; candidate_id: string; program: string; count: number; seed: number; stage?: string;
             job_id?: string; evaluator?: { kind: string }; evaluation?: { fitness: number | null };
@@ -197,6 +216,7 @@ async function installStubKernel(page: Page): Promise<void> {
       Object.defineProperty(window, 'WebSocket', { configurable: true, value: StubKernelSocket });
     },
     {
+      token: E2E_KERNEL_TOKEN,
       evaluator: FIXTURE_EVALUATOR,
       frontier: FRONTIER_EVALUATOR,
       conjectureSchema: FIXTURE_SCHEMA_REPLY,

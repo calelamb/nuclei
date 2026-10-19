@@ -45,6 +45,8 @@ import textwrap  # noqa: E402
 import time  # noqa: E402
 from pathlib import Path  # noqa: E402
 
+from kernel.tests._auth_harness import StreamingWS as _BaseStreamingWS, serve_authenticated  # noqa: E402
+
 FAKE_MODULE = "fake_trn_analyses"
 FAKE_SOURCE = textwrap.dedent('''
     import time
@@ -122,51 +124,11 @@ def write_fake_analyses(directory: Path) -> Path:
     return path
 
 
-class StreamingWS:
-    """Drives ``server._handle_connection`` like a live websocket."""
+class StreamingWS(_BaseStreamingWS):
+    """Drives the kernel handler like a live, authenticated connection."""
 
     def __init__(self) -> None:
-        self._incoming: asyncio.Queue = asyncio.Queue()
-        self.sent: list[dict] = []
-        self._activity = asyncio.Event()
-
-    def push(self, message: dict) -> None:
-        self._incoming.put_nowait(json.dumps(message))
-
-    def close(self) -> None:
-        self._incoming.put_nowait(None)
-
-    def __aiter__(self):
-        return self
-
-    async def __anext__(self):
-        item = await self._incoming.get()
-        if item is None:
-            raise StopAsyncIteration
-        return item
-
-    async def send(self, raw: str) -> None:
-        self.sent.append(json.loads(raw))
-        self._activity.set()
-
-    def types(self) -> list[str]:
-        return [m.get("type") for m in self.sent]
-
-    async def wait_for(self, predicate, timeout: float = 180.0) -> list[dict]:
-        deadline = time.monotonic() + timeout
-        while True:
-            match = [m for m in self.sent if predicate(m)]
-            if match:
-                return match
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise TimeoutError(f"no message matched within {timeout}s; got {self.types()}")
-            self._activity.clear()
-            with contextlib.suppress(asyncio.TimeoutError):
-                await asyncio.wait_for(self._activity.wait(), timeout=min(remaining, 0.25))
-
-    async def wait_type(self, msg_type: str, timeout: float = 180.0) -> dict:
-        return (await self.wait_for(lambda m: m.get("type") == msg_type, timeout))[0]
+        super().__init__(default_timeout=180.0)
 
 
 @contextlib.asynccontextmanager
@@ -175,7 +137,7 @@ async def connection():
     from kernel import server
 
     ws = StreamingWS()
-    task = asyncio.create_task(server._handle_connection(ws))
+    task = asyncio.create_task(serve_authenticated(ws, server._handle_connection))
     try:
         yield ws
     finally:

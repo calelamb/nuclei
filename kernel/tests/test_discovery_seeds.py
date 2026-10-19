@@ -17,6 +17,7 @@ from kernel.discovery import isolation  # noqa: E402
 from kernel.discovery import manager as manager_module  # noqa: E402
 from kernel.discovery.manager import DiscoveryManager  # noqa: E402
 from kernel.tests.test_discovery_handlers import StreamingWS  # noqa: E402
+from kernel.tests._auth_harness import serve_authenticated  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SEEDS = os.path.join(ROOT, "kernel", "discovery", "seeds")
@@ -49,7 +50,7 @@ def _manager(tmp_path, monkeypatch):
 async def evaluate(name: str, stage: str = "full", seed: int = 7) -> dict:
     kind, config, _, _ = CASES[name]
     ws = StreamingWS()
-    connection = asyncio.create_task(server.handle_message(ws))
+    connection = asyncio.create_task(serve_authenticated(ws))
     try:
         ws.push({
             "type": "discovery_evaluate", "run_id": "r-1", "candidate_id": "c-1",

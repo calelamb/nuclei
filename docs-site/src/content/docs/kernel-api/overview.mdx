@@ -44,23 +44,43 @@ registry) is shared process-wide. {/* server.py:20-23, 162-167 */}
 ## Authentication
 
 The kernel executes code it receives, so every connection must authenticate
-before any request is handled.
+before any request is handled. This is **protocol v2** and it is breaking for
+external clients: a client that does not send the `authenticate` frame first
+is disconnected. See the [protocol changelog](/docs/reference/protocol-changelog/).
 
 1. The kernel reads a secret token from `NUCLEI_KERNEL_TOKEN` (the desktop app
    generates a fresh one per launch). With no token it refuses to start.
 2. It writes the token and port to a user-only (`0600`) runtime file,
    `~/.nuclei/runtime/kernel.json` (override the directory with
-   `NUCLEI_RUNTIME_DIR`), so local scripts can read it.
+   `NUCLEI_RUNTIME_DIR`), so local scripts can read it. Scripts can use
+   `$NUCLEI_KERNEL_TOKEN` instead when they launched the kernel themselves.
 3. The first frame on a connection must be
    `{"type": "authenticate", "token": "<token>"}`. The kernel answers
-   `{"type": "authenticated"}`; a wrong or missing token closes the
-   connection. The token is never sent in the URL.
+   `{"type": "authenticated"}` and only then handles requests. The token is
+   never sent in the URL.
 4. Browser connections must also come from an allowed `Origin`, and the `Host`
    header must be a loopback name on the kernel's port. Scripts that send no
    `Origin` are accepted only with the token.
 
+Every socket the app opens authenticates this way: the editor's, the Trainability
+Lab's, the Discovery Engine's, and the audit and conjecture sessions. Replies
+in the [Quantum AI Lab messages](/docs/kernel-api/messages-lab/) examples start
+after the handshake.
+
+### How a connection is refused
+
+| Situation | Result |
+|-----------|--------|
+| Foreign `Origin` or non-loopback `Host` | HTTP `403` on the WebSocket upgrade; the connection never opens |
+| First frame is not a valid `authenticate` frame, wrong token, or no frame within 10 s | Closed with code `4401` |
+| Request sent before the `authenticated` ack | Not handled; the connection is closed with `4401` |
+
+A client library's "connection refused with 403" therefore means the `Origin`
+or `Host` is wrong, and a `4401` close means the token is wrong or missing.
+
 For throwaway local experiments only, `NUCLEI_KERNEL_INSECURE_DEV=1` disables
-authentication and prints a warning.
+authentication and prints a warning. The kernel never passes its token to the
+processes it starts (code execution, Lab workers, the discovery sandbox).
 
 ## Running the kernel standalone
 

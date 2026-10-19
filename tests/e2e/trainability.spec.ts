@@ -14,14 +14,18 @@ import {
  * build open a Lab session; the stub answers every trainability message with
  * the unit-test fixtures (spec §5.6 shapes).
  */
-const FIXTURE_URL = '/?e2eProject=lab-project&workspace=research&labKernel=ws://127.0.0.1:9777';
+/** Session token the stub kernel expects in the authenticate frame (DEV `labKernelToken`). */
+const E2E_KERNEL_TOKEN = 'e2e-lab-kernel-token';
+const FIXTURE_URL = `/?e2eProject=lab-project&workspace=research&labKernel=ws://127.0.0.1:9777&labKernelToken=${E2E_KERNEL_TOKEN}`;
 
 async function installStubKernel(page: Page, results: unknown = resultsFixture): Promise<void> {
   await page.addInitScript(
     (fixtures) => {
+      const e2eToken = fixtures.token;
       type Listener = (event: Event | MessageEvent<string>) => void;
       class StubKernelSocket {
         readyState = 0;
+        private authenticated = false;
         private readonly listeners = new Map<string, Listener[]>();
         constructor() {
           queueMicrotask(() => {
@@ -38,6 +42,22 @@ async function installStubKernel(page: Page, results: unknown = resultsFixture):
           this.emit('close', new Event('close'));
         }
         send(serialized: string): void {
+          // Protocol v2: the first frame must carry the session token. Anything
+          // else is refused with 4401, exactly like the real kernel.
+          if (!this.authenticated) {
+            const first = JSON.parse(serialized) as { type?: string; token?: string };
+            if (first.type === 'authenticate' && first.token === e2eToken) {
+              this.authenticated = true;
+              setTimeout(
+                () => this.emit('message', new MessageEvent('message', { data: JSON.stringify({ type: 'authenticated' }) })),
+                0,
+              );
+            } else {
+              this.readyState = 3;
+              this.emit('close', Object.assign(new Event('close'), { code: 4401 }));
+            }
+            return;
+          }
           const message = JSON.parse(serialized) as { type: string; job_id?: string };
           const reply = (frame: unknown) =>
             setTimeout(() => this.emit('message', new MessageEvent('message', { data: JSON.stringify(frame) })), 0);
@@ -67,7 +87,7 @@ async function installStubKernel(page: Page, results: unknown = resultsFixture):
       }
       Object.defineProperty(window, 'WebSocket', { configurable: true, value: StubKernelSocket });
     },
-    { inspection: inspectionFixture, lint: lintDiagnosticsFixture, summary: lintSummaryFixture, results, provenance: provenanceFixture },
+    { token: E2E_KERNEL_TOKEN, inspection: inspectionFixture, lint: lintDiagnosticsFixture, summary: lintSummaryFixture, results, provenance: provenanceFixture },
   );
 }
 

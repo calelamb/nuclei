@@ -20,6 +20,7 @@ from kernel.discovery.audits.runner import AuditManager  # noqa: E402
 from kernel.lab_context import owner_for_connection, release_owner  # noqa: E402
 from kernel.tests._discovery_audit_helpers import HONEST_SEEDS, honest_evaluation, read_seed  # noqa: E402
 from kernel.tests.test_discovery_handlers import StreamingWS, is_type  # noqa: E402
+from kernel.tests._auth_harness import serve_authenticated  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -62,7 +63,7 @@ def blocking(seen: list):
 
 async def drive(messages, waits, timeout=240.0):
     ws = StreamingWS()
-    connection = asyncio.create_task(server.handle_message(ws))
+    connection = asyncio.create_task(serve_authenticated(ws))
     try:
         for message in messages:
             ws.push(message)
@@ -115,7 +116,7 @@ async def test_cancel_of_a_whole_run_only_counts_that_run():
     audit_runner.set_audit_manager(AuditManager(max_workers=1, job_runner=blocking(seen)))
     messages = [audit_msg(candidate_id=f"c{i}") for i in range(3)] + [audit_msg(candidate_id="other", run_id="r-2")]
     ws = StreamingWS()
-    connection = asyncio.create_task(server.handle_message(ws))
+    connection = asyncio.create_task(serve_authenticated(ws))
     try:
         for message in messages:
             ws.push(message)
@@ -139,7 +140,7 @@ async def test_owner_release_cancels_every_audit_it_holds():
     manager = AuditManager(max_workers=2, job_runner=blocking(seen))
     audit_runner.set_audit_manager(manager)
     ws = StreamingWS()
-    connection = asyncio.create_task(server.handle_message(ws))
+    connection = asyncio.create_task(serve_authenticated(ws))
     for i in range(3):
         ws.push(audit_msg(candidate_id=f"c{i}"))
     await ws.wait_for(lambda m: ws.count("discovery_audit_accepted") == 3)
@@ -159,7 +160,7 @@ async def test_queue_cap_returns_discovery_busy():
     seen: list[threading.Event] = []
     audit_runner.set_audit_manager(AuditManager(max_workers=1, job_runner=blocking(seen)))
     ws = StreamingWS()
-    connection = asyncio.create_task(server.handle_message(ws))
+    connection = asyncio.create_task(serve_authenticated(ws))
     try:
         for i in range(65):
             ws.push(audit_msg(candidate_id=f"c{i}"))
