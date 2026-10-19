@@ -11,15 +11,8 @@ export interface LandingProps {
 /** Props that make an element a programmatic landing target: focusable by script, never by Tab, no ring. */
 export const LANDING_PROPS: LandingProps = { tabIndex: -1, [LANDING_ATTR]: '' };
 
-export interface LandingHandle<T extends HTMLElement> {
-  readonly ref: RefObject<T | null>;
-  readonly props: LandingProps;
-  /** Move focus to the target (no scrolling); false when it is not mounted. */
-  readonly focus: () => boolean;
-}
-
-/** A landing target plus a way to focus it, for headings that a keyboard action should land on. */
-export function useLandingRef<T extends HTMLElement>(): LandingHandle<T> {
+/** A landing target's ref plus a function that moves focus to it (no scrolling); false when it is not mounted. */
+export function useLandingRef<T extends HTMLElement>(): readonly [RefObject<T | null>, () => boolean] {
   const ref = useRef<T | null>(null);
   const focus = useCallback(() => {
     const el = ref.current;
@@ -27,5 +20,5 @@ export function useLandingRef<T extends HTMLElement>(): LandingHandle<T> {
     el.focus({ preventScroll: true });
     return document.activeElement === el;
   }, []);
-  return { ref, props: LANDING_PROPS, focus };
+  return [ref, focus] as const;
 }
