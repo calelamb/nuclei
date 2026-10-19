@@ -99,7 +99,7 @@ export function QuizBlock({ questions }: QuizBlockProps) {
             {chosen !== null && !solved && (
               <div className="quiz__feedback quiz__feedback--wrong" role="status">
                 <span>{`${String.fromCharCode(65 + chosen)} isn't the answer.`}</span>
-                <Button size="sm" variant="danger" onClick={() => retry(q.id)}>Try again</Button>
+                <Button size="sm" variant="secondary" onClick={() => retry(q.id)}>Try again</Button>
               </div>
             )}
 

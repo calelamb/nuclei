@@ -20,7 +20,7 @@ export function CapstoneCard({ project, completedCount, onStart }: CapstoneCardP
       <div className="cap-card__desc">{project.description}</div>
       <div className="cap-card__meta">
         <span><Clock size={12} aria-hidden="true" />{project.estimatedWeeks} week{project.estimatedWeeks > 1 ? 's' : ''}</span>
-        <span>{completedCount}/{total} milestones</span>
+        <span>{completedCount}/{total} steps</span>
         <Badge tone={levelTone(project.difficulty)} style={{ textTransform: 'capitalize' }}>{project.difficulty}</Badge>
       </div>
       <div className="cap-card__bar" role="progressbar" aria-label={`${project.title} progress`} aria-valuemin={0} aria-valuemax={total} aria-valuenow={completedCount}>

@@ -106,6 +106,15 @@ export function Tooltip({ label, shortcut, placement = 'above', children }: Tool
     return () => releaseTooltip(closeNow);
   }, [open, closeNow]);
 
+  // A trigger that turns disabled while the tip is up (focus just fell off it) must not leave the tip stranded.
+  useEffect(() => {
+    const target = wrapRef.current?.firstElementChild;
+    if (!open || !target || typeof MutationObserver === 'undefined') return undefined;
+    const observer = new MutationObserver(() => { if (target.hasAttribute('disabled')) closeNow(); });
+    observer.observe(target, { attributes: true, attributeFilter: ['disabled'] });
+    return () => observer.disconnect();
+  }, [open, closeNow]);
+
   const show = () => {
     if (suppressed.current) return;
     if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; }

@@ -21,7 +21,7 @@
 }
 .dirac-onboard__form { display: flex; gap: var(--space-2); }
 .dirac-onboard__form .nuclei-input { flex: 1; min-width: 0; }
-.dirac-onboard__error { margin: 0; font-size: var(--font-size-caption); color: var(--color-danger); }
+.dirac-onboard__error { margin: 0; font-size: var(--font-size-caption); color: var(--color-danger-text); }
 .dirac-onboard__fine { margin: 0; text-align: center; text-wrap: balance; font-size: var(--font-size-caption); line-height: 1.5; color: var(--color-text-tertiary); }
 .dirac-onboard__links { display: flex; justify-content: center; gap: var(--space-3); font-size: var(--font-size-caption); }
 .dirac-link {

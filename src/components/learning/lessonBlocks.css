@@ -12,14 +12,14 @@
   font: var(--font-size-body) var(--font-sans);
   transition: background-color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
 }
-.quiz__option:hover:not([aria-disabled='true']) { border-color: var(--color-accent-quantum); background: color-mix(in srgb, var(--color-accent-quantum) 6%, transparent); }
+.quiz__option:not([data-state='wrong']):not([data-state='right']):hover:not([aria-disabled='true']) { border-color: var(--color-accent-quantum); background: color-mix(in srgb, var(--color-accent-quantum) 6%, transparent); }
 .quiz__option[aria-disabled='true'] { cursor: default; }
-.quiz__option[data-state='wrong'] { border-color: var(--color-danger); background: color-mix(in srgb, var(--color-danger) 8%, transparent); color: var(--color-danger); }
+.quiz__option[data-state='wrong'] { border-color: var(--color-danger); background: color-mix(in srgb, var(--color-danger) 8%, transparent); color: var(--color-danger-text); }
 .quiz__option[data-state='right'] { border-color: var(--color-success); background: color-mix(in srgb, var(--color-success) 8%, transparent); color: var(--color-success-text, color-mix(in srgb, var(--color-success) 55%, var(--color-text-primary))); }
 .quiz__letter { display: grid; place-items: center; width: 24px; height: 24px; flex-shrink: 0; border: 2px solid var(--color-text-tertiary); border-radius: 50%; font-size: var(--font-size-chrome-label); font-weight: var(--font-weight-semibold); color: var(--color-text-tertiary); }
 .quiz__option[data-state='wrong'] .quiz__letter, .quiz__option[data-state='right'] .quiz__letter { border-color: currentColor; color: inherit; }
 .quiz__feedback { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-3); padding: var(--space-2) var(--space-3); border-radius: var(--radius-soft); font-size: var(--font-size-code); }
-.quiz__feedback--wrong { background: color-mix(in srgb, var(--color-danger) 8%, transparent); color: var(--color-danger); }
+.quiz__feedback--wrong { background: color-mix(in srgb, var(--color-danger) 8%, transparent); color: var(--color-danger-text); }
 .quiz__feedback--right { display: block; padding: var(--space-3) var(--space-4); background: color-mix(in srgb, var(--color-success) 8%, transparent); color: var(--color-success-text, color-mix(in srgb, var(--color-success) 55%, var(--color-text-primary))); line-height: 1.5; }
 
 .concept { max-width: var(--lesson-card-max); margin: var(--space-4) 0; overflow: hidden; border: 1px solid var(--color-border-strong); border-radius: var(--radius-round); background: var(--color-surface-raised); box-shadow: var(--shadow-md); font-family: var(--font-sans); }

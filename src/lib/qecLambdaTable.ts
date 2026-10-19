@@ -1,5 +1,6 @@
 import type { LambdaGroupEstimate, RateUnits } from './qecFit';
 import { lambdaCaveats } from './qecLambdaText';
+import { experimentNames } from './qecExperimentName';
 import { formatLambda, formatNoise } from './qecPlotFormat';
 
 /** A decoder's table shows this many rows before the rest sit behind "Show all". */
@@ -40,11 +41,6 @@ export interface LambdaTableView {
   notes: string[];
 }
 
-/** "stats r=3d" -> "rounds = 3d"; the default "stats" label carries no information. */
-export function displayExperiment(label: string): string {
-  return label.replace(/^(stats|unlabeled)\s*/, '').replace(/\br=/g, 'rounds = ').trim() || 'default';
-}
-
 function shortReason(warning: string): string {
   if (/^saturated/.test(warning)) return 'saturated';
   if (/^Λ ≤ 1/.test(warning)) return 'above threshold';
@@ -63,7 +59,7 @@ function droppedNote(e: LambdaGroupEstimate): string[] {
   return [`${distanceList(dropped)} had no logical errors and ${dropped.length === 1 ? 'is' : 'are'} left out of the fit (suppression is at least as strong)`];
 }
 
-function toRow(e: LambdaGroupEstimate, showExperiment: boolean): LambdaRowView {
+function toRow(e: LambdaGroupEstimate, names: ReadonlyMap<string, string> | null): LambdaRowView {
   const est = e.estimate;
   return {
     p: formatNoise(e.noise),
@@ -73,7 +69,7 @@ function toRow(e: LambdaGroupEstimate, showExperiment: boolean): LambdaRowView {
     ci: est.intervalMeaningful ? `${formatLambda(est.ci95.low)}–${formatLambda(est.ci95.high)}` : null,
     rSquared: est.rSquared.toFixed(2),
     meaningful: est.intervalMeaningful,
-    experiment: showExperiment ? displayExperiment(e.label) : null,
+    experiment: names ? names.get(e.label) ?? e.label : null,
     flags: [...est.warnings, ...lambdaCaveats(e), ...droppedNote(e)],
   };
 }
@@ -104,7 +100,8 @@ function distinctNotes(estimates: readonly LambdaGroupEstimate[]): string[] {
  * line, and each distinct caveat stated once instead of repeated per row.
  */
 export function buildLambdaTable(estimates: readonly LambdaGroupEstimate[], units: RateUnits): LambdaTableView {
-  const showExperiment = new Set(estimates.map((e) => e.label)).size > 1;
+  const labels = estimates.map((e) => e.label);
+  const names = new Set(labels).size > 1 ? experimentNames(labels) : null;
   const distances = [...new Set(estimates.flatMap((e) => e.estimate.distances))].sort((a, b) => a - b);
   const steps = [...new Set(estimates.map((e) => e.estimate.step))];
   const subtitle = [
@@ -116,8 +113,8 @@ export function buildLambdaTable(estimates: readonly LambdaGroupEstimate[], unit
   const groups = decoders.map((decoder) => {
     const mine = estimates
       .filter((e) => e.decoder === decoder)
-      .sort((a, b) => a.noise - b.noise || a.label.localeCompare(b.label));
-    const all = mine.map((e) => toRow(e, showExperiment));
+      .sort((a, b) => a.label.localeCompare(b.label) || a.noise - b.noise);
+    const all = mine.map((e) => toRow(e, names));
     const rows = all.filter((r) => r.meaningful);
     const hidden = all.filter((r) => !r.meaningful);
     return { decoder, rows, collapsed: hidden.length > 0 ? { rows: hidden, summary: collapsedSummary(hidden, rows) } : null };

@@ -68,3 +68,5 @@
   background: color-mix(in srgb, var(--color-warning) 14%, transparent); color: var(--color-warning-text);
   font-family: var(--font-sans); font-size: var(--font-size-caption); font-weight: var(--font-weight-medium); line-height: var(--line-height-caption);
 }
+.qec-lambda-group td { font-size: 11px; font-weight: 600; letter-spacing: 0.02em; padding-top: var(--space-2); }
+.qec-lambda-table .qec-lambda-warn { width: 20px; height: 20px; }
