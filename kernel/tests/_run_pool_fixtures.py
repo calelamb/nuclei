@@ -82,3 +82,14 @@ def isolated_pool():
     for instance in made:
         instance.shutdown()
     run_worker.shutdown_pool()
+
+
+@pytest.fixture
+def inprocess_mode():
+    """Run the Lab's message ops (``call_op``) in the test process, so a test can monkeypatch the code they call.
+
+    Production never does this: ``server.main()`` forbids in-process execution of user code.
+    """
+    run_worker.set_inprocess_ops(True)
+    yield
+    run_worker.set_inprocess_ops(False)

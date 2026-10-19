@@ -10,6 +10,7 @@ import pytest
 
 pytest.importorskip("qiskit")
 
+from kernel.tests._run_pool_fixtures import inprocess_mode  # noqa: E402,F401 - fixture: monkeypatched lint runs in-process
 from kernel.tests._trainability_job_helpers import QISKIT_CODE, connection  # noqa: E402
 from kernel.trainability._settings import normalize_analyses, normalize_settings  # noqa: E402
 from kernel.trainability._errors import TrainabilityError  # noqa: E402
@@ -108,7 +109,7 @@ def test_unknown_trainability_message():
 
 
 @pytest.fixture
-def fake_lint(monkeypatch):
+def fake_lint(monkeypatch, inprocess_mode):
     calls: list[dict] = []
     module = types.ModuleType("kernel.trainability.lint")
 
@@ -161,7 +162,7 @@ def test_lint_observable_error_carries_column(fake_lint):
     assert not fake_lint
 
 
-def test_lint_missing_module_reports_unavailable(monkeypatch):
+def test_lint_missing_module_reports_unavailable(monkeypatch, inprocess_mode):
     monkeypatch.setitem(sys.modules, "kernel.trainability.lint", None)  # forces ImportError
 
     async def scenario():

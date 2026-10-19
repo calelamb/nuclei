@@ -287,7 +287,7 @@ async def handle_message(websocket):
     try:
         await _message_loop(websocket, executor, routes)
     finally:
-        await routes.aclose()
+        await routes.aclose(connection_closed=getattr(websocket, "close_code", None) is not None)
 
 
 async def _hardware_payload(routes: RunRoutes, msg: dict, code: str, provider: str, backend: str, language, shots):
@@ -328,7 +328,7 @@ async def _message_loop(websocket, executor: Executor, routes: RunRoutes):
             # Everything that executes user code goes through the warm run-worker pool
             # (kernel/run_routes.py): the server process never runs it, a runaway program cannot
             # wedge this connection, and the loop keeps reading (run_cancel, newer parses).
-            routes.dispatch(msg_type, msg)
+            await routes.dispatch(msg_type, msg)
 
         elif msg_type == "lint":
             # Editor diagnostics via ruff (dev tools Phase 4). Additive;

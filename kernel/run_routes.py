@@ -57,17 +57,35 @@ class _Sender:
         self._websocket = websocket
         self._loop = loop
         self._queue: asyncio.Queue[str | None] = asyncio.Queue()
+        self._broken = False
         self._task = loop.create_task(self._pump())
+
+    def _discard_pending(self) -> None:
+        while True:
+            try:
+                self._queue.get_nowait()
+            except asyncio.QueueEmpty:
+                return
+            self._queue.task_done()
+
+    async def drain(self) -> None:
+        """Return once everything queued so far has been written to the socket."""
+        if not self._broken:
+            await self._queue.join()
 
     async def _pump(self) -> None:
         while True:
             text = await self._queue.get()
-            if text is None:
-                return
             try:
+                if text is None:
+                    return
                 await self._websocket.send(text)
             except Exception:  # noqa: BLE001 - the connection is gone; later frames have nowhere to go
+                self._broken = True
+                self._discard_pending()
                 return
+            finally:
+                self._queue.task_done()
 
     def send_text(self, text: str) -> None:
         self._queue.put_nowait(text)
@@ -168,21 +186,36 @@ class RunRoutes:
 
     # -- connection lifecycle ---------------------------------------------
 
-    def dispatch(self, msg_type: str, msg: dict) -> None:
-        """Start handling one routed message; returns at once (the reply is a task)."""
+    async def dispatch(self, msg_type: str, msg: dict) -> None:
+        """Handle one routed message.
+
+        A request carrying a ``run_id`` (a v1.4 client: every frame echoes the id, so interleaving is
+        attributable) and every ``parse`` (fire-and-forget; superseded ones are dropped) run as tasks
+        and this returns at once, so the connection loop keeps reading ``run_cancel`` and newer
+        parses. Any other request is answered in order, exactly as before the pool existed.
+        """
         if msg_type == "run_cancel":
             self._cancel(msg)
-            return
-        task = asyncio.get_running_loop().create_task(self._guarded(msg_type, msg))
-        self._tasks.add(task)
-        task.add_done_callback(self._tasks.discard)
+        elif msg.get("run_id") is not None or msg_type == "parse":
+            task = asyncio.get_running_loop().create_task(self._guarded(msg_type, msg))
+            self._tasks.add(task)
+            task.add_done_callback(self._tasks.discard)
+        else:
+            await self._guarded(msg_type, msg)
+            await self.sender.drain()  # the reply is on the wire before the next request is read
 
-    async def aclose(self) -> None:
-        """The connection closed: cancel every request it still has in flight."""
-        if run_worker.pool_started():
-            run_worker.get_pool().release_owner(self.owner)
-        for task in list(self._tasks):
-            task.cancel()
+    async def aclose(self, connection_closed: bool = True) -> None:
+        """The message stream ended.
+
+        A closed connection cancels every request it still has in flight (a closed window must never
+        leave a sweep burning CPU). A stream that merely ran out of messages (in-process fakes) lets
+        them finish so their replies are not lost.
+        """
+        if connection_closed:
+            if run_worker.pool_started():
+                run_worker.get_pool().release_owner(self.owner)
+            for task in list(self._tasks):
+                task.cancel()
         if self._tasks:
             await asyncio.gather(*self._tasks, return_exceptions=True)
         await self.sender.close()
