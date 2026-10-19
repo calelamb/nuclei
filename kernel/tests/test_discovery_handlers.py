@@ -35,7 +35,7 @@ class StreamingWS(_BaseStreamingWS):
 
 
 def blocking_sandbox(seen: list | None = None):
-    def run(request, *, wall_seconds, cancel_event=None):
+    def run(request, *, wall_seconds, cancel_event=None, origin=None):
         if seen is not None:
             seen.append(cancel_event)
         cancel_event.wait(30)

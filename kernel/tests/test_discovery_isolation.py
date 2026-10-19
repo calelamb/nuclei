@@ -613,7 +613,7 @@ SIMPLE = "import stim\ndef build(d, r):\n    return stim.Circuit('H 0')\n"
 SANDBOX_CALLS: list[dict] = []
 
 
-def _recording_sandbox(request, *, wall_seconds, cancel_event=None):
+def _recording_sandbox(request, *, wall_seconds, cancel_event=None, origin=None):
     SANDBOX_CALLS.append(request)
     return {"status": "error", "artifacts": [], "stdout": "", "stderr": "", "isolation": "process",
             "error": {"code": "worker_no_output", "message": "stub"}}
@@ -695,6 +695,29 @@ async def test_the_prescreen_rejects_before_the_sandbox_and_consent_does_not_byp
     assert failure["stage"] == "sandbox" and failure["code"] == ERR_PRESCREEN
     assert failure["message"].startswith("prescreen: shutil")
     assert SANDBOX_CALLS == []
+
+
+ORIGINS_SEEN: list = []
+
+
+def _origin_recording_sandbox(request, *, wall_seconds, cancel_event=None, origin=None):
+    ORIGINS_SEEN.append(origin)
+    return _recording_sandbox(request, wall_seconds=wall_seconds, cancel_event=cancel_event)
+
+
+@pytest.mark.asyncio
+async def test_the_manager_hands_the_request_origin_to_the_sandbox(tmp_path):
+    ORIGINS_SEEN.clear()
+    manager = _install_manager(tmp_path, iso.IsolationInfo(iso.MODE_LANDLOCK, reads="restricted", writes="scratch-only"))
+    manager._sandbox = _origin_recording_sandbox
+    try:
+        await session(
+            [evaluate_msg(SIMPLE, candidate_id="c-u", origin="user"), evaluate_msg(SIMPLE, candidate_id="c-n")],
+            [is_type("discovery_evaluation", candidate_id="c-u"), is_type("discovery_evaluation", candidate_id="c-n")],
+        )
+    finally:
+        manager_module.set_manager(None)
+    assert sorted(ORIGINS_SEEN) == ["claude", "user"], "a trusted origin must reach run_candidate; a missing one is 'claude'"
 
 
 @pytest.mark.asyncio

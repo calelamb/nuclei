@@ -282,7 +282,7 @@ class DiscoveryManager:
         t0 = time.monotonic()
         sandbox = self._sandbox(
             request, wall_seconds=CANDIDATE_CPU_DEFAULT + SANDBOX_WALL_SLACK_SECONDS,
-            cancel_event=job.cancel_event,
+            cancel_event=job.cancel_event, origin=req.origin or "claude",
         )
         timings["sandbox"] = _ms(time.monotonic() - t0)
         if sandbox.get("status") != "ok":

@@ -30,7 +30,7 @@ from kernel.discovery.constants import (
 from kernel.discovery.evaluators import EVALUATORS, effective_config, fingerprint, normalize_config
 from kernel.discovery.evaluators.base import source_closure
 from kernel.discovery.procrun import describe_signal, minimal_env, python_command, run_process
-from kernel.discovery.sandbox import default_request, run_candidate
+from kernel.discovery.sandbox import ERR_PRESCREEN, UNTRUSTED_ORIGINS, default_request, run_candidate
 
 AUDIT_STAGE = "full"
 AUDIT_CPU_SECONDS = 900
@@ -82,6 +82,7 @@ class AuditRequest:
     entry: str
     seed: int
     evaluation: dict[str, Any]
+    origin: str | None = None  # who wrote the program; missing is untrusted ('claude'), as in the manager
 
 
 def decide(evaluation_status: str | None, checks: list[dict[str, Any]]) -> tuple[str, list[str]]:
@@ -102,7 +103,10 @@ def decide(evaluation_status: str | None, checks: list[dict[str, Any]]) -> tuple
 
 def _sandbox_once(spec, config: dict[str, Any], req: AuditRequest, sandbox_runner, cancel: threading.Event) -> dict[str, Any]:
     request = default_request(spec.task, req.program, req.entry, spec.calls(config), CANDIDATE_CPU_DEFAULT)
-    return sandbox_runner(request, wall_seconds=CANDIDATE_CPU_DEFAULT + SANDBOX_WALL_SLACK_SECONDS, cancel_event=cancel)
+    return sandbox_runner(
+        request, wall_seconds=CANDIDATE_CPU_DEFAULT + SANDBOX_WALL_SLACK_SECONDS, cancel_event=cancel,
+        origin=req.origin or UNTRUSTED_ORIGINS[0],
+    )
 
 
 def _canonical(artifacts: Any) -> str:
@@ -112,8 +116,13 @@ def _canonical(artifacts: Any) -> str:
 def _sandbox_failure_check(sandbox: dict[str, Any], scored: bool) -> dict[str, Any]:
     error = sandbox.get("error") or {"code": "worker_bad_output", "message": "sandbox failed"}
     transient = error.get("code") in TRANSIENT_SANDBOX_CODES
-    status = "skipped" if transient or not scored else "fail"
+    # Decision: a candidate the static pre-screen refuses never ran, so the audit cannot say anything
+    # about it: skipped (-> inconclusive), never a reproducibility 'exploit'.
+    prescreened = error.get("code") == ERR_PRESCREEN
+    status = "skipped" if transient or prescreened or not scored else "fail"
     detail = f"fresh sandbox run failed: {error.get('code')}: {error.get('message')}"
+    if prescreened:
+        detail = f"rejected by the pre-screen before it ran, so the audit cannot judge it: {error.get('message')}"
     if status == "fail":
         detail += " (it succeeded when the evaluator ran it, so the candidate is not reproducible)"
     return _check("sandbox_reproducible", "Candidate reproduces in a fresh sandbox", status, detail[:600])

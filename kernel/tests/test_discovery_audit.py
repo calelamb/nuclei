@@ -291,7 +291,7 @@ def test_decide_rules():
 def _stub_sandbox(artifacts_list):
     calls = iter(artifacts_list)
 
-    def run(request, *, wall_seconds, cancel_event=None):
+    def run(request, *, wall_seconds, cancel_event=None, origin=None):
         reply = next(calls)
         return reply if "status" in reply else {"status": "ok", "artifacts": reply["artifacts"], "isolation": "process"}
 
@@ -425,3 +425,50 @@ def test_audit_fingerprint_changes_when_the_audit_source_changes(monkeypatch):
     for name, data in sorted({**real("kernel.discovery.audits.qec_memory"), "kernel.discovery.audits.qec_memory": b"edited"}.items()):
         expected.update(name.encode() + b"\0" + data + b"\0")
     assert audit_fingerprint("qec_memory") == expected.hexdigest()
+
+
+# --- origin threading and the pre-screen outcome (PRD 15 R-F fix round 2) ---------------------------------
+
+
+def _origin_sandbox(seen):
+    def run(request, *, wall_seconds, cancel_event=None, origin=None):
+        seen.append(origin)
+        return {"status": "ok", "artifacts": [{"call_index": 0, "artifact": {}}], "isolation": "process"}
+
+    return run
+
+
+def test_runner_passes_the_request_origin_to_every_sandbox_run():
+    import dataclasses
+
+    for origin, expected in (("user", "user"), ("ast", "ast"), ("claude", "claude"), (None, "claude")):
+        seen: list = []
+        job = dataclasses.replace(_job(), origin=origin)
+        run_audit_job(job, threading.Event(), sandbox_runner=_origin_sandbox(seen), worker_runner=_stub_worker([]))
+        assert seen == [expected, expected], f"origin {origin!r} reached the sandbox as {seen}"
+
+
+def test_parse_audit_carries_a_valid_origin_and_rejects_an_unknown_one():
+    from kernel.discovery.audits.handlers import parse_audit
+    from kernel.discovery.handlers import RequestError
+    from kernel.tests.test_discovery_audit_protocol import audit_msg
+
+    assert parse_audit(audit_msg(origin="user")).origin == "user"
+    assert parse_audit(audit_msg()).origin is None
+    with pytest.raises(RequestError):
+        parse_audit(audit_msg(origin="mallory"))
+
+
+def test_a_prescreen_rejected_untrusted_candidate_is_inconclusive_not_an_exploit():
+    from kernel.discovery import isolation as iso
+    from kernel.discovery.sandbox import run_candidate
+
+    hostile = "import shutil\ndef build(d, r):\n    shutil.rmtree('/tmp/not-yours')\n"
+    real = lambda request, **kw: run_candidate(request, isolation=iso.IsolationInfo(iso.MODE_PROCESS), **kw)  # noqa: E731
+    import dataclasses
+
+    job = dataclasses.replace(_job(), program=hostile, origin="claude")
+    record = run_audit_job(job, threading.Event(), sandbox_runner=real, worker_runner=_stub_worker([]))
+    assert record["verdict"] == "inconclusive", record
+    assert status_of(record, "sandbox_reproducible") == "skipped"
+    assert "pre-screen" in record["reasons"][0] and "not reproducible" not in record["reasons"][0]

@@ -22,7 +22,7 @@ from kernel.discovery.constants import (
 )
 from kernel.discovery.evaluators import EVALUATORS, InvalidConfig, normalize_config
 from kernel.discovery.handlers import (
-    RequestError, _error, _IDENT, _integer, _program, _text, require_evaluator_available,
+    RequestError, _error, _IDENT, _origin, _integer, _program, _text, require_evaluator_available,
 )
 
 ERR_AUDIT_UNAVAILABLE = "audit_unavailable"
@@ -51,7 +51,7 @@ def parse_audit(msg: dict[str, Any]) -> AuditRequest:
     evaluation = msg.get("evaluation")
     if not isinstance(evaluation, dict) or evaluation.get("status") not in _EVALUATION_STATUSES:
         raise RequestError(ERR_INVALID_REQUEST, "'evaluation' must be an evaluation record with a valid 'status'.")
-    return AuditRequest(run_id, candidate_id, spec.kind, config, _program(msg), entry, _integer(msg, "seed"), evaluation)
+    return AuditRequest(run_id, candidate_id, spec.kind, config, _program(msg), entry, _integer(msg, "seed"), evaluation, _origin(msg))
 
 
 async def _audit(msg: dict[str, Any], ctx) -> None:
