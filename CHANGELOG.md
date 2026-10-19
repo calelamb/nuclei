@@ -31,10 +31,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as the kernel. Third-party clients may still omit the nonce.
 - The app waits for the kernel's ready line before releasing the token. The
   token reaches the kernel and the QEC Data Engine over stdin, not the
-  environment, and pre-auth frames are capped at 8 KiB.
+  environment, and pre-auth frames are capped at 8 KiB. Unauthenticated
+  connections get 3 seconds to identify themselves.
 
 ### Fixed
 
+- Dirac hardware submission authenticates to the kernel and verifies its proof
+  before sending any request.
 - The kernel is served with the `websockets` asyncio API, so authentication
   works on `websockets` 13.x (the new floor, `>=13.0`).
 - The kernel is stopped cleanly when Nuclei quits (SIGTERM with a grace period).
