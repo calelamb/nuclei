@@ -5,6 +5,7 @@ import { buildLambdaTable, lambdaRangeSummary, LAMBDA_ROW_LIMIT, type LambdaDeco
 import type { ThemeColors } from '../../stores/themeStore';
 import { ICON_SIZE, ICON_STROKE, TYPOGRAPHY } from '../../styles/tokens';
 import './qecAnalysis.css';
+import { IconButton } from '../ui/IconButton';
 import { Table, Thead, Tbody, Tr, Th, Td } from '../ui/Table';
 
 interface Props {
@@ -120,7 +121,6 @@ function LambdaRows({ rows, colors }: { rows: readonly LambdaRowView[]; colors: 
 }
 
 function LambdaRow({ row, colors }: { row: LambdaRowView; colors: ThemeColors }) {
-  const flagText = row.flags.join('\n');
   const tone = row.meaningful ? colors.text : colors.textMuted;
   return (
     <Tr>
@@ -132,9 +132,15 @@ function LambdaRow({ row, colors }: { row: LambdaRowView; colors: ThemeColors })
       <Td numeric style={{ color: tone }}>{row.rSquared}</Td>
       <Td>
         {row.flags.length > 0 && (
-          <span role="img" aria-label={`Warnings: ${row.flags.join('; ')}`} title={flagText} style={{ color: colors.warning, display: 'inline-flex' }}>
+          <IconButton
+            size="sm"
+            className="qec-lambda-warn"
+            aria-label={`Warnings: ${row.flags.join('; ')}`}
+            tooltip={{ label: row.flags.join('; '), placement: 'below' }}
+            style={{ color: colors.warning }}
+          >
             <TriangleAlert size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} aria-hidden="true" />
-          </span>
+          </IconButton>
         )}
       </Td>
     </Tr>

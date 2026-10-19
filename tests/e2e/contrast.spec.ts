@@ -115,3 +115,58 @@ test.describe('Launch cards stay AA-legible', () => {
     });
   }
 });
+
+/**
+ * Painted colours, not parsed ones: color-mix() washes and color(srgb ...) values are
+ * resolved by the browser itself (fill a 1px canvas, read the pixel), then each
+ * translucent ancestor background is composited over the one beneath it.
+ */
+const PAINTED_CONTRAST_SCRIPT = (selector: string) => {
+  const el = document.querySelector<HTMLElement>(selector);
+  if (!el) return null;
+  const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+  if (!ctx) return null;
+  const paint = (css: string): [number, number, number, number] => {
+    ctx.clearRect(0, 0, 1, 1);
+    ctx.fillStyle = '#000';
+    ctx.fillStyle = css;
+    ctx.fillRect(0, 0, 1, 1);
+    const d = ctx.getImageData(0, 0, 1, 1).data;
+    return [d[0], d[1], d[2], d[3] / 255];
+  };
+  const chain: string[] = [];
+  for (let n: HTMLElement | null = el; n; n = n.parentElement) chain.push(getComputedStyle(n).backgroundColor);
+  let under: [number, number, number] = [255, 255, 255];
+  for (const css of chain.reverse()) {
+    const [r, g, b, a] = paint(css);
+    under = [r * a + under[0] * (1 - a), g * a + under[1] * (1 - a), b * a + under[2] * (1 - a)];
+  }
+  const [fr, fg, fb] = paint(getComputedStyle(el).color);
+  const lum = (c: number[]) => {
+    const f = c.map((v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; });
+    return 0.2126 * f[0] + 0.7152 * f[1] + 0.0722 * f[2];
+  };
+  const [hi, lo] = [lum(under), lum([fr, fg, fb])].sort((a, b) => b - a);
+  return (hi + 0.05) / (lo + 0.05);
+};
+
+test.describe('Danger text on danger washes stays AA (design-r10-01)', () => {
+  for (const theme of THEMES) {
+    test(`${theme}: a wrong quiz answer and its feedback are at least ${MIN_TEXT_CONTRAST}:1`, async ({ page }) => {
+      await page.goto('/?e2eProject=qec-project');
+      await page.getByRole('button', { name: /learn/i }).first().click();
+      await page.evaluate((t) => { document.documentElement.dataset.theme = t; }, theme);
+      await page.getByText('Quantum Computing Fundamentals').first().click();
+      const option = page.locator('.quiz__option').first();
+      await option.scrollIntoViewIfNeeded();
+      await option.click();
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(300); // let the colour transition settle
+      for (const selector of ['.quiz__option[data-state="wrong"]', '.quiz__feedback--wrong']) {
+        const ratio = await page.evaluate(PAINTED_CONTRAST_SCRIPT, selector);
+        expect(ratio, `${theme} ${selector}`).not.toBeNull();
+        expect(ratio as number, `${theme} ${selector}`).toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST);
+      }
+    });
+  }
+});

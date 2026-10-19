@@ -50,3 +50,17 @@ describe('QecLambdaReadout experiment groups (qec-r-79)', () => {
     expect(r2.container.querySelectorAll('tr.qec-lambda-group').length).toBe(0);
   });
 });
+
+describe('QecLambdaReadout warnings (qec-r-55)', () => {
+  afterEach(cleanup);
+  it('exposes a row warning as a focusable button, not a title-only span', () => {
+    const colors = useThemeStore.getState().colors;
+    const saturated = [3, 5, 7].map((d) => row(d, 0.01, 0.5));
+    const estimates = lambdaEstimates([...[3, 5, 7].map((d, k) => row(d, 0.001, 0.01 / 3 ** k)), ...saturated], { units: 'per_round' });
+    const { container } = render(<QecLambdaReadout decoders={['pymatching']} estimates={estimates} units="per_round" colors={colors} />);
+    const warn = container.querySelector('button[aria-label^="Warnings:"]');
+    expect(warn).not.toBeNull();
+    expect(warn?.getAttribute('title')).toBeNull();
+    expect(container.querySelector('[role="img"][title]')).toBeNull();
+  });
+});
