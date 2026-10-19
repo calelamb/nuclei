@@ -203,7 +203,8 @@ export function noiseModelToYaml(model: NoiseModelDef): string {
 }
 
 /** A single generator-arg difference between two models (coefficients over p).
- * `null` on a side means that model doesn't use the channel (or is entry-only). */
+ * A generator model that leaves a channel unset reads as 0 (channel off).
+ * `null` on a side only ever means that model is entry-only (no generator args). */
 export interface NoiseArgDiff {
   arg: GeneratorArgName;
   a: number | null;
@@ -212,12 +213,17 @@ export interface NoiseArgDiff {
 
 /** Diff two models' generator-arg coefficients — powers the library's compare
  * view. Only channels that differ are returned. Entry-only models (null args)
- * compare as "all channels absent". */
+ * compare as `null` on every channel. */
+export function coefficientOf(model: NoiseModelDef, arg: GeneratorArgName): number | null {
+  if (model.generator_args === null) return null;
+  return model.generator_args[arg] ?? 0;
+}
+
 export function diffNoiseModels(a: NoiseModelDef, b: NoiseModelDef): NoiseArgDiff[] {
   const out: NoiseArgDiff[] = [];
   for (const arg of GENERATOR_ARG_NAMES) {
-    const av = a.generator_args?.[arg] ?? null;
-    const bv = b.generator_args?.[arg] ?? null;
+    const av = coefficientOf(a, arg);
+    const bv = coefficientOf(b, arg);
     if (av !== bv) out.push({ arg, a: av, b: bv });
   }
   return out;

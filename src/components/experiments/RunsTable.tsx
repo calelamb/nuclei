@@ -334,6 +334,7 @@ function RunsTableBody() {
                   aria-sort={sortKey !== column.key ? 'none' : sortDirection === 'asc' ? 'ascending' : 'descending'}
                   className="nuclei-runs-header__cell"
                   data-numeric={isNumericColumn(column)}
+                  data-kind={column.kind}
                 >
                   <button
                     type="button"

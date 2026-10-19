@@ -28,7 +28,7 @@ export function CompareMetricsTable({ runs, precisionRuns }: { runs: readonly Ru
     <Table label="Metrics by run" dense>
       <Thead>
         <Tr>
-          <Th plain>Run</Th>
+          <Th>Run</Th>
           {metricNames.map((name) => <Th key={name} numeric plain title={name}>{metricLabel(name)}</Th>)}
         </Tr>
       </Thead>

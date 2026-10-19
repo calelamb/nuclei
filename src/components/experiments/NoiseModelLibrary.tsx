@@ -9,6 +9,7 @@ import {
   noiseModelToYaml,
   diffNoiseModels,
   GENERATOR_ARG_NAMES,
+  coefficientOf,
   type NoiseModelDef,
 } from '../../types/noiseModel';
 import { TYPOGRAPHY, ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
@@ -167,13 +168,13 @@ export function NoiseModelLibrary({ projectRoot, onClose }: { projectRoot: strin
             ) : (
               <Table label="Generator arguments" dense>
                 <Thead>
-                  <Tr><Th plain>argument</Th><Th numeric plain>coefficient</Th></Tr>
+                  <Tr><Th>argument</Th><Th numeric>coefficient</Th></Tr>
                 </Thead>
                 <Tbody>
                   {GENERATOR_ARG_NAMES.map((arg) => (
                     <Tr key={arg}>
                       <Td muted>{arg}</Td>
-                      <Td numeric>{selected.generator_args?.[arg] ?? '—'}</Td>
+                      <Td numeric>{coefficientOf(selected, arg) ?? '—'}</Td>
                     </Tr>
                   ))}
                 </Tbody>
@@ -200,21 +201,21 @@ export function NoiseModelLibrary({ projectRoot, onClose }: { projectRoot: strin
                 <div style={{ marginTop: 8 }}>
                   {entryOnlyCompare && (
                     <p style={{ fontSize: 11, color: colors.textMuted, margin: '0 0 8px' }}>
-                      — means an entry-only model: no per-gate rates to compare.
+                      — means an entry-only model: no per-gate rates to compare. 0 means the channel is off.
                     </p>
                   )}
-                  <Table label="Generator argument differences" dense>
+                  <Table label="Generator argument differences" dense className="nuclei-noise-diff">
                     <Thead>
                       <Tr>
-                        <Th plain>channel</Th>
-                        <Th numeric plain>{selected.name}</Th>
-                        <Th numeric plain>{compare.name}</Th>
+                        <Th>channel</Th>
+                        <Th numeric plain title={selected.name}>{selected.name}</Th>
+                        <Th numeric plain title={compare.name}>{compare.name}</Th>
                       </Tr>
                     </Thead>
                     <Tbody>
                       {diff.map((d) => (
                         <Tr key={d.arg}>
-                          <Td muted>{d.arg}</Td>
+                          <Td muted title={d.arg}>{d.arg}</Td>
                           <Td numeric>{d.a ?? '—'}</Td>
                           <Td numeric>{d.b ?? '—'}</Td>
                         </Tr>
@@ -255,9 +256,11 @@ function ModelRow({ model, active, compareActive, onSelect }: { model: NoiseMode
       className="nuclei-menu-item nuclei-noise-row"
       data-active={active}
       data-compare={compareActive}
+      aria-current={active ? 'true' : undefined}
       onClick={onSelect}
     >
-      {model.name}
+      <span className="nuclei-noise-row__name">{model.name}</span>
+      {compareActive && <span className="nuclei-noise-row__tag">compare</span>}
     </button>
   );
 }

@@ -64,4 +64,45 @@ describe('NoiseModelLibrary as a dialog (research-r-09)', () => {
     fireEvent.change(screen.getByLabelText('Compare with'), { target: { value: 'biased_z' } });
     expect(screen.getByText(/entry-only model: no per-gate rates/)).toBeTruthy();
   });
+
+  async function openLibrary(): Promise<void> {
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Noise models' }));
+    await screen.findByRole('dialog');
+  }
+
+  it('shows 0 for a channel a generator model leaves unset and keeps the dash for entry-only (qec-r-91)', async () => {
+    await openLibrary();
+    fireEvent.change(screen.getByLabelText('Compare with'), { target: { value: 'measurement_heavy' } });
+    const diff = screen.getByRole('table', { name: 'Generator argument differences' });
+    const row = Array.from(diff.querySelectorAll('tr')).find((tr) => tr.textContent?.includes('before_round_data_depolarization'));
+    expect(Array.from(row?.querySelectorAll('td') ?? []).map((td) => td.textContent)).toEqual(['before_round_data_depolarization', '1', '0']);
+    expect(diff.textContent).not.toContain('—');
+    expect(screen.queryByText(/entry-only model/)).toBeNull();
+
+    fireEvent.change(screen.getByLabelText('Compare with'), { target: { value: 'biased_z' } });
+    expect(screen.getByRole('table', { name: 'Generator argument differences' }).textContent).toContain('—');
+    expect(screen.getByText(/entry-only model/)).toBeTruthy();
+  });
+
+  it('marks the selected row aria-current and tags the compare row (research-r-18)', async () => {
+    await openLibrary();
+    const list = screen.getAllByRole('button').filter((b) => b.classList.contains('nuclei-noise-row'));
+    expect(list.filter((b) => b.getAttribute('aria-current') === 'true').map((b) => b.textContent)).toEqual(['uniform_depolarizing']);
+    fireEvent.change(screen.getByLabelText('Compare with'), { target: { value: 'SI1000' } });
+    const compareRow = screen.getByRole('button', { name: /SI1000/ });
+    expect(compareRow.textContent).toContain('compare');
+    expect(compareRow.getAttribute('aria-current')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'biased_z' }));
+    expect(screen.getByRole('button', { name: 'biased_z' }).getAttribute('aria-current')).toBe('true');
+  });
+
+  it('reserves plain headers for identifiers: prose headers take the overline (design-r12-04)', async () => {
+    await openLibrary();
+    fireEvent.change(screen.getByLabelText('Compare with'), { target: { value: 'measurement_heavy' } });
+    const heads = (name: string) => Array.from(screen.getByRole('table', { name }).querySelectorAll('th'));
+    const plain = (th: Element) => th.classList.contains('nuclei-table__plain');
+    expect(heads('Generator arguments').map(plain)).toEqual([false, false]);
+    expect(heads('Generator argument differences').map(plain)).toEqual([false, true, true]);
+  });
 });
