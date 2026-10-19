@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { lambdaEstimates } from './qecFit';
-import { buildLambdaTable, lambdaRangeSummary, LAMBDA_ROW_LIMIT } from './qecLambdaTable';
+import { buildLambdaTable, explainMissingLambda, lambdaRangeSummary, LAMBDA_ROW_LIMIT } from './qecLambdaTable';
 import { formatLambda } from './qecPlotFormat';
 import type { QecCampaignStatsRow } from '../types/qec';
 
@@ -91,5 +91,32 @@ describe('lambdaRangeSummary (qec-r-35)', () => {
 
   it('shows at most LAMBDA_ROW_LIMIT rows before offering the rest', () => {
     expect(LAMBDA_ROW_LIMIT).toBe(8);
+  });
+});
+
+describe('explainMissingLambda (qec-r-84)', () => {
+  const zero = (d: number, p: number): QecCampaignStatsRow => ({ ...row(d, p, 0.01), errors: 0 });
+
+  it('names the distances that have errors at a shared p and those that had none', () => {
+    const data = [row(3, 0.001, 0.01), row(5, 0.001, 0.001), zero(7, 0.001), zero(9, 0.001), zero(11, 0.001)];
+    const msg = explainMissingLambda(data, 'pymatching');
+    expect(msg).toBe('Λ not estimated: only d = 3 and 5 have logical errors at a shared p (d = 7, 9 and 11 had none)');
+  });
+
+  it('falls back to the generic need when fewer than three distances exist at all', () => {
+    const msg = explainMissingLambda([row(3, 0.001, 0.01), row(5, 0.001, 0.001)], 'pymatching');
+    expect(msg).toBe('Λ not estimated: needs ≥ 3 distances at the same p (this data has d = 3 and 5)');
+  });
+
+  it('says so when no distance has errors', () => {
+    const msg = explainMissingLambda([zero(3, 0.001), zero(5, 0.001), zero(7, 0.001)], 'pymatching');
+    expect(msg).toBe('Λ not estimated: no distance has logical errors at a shared p (d = 3, 5 and 7 had none)');
+  });
+
+  it('uses the p with the most distances that have errors', () => {
+    const data = [row(3, 0.001, 0.01), zero(5, 0.001), row(5, 0.002, 0.01), row(7, 0.002, 0.001), zero(9, 0.002), zero(3, 0.002)];
+    const msg = explainMissingLambda(data, 'pymatching');
+    expect(msg).toContain('only d = 5 and 7 have logical errors');
+    expect(msg).toContain('d = 3 and 9 had none');
   });
 });

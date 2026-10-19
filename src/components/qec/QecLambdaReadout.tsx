@@ -1,7 +1,8 @@
 import { Fragment, useState } from 'react';
 import { TriangleAlert } from 'lucide-react';
-import { MIN_LAMBDA_DISTANCES, type LambdaGroupEstimate, type RateUnits } from '../../lib/qecFit';
-import { buildLambdaTable, lambdaRangeSummary, LAMBDA_ROW_LIMIT, type LambdaDecoderGroup, type LambdaRowView } from '../../lib/qecLambdaTable';
+import type { LambdaGroupEstimate, RateUnits } from '../../lib/qecFit';
+import type { QecCampaignStatsRow } from '../../types/qec';
+import { buildLambdaTable, explainMissingLambda, lambdaRangeSummary, LAMBDA_ROW_LIMIT, type LambdaDecoderGroup, type LambdaRowView } from '../../lib/qecLambdaTable';
 import type { ThemeColors } from '../../stores/themeStore';
 import { ICON_SIZE, ICON_STROKE, TYPOGRAPHY } from '../../styles/tokens';
 import './qecAnalysis.css';
@@ -15,6 +16,8 @@ interface Props {
   colors: ThemeColors;
   /** The panel header already carries this title (the Λ tab), so the readout does not repeat it. */
   hideTitle?: boolean;
+  /** The stats rows behind the estimates, so a decoder without a Λ can say which distances it lacked. */
+  rows?: readonly QecCampaignStatsRow[];
 }
 
 /**
@@ -23,13 +26,13 @@ interface Props {
  * distinct caveat is stated once, and per-row detail sits in the warning icon's
  * tooltip. Same numbers and caveats as the exported figure and Dirac.
  */
-export function QecLambdaReadout({ decoders, estimates, units, colors, hideTitle = false }: Props) {
+export function QecLambdaReadout({ decoders, estimates, units, colors, hideTitle = false, rows = [] }: Props) {
   const table = buildLambdaTable(estimates, units);
   const withoutFit = decoders.filter((d) => !table.groups.some((g) => g.decoder === d));
   return (
     <section aria-label="Error suppression factor Λ" style={{ fontFamily: TYPOGRAPHY.fontSans, fontSize: 12, color: colors.text }}>
       {!hideTitle && (
-        <h3 style={{ margin: 0, fontSize: 12, fontWeight: 600, color: colors.textMuted }}>
+        <h3 style={{ margin: 0, fontSize: 12, fontWeight: 600, color: colors.text }}>
           Error suppression Λ
         </h3>
       )}
@@ -40,7 +43,7 @@ export function QecLambdaReadout({ decoders, estimates, units, colors, hideTitle
       {withoutFit.map((d) => (
         <div key={d} style={{ fontSize: 11, color: colors.textMuted, marginBottom: 6 }}>
           <strong style={{ color: colors.text }}>{d}</strong>
-          {`: Λ not estimated, needs ≥ ${MIN_LAMBDA_DISTANCES} distances at the same p`}
+          : <NoBreakP text={explainMissingLambda(rows, d).replace(/^Λ not estimated: /, 'Λ not estimated, ')} />
         </div>
       ))}
       {table.notes.length > 0 && (
@@ -49,6 +52,16 @@ export function QecLambdaReadout({ decoders, estimates, units, colors, hideTitle
         </ul>
       )}
     </section>
+  );
+}
+
+/** Keeps "the same p" / "a shared p" together so a lone "p" never wraps onto its own line. */
+function NoBreakP({ text }: { text: string }) {
+  return (
+    <>
+      {text.split(/((?:the same|a shared) p)/).map((part, i) =>
+        i % 2 === 1 ? <span key={i} style={{ whiteSpace: 'nowrap' }}>{part}</span> : part)}
+    </>
   );
 }
 
