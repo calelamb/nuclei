@@ -1,10 +1,12 @@
 import { Play } from 'lucide-react';
 import { LabButton, LabCallout, LabCard, LabEmptyState, LabPill } from '../lab';
+import { findEvaluator, isEvaluatorAvailable, unavailableSummary } from '../../services/discovery/availability';
 import { runTimeLabel } from '../../services/discovery/format';
 import { FRONTIER_CONTEXT, FRONTIER_HONESTY, FRONTIER_QUESTION, RED_QUEEN_EXPLAINER } from '../../services/discovery/honesty';
 import { useDiracStore } from '../../stores/diracStore';
 import { useDiscoveryStore, type DiscoveryDefinition } from '../../stores/discoveryStore';
 import type { RunRecord } from '../../types/discovery';
+import { EvaluatorUnavailable } from './EvaluatorUnavailable';
 import { Facts } from './drawerSections';
 import { EvaluatorChip, MutatorChip, RunStatusPill } from './pills';
 
@@ -17,6 +19,7 @@ export function DefinitionPanel({ definition }: { definition: DiscoveryDefinitio
   const runs = useDiscoveryStore((s) => s.runsByDefinition[definition.fileName] ?? NO_RUNS);
   const anyLive = useDiscoveryStore((s) => s.liveRunIds.length > 0);
   const evaluatorsError = useDiscoveryStore((s) => s.evaluatorsError);
+  const evaluators = useDiscoveryStore((s) => s.evaluators);
   const starting = useDiscoveryStore((s) => s.startRun);
   const selectRun = useDiscoveryStore((s) => s.selectRun);
   const hasKey = useDiracStore((s) => !!s.apiKey);
@@ -24,6 +27,8 @@ export function DefinitionPanel({ definition }: { definition: DiscoveryDefinitio
   const usesLlm = spec.mutator.kind !== 'ast';
   const needsKey = spec.mutator.kind === 'llm' || spec.mutator.kind === 'red_queen';
   const { budget, search, mutator } = spec;
+  const evaluatorInfo = findEvaluator(evaluators, spec.evaluator.kind);
+  const unavailable = evaluatorInfo && !isEvaluatorAvailable(evaluatorInfo) ? evaluatorInfo : null;
 
   return (
     <div className="lab-stack">
@@ -31,7 +36,7 @@ export function DefinitionPanel({ definition }: { definition: DiscoveryDefinitio
         title={spec.name}
         subtitle={spec.description || definition.fileName}
         actions={
-          <LabButton variant="primary" size="md" icon={Play} disabled={anyLive || (needsKey && !hasKey)} title={anyLive ? 'A discovery run is already active' : undefined} onClick={() => void starting(definition.fileName)}>
+          <LabButton variant="primary" size="md" icon={Play} disabled={anyLive || (needsKey && !hasKey) || !!unavailable} title={anyLive ? 'A discovery run is already active' : unavailable ? unavailableSummary(unavailable) : undefined} onClick={() => void starting(definition.fileName)}>
             Start run
           </LabButton>
         }
@@ -49,6 +54,11 @@ export function DefinitionPanel({ definition }: { definition: DiscoveryDefinitio
           )}
           {spec.mutator.kind === 'red_queen' && (
             <LabCallout tone="warning" title="Red Queen mode">{RED_QUEEN_EXPLAINER}</LabCallout>
+          )}
+          {unavailable && (
+            <LabCallout tone="warning" title={unavailableSummary(unavailable)}>
+              <EvaluatorUnavailable info={unavailable} showSummary={false} />
+            </LabCallout>
           )}
           {usesLlm && !hasKey && (
             <LabCallout tone="warning" title="No API key set">

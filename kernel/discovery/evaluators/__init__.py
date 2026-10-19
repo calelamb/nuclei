@@ -7,6 +7,12 @@ config; use :mod:`.guardrails` for ordered first-fail guardrails. For
 ``quantum_circuit`` tasks the sandbox emits ``{"ir": <IR JSON>, "framework"}``
 artifacts (via ``kernel.trainability.convert.from_object``); parse them with
 ``kernel.trainability`` inside the evaluator's ``score``.
+
+Optional packages: evaluator modules must import cleanly WITHOUT Stim / PyMatching /
+Sinter (the managed venv lacks them). Import those lazily (see
+``kernel.discovery._optional.lazy_module``) and list the evaluator's needs in
+``availability.REQUIRES``; the registry then reports it ``available: false``
+instead of failing the whole engine.
 """
 
 from __future__ import annotations
@@ -18,6 +24,12 @@ from kernel.discovery.evaluators.base import (  # noqa: F401
     effective_config,
     fingerprint,
     normalize_config,
+)
+from kernel.discovery.evaluators.availability import (  # noqa: F401
+    ERR_MISSING_DEPENDENCY,
+    describe,
+    error_fields,
+    missing_for,
 )
 from kernel.discovery.evaluators.qec_memory import SPEC as _QEC_MEMORY
 from kernel.discovery.evaluators.state_synthesis import SPEC as _STATE_SYNTHESIS

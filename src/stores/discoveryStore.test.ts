@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { DiscoveryEnv } from '../services/discovery/env';
 import {
-  SEED_PROGRAM, createFakeKernel, createFakeLlm, createManualClock, createMemoryFs, joinPath, testHash, type FakeKernel,
+  SEED_PROGRAM, TOY_EVALUATOR, createFakeKernel, createFakeLlm, createManualClock, createMemoryFs, joinPath, testHash, type FakeKernel,
 } from '../services/discovery/testkit';
 import { isDiscoveryActive, isDiscoveryRunning, selectSelectedView, useDiscoveryStore } from './discoveryStore';
 
@@ -309,5 +309,41 @@ describe('selection', () => {
     store().selectDefinition(null);
     expect(store().selectedCandidateId).toBeNull();
     expect(selectSelectedView(store())).toBeNull();
+  });
+});
+
+describe('starting a run whose evaluator is unavailable', () => {
+  const QEC_DEFINITION = DEFINITION.replace('kind: state_synthesis', 'kind: qec_memory');
+  const unavailable = {
+    ...TOY_EVALUATOR, kind: 'qec_memory' as const, available: false, missing: ['stim', 'pymatching'],
+    install: { catalog_ids: ['stim', 'pymatching'], hint: "Install 'Stim' and 'PyMatching' from the Research catalog in Environment setup." },
+  };
+  const installed = { ...unavailable, available: true, missing: undefined, install: undefined };
+
+  async function configureWith(evaluator: typeof unavailable | typeof installed) {
+    const env = makeEnv({ ...project(), 'proj/experiments/toy.discovery.yaml': QEC_DEFINITION });
+    kernel = createFakeKernel({ latencyMs: 2, evaluators: [evaluator] });
+    store().configure({ ...env, openSession: async () => kernel.session });
+    await store().reload('proj');
+  }
+
+  it('fails fast with the friendly message and never sends discovery_evaluate', async () => {
+    await configureWith(unavailable);
+    const res = await store().startRun('toy.discovery.yaml');
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.error).toMatch(/^Needs the QEC research pack \(stim, pymatching\)\. Install/);
+    expect(store().error).toBe(res.error);
+    expect(store().liveRunIds).toEqual([]);
+    expect(kernel.sent.some((m) => m.type === 'discovery_evaluate')).toBe(false);
+  });
+
+  it('asks the kernel again, so packages installed since the catalogue was cached are picked up', async () => {
+    await configureWith(installed);
+    useDiscoveryStore.setState({ evaluators: [unavailable] }); // stale cache from before the install
+    const res = await store().startRun('toy.discovery.yaml');
+    expect(res.ok).toBe(true);
+    expect(store().evaluators[0].available).toBe(true);
+    await until(() => store().liveRunIds.length === 0, 'run to finish');
   });
 });

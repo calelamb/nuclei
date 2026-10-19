@@ -10,11 +10,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Iterator
 
-import stim
-
+from kernel.discovery._optional import lazy_module
 from kernel.discovery.distance import CONFIRM_BUDGET_SECONDS, DistanceResult, exact_search, fault_distance
 from kernel.discovery.evaluators.guardrails import FAIL, PASS, WARN, Guardrail, across
 from kernel.discovery.noise import apply_noise
+
+stim = lazy_module("stim")  # optional (Research catalog); imported on first use
 
 MAX_EXPANDED_INSTRUCTIONS = 2_000_000
 DETERMINISM_SHOTS = 32

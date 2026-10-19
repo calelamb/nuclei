@@ -41,7 +41,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable
 
-import stim
+from kernel.discovery._optional import lazy_module
+
+stim = lazy_module("stim")  # optional (Research catalog); imported on first use
 
 MODELS = ("uniform", "si1000", "biased_z")
 _ANNOTATIONS = frozenset({"DETECTOR", "OBSERVABLE_INCLUDE", "QUBIT_COORDS", "SHIFT_COORDS", "TICK", "MPAD"})

@@ -17,6 +17,7 @@ import {
   type DiscoveryValidationError,
 } from '../services/discovery/definitions';
 import type { DiscoveryEnv, DiscoverySession } from '../services/discovery/env';
+import { isEvaluatorAvailable, unavailableStartMessage } from '../services/discovery/availability';
 import { fetchEvaluators } from '../services/discovery/evaluatorCatalog';
 import { computeKpis, type DiscoveryKpis } from '../services/discovery/kpis';
 import { auditStoredCandidate, exportExploitFixture, type ExportedFixture } from '../services/discovery/auditActions';
@@ -193,7 +194,16 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => {
       evaluators = res.evaluators;
       set({ evaluators, evaluatorsError: null });
     }
-    const evaluator = evaluators.find((x) => x.kind === kind);
+    let evaluator = evaluators.find((x) => x.kind === kind);
+    if (evaluator && !isEvaluatorAvailable(evaluator)) {
+      // The packages may have been installed since the catalogue was cached: ask the kernel again.
+      const fresh = await fetchEvaluators(session);
+      if (fresh.ok) {
+        set({ evaluators: fresh.evaluators, evaluatorsError: null });
+        evaluator = fresh.evaluators.find((x) => x.kind === kind) ?? evaluator;
+      }
+      if (!isEvaluatorAvailable(evaluator)) return fail(unavailableStartMessage(evaluator));
+    }
     return evaluator ? { ok: true, evaluator } : fail(`The kernel has no "${kind}" evaluator. Update the kernel or pick another evaluator.`);
   }
 

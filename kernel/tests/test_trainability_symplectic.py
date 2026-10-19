@@ -179,7 +179,10 @@ def dense_unitary(gates, n):
     return u
 
 
-@pytest.mark.parametrize("backend", [False, True])
+needs_stim = pytest.mark.skipif(sy._stim is None, reason="stim is an optional accelerator and is not installed")
+
+
+@pytest.mark.parametrize("backend", [False, pytest.param(True, marks=needs_stim)])
 @pytest.mark.parametrize("n", [1, 2, 3, 4])
 def test_conjugator_matches_dense(n, backend):
     rng = np.random.default_rng(30 + n)
@@ -205,6 +208,7 @@ def test_every_supported_gate_individually():
             np.testing.assert_allclose(u.conj().T @ dense(lab) @ u, dense(res), atol=1e-10)
 
 
+@needs_stim
 def test_native_equals_stim_n70():
     n = 70
     rng = np.random.default_rng(5)
@@ -239,7 +243,8 @@ def test_native_equals_stim_pauli_after():
 def test_auto_backend_and_errors():
     assert CliffordConjugator([("H", (0,))], 4).backend == "native"
     many = [("H", (i % 4,)) for i in range(40)]
-    assert CliffordConjugator(many, 4).backend == "stim"
+    # Stim only accelerates; without it the same circuit falls back to native conjugation.
+    assert CliffordConjugator(many, 4).backend == ("stim" if sy._stim is not None else "native")
     with pytest.raises(ValueError):
         CliffordConjugator([("CX", (0, 0))], 2)
     with pytest.raises(ValueError):
@@ -368,3 +373,14 @@ def test_two_qubit_rotations_at_quarter_turns_are_clifford_and_match_dense(name,
 def test_non_quarter_two_qubit_rotation_is_not_clifford():
     from kernel.trainability._symplectic_gates import clifford_sequence
     assert clifford_sequence("RZZ", (0.3,)) is None and not is_clifford_gate("RXX", (np.pi / 4,))
+
+
+def test_without_stim_auto_falls_back_to_native_and_forcing_stim_errors(monkeypatch):
+    monkeypatch.setattr(sy, "_stim", None)
+    many = [("H", (i % 4,)) for i in range(40)]
+    assert CliffordConjugator(many, 4).backend == "native"
+    with pytest.raises(RuntimeError, match="stim is not installed"):
+        CliffordConjugator(many, 4, use_stim=True)
+    labels = ["XIII", "IZZI", "YXZI"]
+    native = CliffordConjugator(many, 4, use_stim=False).conjugate(PauliArray.from_labels(labels, 4)).to_labels()
+    assert CliffordConjugator(many, 4).conjugate(PauliArray.from_labels(labels, 4)).to_labels() == native

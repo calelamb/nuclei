@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The Discovery Engine no longer fails as a whole when Stim and PyMatching are
+  not installed (the installed app's default). `discovery_evaluators` lists
+  `qec_memory` as `available: false` with the Research catalog entries to
+  install; `discovery_evaluate` and `discovery_audit` for it return a friendly
+  `missing_dependency` error, and the New Discovery wizard and definition panel
+  say what is needed and open Environment setup. State synthesis, VQE, the
+  trainability frontier, conjectures and the Trainability Lab work without
+  optional packages. The sandbox isolation probe no longer depends on Stim, so
+  it can no longer silently fall back to plain process isolation.
+
 ## [0.14.0] - 2026-10-18
 
 Quantum AI Lab release (PRD 14): two Research-mode instruments for the two
