@@ -22,6 +22,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sandboxed candidates cannot read the kernel's runtime file.
 - Nuclei no longer force-kills whatever process is listening on the kernel
   port; it only stops a kernel it started and reports a conflict otherwise.
+- Upgrading from 0.14.0: a leftover unauthenticated 0.14.0 kernel (same user,
+  running `kernel/server.py`) is stopped on first launch. The app never
+  connects without a session token, and shows "Couldn't start the kernel"
+  with a Retry button when the kernel cannot start.
+- The kernel proves it knows the session token (`proof` in the `authenticated`
+  ack, answering a client `nonce`), so a program squatting the port cannot pass
+  as the kernel. Third-party clients may still omit the nonce.
+- The app waits for the kernel's ready line before releasing the token. The
+  token reaches the kernel and the QEC Data Engine over stdin, not the
+  environment, and pre-auth frames are capped at 8 KiB.
 
 ### Fixed
 
