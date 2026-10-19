@@ -19,6 +19,7 @@ import importlib
 import importlib.util
 import json
 import os
+import resource
 import re
 import signal
 import sys
@@ -494,9 +495,24 @@ def _read_bounded(fd: int, limit: int) -> tuple[bytes, bool]:
             return b"".join(chunks), True
 
 
+# The trusted parent's CPU allowance on top of the candidate's budget. The parent's own
+# startup and pre-imports (numpy, stim, qiskit) must never be charged to the candidate:
+# on a slow host they alone can exceed a 1 s budget, killing the parent before it reports.
+PARENT_CPU_ALLOWANCE_S = 60
+
+
+def _limit_candidate_cpu(cpu_seconds: int) -> None:
+    """Apply the candidate's exact CPU budget in the child (its CPU clock starts at 0 after fork)."""
+    try:
+        resource.setrlimit(resource.RLIMIT_CPU, (cpu_seconds, cpu_seconds))
+    except (ValueError, OSError):
+        pass  # the parent's (budget + allowance) limit and the supervisor's wall clock still apply
+
+
 def _child_run(request: dict[str, Any], report_fd: int) -> None:
     """Runs in the forked child ONLY. Never returns."""
     code = 0
+    _limit_candidate_cpu(clamp_cpu(request.get("cpu_seconds")))
     try:
         stdout_cap = BoundedCapture(STREAM_CAP_BYTES)
         stderr_cap = BoundedCapture(STREAM_CAP_BYTES)
@@ -571,7 +587,7 @@ def main() -> int:
     raw = sys.stdin.buffer.read(MAX_REQUEST_BYTES + 1)
     try:
         request = parse_request(raw)
-        apply_worker_limits(WorkerLimits(cpu_seconds=clamp_cpu(request.get("cpu_seconds"))))
+        apply_worker_limits(WorkerLimits(cpu_seconds=clamp_cpu(request.get("cpu_seconds")) + PARENT_CPU_ALLOWANCE_S))
         _preimport(request["task"])
     except WorkerFailure as exc:
         _write_all(out_fd, build_response([], "", "", {"code": exc.code, "message": exc.message}))

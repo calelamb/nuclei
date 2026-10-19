@@ -73,7 +73,10 @@ def test_lambda_with_propagated_interval_and_inconclusive_cases():
 
 
 def test_repetition_seed_passes_every_guardrail_and_has_lambda_above_one():
-    core = score(seed_build)
+    # p = 5e-3 (still far below the repetition-code threshold) so both distances see logical
+    # errors on every platform: Stim's seeded sampling is not cross-platform, and at the default
+    # 1e-3 a d=5 run can legitimately see zero errors, which honestly makes Λ inconclusive.
+    core = score(seed_build, {"noise": {"model": "uniform", "p": 5e-3}})
     assert core.status == "scored"
     assert all(g["status"] == "pass" for g in core.guardrails)
     per_distance = core.metrics["per_distance"]
