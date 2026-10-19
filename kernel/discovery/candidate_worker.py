@@ -543,13 +543,22 @@ def _child_run(request: dict[str, Any], report_fd: int) -> None:
         os._exit(code)
 
 
-def _mirror_child_death(status: int) -> None:
-    """If the child died from a signal (CPU limit, OOM kill...), die the same way so the
-    supervisor reports ``worker_killed`` exactly as before the fork split."""
-    if os.WIFSIGNALED(status):
-        sig = os.WTERMSIG(status)
-        signal.signal(sig, signal.SIG_DFL)
-        os.kill(os.getpid(), sig)
+def _child_death(status: int) -> dict[str, Any] | None:
+    """A ``worker_killed`` error when the child died from a signal (CPU limit, OOM kill...).
+
+    The trusted parent reports it explicitly instead of re-raising the signal on itself:
+    re-raising does not survive every wrapper (``bwrap`` turns a signal death into a plain
+    exit code, and a process that is PID 1 in its namespace ignores signals it sends itself).
+    """
+    if not os.WIFSIGNALED(status):
+        return None
+    sig = os.WTERMSIG(status)
+    try:
+        name = signal.Signals(sig).name
+    except ValueError:
+        name = f"signal {sig}"
+    return {"code": "worker_killed",
+            "message": f"Candidate was killed by {name}; this usually means the CPU limit was exceeded."}
 
 
 def _supervise_child(request: dict[str, Any], read_fd: int, pid: int) -> bytes:
@@ -559,7 +568,9 @@ def _supervise_child(request: dict[str, Any], read_fd: int, pid: int) -> bytes:
     finally:
         os.close(read_fd)
     _, status = os.waitpid(pid, 0)
-    _mirror_child_death(status)
+    killed = _child_death(status)
+    if killed is not None:
+        return build_response([], "", "", killed)
     if overflow:
         return build_response([], "", "", {"code": "response_too_large", "message": "Worker response exceeded the byte limit."})
     if not raw:

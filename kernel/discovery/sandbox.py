@@ -87,6 +87,14 @@ def _interpret(result: ProcResult, isolation: str) -> dict[str, Any]:
             isolation,
         )
     text = result.stdout.decode("utf-8", "replace").strip()
+    if not text and result.returncode is not None and result.returncode > 128:
+        # ``bwrap`` (and shells) report a signal death as exit code 128 + signum.
+        return _error(
+            "worker_killed",
+            f"Candidate worker was killed (signal {result.returncode - 128}); "
+            "this usually means the CPU limit was exceeded.",
+            isolation,
+        )
     if not text:
         return _error(
             "worker_no_output",
