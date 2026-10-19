@@ -140,6 +140,11 @@ export class PyodideRuntimeClient {
     return this.stoppedDuringInstall;
   }
 
+  /** Lift the pause without a Run: the code that needed the interrupted install no longer does. */
+  releasePreviewPause(): void {
+    this.stoppedDuringInstall = false;
+  }
+
   /** The package a lazy install is fetching right now ("Cirq"), or null. */
   currentInstall(): string | null {
     return this.installing;

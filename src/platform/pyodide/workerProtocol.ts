@@ -45,3 +45,6 @@ export const BOOT_STAGES: ReadonlyArray<{ label: string; fraction: number }> = [
   { label: 'Loading NumPy', fraction: 0.6 },
   { label: 'Starting Python', fraction: 0.85 },
 ];
+
+/** Code that needs the lazily installed Cirq package. */
+export const CIRQ_MENTION = /\b(?:import|from)\s+cirq\b/;

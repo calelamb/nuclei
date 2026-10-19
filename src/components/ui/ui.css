@@ -153,6 +153,8 @@
    (hover tints the border; focus never does). The resting accent stripe stays as it is. */
 .nuclei-choice-card:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring-color); outline-offset: var(--focus-ring-offset);
+  /* The ring is the signal now; a full-strength stripe beside it doubles the left edge. */
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--choice-accent) 40%, transparent);
 }
 /* In the light theme the sunken surface reads as disabled; resting cards sit on the raised surface and lift to white. */
 :root[data-theme='light'] .nuclei-choice-card { background: var(--color-surface-raised); }

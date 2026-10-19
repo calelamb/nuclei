@@ -232,4 +232,14 @@ describe('PyodideKernel — worker-backed runtime', () => {
     await kernel.send({ type: 'execute', code: 'import cirq', shots: 1 });
     expect(captured.filter((m) => m.type === 'output')).toEqual([{ type: 'output', text: 'Installing Cirq\n' }]);
   });
+  it('resumes the preview when a paused buffer is edited away from the interrupted package', async () => {
+    const { kernel, captured, runtime } = makeKernel({ parse: { snapshot: { framework: 'qiskit' }, output: '', error: null } });
+    await kernel.init();
+    (runtime as unknown as { stoppedDuringInstall: boolean }).stoppedDuringInstall = true;
+    await kernel.send({ type: 'parse', code: 'import cirq' });
+    expect(captured.filter((m) => m.type === 'snapshot')).toHaveLength(0);
+    await kernel.send({ type: 'parse', code: 'from qiskit import QuantumCircuit' });
+    expect(runtime.previewPausedByStop()).toBe(false);
+    expect(captured.some((m) => m.type === 'snapshot')).toBe(true);
+  });
 });
