@@ -44,7 +44,8 @@ def _format_error(exc):
             f'  File "{USER_FILENAME}", line {f.lineno}, in {f.name}' for f in frames
         )
     lines.extend(part.rstrip("\n") for part in traceback.format_exception_only(type(exc), exc))
-    return "\n".join(lines)
+    # The shim's module name is an implementation detail, never a student's concern.
+    return "\n".join(lines).replace("_nuclei_unsupported.", "")
 
 
 _output_sink = None

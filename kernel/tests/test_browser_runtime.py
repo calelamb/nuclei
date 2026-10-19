@@ -333,3 +333,27 @@ def test_a_failing_sink_falls_back_to_returning_the_whole_output():
     assert proc.returncode == 0, proc.stderr
     got = json.loads(proc.stdout.split("@@RESULT@@", 1)[1])
     assert got["out"]["output"] == "kept\n"
+
+
+def test_qiskit_typo_reads_as_typo_with_suggestion():
+    code = "from qiskit import QuantumCircuit\nqc = QuantumCircuit(1)\nqc.hh(0)\n"
+    out = run_browser("nuclei_execute", code, 10)
+    assert out["error"].rstrip().endswith(
+        "AttributeError: 'QuantumCircuit' object has no attribute 'hh'. Did you mean: 'h'?"
+    )
+    assert "browser" not in out["error"] and "_nuclei_unsupported" not in out["error"]
+
+
+def test_real_qiskit_method_outside_subset_is_browser_limit_without_module_prefix():
+    code = "from qiskit import QuantumCircuit\nqc = QuantumCircuit(1)\nqc.assign_parameters({})\n"
+    out = run_browser("nuclei_execute", code, 10)
+    assert "isn't available in the browser version of Qiskit" in out["error"]
+    assert "_nuclei_unsupported" not in out["error"]
+    assert "UnsupportedAttribute: QuantumCircuit.assign_parameters()" in out["error"]
+
+
+def test_module_typo_suggests_real_name():
+    out = run_browser("nuclei_execute", "from qiskit import QuantumCirquit\n", 10)
+    assert "QuantumCirquit" in out["error"] and "browser version" not in out["error"]
+    out = run_browser("nuclei_execute", "import qiskit\nqiskit.QuantumCirquit(1)\n", 10)
+    assert "Did you mean: 'QuantumCircuit'?" in out["error"]
