@@ -23,6 +23,7 @@ import { rankCommands } from './rankCommands';
 import { shortcutLabel, isMacPlatform, bindingLabel } from '../../config/keybindings';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
+import { closeActiveTooltip } from '../ui/tooltipSingleton';
 export interface Command {
   id: string;
   label: string;
@@ -57,7 +58,7 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
   // Focus stays on the input (the combobox); the trap keeps Tab inside and hands focus back to
   // whatever had it (the editor, a button) when the palette closes.
   useFocusTrap(panelRef, { autoFocus: false, restoreFocus: true });
-  useEffect(() => { inputRef.current?.focus(); }, []);
+  useEffect(() => { closeActiveTooltip(); inputRef.current?.focus(); }, []);
 
   const searching = query.trim() !== '';
   // Unfiltered: grouped under one header per category. Searching: a flat list ranked by relevance.
