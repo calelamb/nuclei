@@ -244,12 +244,13 @@ describe('side placement on a tall trigger', () => {
 });
 
 describe('Tooltip trigger that becomes disabled', () => {
-  it('closes an open focus tooltip when its trigger turns disabled', () => {
+  it('closes an open focus tooltip when its trigger turns disabled', async () => {
     const view = render(<Tooltip label="New conversation"><button>new</button></Tooltip>);
     fireEvent.focus(screen.getByText('new'));
     act(() => { vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS + 10); });
     expect(screen.getByRole('tooltip')).toBeTruthy();
     view.rerender(<Tooltip label="Nothing to clear yet"><button disabled>new</button></Tooltip>);
+    await act(async () => { await Promise.resolve(); });
     expect(screen.queryByRole('tooltip')).toBeNull();
   });
 });
