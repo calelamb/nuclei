@@ -12,6 +12,7 @@ import {
   CLOSE_UNAUTHENTICATED,
   KERNEL_AUTH_REJECTED_MESSAGE,
   KernelAuthRejectedError,
+  KernelTokenUnavailableError,
   openKernelConnection,
 } from '../services/kernelSocket';
 import type { PyodideKernel } from '../platform/pyodideKernel';
@@ -429,6 +430,13 @@ export function useKernel() {
     useSimulationStore.getState().addOutput(`Error: ${KERNEL_AUTH_REJECTED_MESSAGE}`, 'stderr');
   }, []);
 
+  const failKernel = useCallback((message: string) => {
+    useEditorStore.getState().setKernelConnected(false);
+    useEditorStore.getState().setKernelReady(false);
+    useEditorStore.getState().setKernelStatus('failed', message);
+    useSimulationStore.getState().addOutput(`Error: ${message}`, 'stderr');
+  }, []);
+
   const connect = useCallback(() => {
     if (!mountedRef.current || isWeb) return;
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
@@ -523,8 +531,14 @@ export function useKernel() {
       };
 
       ws.onerror = () => { ws.close(); };
+    }, (error: unknown) => {
+      // The shell would not give us a token: never fall back to talking to an
+      // unauthenticated listener. Report it and wait for the user's Retry.
+      if (!mountedRef.current) return;
+      const detail = error instanceof KernelTokenUnavailableError ? error.message : String(error);
+      failKernel(`Couldn't connect to the kernel: ${detail}`);
     });
-  }, [failAuthRejected, handleMessage, isWeb, platform]);
+  }, [failAuthRejected, failKernel, handleMessage, isWeb, platform]);
 
 
   // Initialize Pyodide kernel for web
@@ -571,6 +585,7 @@ export function useKernel() {
   // Start kernel. The old code slept 3000ms blind after startKernel() resolved;
   // we now rely on the retry loop instead — if the Python socket isn't open
   // yet, the initial connect fails fast and retry picks it up in RETRY_DELAY_MS.
+  const retryNonce = useEditorStore((s) => s.kernelRetryNonce);
   useEffect(() => {
     mountedRef.current = true;
     retryCountRef.current = 0;
@@ -578,9 +593,18 @@ export function useKernel() {
     if (isWeb) {
       initPyodide();
     } else {
-      platform.startKernel()
-        .then(() => connect())
-        .catch(() => connect());
+      useEditorStore.getState().setKernelStatus('connecting');
+      // start_kernel fails when the port is held by a process we may not
+      // reap, or the kernel never reports ready. Surface that instead of
+      // connecting to whatever is listening (it would be unauthenticated).
+      platform.startKernel().then(
+        () => connect(),
+        (error: unknown) => {
+          if (!mountedRef.current) return;
+          const detail = error instanceof Error ? error.message : String(error);
+          failKernel(`Couldn't start the kernel: ${detail}`);
+        },
+      );
     }
 
     return () => {
@@ -591,7 +615,7 @@ export function useKernel() {
       if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
       if (!isWeb) platform.stopKernel().catch(() => {});
     };
-  }, [connect, initPyodide, platform, isWeb]);
+  }, [connect, failKernel, initPyodide, platform, isWeb, retryNonce]);
 
   // Debounced parse on code change
   useEffect(() => {

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   KERNEL_AUTH_REJECTED_MESSAGE,
   KernelAuthRejectedError,
+  KernelTokenUnavailableError,
   openAuthenticatedKernelSocket,
   openKernelConnection,
 } from './kernelSocket';
@@ -91,18 +92,23 @@ describe('openAuthenticatedKernelSocket', () => {
     expect(seen).toEqual([{ type: 'snapshot' }]);
   });
 
-  it('sends no auth frame when no token is available (web or insecure dev)', async () => {
-    const ws = (await openAuthenticatedKernelSocket('ws://localhost:9742', async () => null)) as unknown as FakeSocket;
-    ws.open();
-    expect(ws.sent).toEqual([]);
+  it('refuses to connect when the provider returns an empty token', async () => {
+    await expect(
+      openAuthenticatedKernelSocket('ws://localhost:9742', async () => null),
+    ).rejects.toBeInstanceOf(KernelTokenUnavailableError);
+    await expect(
+      openAuthenticatedKernelSocket('ws://localhost:9742', async () => ''),
+    ).rejects.toBeInstanceOf(KernelTokenUnavailableError);
+    expect(FakeSocket.instances).toHaveLength(0);
   });
 
-  it('treats a token lookup failure as no token instead of throwing', async () => {
-    const ws = (await openAuthenticatedKernelSocket('ws://localhost:9742', async () => {
-      throw new Error('kernel not started');
-    })) as unknown as FakeSocket;
-    ws.open();
-    expect(ws.sent).toEqual([]);
+  it('fails closed when the token lookup throws: no socket is opened', async () => {
+    await expect(
+      openAuthenticatedKernelSocket('ws://localhost:9742', async () => {
+        throw new Error('Kernel is not running');
+      }),
+    ).rejects.toThrow(/Kernel is not running/);
+    expect(FakeSocket.instances).toHaveLength(0);
   });
 
   it('works when no token provider is supplied', async () => {
@@ -135,8 +141,15 @@ describe('openKernelConnection (authentication ack)', () => {
     expect(done).toBe(true);
   });
 
-  it('resolves on open when no token is sent (web or insecure dev)', async () => {
-    const { ws, authenticated } = await openKernelConnection('ws://localhost:9742', async () => null);
+  it('rejects with KernelTokenUnavailableError for an empty token (the upgrade-path PoC)', async () => {
+    await expect(
+      openKernelConnection('ws://localhost:9742', async () => { throw new Error('Kernel is not running'); }),
+    ).rejects.toBeInstanceOf(KernelTokenUnavailableError);
+    expect(FakeSocket.instances).toHaveLength(0);
+  });
+
+  it('resolves on open only when there is no token provider at all (web build)', async () => {
+    const { ws, authenticated } = await openKernelConnection('ws://localhost:9742');
     (ws as unknown as FakeSocket).open();
     await expect(authenticated).resolves.toBeUndefined();
   });

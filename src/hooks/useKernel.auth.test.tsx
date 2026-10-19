@@ -132,3 +132,64 @@ describe('useKernel authentication', () => {
     await waitFor(() => expect(FakeSocket.instances.length).toBeGreaterThan(1));
   });
 });
+
+describe('useKernel fail-closed start', () => {
+  beforeEach(() => {
+    FakeSocket.instances = [];
+    vi.stubGlobal('WebSocket', FakeSocket);
+    useEditorStore.setState({
+      kernelConnected: false, kernelReady: false, kernelStatus: 'idle', kernelError: null, code: '',
+      kernelRetryNonce: 0,
+    });
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  function failingWrapper(startKernel: () => Promise<string>) {
+    const failing = { ...bridge, startKernel } as unknown as PlatformBridge;
+    return function Wrapper({ children }: { children: ReactNode }) {
+      return <PlatformProvider bridge={failing}>{children}</PlatformProvider>;
+    };
+  }
+
+  it('surfaces the start_kernel error and never opens a socket (upgrade PoC)', async () => {
+    const startKernel = vi.fn(async () => { throw new Error('Port 9742 is already in use'); });
+    renderHook(() => useKernel(), { wrapper: failingWrapper(startKernel) });
+    await waitFor(() => expect(useEditorStore.getState().kernelStatus).toBe('failed'));
+    expect(useEditorStore.getState().kernelError).toBe(
+      "Couldn't start the kernel: Port 9742 is already in use",
+    );
+    expect(FakeSocket.instances).toHaveLength(0);
+  });
+
+  it('retries start_kernel when the user hits Retry', async () => {
+    let calls = 0;
+    const startKernel = vi.fn(async () => {
+      calls += 1;
+      if (calls === 1) throw new Error('boom');
+      return 'started';
+    });
+    renderHook(() => useKernel(), { wrapper: failingWrapper(startKernel) });
+    await waitFor(() => expect(useEditorStore.getState().kernelStatus).toBe('failed'));
+    useEditorStore.getState().requestKernelRetry();
+    await waitFor(() => expect(FakeSocket.instances).toHaveLength(1));
+    expect(startKernel).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not connect when the token provider fails after a successful start', async () => {
+    const noToken = {
+      ...bridge,
+      getKernelAuthToken: async () => { throw new Error('Kernel is not running'); },
+    } as unknown as PlatformBridge;
+    renderHook(() => useKernel(), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <PlatformProvider bridge={noToken}>{children}</PlatformProvider>
+      ),
+    });
+    await waitFor(() => expect(useEditorStore.getState().kernelStatus).toBe('failed'));
+    expect(useEditorStore.getState().kernelError).toMatch(/token unavailable/);
+    expect(FakeSocket.instances).toHaveLength(0);
+  });
+});

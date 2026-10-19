@@ -135,6 +135,10 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
         if (cancelled) { socket.close(); return; }
         ws = socket;
         attach(socket);
+      }).catch(() => {
+        // No session token (kernel not started or not ours): stay offline
+        // rather than talking to an unauthenticated listener.
+        wsRef.current = null;
       });
     }
     function attach(ws: WebSocket) {

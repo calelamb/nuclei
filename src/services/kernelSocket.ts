@@ -4,21 +4,45 @@
  * The kernel closes any connection whose first frame is not
  * `{type:'authenticate', token}`. The token is fetched from the desktop shell
  * (Tauri command) and is never placed in the URL or a subprotocol header.
+ * If the shell cannot supply a token the connection is refused outright
+ * (`KernelTokenUnavailableError`) rather than opened unauthenticated.
  * The auth frame is sent from an `open` listener registered before the
  * caller can attach `onopen`, so it always precedes the caller's own frames.
  */
 
 export type KernelTokenProvider = () => Promise<string | null>;
 
+/** The desktop shell could not supply a session token for this kernel. */
+export class KernelTokenUnavailableError extends Error {
+  constructor(detail: string) {
+    super(`Kernel session token unavailable: ${detail}`);
+    this.name = 'KernelTokenUnavailableError';
+  }
+}
+
+function describeFailure(cause: unknown): string {
+  if (typeof cause === 'string' && cause) return cause;
+  if (cause instanceof Error && cause.message) return cause.message;
+  return 'token request failed';
+}
+
+/**
+ * Fails closed: a build that has a token provider (the desktop shell) must
+ * never connect without a token, otherwise a stale unauthenticated kernel (or
+ * any process squatting the port) would be treated as authenticated. Only
+ * builds with no provider at all (web/Pyodide, which never open this socket)
+ * take the no-token path.
+ */
 async function resolveToken(getToken?: KernelTokenProvider): Promise<string | null> {
   if (!getToken) return null;
+  let token: string | null;
   try {
-    return await getToken();
-  } catch {
-    // No token (kernel not started yet, or web/insecure dev): connect without
-    // one and let the kernel's own policy decide.
-    return null;
+    token = await getToken();
+  } catch (cause) {
+    throw new KernelTokenUnavailableError(describeFailure(cause));
   }
+  if (!token) throw new KernelTokenUnavailableError('the shell returned an empty token');
+  return token;
 }
 
 /** WebSocket close code the kernel uses for a missing or wrong token. */
