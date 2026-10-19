@@ -122,8 +122,15 @@ export class BlochStage {
     this.canvas.removeEventListener('webglcontextlost', this.onContextLost);
     this.canvas.removeEventListener('webglcontextrestored', this.onContextRestored);
     this.blochScene.dispose();
-    // No forceContextLoss(): React StrictMode re-attaches the same canvas, which must stay usable.
+    // No forceContextLoss() here: React StrictMode re-attaches the same canvas, which must stay usable.
+    // The owner calls releaseContext() once it knows the canvas is really gone.
     this.renderer.dispose();
+  }
+
+  /** Give the GPU context back. Only for a disposed stage whose canvas left the document (browsers cap live contexts at about 16). */
+  releaseContext(): void {
+    if (!this.disposed) return;
+    this.renderer.forceContextLoss();
   }
 
   private readonly frame = (now: number): void => {

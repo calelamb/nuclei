@@ -90,6 +90,9 @@ export function BlochPanel({ initialQubits = 0 }: { initialQubits?: number } = {
       pushViews();
       return () => {
         stage.dispose();
+        // A StrictMode re-attach keeps the canvas in the document; a real unmount does not. Without this every
+        // Run leaked a WebGL context and the console warned "Too many active WebGL contexts" from about Run 17.
+        queueMicrotask(() => { if (!canvas.isConnected) stage.releaseContext(); });
         if (stageRef.current === stage) stageRef.current = null;
       };
     } catch (error) {
