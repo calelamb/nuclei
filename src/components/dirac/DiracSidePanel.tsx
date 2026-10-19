@@ -226,6 +226,11 @@ function ThinkingDots() {
 }
 
 /* ── Main Dirac Side Panel ── */
+/** A heading or block the app itself focused (tabindex -1, not a control): nothing the person is typing into. */
+function isLandingTarget(el: Element): boolean {
+  return el.getAttribute('tabindex') === '-1' && !el.matches('input, textarea, select, button, [contenteditable="true"]');
+}
+
 export function DiracSidePanel() {
   const { messages, isLoading } = useDiracStore();
   const apiKey = useDiracStore((s) => s.apiKey);
@@ -287,7 +292,7 @@ export function DiracSidePanel() {
     let tries = 0;
     const land = () => {
       const active = document.activeElement;
-      const onBody = !active || active === document.body;
+      const onBody = !active || active === document.body || (!bandDriven && isLandingTarget(active));
       const inFoldingSidebar = !onBody && active.closest('[data-tour-sidebar]') !== null && isOpen;
       if (!onBody && !(inFoldingSidebar && tries < 6)) return;
       if (!onBody) { tries += 1; frame = requestAnimationFrame(land); return; }

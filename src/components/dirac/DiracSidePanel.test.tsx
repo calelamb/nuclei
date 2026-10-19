@@ -259,6 +259,21 @@ describe('DiracSidePanel', () => {
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Anthropic API key')));
   });
 
+  it('Cmd+D from a programmatic landing target in the main area (no fold) still lands in Dirac (shell-r12-02)', async () => {
+    resetStores(null);
+    useDiracPanelStore.setState({ isOpen: false, autoCollapsed: false, lastNarrow: false });
+    const main = document.createElement('main');
+    const heading = document.createElement('h2');
+    heading.tabIndex = -1;
+    main.appendChild(heading);
+    document.body.appendChild(main);
+    render(<DiracSidePanel />);
+    heading.focus();
+    act(() => { useDiracPanelStore.getState().toggle(); });
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Anthropic API key')));
+    main.remove();
+  });
+
   it('renders a rejected key as a friendly card with an Update key action (learn-14)', () => {
     resetStores('sk-ant-test');
     useDiracStore.setState({
