@@ -4,6 +4,7 @@ use std::sync::Mutex;
 use std::thread;
 use tauri::{Manager, State};
 
+use super::kernel_legacy;
 use super::kernel_ownership as ownership;
 
 // Canonical kernel port. The frontend connects here by hardcoded URL
@@ -103,6 +104,10 @@ pub fn start_kernel(
     // (verified by pid + command line). Never kill an arbitrary listener.
     let runtime_dir = ownership::runtime_dir();
     ownership::reap_recorded_kernel(runtime_dir.as_deref(), KERNEL_PORT);
+    // Kernels from Nuclei <= 0.14.0 outlive the app and left no owner record;
+    // reap such an orphan (same user + Nuclei kernel command line) so an
+    // upgrade never leaves an unauthenticated kernel on the port.
+    kernel_legacy::reap_legacy_listener(KERNEL_PORT);
     if ownership::port_in_use(KERNEL_PORT) {
         return Err(format!(
             "Port {KERNEL_PORT} is already in use by another application. \
