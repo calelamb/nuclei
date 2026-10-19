@@ -9,6 +9,7 @@ agnostic. Also unit-tested under plain CPython (kernel/tests).
 
 import io
 import json
+import re
 import sys
 import time
 import traceback
@@ -34,6 +35,9 @@ _QISKIT_FALLBACK_NAMES = {
 # --------------------------------------------------------------------------
 # Running user code
 # --------------------------------------------------------------------------
+_SHIM_PATH_RE = re.compile(r" \((?:unknown location|[^()\n]*/shim/[^()\n]*)\)")
+
+
 def _format_error(exc):
     """Traceback limited to the user's own frames plus the final error line."""
     frames = [f for f in traceback.extract_tb(exc.__traceback__) if f.filename == USER_FILENAME]
@@ -45,7 +49,9 @@ def _format_error(exc):
         )
     lines.extend(part.rstrip("\n") for part in traceback.format_exception_only(type(exc), exc))
     # The shim's module name is an implementation detail, never a student's concern.
-    return "\n".join(lines).replace("_nuclei_unsupported.", "")
+    text = "\n".join(lines).replace("_nuclei_unsupported.", "")
+    # Same for the shim's install path, e.g. "(/opt/nuclei/shim/qiskit/__init__.py)".
+    return _SHIM_PATH_RE.sub("", text)
 
 
 _output_sink = None

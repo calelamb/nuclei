@@ -357,3 +357,19 @@ def test_module_typo_suggests_real_name():
     assert "QuantumCirquit" in out["error"] and "browser version" not in out["error"]
     out = run_browser("nuclei_execute", "import qiskit\nqiskit.QuantumCirquit(1)\n", 10)
     assert "Did you mean: 'QuantumCircuit'?" in out["error"]
+
+
+def test_module_typo_suggestion_appears_exactly_once():
+    out = run_browser("nuclei_execute", "import qiskit\nqiskit.QuantumCirquit(1)\n", 10)
+    assert out["error"].count("Did you mean") == 1
+    assert "?." not in out["error"]
+    out = run_browser(
+        "nuclei_execute", "import qiskit.quantum_info as qi\nqi.Statevectr\n", 10
+    )
+    assert out["error"].count("Did you mean") == 1
+
+
+def test_import_typo_hides_shim_install_path():
+    out = run_browser("nuclei_execute", "from qiskit import QuantumCirquit\n", 10)
+    assert "/shim/" not in out["error"] and "__init__.py" not in out["error"]
+    assert out["error"].count("Did you mean: 'QuantumCircuit'?") == 1

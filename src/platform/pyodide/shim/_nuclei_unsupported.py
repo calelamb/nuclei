@@ -70,8 +70,12 @@ def make_getattr(module_name):
         if real is not None and name not in real:
             module = importlib.import_module(module_name)
             known = {n for n in vars(module) if not n.startswith("_")} | real
+            # CPython (3.12+) appends its own "Did you mean" to module AttributeErrors
+            # and ImportErrors, drawn from dir(module): make the real names visible
+            # there instead of formatting a second suggestion ourselves.
+            module.__dict__["__dir__"] = lambda: sorted(known)
             raise AttributeError(
-                f"module '{module_name}' has no attribute '{name}'.{did_you_mean(name, known)}"
+                f"module '{module_name}' has no attribute '{name}'", name=name, obj=module
             ) from None
         raise UnsupportedInBrowser(f"{module_name}.{name}") from None
 
