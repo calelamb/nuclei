@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from 'vitest';
 
-import { render, cleanup, fireEvent } from '@testing-library/react';
+import { render, cleanup, fireEvent, act } from '@testing-library/react';
 import { HistogramChip } from './HistogramChip';
 import { useSimulationStore } from '../../stores/simulationStore';
 
@@ -97,5 +97,35 @@ describe('<HistogramChip>', () => {
     const { container } = render(<HistogramChip probabilities={{ '000': 0.4, '001': 0.3, '111': 0.3 }} />);
     expect(container.firstElementChild?.getAttribute('data-layout')).toBe('rows');
     delete (HTMLElement.prototype as unknown as Record<string, unknown>).clientWidth;
+  });
+});
+
+describe('<HistogramChip> keyboard tooltips (IR10-08 review)', () => {
+  afterEach(() => { delete (HTMLElement.prototype as unknown as Record<string, unknown>).clientWidth; useSimulationStore.setState({ result: null }); });
+  const withShots = () => useSimulationStore.setState({
+    result: { state_vector: [], probabilities: {}, measurements: {}, bloch_coords: [], execution_time_ms: 1, shot_count: 1024 } as never,
+  });
+
+  it.each([[300, 'rows'], [900, 'inline']])('focusing Expand shows its own label, not the sample explainer (%i px, %s)', async (width) => {
+    withShots();
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get() { return width; } });
+    const { getByLabelText } = render(<HistogramChip probabilities={{ '0': 0.5, '1': 0.5 }} onExpand={() => {}} onDismiss={() => {}} />);
+    const expand = getByLabelText('Expand histogram');
+    act(() => { expand.focus(); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 450)); });
+    const tips = document.querySelectorAll('[role="tooltip"]');
+    expect(tips).toHaveLength(1);
+    expect(tips[0].textContent).toBe('Expand histogram');
+    expect(expand.getAttribute('aria-describedby')).toBe(tips[0].id);
+  });
+
+  it.each([[300], [900]])('offers the sample explainer on its own focusable trigger (%i px)', async (width) => {
+    withShots();
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get() { return width; } });
+    const { getByLabelText } = render(<HistogramChip probabilities={{ '0': 0.5, '1': 0.5 }} />);
+    const info = getByLabelText('About the Nuclei sample');
+    act(() => { info.focus(); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 450)); });
+    expect(document.querySelector('[role="tooltip"]')?.textContent).toContain('Nuclei sample · 1,024 shots');
   });
 });

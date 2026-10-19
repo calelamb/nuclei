@@ -22,3 +22,10 @@
 .histogram-chip__icon.nuclei-icon-btn { color: var(--color-text-tertiary); }
 .histogram-chip__icon.nuclei-icon-btn:hover:not(:disabled) { color: var(--color-text-primary); }
 .histogram-chip__icon--danger.nuclei-icon-btn:hover:not(:disabled) { color: var(--color-danger); }
+
+.histogram-chip__info {
+  display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0;
+  border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--color-text-secondary); cursor: help;
+}
+.histogram-chip__info:hover { color: var(--color-text-primary); }
+.histogram-chip__caption { border-radius: var(--radius-xs); cursor: help; }
