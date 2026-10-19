@@ -38,6 +38,8 @@ class LoadedProgram:
     exec_ms: float = 0.0
     metrics: dict = field(default_factory=dict)
     cacheable: bool = True
+    figures: list = field(default_factory=list)
+    figures_dropped: int = 0
 
 
 def make_key(

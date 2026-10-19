@@ -19,3 +19,15 @@ class KernelError:
         if extra:
             data.update(extra)
         return data
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "KernelError":
+        """Rebuild an error from its wire form (``to_dict``): unknown keys become ``extra``."""
+        known = {"code", "message", "traceback", "framework", "dependency"}
+        extra = {k: v for k, v in data.items() if k not in known and k != "extra"}
+        extra.update(data.get("extra") or {})
+        return cls(
+            code=str(data.get("code", "error")), message=str(data.get("message", "")),
+            traceback=data.get("traceback"), framework=data.get("framework"),
+            dependency=data.get("dependency"), extra=extra or None,
+        )

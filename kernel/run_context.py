@@ -32,11 +32,12 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Callable, Iterator
 
-from kernel import run_cache
+from kernel import run_cache, run_figures
 from kernel.run_cache import LoadedProgram
 
 CPU_HEADROOM_SECONDS = 60
 UNSAVED_FILENAME = "<nuclei>"
+FIGURE_OPS = frozenset({"execute", "run_python"})
 INPUT_MESSAGE = "interactive input() is not supported in Nuclei runs; use params or read a file"
 
 
@@ -353,6 +354,7 @@ class RequestState:
     seed: int | None = None
     cache: str = "none"  # "use" (read + write) | "bypass" (write only) | "none"
     cpu_s: int | None = None
+    figures: bool = False  # render open matplotlib figures to PNG after the program runs
 
     @staticmethod
     def from_wire(op: str, run_id: str, ctx: dict) -> "RequestState":
@@ -361,6 +363,7 @@ class RequestState:
             op=op, run_id=run_id, language=ctx.get("language"), project_root=ctx.get("project_root"),
             file_path=ctx.get("file_path"), run_dir=ctx.get("run_dir"), params=dict(ctx.get("params") or {}),
             seed=ctx.get("seed"), cache=ctx.get("cache", "none"), cpu_s=limits.get("cpu_s"),
+            figures=bool(ctx.get("figures", op in FIGURE_OPS)),
         )
 
 
@@ -400,6 +403,9 @@ class WorkerRuntime:
         sys.meta_path.insert(0, self.finder)
         install_audit_hook()
         self._wrap_multiprocessing()
+        # Imported project siblings must never leave stale bytecode behind: an edit within the same
+        # second and size as the cached .pyc would otherwise keep serving the old module.
+        sys.dont_write_bytecode = True
         self.baseline = Baseline()
         os.chdir(self.scratch_root)
 
@@ -627,6 +633,8 @@ class WorkerRuntime:
         started = time.perf_counter()
         with trace_gate_lines(filename) as lines, self.user_context(main, code, seed) as session:
             program.error, program.cacheable = self._run_compiled(compiled, main)
+            if request.figures:  # before the context exit closes every figure
+                program.figures, program.figures_dropped = run_figures.render_open_figures()
         program.line_map = lines
         program.user_modules = session.user_modules
         program.exec_ms = (time.perf_counter() - started) * 1000

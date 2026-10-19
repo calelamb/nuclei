@@ -166,6 +166,8 @@ class Executor:
         self._last_qec_circuit = None
         # Extra result fields a run computed outside SimulationResult (R-4 `bound_at`).
         self.result_extras: dict[str, Any] = {}
+        # The LoadedProgram of the most recent worker-mode run (figures, cache entry); None in-process.
+        self.program: Any = None
 
     def _new_capture(self) -> io.TextIOBase:
         if self._capture_limit_bytes is None:
@@ -299,12 +301,7 @@ class Executor:
         )
 
     def _kernel_error(self, error: dict) -> KernelError:
-        known = {"code", "message", "traceback", "framework", "dependency"}
-        extra = {k: v for k, v in error.items() if k not in known}
-        return KernelError(
-            code=error["code"], message=error["message"], traceback=error.get("traceback"),
-            framework=error.get("framework"), dependency=error.get("dependency"), extra=extra or None,
-        )
+        return KernelError.from_dict(error)
 
     def _run_code(
         self,
@@ -332,6 +329,7 @@ class Executor:
             program = runtime.load_program(code, params=dict(params or {}), seed=seed)
             self._namespace = program.namespace
             self._metrics = dict(program.metrics)
+            self.program = program
             return "", "", self._kernel_error(program.error) if program.error else None
         run_context.assert_inprocess_exec_allowed("Executor._run_code")
         return self._run_in_process(code, params=params, seed=seed)
