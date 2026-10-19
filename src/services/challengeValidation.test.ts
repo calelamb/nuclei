@@ -51,6 +51,13 @@ describe('challengeValidation state_fidelity', () => {
     expect(near.message).toContain('98.9% overlap');
   });
 
+  it('does not floor floating-point noise below the true value (0.2499999999999999 reads 25%)', () => {
+    const r = validateTestCase(fidelityCase(), resultWithMetrics({ fidelity: 0.2499999999999999 }), 5);
+    expect(r.message).toContain('25% overlap');
+    const half = validateTestCase(fidelityCase(), resultWithMetrics({ fidelity: 0.4999999999999999 }), 5);
+    expect(half.message).toContain('50% overlap');
+  });
+
   it('respects a custom min_fidelity', () => {
     expect(validateTestCase(fidelityCase(0.8), resultWithMetrics({ fidelity: 0.85 }), 5).passed).toBe(true);
     expect(validateTestCase(fidelityCase(0.9), resultWithMetrics({ fidelity: 0.85 }), 5).passed).toBe(false);

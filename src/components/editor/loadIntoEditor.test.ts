@@ -33,6 +33,17 @@ describe('loadIntoEditor', () => {
     expect(useEditorStore.getState().code).toBe(DEMO);
   });
 
+  it('treats the code it just loaded as untouched until the learner edits it', async () => {
+    const confirm = vi.fn(async () => true);
+    await loadIntoEditor(DEMO, { label: 'demo code', confirm });
+    useEditorStore.setState({ isDirty: true });
+    await loadIntoEditor('# next\n', { label: 'demo code', confirm });
+    expect(confirm).not.toHaveBeenCalled();
+    useEditorStore.setState({ code: DEMO + 'x = 1\n', isDirty: true });
+    await loadIntoEditor(DEMO, { label: 'demo code', confirm });
+    expect(confirm).toHaveBeenCalledTimes(1);
+  });
+
   it('leaves the dirty buffer alone when the confirm is cancelled', async () => {
     resetStores({ code: WORK, isDirty: true });
     const result = await loadIntoEditor(DEMO, { label: 'demo code', confirm: async () => false });

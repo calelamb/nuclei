@@ -18,9 +18,13 @@ export interface LoadIntoEditorOptions {
   description?: string;
 }
 
+/** The last code this module put in the editor; unedited, it is as disposable as a starter. */
+let lastLoadedCode: string | null = null;
+
 /** True when the buffer is empty or still an untouched starter for any framework. */
 export function isUntouchedStarter(code: string): boolean {
   const normalized = code.trimEnd();
+  if (lastLoadedCode !== null && code === lastLoadedCode) return true;
   return normalized === '' || Object.values(STARTER_TEMPLATES).some((t) => t.trimEnd() === normalized);
 }
 
@@ -59,6 +63,7 @@ export function placeInEditor(code: string, framework: Framework | undefined, ta
     editor.setFilePath(null);
   }
   editor.setCode(code);
+  lastLoadedCode = code;
   if (framework) editor.setFramework(framework);
   editor.requestEditorFocus();
   return projectMode ? 'opened-tab' : 'replaced';

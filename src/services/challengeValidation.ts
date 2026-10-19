@@ -250,9 +250,9 @@ function validateNumericMatch(
 
 export const DEFAULT_MIN_FIDELITY = 0.99;
 
-/** 0.25 -> "25%", 0.9895 -> "98.9%": one decimal at most, never rounded up to the threshold. */
+/** 0.25 -> "25%", 0.9895 -> "98.9%": one decimal at most, never rounded up to the threshold; the epsilon keeps 0.2499999999999999 from reading 24.9%. */
 function percent(fraction: number): string {
-  return `${Number((Math.floor(fraction * 1000) / 10).toFixed(1))}%`;
+  return `${Number((Math.floor(fraction * 1000 + 1e-6) / 10).toFixed(1))}%`;
 }
 
 /**
