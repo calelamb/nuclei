@@ -193,6 +193,13 @@ def _cirq_snapshot(circuit):
         for op in moment.operations:
             qubits = [qubit_index[q] for q in op.qubits]
             name = _cirq_gate_name(cirq, op.gate)
+            if name == "Measure":
+                # One Measure per measured qubit, so the diagram draws a box on every wire.
+                gates.extend(
+                    {"type": "Measure", "targets": [q], "controls": [], "params": [], "layer": moment_idx}
+                    for q in qubits
+                )
+                continue
             two_qubit = name in ("CNOT", "CZ")
             gates.append({
                 "type": name,
@@ -204,7 +211,7 @@ def _cirq_snapshot(circuit):
     return {
         "framework": "cirq",
         "qubit_count": len(all_qubits),
-        "classical_bit_count": sum(1 for op in circuit.all_operations() if isinstance(op.gate, cirq.MeasurementGate)),
+        "classical_bit_count": sum(len(op.qubits) for op in circuit.all_operations() if isinstance(op.gate, cirq.MeasurementGate)),
         "depth": len(circuit.moments),
         "gates": gates,
     }
