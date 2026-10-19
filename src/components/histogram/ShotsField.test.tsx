@@ -71,6 +71,9 @@ describe('<ShotsField>', () => {
     expect(useSimulationStore.getState().shots).toBe(1024);
     expect(useSettingsStore.getState().kernel.defaultShots).toBe(1024);
     expect(screen.getByRole('status').textContent).toMatch(/Maximum is 100,000/);
+    // Still focused: the kept value is shown plain and selected so the correction replaces it.
+    expect(input.value).toBe('1024');
+    act(() => { input.blur(); });
     expect(input.value).toBe('1,024');
   });
 
@@ -117,5 +120,30 @@ describe('<ShotsField>', () => {
     expect(screen.getByRole('status').textContent).toMatch(/Minimum/);
     focusLikeAPerson(input);
     expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('after a rejected Enter the kept value is selected so the next keystrokes replace it', () => {
+    useSimulationStore.getState().setShots(2048);
+    render(<ShotsField />);
+    const input = screen.getByLabelText('Shots') as HTMLInputElement;
+    focusLikeAPerson(input);
+    typeText(input, '50');
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(screen.getByRole('status').textContent).toMatch(/Minimum is 100/);
+    expect(input.selectionStart).toBe(0);
+    expect(input.selectionEnd).toBe(input.value.length);
+    typeText(input, '500');
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(useSimulationStore.getState().shots).toBe(500);
+  });
+
+  it('keeps the selection through the mouseup that follows a click-to-focus (WebKit collapses it otherwise)', () => {
+    render(<ShotsField />);
+    const input = screen.getByLabelText('Shots') as HTMLInputElement;
+    focusLikeAPerson(input);
+    const notPrevented = fireEvent.mouseUp(input);
+    expect(notPrevented).toBe(false);
+    // Only the first mouseup after focus is swallowed; later clicks place the caret normally.
+    expect(fireEvent.mouseUp(input)).toBe(true);
   });
 });

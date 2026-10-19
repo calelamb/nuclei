@@ -22,6 +22,8 @@ export function ShotsField() {
   const [hint, setHint] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const selectOnDraft = useRef(false);
+  // The mouseup that ends a click-to-focus would collapse the selection in WebKit; swallow it once.
+  const swallowMouseUp = useRef(false);
 
   // Focus swaps the grouped "1,024" for the plain "1024". Selecting before that re-render is lost, so
   // select once the plain value is in the DOM and typing replaces it instead of appending.
@@ -32,11 +34,17 @@ export function ShotsField() {
     }
   }, [draft]);
 
-  const commit = () => {
+  const commit = (keepFocus = false) => {
     if (draft === null) return;
     const result = commitShotsDraft(draft, shots);
     setHint(result.hint);
-    setDraft(null);
+    // A rejected Enter leaves the field focused: re-select the kept value so the correction replaces it.
+    if (keepFocus && result.hint) {
+      selectOnDraft.current = true;
+      setDraft(String(shots));
+    } else {
+      setDraft(null);
+    }
     // A rejected draft keeps the current value, so nothing is written (Settings never sees a typo).
     if (result.value !== shots) {
       setShots(result.value);
@@ -45,7 +53,7 @@ export function ShotsField() {
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') commit();
+    if (e.key === 'Enter') commit(true);
     if (e.key === 'Escape') {
       setDraft(null);
       setHint(null);
@@ -62,9 +70,10 @@ export function ShotsField() {
         size="sm"
         mono
         value={draft ?? shots.toLocaleString('en-US')}
-        onFocus={() => { setHint(null); selectOnDraft.current = true; setDraft(String(shots)); }}
+        onFocus={() => { setHint(null); selectOnDraft.current = true; swallowMouseUp.current = true; setDraft(String(shots)); }}
+        onMouseUp={(e) => { if (swallowMouseUp.current) { swallowMouseUp.current = false; e.preventDefault(); } }}
         onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
+        onBlur={() => { swallowMouseUp.current = false; commit(); }}
         onKeyDown={onKeyDown}
         aria-label="Shots"
         aria-describedby={hint ? 'histogram-shots-hint' : undefined}
