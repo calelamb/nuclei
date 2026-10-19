@@ -280,13 +280,20 @@ export function DiracSidePanel() {
     const hadFocus = focusWasInDirac.current;
     focusWasInDirac.current = false;
     if (bandDriven && !hadFocus) return undefined;
-    const frame = requestAnimationFrame(() => {
+    // The sidebar may be folding away under focus (Dirac claiming room): wait a few frames for it to leave, then land.
+    let frame = 0;
+    let tries = 0;
+    const land = () => {
       const active = document.activeElement;
-      if (active && active !== document.body) return;
+      const onBody = !active || active === document.body;
+      const inFoldingSidebar = !onBody && active.closest('[data-tour-sidebar]') !== null && isOpen;
+      if (!onBody && !(inFoldingSidebar && tries < 6)) return;
+      if (!onBody) { tries += 1; frame = requestAnimationFrame(land); return; }
       // Opening lands on the field the person will type into (composer, or the key field with no key); Collapse is only a fallback.
       const entry = inputRef.current ?? document.querySelector<HTMLElement>('section[aria-label="Connect Dirac"] input');
       (isOpen ? entry ?? collapseRef.current : railRef.current)?.focus();
-    });
+    };
+    frame = requestAnimationFrame(land);
     return () => cancelAnimationFrame(frame);
   }, [isOpen]);
 

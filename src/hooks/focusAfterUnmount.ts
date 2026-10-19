@@ -1,3 +1,5 @@
+import { focusQuietly } from '../components/ui/quietFocus';
+
 /** Frames to wait for the origin to unmount and a target to appear (about half a second). */
 const MAX_FRAMES = 30;
 /** After focus lands, keep watching this many frames: the target may itself remount and drop focus to <body>. */
@@ -25,7 +27,7 @@ export function focusAfterUnmount(
     for (const selector of targets) {
       const el = document.querySelector<HTMLElement>(selector);
       if (!el) continue;
-      el.focus({ preventScroll: true });
+      focusQuietly(el, { preventScroll: true });
       if (document.activeElement === el) { landedOn = el; return true; }
     }
     return false;

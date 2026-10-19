@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigationStore } from '../stores/navigationStore';
 import { focusAfterUnmount } from './focusAfterUnmount';
+import { consumeDiracClaimedRoom } from './sidebarFoldReason';
 
 const SIDEBAR_SELECTOR = '[data-tour-sidebar]';
 
@@ -19,7 +20,10 @@ export function useSidebarFoldFocus(): void {
     document.addEventListener('focusin', onFocusIn);
     const unsubscribe = useNavigationStore.subscribe((state, prev) => {
       const folded = prev.activeView !== null && state.activeView === null && state.autoCollapsedView !== null;
-      if (!folded || !focusedInSidebar || !document.contains(focusedInSidebar)) return;
+      if (!folded) return;
+      // Dirac claiming room has its own landing (its key field or composer): never race it to the rail.
+      if (consumeDiracClaimedRoom()) { focusedInSidebar = null; return; }
+      if (!focusedInSidebar || !document.contains(focusedInSidebar)) return;
       focusAfterUnmount(focusedInSidebar, [`[data-tour-target="activity-${prev.activeView}"]`]);
       focusedInSidebar = null;
     });

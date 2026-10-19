@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useDiracPanelStore } from '../stores/diracPanelStore';
 import { useNavigationStore } from '../stores/navigationStore';
+import { noteDiracClaimedRoom } from '../hooks/sidebarFoldReason';
 import { bandsForWidth, planRoom, shouldFoldDiracForSidebar } from './breakpoints';
 
 interface RoomRetreatOptions {
@@ -37,8 +38,11 @@ export function useRoomRetreat({ sidebarWidth, vizWanted, canCollapseSidebar, si
 
   // Set when Dirac folded itself because the user opened the sidebar: that fold must not bounce the sidebar back out.
   const foldedForSidebar = useRef(false);
+  const prevDiracOpen = useRef(diracOpen);
 
   useEffect(() => {
+    const diracJustOpened = diracOpen && !prevDiracOpen.current;
+    prevDiracOpen.current = diracOpen;
     if (foldedForSidebar.current) {
       foldedForSidebar.current = false;
       return;
@@ -50,7 +54,10 @@ export function useRoomRetreat({ sidebarWidth, vizWanted, canCollapseSidebar, si
     const plan = planRoom({ viewport, sidebarWidth, diracWidth: diracOpen && !foldingNow ? diracWidth : null, vizWanted });
     const nav = useNavigationStore.getState();
     if (plan.closeSidebar) {
-      if (canCollapseSidebar && nav.activeView !== null) nav.retreatSidebarForRoom();
+      if (canCollapseSidebar && nav.activeView !== null) {
+        if (diracJustOpened) noteDiracClaimedRoom();
+        nav.retreatSidebarForRoom();
+      }
     } else {
       nav.restoreSidebarForRoom();
     }

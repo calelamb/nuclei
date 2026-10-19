@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { act, cleanup, render } from '@testing-library/react';
 import { useSidebarFoldFocus } from './useSidebarFoldFocus';
+import { noteDiracClaimedRoom, consumeDiracClaimedRoom } from './sidebarFoldReason';
 import { useNavigationStore } from '../stores/navigationStore';
 
 function Shell() {
@@ -38,5 +39,18 @@ describe('useSidebarFoldFocus', () => {
     expect(document.activeElement).toBe(other);
     expect(document.activeElement).not.toBe(getByText('Settings'));
     other.remove();
+  });
+
+  it('does not race Dirac to the rail button when Dirac claimed the room', async () => {
+    useNavigationStore.setState({ activeView: 'settings', autoCollapsedView: null });
+    const { getByTestId, getByText } = render(<Shell />);
+    act(() => { getByTestId('inside').focus(); });
+    act(() => {
+      noteDiracClaimedRoom();
+      useNavigationStore.setState({ activeView: null, autoCollapsedView: 'settings' });
+    });
+    await act(async () => { await new Promise((r) => setTimeout(r, 80)); });
+    expect(document.activeElement).not.toBe(getByText('Settings'));
+    expect(consumeDiracClaimedRoom()).toBe(false);
   });
 });
