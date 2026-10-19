@@ -119,4 +119,18 @@ describe('explainMissingLambda (qec-r-84)', () => {
     expect(msg).toContain('only d = 5 and 7 have logical errors');
     expect(msg).toContain('d = 3 and 9 had none');
   });
+
+  it('falls back to the generic wording when three distances do have errors (the estimator disagreed for another reason)', () => {
+    const data = [row(3, 0.001, 0.01), row(5, 0.001, 0.001), row(7, 0.001, 0.0001)];
+    const msg = explainMissingLambda(data, 'pymatching');
+    expect(msg).not.toMatch(/only d = 3, 5 and 7/);
+  });
+
+  it('separates distances that were not measured at that p from those with zero errors', () => {
+    const data = [row(3, 0.001, 0.01), row(5, 0.001, 0.001), zero(7, 0.001), row(9, 0.002, 0.01)];
+    const msg = explainMissingLambda(data, 'pymatching');
+    expect(msg).toContain('only d = 3 and 5 have logical errors at a shared p');
+    expect(msg).toContain('d = 7 had none');
+    expect(msg).toContain('d = 9 was not measured at that p');
+  });
 });

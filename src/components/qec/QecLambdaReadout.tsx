@@ -43,7 +43,7 @@ export function QecLambdaReadout({ decoders, estimates, units, colors, hideTitle
       {withoutFit.map((d) => (
         <div key={d} style={{ fontSize: 11, color: colors.textMuted, marginBottom: 6 }}>
           <strong style={{ color: colors.text }}>{d}</strong>
-          : <NoBreakP text={explainMissingLambda(rows, d).replace(/^Λ not estimated: /, 'Λ not estimated, ')} />
+          : <NoBreakP text={explainMissingLambda(rows, d, units).replace(/^Λ not estimated: /, 'Λ not estimated, ')} />
         </div>
       ))}
       {table.notes.length > 0 && (
