@@ -257,7 +257,9 @@ export function DiracSidePanel() {
     const frame = requestAnimationFrame(() => {
       const active = document.activeElement;
       if (active && active !== document.body) return;
-      (isOpen ? collapseRef.current : railRef.current)?.focus();
+      // Opening lands on the field the person will type into (composer, or the key field with no key); Collapse is only a fallback.
+      const entry = inputRef.current ?? document.querySelector<HTMLElement>('section[aria-label="Connect Dirac"] input');
+      (isOpen ? entry ?? collapseRef.current : railRef.current)?.focus();
     });
     return () => cancelAnimationFrame(frame);
   }, [isOpen]);
