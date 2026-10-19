@@ -20,7 +20,7 @@ import type { MainTakeover } from '../../layout/takeover';
 import type { Framework } from '../../types/quantum';
 import type { LayoutPreset } from '../../stores/layoutStore';
 import { rankCommands } from './rankCommands';
-import { shortcutLabel, isMacPlatform, bindingLabel } from '../../config/keybindings';
+import { shortcutLabel, isMacPlatform, bindingLabel, railShortcutLabel } from '../../config/keybindings';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
 import { closeActiveTooltip } from '../ui/tooltipSingleton';
@@ -222,13 +222,8 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
   );
 }
 
-/** ⌘1..9 map onto the first nine top-rail views, in registry order (PRD 11
- * Phase D). Exported so App.tsx binds the same mapping the palette displays. */
-// eslint-disable-next-line react-refresh/only-export-components
-export function railShortcutFor(index: number, mac: boolean = isMacPlatform()): string | undefined {
-  if (index >= 9) return undefined;
-  return mac ? `⌘${index + 1}` : `Ctrl+${index + 1}`;
-}
+/** Kept as an alias so App.tsx and the palette share the registry's rail label. */
+export const railShortcutFor = railShortcutLabel;
 
 export interface CommandContext {
   mode: WorkspaceMode;

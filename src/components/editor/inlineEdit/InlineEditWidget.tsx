@@ -236,7 +236,7 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
       {hasKey && (<>
       {/* Input */}
       <div style={{ display: 'flex', alignItems: 'center', padding: '6px 10px', gap: 8 }}>
-        <span style={{ color: colors.accentText, fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontMono }}>⌘K</span>
+        <span style={{ color: colors.accentText, fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontMono }}>{shortcutLabel('inline-edit') ?? 'Ctrl+K'}</span>
         <input
           ref={inputRef}
           value={instruction}

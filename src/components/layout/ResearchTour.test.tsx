@@ -95,6 +95,27 @@ describe('ResearchTour', () => {
     editor.remove();
   });
 
+  it('returns focus to the re-mounted Replay button, not the editor, when the tour was started from Settings (shell-r8-02)', async () => {
+    useResearchTourStore.setState({ active: false, step: 0 });
+    const editor = document.createElement('textarea');
+    editor.setAttribute('aria-label', 'Editor content');
+    document.body.appendChild(editor);
+    const opener = document.createElement('button');
+    opener.setAttribute('data-tour-return', 'settings-replay');
+    document.body.appendChild(opener);
+    opener.focus();
+    render(<ResearchTour />);
+    act(() => { useResearchTourStore.setState({ active: true }); });
+    opener.remove(); // Settings unmounted while the tour shows other panes
+    fireEvent.keyDown(document, { key: 'Escape' });
+    const replacement = document.createElement('button');
+    replacement.setAttribute('data-tour-return', 'settings-replay');
+    setTimeout(() => document.body.appendChild(replacement), 60);
+    await waitFor(() => expect(document.activeElement).toBe(replacement));
+    editor.remove();
+    replacement.remove();
+  });
+
   it('waits for an editor that remounts after the tour (QEC takeover) and focuses it on Done', async () => {
     useResearchTourStore.setState({ active: false, step: 0 });
     const opener = document.createElement('textarea');

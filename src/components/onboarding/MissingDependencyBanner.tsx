@@ -6,6 +6,7 @@ import { useMissingDependencyStore } from '../../stores/missingDependencyStore';
 import type { FrameworkInfo } from '../../stores/frameworksStore';
 import { isDesktop, resolveFramework, installFrameworks } from '../../services/environment';
 import { TYPOGRAPHY } from '../../styles/tokens';
+import { shortcutLabel } from '../../config/keybindings';
 
 type Phase = 'idle' | 'installing' | 'done' | 'error';
 
@@ -108,7 +109,7 @@ export function MissingDependencyBanner() {
                 {name} installed
               </div>
               <div style={{ fontSize: 12, color: colors.textDim, marginTop: 2, lineHeight: 1.45 }}>
-                Run your code again (⌘↵) — it'll pick up the new package.
+                Run your code again ({shortcutLabel('run')}) — it'll pick up the new package.
               </div>
             </>
           ) : (

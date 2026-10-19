@@ -1,0 +1,13 @@
+/* Rail buttons: a 32px rounded fill on hover (the same overlay surface the mode chip and tabs use), on top of the quiet colour shift. */
+.activity-btn { isolation: isolate; }
+.activity-btn::before {
+  content: '';
+  position: absolute;
+  inset: 6px 8px;
+  z-index: -1;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  transition: background var(--duration-fast, 120ms) ease;
+}
+.activity-btn:hover:not([data-active='true'])::before { background: var(--color-surface-overlay); }
+@media (prefers-reduced-motion: reduce) { .activity-btn::before { transition: none; } }

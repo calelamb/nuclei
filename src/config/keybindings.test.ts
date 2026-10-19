@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { KEYBINDINGS, findBindingId, formatKeys, bindingFor, shortcutLabel, isBindingInMode, type KeyLike } from './keybindings';
+import { KEYBINDINGS, findBindingId, formatKeys, bindingFor, shortcutLabel, isBindingInMode, railShortcutLabel, type KeyLike } from './keybindings';
 
 function ev(key: string, mods: Partial<KeyLike> = {}): KeyLike {
   return { key, metaKey: true, ctrlKey: false, shiftKey: false, altKey: false, ...mods };
@@ -96,5 +96,17 @@ describe('workspace-scoped bindings', () => {
 
   it('Launch on hardware lives under Run', () => {
     expect(bindingFor('launch').group).toBe('Run');
+  });
+});
+
+describe('railShortcutLabel', () => {
+  it('says Ctrl on non-Mac and the glyph on Mac, and stops after nine', () => {
+    expect(railShortcutLabel(0, true)).toBe('⌘1');
+    expect(railShortcutLabel(3, false)).toBe('Ctrl+4');
+    expect(railShortcutLabel(9, true)).toBeUndefined();
+  });
+  it('labels the Settings and inline-edit chords per platform', () => {
+    expect(shortcutLabel('settings', false, false)).toBe('Ctrl+,');
+    expect(shortcutLabel('inline-edit', false, false)).toBe('Ctrl+K');
   });
 });

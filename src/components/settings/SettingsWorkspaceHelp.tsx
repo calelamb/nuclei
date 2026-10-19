@@ -30,7 +30,7 @@ export function WorkspaceSection() {
       </SettingRow>
       {mode === 'research' && (
         <SettingRow label="Research tour" hint="A three-step walkthrough of the Research workspace.">
-          <Button size="sm" onClick={startTour}>Replay</Button>
+          <Button size="sm" onClick={startTour} data-tour-return="settings-replay">Replay</Button>
         </SettingRow>
       )}
     </Section>
