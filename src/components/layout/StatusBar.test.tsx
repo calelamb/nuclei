@@ -283,3 +283,20 @@ describe('<StatusBar> chrome (shell-r6-07, interaction-r-11)', () => {
     expect(getByText('Qubits: 2').style.color).not.toBe('var(--color-text-tertiary)');
   });
 });
+
+describe('Commands button glyph (IR10-07)', () => {
+  const realPlatform = Object.getOwnPropertyDescriptor(Navigator.prototype, 'platform');
+  afterEach(() => { if (realPlatform) Object.defineProperty(Navigator.prototype, 'platform', realPlatform); });
+  const iconClass = () => document.querySelector('button[aria-label="Open command palette"] svg')?.getAttribute('class') ?? '';
+
+  it('shows the Command key glyph on Mac and a neutral terminal glyph elsewhere', () => {
+    Object.defineProperty(Navigator.prototype, 'platform', { configurable: true, get: () => 'MacIntel' });
+    renderStatusBar();
+    expect(iconClass()).toContain('lucide-command');
+    cleanup();
+    Object.defineProperty(Navigator.prototype, 'platform', { configurable: true, get: () => 'Win32' });
+    renderStatusBar();
+    expect(iconClass()).not.toContain('lucide-command');
+    expect(iconClass()).toContain('lucide-square-terminal');
+  });
+});
