@@ -16,6 +16,7 @@ import {
   type LeftPanelId,
 } from '../../layout/panelRegistry';
 import type { WorkspaceMode } from '../../stores/workspaceStore';
+import type { MainTakeover } from '../../layout/takeover';
 import type { Framework } from '../../types/quantum';
 import type { LayoutPreset } from '../../stores/layoutStore';
 import { rankCommands } from './rankCommands';
@@ -241,6 +242,11 @@ export interface CommandContext {
   hasSelectedRun: boolean;
   /** Active framework; panels whose affinity excludes it are not offered. Omit/null = offer all. */
   framework?: Framework | null;
+  /**
+   * The full-width view that owns the main area. While a lesson or challenge does, the editor, its panels and the
+   * circuit are not on screen, so commands that act on them are not offered.
+   */
+  mainTakeover?: MainTakeover | null;
   /** Render shortcut hints as glyphs (Mac) or words (Ctrl+...). Defaults to the host platform. */
   mac?: boolean;
 }
@@ -270,6 +276,19 @@ export interface CommandActions {
   openRunFolder: () => void;
   /** Switch the layout preset (layoutStore.setPreset). */
   setLayoutPreset: (preset: LayoutPreset) => void;
+}
+
+/** Step-through acts on the circuit diagram, so it is only offered while the editor is on screen. */
+function stepCommands(): Command[] {
+  const setStepMode = (on: boolean) => () => {
+    void import('../../stores/circuitStore').then(({ useCircuitStore }) => {
+      useCircuitStore.getState().setStepMode(on);
+    });
+  };
+  return [
+    { id: 'step-through', label: 'Step through circuit', category: 'Circuit', action: setStepMode(true) },
+    { id: 'reset-step', label: 'Reset step-through', category: 'Circuit', action: setStepMode(false) },
+  ];
 }
 
 /**
@@ -308,8 +327,10 @@ export function buildCommands(actions: CommandActions, context: CommandContext):
     });
   }
 
+  const editorHidden = context.mainTakeover === 'lesson' || context.mainTakeover === 'challenge';
+
   // Toggle <panel> — every viz/bottom panel this mode offers.
-  for (const panel of PANEL_REGISTRY) {
+  for (const panel of editorHidden ? [] : PANEL_REGISTRY) {
     if (!panel.modes.includes(context.mode)) continue;
     if (!panelPassesFramework(panel, context.framework ?? null)) continue;
     commands.push({
@@ -324,7 +345,7 @@ export function buildCommands(actions: CommandActions, context: CommandContext):
 
   // Layout presets: one command each, findable by "layout" or "preset".
   // Only offered while the status bar can show the resulting preset.
-  for (const [preset, label] of context.layoutPresets === false ? [] : [['clean', 'Clean'], ['balanced', 'Balanced'], ['full', 'Full']] as const) {
+  for (const [preset, label] of context.layoutPresets === false || editorHidden ? [] : [['clean', 'Clean'], ['balanced', 'Balanced'], ['full', 'Full']] as const) {
     commands.push({
       id: `layout-${preset}`,
       label: `Layout: ${label}`,
@@ -349,26 +370,17 @@ export function buildCommands(actions: CommandActions, context: CommandContext):
 
   // Static app commands.
   commands.push(
-    { id: 'run', label: bindingLabel('run'), category: 'Run', shortcut: sc('run'), keywords: ['execute', 'simulate', 'play'], action: actions.run },
+    ...(editorHidden ? [] : [{ id: 'run', label: bindingLabel('run'), category: 'Run', shortcut: sc('run'), keywords: ['execute', 'simulate', 'play'], action: actions.run }]),
     { id: 'open', label: bindingLabel('open'), category: 'File', shortcut: sc('open'), action: actions.openFile },
     { id: 'save', label: bindingLabel('save'), category: 'File', shortcut: sc('save'), action: actions.saveFile },
-    { id: 'new', label: bindingLabel('new'), category: 'File', shortcut: sc('new'), action: actions.newFile },
+    ...(editorHidden ? [] : [{ id: 'new', label: bindingLabel('new'), category: 'File', shortcut: sc('new'), action: actions.newFile }]),
     { id: 'theme', label: bindingLabel('toggle-theme'), category: 'View', shortcut: sc('toggle-theme'), keywords: ['dark', 'light', 'appearance', 'color', 'mode'], action: actions.toggleTheme },
     ...(context.mode === 'learn'
       ? [{ id: 'mode', label: bindingLabel('cycle-ui-mode'), category: 'View', shortcut: sc('cycle-ui-mode'), keywords: ['beginner', 'intermediate', 'advanced', 'simple', 'cycle', 'ui mode'], action: actions.cycleMode }]
       : []),
     { id: 'dirac', label: bindingLabel('toggle-dirac'), category: 'Dirac', shortcut: sc('toggle-dirac'), keywords: ['ai', 'assistant', 'chat'], action: actions.toggleDirac },
     { id: 'dirac-focus', label: bindingLabel('focus-dirac'), category: 'Dirac', shortcut: sc('focus-dirac'), keywords: ['ai', 'assistant', 'chat', 'ask'], action: actions.focusDirac },
-    { id: 'step-through', label: 'Step through circuit', category: 'Circuit', action: () => {
-      import('../../stores/circuitStore').then(({ useCircuitStore }) => {
-        useCircuitStore.getState().setStepMode(true);
-      });
-    }},
-    { id: 'reset-step', label: 'Reset step-through', category: 'Circuit', action: () => {
-      import('../../stores/circuitStore').then(({ useCircuitStore }) => {
-        useCircuitStore.getState().setStepMode(false);
-      });
-    }},
+    ...(editorHidden ? [] : stepCommands()),
     { id: 'shortcuts', label: bindingLabel('shortcuts'), category: 'Help', shortcut: sc('shortcuts'), keywords: ['keys', 'hotkeys', 'bindings'], action: actions.toggleShortcuts },
     { id: 'whats-new', label: "What's New", category: 'Help', keywords: ['release', 'notes', 'changelog', 'version'], action: actions.openWhatsNew },
   );

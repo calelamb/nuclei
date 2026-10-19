@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 import { useWorkspaceStore, type WorkspaceMode } from './workspaceStore';
 import { useExperimentRunStore } from './experimentRunStore';
+import { focusAfterUnmount } from '../hooks/focusAfterUnmount';
+
+/** The status bar's workspace chip: the one control present in every mode, so focus can always come home to it. */
+export const MODE_CHIP_FOCUS_ID = 'mode-chip';
 
 /**
  * PRD 11 Phase B — workspace mode switching with an in-flight-work guard.
@@ -41,6 +45,8 @@ function announce(mode: WorkspaceMode): string {
 }
 
 function applySwitch(target: WorkspaceMode, set: (partial: Partial<ModeSwitchState>) => void): void {
+  // Mode-specific chrome (the Level chip, a Learn-only panel) unmounts with the switch; keep focus on something real.
+  if (typeof document !== 'undefined') focusAfterUnmount(document.activeElement, [`[data-focus-id="${MODE_CHIP_FOCUS_ID}"]`]);
   useWorkspaceStore.getState().setMode(target);
   set({ pending: null, announcement: announce(target) });
 }

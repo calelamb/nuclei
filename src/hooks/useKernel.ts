@@ -67,6 +67,8 @@ export function useKernel() {
   const hadFailureRef = useRef(false);
   const explainSeqRef = useRef(0);
   const runtimeSubscriptionsRef = useRef<Array<() => void>>([]);
+  const installStartedAtRef = useRef(0);
+  const runStartedAtRef = useRef(0);
   // A Run requested before the kernel was ready; fired by the effect after `execute`.
   const queuedRunRef = useRef(false);
   // Per-provider "connecting" watchdogs: a hardware_connect that's sent but
@@ -236,7 +238,21 @@ export function useKernel() {
     const offNotice = runtime.onNotice((text) => {
       if (!useSimulationStore.getState().isRunning) useSimulationStore.getState().addOutput(text, 'info');
     });
-    runtimeSubscriptionsRef.current = [offProgress, offState, offNotice];
+    const offInstall = runtime.onInstall((pkg) => {
+      if (!mountedRef.current) return;
+      const editor = useEditorStore.getState();
+      editor.setKernelInstalling(pkg);
+      if (pkg !== null) {
+        installStartedAtRef.current = performance.now();
+        return;
+      }
+      // Finished: a run that waited behind the install owns up to the time it cost.
+      if (useSimulationStore.getState().isRunning) {
+        const since = Math.max(installStartedAtRef.current, runStartedAtRef.current);
+        editor.setLastInstallMs(performance.now() - since);
+      }
+    });
+    runtimeSubscriptionsRef.current = [offProgress, offState, offNotice, offInstall];
   }, [failKernel, markWebReady]);
 
   // Web: boot the shared Pyodide worker and mirror its state into the editor
@@ -355,6 +371,9 @@ export function useKernel() {
           if (useSimulationStore.getState().isRunning) return;
 
           const language = kernelLanguageFor(useEditorStore.getState().framework, useEditorStore.getState().filePath);
+          // The old squiggle describes code that no longer exists; drop it as the new preview starts
+          // (a slow one can take seconds) rather than when its answer lands.
+          useEditorStore.getState().clearErrors();
           if (isWeb && pyodideRef.current) {
             pyodideRef.current.send({ type: 'parse', code: state.code, language });
           } else if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -419,6 +438,8 @@ export function useKernel() {
       useSimulationStore.getState().clearResult();
       useSimulationStore.getState().beginRun(code);
       useSimulationStore.getState().setRunning(true);
+      useEditorStore.getState().setLastInstallMs(null);
+      runStartedAtRef.current = performance.now();
       useSimulationStore.getState().addOutput(separator, 'separator');
       pyodideRef.current.send({ type: 'execute', code, shots, language });
     } else {

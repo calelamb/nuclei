@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bootStepLabel, getKernelStatusModel } from './kernelStatusModel';
+import { bootStepLabel, getKernelStatusModel, installStepLabel } from './kernelStatusModel';
 import { getRunButtonState } from '../editor/runButtonState';
 import { BOOT_STAGES } from '../../platform/pyodide/workerProtocol';
 
@@ -94,7 +94,7 @@ describe('bootStepLabel (shell-r6-05)', () => {
   it('derives the Run slot, results heading and status bar from one count', () => {
     expect(bootStepLabel(step(1, 'Downloading Python'), { isWeb: true })).toEqual({
       short: 'Starting 1/3',
-      long: 'Starting Python (1 of 3)',
+      long: 'Starting Python 1/3',
       status: 'Starting Python 1/3',
       stage: 'Downloading Python',
       counted: true,
@@ -116,5 +116,37 @@ describe('bootStepLabel (shell-r6-05)', () => {
     const attempts = bootStepLabel({ step: 2, total: 15, kind: 'attempts', label: 'Starting kernel', fraction: 0.1 }, { isWeb: false });
     expect(attempts).toMatchObject({ short: 'Starting…', counted: false, stage: 'Starting kernel' });
     expect(bootStepLabel(null, { isWeb: true }).long).toBe('Starting Python…');
+  });
+});
+
+describe('install phase and boot wording', () => {
+  const ready = { ...base, kernelStatus: 'ready' as const, kernelReady: true };
+
+  it('says Installing Cirq instead of Python ready while the install runs', () => {
+    expect(getKernelStatusModel({ ...ready, kernelInstalling: 'Cirq' })).toMatchObject({ label: 'Installing Cirq…', tone: 'busy' });
+  });
+
+  it('keeps saying it mid-run, never plain Running', () => {
+    expect(getKernelStatusModel({ ...ready, isRunning: true, kernelInstalling: 'Cirq' }).label).toBe('Installing Cirq…');
+  });
+
+  it('shares one string with the boot vocabulary', () => {
+    expect(installStepLabel('Cirq')).toEqual({ short: 'Installing Cirq…', long: 'Installing Cirq…', status: 'Installing Cirq…' });
+  });
+
+  it('owns up to an install the run waited behind', () => {
+    const model = getKernelStatusModel({ ...ready, executionTimeMs: 11, installMs: 10_400 });
+    expect(model.label).toBe('Done · 11 ms (+10 s install)');
+  });
+
+  it('ignores a sub-second install', () => {
+    expect(getKernelStatusModel({ ...ready, executionTimeMs: 11, installMs: 400 }).label).toBe('Done · 11 ms');
+  });
+
+  it('writes the boot count the same way in the results heading and the status bar', () => {
+    const progress = { step: 3, total: 3, label: 'Starting Python', fraction: 0.9 };
+    const step = bootStepLabel(progress, { isWeb: true });
+    expect(step.long).toBe('Starting Python 3/3');
+    expect(step.long).toBe(step.status);
   });
 });

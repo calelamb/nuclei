@@ -108,12 +108,17 @@ function ensureCirq(): Promise<void> {
   const py = pyodide;
   if (!py) return Promise.reject(new Error('Python is not ready'));
   post({ type: 'notice', text: 'Installing Cirq (first use, about 10 seconds)…' });
+  post({ type: 'installing', package: 'Cirq', active: true });
   cirqPromise = (async () => {
-    await py.loadPackage('micropip');
-    await py.pyimport('micropip').install(CIRQ_REQUIREMENT);
-    // Importing cirq takes seconds the first time; do it now so the student's
-    // own `import cirq` (inside the parse/run time budget) is instant.
-    py.runPython('import cirq');
+    try {
+      await py.loadPackage('micropip');
+      await py.pyimport('micropip').install(CIRQ_REQUIREMENT);
+      // Importing cirq takes seconds the first time; do it now so the student's
+      // own `import cirq` (inside the parse/run time budget) is instant.
+      py.runPython('import cirq');
+    } finally {
+      post({ type: 'installing', package: 'Cirq', active: false });
+    }
   })();
   cirqPromise.catch(() => { cirqPromise = null; }); // allow a retry after a network failure
   return cirqPromise;

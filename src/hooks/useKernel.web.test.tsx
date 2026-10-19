@@ -16,6 +16,8 @@ const controls = vi.hoisted(() => ({
   failBoot: false,
   releaseBoot: null as null | (() => void),
   holdBoot: false,
+  holdParse: false,
+  parsesSent: 0,
   executeCalls: 0,
   parseReply: { snapshot: null, output: '', error: null } as Record<string, unknown>,
 }));
@@ -39,6 +41,7 @@ vi.mock('../platform/pyodide/pyodideClient', async (importOriginal) => {
         return;
       }
       if (req.fn === 'nuclei_execute') controls.executeCalls += 1;
+      if (req.fn === 'nuclei_parse') { controls.parsesSent += 1; if (controls.holdParse) return; }
       const body = req.fn === 'nuclei_parse'
         ? controls.parseReply
         : { result: { shot_count: 1 }, snapshot: null, output: '', error: null };
@@ -64,6 +67,8 @@ describe('useKernel (web)', () => {
   beforeEach(async () => {
     controls.failBoot = false;
     controls.holdBoot = false;
+    controls.holdParse = false;
+    controls.parsesSent = 0;
     controls.releaseBoot = null;
     controls.executeCalls = 0;
     controls.parseReply = { snapshot: null, output: '', error: null };
@@ -140,6 +145,21 @@ describe('useKernel (web)', () => {
     expect(useSimulationStore.getState().terminalOutput).toEqual([]);
     expect(focus).not.toHaveBeenCalled();
     expect(useEditorStore.getState().errors[0].line).toBe(3);
+  });
+
+  it('clears the previous parse squiggle the moment a new preview is dispatched', async () => {
+    renderHook(() => useKernel(), { wrapper });
+    await waitFor(() => expect(useEditorStore.getState().kernelReady).toBe(true));
+    controls.parseReply = { snapshot: null, output: '', error: 'Traceback (most recent call last):\n  File "<string>", line 2, in <module>\nNameError: x' };
+    act(() => useEditorStore.getState().setCode('x = 1\nq0\n'));
+    await waitFor(() => expect(useEditorStore.getState().errors).toHaveLength(1), { timeout: 2000 });
+
+    // The fix is typed; the slow preview has not answered yet.
+    controls.holdParse = true;
+    const before = controls.parsesSent;
+    act(() => useEditorStore.getState().setCode('x = 1\n'));
+    await waitFor(() => expect(controls.parsesSent).toBe(before + 1), { timeout: 2000 });
+    expect(useEditorStore.getState().errors).toEqual([]);
   });
 
   it('ignores a second Run while one is already in flight', async () => {

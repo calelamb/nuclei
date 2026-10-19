@@ -7,6 +7,7 @@ import { getExecute } from '../../App';
 import { Button, EmptyState } from '../ui';
 import { revealTerminalError } from '../../lib/revealTerminalError';
 import { resultsEmptyVariant } from './resultsEmptyVariant';
+import { installStepLabel } from '../layout/kernelStatusModel';
 
 const IDLE_COPY = "Run your circuit to see each qubit's Bloch sphere and the outcome histogram.";
 
@@ -20,6 +21,7 @@ export function ResultsEmptyState() {
   const lastRunFailed = useSimulationStore((s) => s.lastRunFailed);
   const lastRunNoCircuit = useSimulationStore((s) => s.lastRunNoCircuit);
   const lastRunStopped = useSimulationStore((s) => s.lastRunStopped);
+  const installing = useEditorStore((s) => s.kernelInstalling);
   const errorLine = useEditorStore((s) => s.errors[0]?.line ?? null);
   const focusTerminal = useBottomPanelStore((s) => s.focusTerminal);
   const variant = resultsEmptyVariant({ isRunning, lastRunFailed, lastRunNoCircuit, lastRunStopped });
@@ -34,7 +36,7 @@ export function ResultsEmptyState() {
   if (variant === 'running') {
     return (
       <div role="status" className="viz-results-empty">
-        <EmptyState className="viz-empty" icon={<Orbit size={20} style={{ animation: 'nuclei-heartbeat 1.5s ease infinite' }} />} title="Running…" />
+        <EmptyState className="viz-empty" icon={<Orbit size={20} style={{ animation: 'nuclei-heartbeat 1.5s ease infinite' }} />} title={installing ? installStepLabel(installing).long : 'Running…'} />
       </div>
     );
   }

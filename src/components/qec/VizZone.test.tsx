@@ -188,7 +188,7 @@ describe('<VizZone> while Python boots', () => {
   it('puts the step in the title and keeps the body to one sentence', () => {
     useEditorStore.setState({ kernelProgress: { step: 1, total: 3, label: 'Downloading Python', fraction: 0 } });
     const { container } = render(<VizZone visible={visible({})} chip={null} booting />);
-    expect(container.textContent).toContain('Starting Python (1 of 3)');
+    expect(container.textContent).toContain('Starting Python 1/3');
     expect(container.textContent).toContain('Circuit and results appear when it');
     expect(container.textContent).not.toMatch(/·\s*1\/3/);
     useEditorStore.setState({ kernelProgress: null });

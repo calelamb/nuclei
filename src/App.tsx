@@ -4,7 +4,7 @@ import { PlatformProvider, usePlatform, loadBridge } from './platform/PlatformPr
 import { Onboarding } from './components/onboarding/Onboarding';
 import { KeyboardShortcuts } from './components/onboarding/KeyboardShortcuts';
 import { requestSettingsFocus } from './components/settings/settingsFocus';
-import { focusNavLanding } from './components/layout/focusViz';
+import { focusAfterViewSelect } from './components/layout/focusViz';
 import { CommandPalette, buildCommands } from './components/commandPalette/CommandPalette';
 import { UpdateBanner } from './components/UpdateBanner';
 import { MissingDependencyBanner } from './components/onboarding/MissingDependencyBanner';
@@ -22,7 +22,7 @@ import { useActiveTabSync } from './hooks/useActiveTabSync';
 import { useKeychainKeyMigration } from './hooks/useKeychainKeyMigration';
 import { useProjectStore } from './stores/projectStore';
 import { useThemeStore, isThemePreference } from './stores/themeStore';
-import { getResolvedVisibility, togglePanelResolved } from './layout/resolvedVisibility';
+import { cycleTerminalShortcut, togglePanelResolved } from './layout/resolvedVisibility';
 import { useEditorStore } from './stores/editorStore';
 import { useHelpOverlayStore } from './stores/helpOverlayStore';
 import { useWhatsNewStore } from './stores/whatsNewStore';
@@ -36,7 +36,6 @@ import { useModeSwitchStore } from './stores/modeSwitchStore';
 import { useResearchTourStore } from './stores/researchTourStore';
 import { useModeIdentity } from './hooks/useModeIdentity';
 import { useDiracPanelStore } from './stores/diracPanelStore';
-import { useBottomPanelStore } from './stores/bottomPanelStore';
 import { useNavigationStore } from './stores/navigationStore';
 import { useLayoutStore } from './stores/layoutStore';
 import { useSettingsStore } from './stores/settingsStore';
@@ -47,6 +46,7 @@ import { openRunFolder } from './lib/openRunFolder';
 import { restorePersistedPlugins } from './plugins/pluginLoader';
 import { topRailViewsFor } from './layout/panelRegistry';
 import { featuresFor } from './layout/uiModeFeatures';
+import { useMainTakeoverKind } from './layout/takeover';
 import { useUiFeatures } from './hooks/useUiFeatures';
 import type { PlatformBridge } from './platform/bridge';
 import type { Framework, KernelLanguage } from './types/quantum';
@@ -141,9 +141,9 @@ function AppInner() {
   // Keyboard routes (palette "Go to", Cmd+1..9) also move focus into the sidebar they open, never leaving it in the editor.
   const navigateFromKeyboard = useCallback((view: Parameters<typeof setActiveView>[0]) => {
     if (view === 'settings' || view === null) { navigate(view); return; }
-    setActiveView(view);
-    focusNavLanding();
-  }, [navigate, setActiveView]);
+    useNavigationStore.getState().selectView(view, { toggle: false });
+    focusAfterViewSelect(view);
+  }, [navigate]);
   const workspaceMode = useWorkspaceStore((s) => s.mode);
   const experimentalFeatures = useSettingsStore((s) => s.general.experimentalFeatures);
   const experiments = useExperimentStore((s) => s.experiments);
@@ -340,6 +340,7 @@ function AppInner() {
   }, [platform]);
 
   const uiFeatures = useUiFeatures();
+  const mainTakeover = useMainTakeoverKind();
   const commands = buildCommands({
     run: () => { const fn = getExecute(); if (fn) fn(); },
     openFile: () => fileOps.openFile(),
@@ -379,6 +380,7 @@ function AppInner() {
     experiments: experiments.map((e) => ({ fileName: e.fileName, name: e.spec.name })),
     hasSelectedRun: selectedRunDir !== null,
     framework,
+    mainTakeover,
   });
 
   // Global keyboard shortcuts. Dispatch is by id from the single keybinding
@@ -427,24 +429,12 @@ function AppInner() {
           const topViews = topRailViewsFor(mode, { developerViews: dev, explorerSidebar });
           const view = topViews[Number(e.key) - 1];
           if (view) {
-            useNavigationStore.getState().setActiveView(view);
-            focusNavLanding();
+            useNavigationStore.getState().selectView(view, { toggle: false });
+            focusAfterViewSelect(view);
           }
           break;
         }
-        case 'toggle-bottom-panel': {
-          // Opening the bottom panel always focuses the terminal tab so
-          // print-debug output is immediately visible. A terminal the layout
-          // preset keeps hidden (Clean, no output yet) is forced visible first.
-          const store = useBottomPanelStore.getState();
-          if (!getResolvedVisibility().terminal) {
-            useLayoutStore.getState().setPanelOverride('terminal', true);
-            store.focusTerminal();
-          } else if (store.collapsed) store.focusTerminal();
-          else if (store.activeTab !== 'terminal') store.setActiveTab('terminal');
-          else store.setCollapsed(true);
-          break;
-        }
+        case 'toggle-bottom-panel': cycleTerminalShortcut(); break;
         default: break;
       }
     };

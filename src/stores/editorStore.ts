@@ -47,6 +47,10 @@ interface EditorState {
   kernelStatus: KernelStatus;
   kernelError: string | null;
   kernelProgress: KernelProgress | null;
+  /** The package a lazy install (web Cirq) is fetching right now, or null. */
+  kernelInstalling: string | null;
+  /** How long the last run waited behind a lazy install; the kernel's own timing excludes it. */
+  lastInstallMs: number | null;
   errors: EditorError[];
   /** Bumped by requestEditorFocus; the editor focuses itself when it changes. */
   focusRequest: number;
@@ -59,6 +63,8 @@ interface EditorState {
   setKernelReady: (ready: boolean) => void;
   setKernelStatus: (status: KernelStatus, error?: string | null) => void;
   setKernelProgress: (progress: KernelProgress | null) => void;
+  setKernelInstalling: (pkg: string | null) => void;
+  setLastInstallMs: (ms: number | null) => void;
   setErrors: (errors: EditorError[]) => void;
   clearErrors: () => void;
 }
@@ -74,6 +80,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   kernelStatus: 'idle',
   kernelError: null,
   kernelProgress: null,
+  kernelInstalling: null,
+  lastInstallMs: null,
   errors: [],
   focusRequest: 0,
   setCode: (code) => {
@@ -103,6 +111,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       kernelProgress: kernelStatus === 'connecting' ? s.kernelProgress : null,
     })),
   setKernelProgress: (kernelProgress) => set({ kernelProgress }),
+  setKernelInstalling: (kernelInstalling) => set({ kernelInstalling }),
+  setLastInstallMs: (lastInstallMs) => set({ lastInstallMs }),
   setErrors: (errors) => set({ errors }),
   clearErrors: () => set({ errors: [] }),
   requestEditorFocus: () => set((s) => ({ focusRequest: s.focusRequest + 1 })),
