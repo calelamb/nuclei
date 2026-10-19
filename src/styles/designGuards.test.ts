@@ -195,6 +195,8 @@ describe('design guards', () => {
   });
 
   it('dims stale result graphics with the one --stale-graphic-opacity token, not per-surface literals', () => {
+    const demo = files.find((f) => f.rel === 'components/learning/demo.css')?.text ?? '';
+    expect(demo).not.toMatch(/exercise__output-lines\s*\{[^}]*opacity/);
     for (const rel of ['components/learning/demo.css', 'components/layout/vizRail.css', 'components/bloch/bloch.css']) {
       const text = files.find((f) => f.rel === rel)?.text ?? '';
       expect(text, rel).toMatch(/opacity:\s*var\(--stale-graphic-opacity\)/);

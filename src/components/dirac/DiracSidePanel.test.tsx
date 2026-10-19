@@ -227,6 +227,21 @@ describe('DiracSidePanel', () => {
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Anthropic API key')));
   });
 
+  it('a mouse click on the rail tab without focusing it (WebKit) still lands focus in the key field', async () => {
+    resetStores(null);
+    useDiracPanelStore.setState({ isOpen: false });
+    render(<DiracSidePanel />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open Dirac panel' }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Anthropic API key')));
+  });
+
+  it('a mouse click on Collapse without focusing it (WebKit) hands focus to the rail tab', async () => {
+    resetStores('sk-ant-test');
+    render(<DiracSidePanel />);
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse Dirac panel' }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Open Dirac panel' })));
+  });
+
   it('renders a rejected key as a friendly card with an Update key action (learn-14)', () => {
     resetStores('sk-ant-test');
     useDiracStore.setState({

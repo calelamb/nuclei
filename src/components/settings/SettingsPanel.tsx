@@ -214,7 +214,7 @@ export function SettingsPanel() {
     if (settingsTarget) clearSettingsTarget();
   }, [settingsTarget, clearSettingsTarget]);
 
-  // Opened from the keyboard: move focus onto the first control, once the frame has settled
+  // Opened from the keyboard: move focus onto the Settings heading, once the frame has settled
   // (a closing palette hands focus back to the editor in the same tick).
   const rootRef = useRef<HTMLDivElement>(null);
   useEffect(() => {

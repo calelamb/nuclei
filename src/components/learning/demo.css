@@ -74,4 +74,5 @@
   color: var(--color-text-tertiary);
   cursor: not-allowed;
 }
-[data-stale] .exercise__output-lines { opacity: var(--stale-graphic-opacity); }
+/* Text never dims by opacity (it fell below AA); the stale pill says why. */
+[data-stale] .exercise__output-lines { color: var(--color-text-secondary); }
