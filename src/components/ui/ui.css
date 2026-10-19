@@ -234,7 +234,7 @@
   color: var(--badge-text, var(--color-text-secondary));
   font-family: var(--font-sans); font-size: var(--font-size-caption); font-weight: var(--font-weight-medium); line-height: 1; white-space: nowrap;
 }
-.nuclei-badge--accent { --badge-color: var(--color-accent-quantum); --badge-text: var(--color-accent-quantum-text); }
+.nuclei-badge--accent { --badge-color: var(--color-accent-quantum); --badge-text: var(--color-accent-quantum-strong); }
 .nuclei-badge--success { --badge-color: var(--color-success); --badge-text: var(--color-success-text); }
 .nuclei-badge--warning { --badge-color: var(--color-warning); --badge-text: var(--color-warning-text); }
 .nuclei-badge--danger { --badge-color: var(--color-danger); --badge-text: var(--color-danger-text); }

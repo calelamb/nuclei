@@ -28,6 +28,8 @@ export interface ColorTokens {
   accentQuantumSoft: string;
   /** Teal for small text/links: AA on every surface in both themes (accentQuantum fails on white). */
   accentQuantumText: string;
+  /** Teal for 11px text on a tinted wash (the accent badge): AA on every surface and wash; equals accentQuantumText in dark. */
+  accentQuantumStrong: string;
   /** Text/icon colour on a solid accentQuantum fill. */
   onAccent: string;
   /** Text on a solid --color-accent-quantum-text / --color-success-text fill (white in light). */
@@ -136,6 +138,7 @@ export const DARK_COLORS: ColorTokens = {
   accentQuantum: '#00B4D8',
   accentQuantumSoft: '#48CAE4',
   accentQuantumText: '#00B4D8',
+  accentQuantumStrong: '#00B4D8',
   onAccent: '#080D16',
   onAccentStrong: '#080D16',
   accentDirac: '#7B2D8E',
@@ -184,6 +187,7 @@ export const LIGHT_COLORS: ColorTokens = {
   accentQuantum: '#0891B2',
   accentQuantumSoft: '#00B4D8',
   accentQuantumText: '#0E7490',
+  accentQuantumStrong: '#0C6680',
   onAccent: '#080D16',
   onAccentStrong: '#FFFFFF',
   accentDirac: '#6B21A8',
