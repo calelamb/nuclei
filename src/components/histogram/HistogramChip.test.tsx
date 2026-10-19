@@ -17,6 +17,10 @@ describe('<HistogramChip> sample caption (IR10-08)', () => {
     const { container } = render(<HistogramChip probabilities={{ '0': 0.5, '1': 0.5 }} />);
     const caption = container.querySelector('[data-testid="histogram-chip-sample"]');
     expect(caption?.textContent).toContain('Nuclei sample · 1,024 shots');
+    // The caption is plain text; the explainer is one real button outside the ellipsised span.
+    expect(caption?.getAttribute('tabindex')).toBeNull();
+    expect(caption?.getAttribute('role')).toBeNull();
+    expect(container.querySelector('button[aria-label="About the Nuclei sample"]')).not.toBeNull();
   });
 });
 

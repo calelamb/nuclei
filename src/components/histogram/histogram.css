@@ -28,4 +28,4 @@
   border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--color-text-secondary); cursor: help;
 }
 .histogram-chip__info:hover { color: var(--color-text-primary); }
-.histogram-chip__caption { border-radius: var(--radius-xs); cursor: help; }
+.histogram-chip__caption { flex-shrink: 0; white-space: nowrap; }
