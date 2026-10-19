@@ -275,16 +275,17 @@ interface DestinationStageProps {
 function DestinationStage(props: DestinationStageProps): ReactElement {
   const [touched, setTouched] = useState(false);
   const errorId = useId();
+  const focusedOnce = useRef(false);
   const issue = touched ? sessionIdIssue(props.sessionId.trim()) : null;
   return (
     <div className="qec-import-destination">
       <label>Session ID<TextInput
-        mono aria-label="Session ID" value={props.sessionId} placeholder="capture-2026-07-22" invalid={issue !== null}
+        mono aria-label="Session ID" value={props.sessionId} placeholder="my-session" invalid={issue !== null}
         aria-describedby={issue ? errorId : undefined}
-        onFocus={(event) => event.currentTarget.select()}
+        onFocus={(event) => { if (!focusedOnce.current) { focusedOnce.current = true; event.currentTarget.select(); } }}
         onBlur={() => setTouched(true)}
         onChange={(event) => { setTouched(true); props.onSessionId(event.target.value); }}
-      />{issue && <small id={errorId} className="qec-import-destination__error">{issue[0].toUpperCase() + issue.slice(1)}</small>}</label>
+      /><small id={errorId} className="qec-import-destination__error">{issue ? issue[0].toUpperCase() + issue.slice(1) : ''}</small></label>
       <label>Session kind<Select value={props.sessionKind} onChange={(event) => props.onSessionKind(event.target.value as DestinationStageProps['sessionKind'])}><option value="hardware_import">Hardware import</option><option value="simulation_campaign">Simulation campaign</option><option value="hardware_live">Hardware live</option><option value="replay">Replay</option></Select></label>
       <div className="qec-import-policy"><Copy aria-hidden="true" size={16} /><strong>Destination: qec-data/sessions/<code className="qec-import-token">{props.sessionId || '<session-id>'}</code></strong><span>The source is copied; the original file is never edited or referenced in place.</span></div>
     </div>
@@ -319,7 +320,7 @@ function nextAllowed(stage: number, probe: ImportProbeResult | null, adapterId: 
   if (stage === 1) return adapterId !== '';
   if (stage === 2) return mappingReady;
   if (stage === 4) return valid;
-  if (stage === 5) return sessionId.trim() !== '';
+  if (stage === 5) return sessionIdIssue(sessionId.trim()) === null;
   return stage < IMPORT_STAGES.length - 1;
 }
 

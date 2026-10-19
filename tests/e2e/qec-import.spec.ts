@@ -45,11 +45,13 @@ test('@qec imports a detector stream and restores the canonical session after re
     await installQecDataStartBoundary(page, engine.endpoint);
     await openWorkbench(page);
 
+    // The row actions are revealed on hover; a real person hovers the row first.
+    await page.locator('.qec-source-row-shell', { has: page.getByRole('button', { name: 'Import minimal-dets' }) }).hover();
     await page.getByRole('button', { name: 'Import minimal-dets' }).click();
     const wizard = page.getByRole('region', { name: 'Import captures/minimal.dets' });
     await expect(wizard).toBeVisible();
     await expect(wizard).toHaveCSS('background-color', 'rgb(241, 245, 249)');
-    await expect(wizard.getByText(SOURCE_HASH)).toBeVisible();
+    await expect(wizard.getByTitle(SOURCE_HASH)).toBeVisible();
 
     await nextStage(page, 'Adapter');
     await page.getByRole('radio', { name: /Stim-results adapter/ }).check();

@@ -113,7 +113,7 @@
 .qec-import-destination .qec-import-policy { grid-column: 1 / -1; margin: 0; }
 /* The destination token stays in one piece; only a genuinely overlong id may break. */
 .qec-import-token { display: inline-block; max-width: 100%; font: inherit; vertical-align: bottom; overflow-wrap: anywhere; }
-.qec-import-destination__error { color: var(--color-danger-text); font-size: var(--font-size-chrome-label); font-weight: 400; }
+.qec-import-destination__error { min-height: 16px; color: var(--color-danger-text); font-size: var(--font-size-chrome-label); font-weight: 400; }
 .qec-import-progress { display: grid; grid-template-columns: 24px auto minmax(0, 1fr) auto; color: var(--qec-analytical-strong); }
 .qec-import-progress__id { display: inline-flex; min-width: 0; align-items: center; justify-content: flex-end; gap: 4px; }
 .qec-import-progress .qec-mono { overflow: hidden; color: var(--qec-text-muted); font-size: var(--font-size-chrome-label); text-align: right; text-overflow: ellipsis; }

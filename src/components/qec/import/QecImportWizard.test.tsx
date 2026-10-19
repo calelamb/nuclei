@@ -493,6 +493,26 @@ describe('<QecImportWizard /> Destination step (qec-r-92)', () => {
     expect(input.getAttribute('aria-invalid')).toBeNull();
   });
 
+  it('selects the suggested id on first focus only, so a later click can place the caret', async () => {
+    render(<QecImportWizard source="captures/repetition-d3.parquet" client={client()} />);
+    await reachDestination();
+    const input = screen.getByLabelText<HTMLInputElement>('Session ID');
+    fireEvent.focus(input);
+    expect([input.selectionStart, input.selectionEnd]).toEqual([0, input.value.length]);
+    input.setSelectionRange(3, 3);
+    fireEvent.focus(input);
+    expect([input.selectionStart, input.selectionEnd]).toEqual([3, 3]);
+  });
+
+  it('rejects ids the engine would refuse before the Import step', async () => {
+    render(<QecImportWizard source="captures/repetition-d3.parquet" client={client()} />);
+    await reachDestination();
+    const input = screen.getByLabelText<HTMLInputElement>('Session ID');
+    fireEvent.change(input, { target: { value: 'my capture 1' } });
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Next stage' }).disabled).toBe(true);
+  });
+
   it('keeps the <session-id> placeholder token in one element when the id is empty', async () => {
     render(<QecImportWizard source="captures/repetition-d3.parquet" client={client()} />);
     await reachDestination();
