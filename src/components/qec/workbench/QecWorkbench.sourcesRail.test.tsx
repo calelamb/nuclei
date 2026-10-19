@@ -38,6 +38,15 @@ describe('Sources rail on narrow windows (rq-r3-06)', () => {
     expect(screen.getByRole('heading', { name: 'Sources / Data' })).toBeTruthy();
   });
 
+  it('keeps keyboard focus on the toggle after it folds and unfolds (qec-r-83)', () => {
+    stubMedia(false);
+    render(<QecWorkbench />);
+    fireEvent.click(screen.getByRole('button', { name: 'Hide sources' }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Show sources' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Show sources' }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Hide sources' }));
+  });
+
   it('folds when the window shrinks into the narrow band', () => {
     stubMedia(false);
     const { container } = render(<QecWorkbench />);

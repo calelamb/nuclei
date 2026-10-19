@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactElement } from 'react';
 import { AlertTriangle, BookOpen, Plus } from 'lucide-react';
 import { useQecStudyStore, type DiscoveredQecStudy } from '../../../services/qecStudyStore';
 import type { QecStudyFs } from '../../../services/qecStudyFs';
@@ -127,7 +127,7 @@ function StudyForm({ busy, submitting, draft, error, onChange, onSubmit, onCance
     'aria-describedby': errorFor(field) ? `qec-study-${field}-error` : undefined,
   });
   return (
-    <form onSubmit={onSubmit} style={{ display: 'grid', gap: 10 }}>
+    <form onSubmit={onSubmit} onKeyDown={(event: KeyboardEvent) => { if (event.key === 'Escape' && !submitting) { event.stopPropagation(); onCancel(); } }} style={{ display: 'grid', gap: 10 }}>
       <FormField id="qec-study-name" label="Study name" error={errorFor('name')}>
         <TextInput id="qec-study-name" autoFocus value={draft.name} disabled={busy} {...describe('name')} onChange={(event) => onChange({ ...draft, name: event.target.value })} />
       </FormField>
@@ -182,7 +182,23 @@ export function QecStudySidebar({ fs }: QecStudySidebarProps): ReactElement {
   const [submitting, setSubmitting] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<FormError | null>(null);
+  const [announcement, setAnnouncement] = useState('');
+  const newStudyRef = useRef<HTMLButtonElement>(null);
+  // Where focus goes once the form unmounts: the form's own buttons disappear, so hand it on.
+  const pendingFocus = useRef<'new-study' | 'created-row' | null>(null);
   useStudyLifecycle(projectRoot, fs);
+  useEffect(() => {
+    if (creating || pendingFocus.current === null) return;
+    const target = pendingFocus.current === 'new-study'
+      ? newStudyRef.current
+      : document.querySelector<HTMLElement>('[aria-label="QEC Studies"] button[aria-pressed="true"]');
+    pendingFocus.current = null;
+    (target ?? newStudyRef.current)?.focus();
+  }, [creating, studies]);
+  const closeForm = (focus: 'new-study' | 'created-row'): void => {
+    pendingFocus.current = focus;
+    setCreating(false);
+  };
   const submit = async (event: FormEvent): Promise<void> => {
     event.preventDefault();
     if (!projectRoot) return setError({ field: 'form', message: 'Open a project before creating a study.' });
@@ -194,7 +210,8 @@ export function QecStudySidebar({ fs }: QecStudySidebarProps): ReactElement {
       await create(projectRoot, validated.study, fs);
       setActiveStudy(validated.study.id);
       setDraft(EMPTY_DRAFT);
-      setCreating(false);
+      setAnnouncement(`Study created: ${validated.study.name}`);
+      closeForm('created-row');
     } catch (cause: unknown) {
       setError({ field: 'form', message: cause instanceof Error ? cause.message : 'Could not create the study. Try again.' });
     } finally {
@@ -206,10 +223,11 @@ export function QecStudySidebar({ fs }: QecStudySidebarProps): ReactElement {
     <div style={{ display: 'grid', gap: 12, padding: 10, fontFamily: TYPOGRAPHY.fontSans }}>
       <section aria-label="QEC Studies"><div style={{ display: 'flex', gap: 5, alignItems: 'center', color: colors.textMuted, fontSize: 12, fontWeight: 500, marginBottom: 6 }}><BookOpen size={12} />Studies</div><StudyList studies={studies} busy={loading || submitting} /></section>
       <ValidationCards colors={colors} />
+      <div role="status" aria-live="polite" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>{announcement}</div>
       <section aria-label="Create study">
         {creating
-          ? <StudyForm busy={loading || submitting} submitting={submitting} draft={draft} error={error} onChange={setDraft} onSubmit={(event) => void submit(event)} onCancel={() => { setCreating(false); setError(null); }} />
-          : <Button size="sm" icon={<Plus size={12} />} onClick={() => setCreating(true)}>New study</Button>}
+          ? <StudyForm busy={loading || submitting} submitting={submitting} draft={draft} error={error} onChange={setDraft} onSubmit={(event) => void submit(event)} onCancel={() => { closeForm('new-study'); setError(null); }} />
+          : <Button ref={newStudyRef} size="sm" icon={<Plus size={12} />} onClick={() => { setAnnouncement(''); setCreating(true); }}>New study</Button>}
       </section>
     </div>
   );

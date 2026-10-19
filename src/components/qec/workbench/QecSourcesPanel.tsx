@@ -1,6 +1,6 @@
 import { Database, ExternalLink, FileCode2, FlaskConical, FolderInput, FolderTree, LoaderCircle, PanelLeftClose, PanelLeftOpen, TriangleAlert } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import type { KeyboardEvent, ReactElement } from 'react';
+import { useEffect, useRef, type KeyboardEvent, type ReactElement, type Ref } from 'react';
 import { resolveQecPanels } from '../../../layout/qecPanelRegistry';
 import { useQecStudyStore, type QecStudyValidationError } from '../../../services/qecStudyStore';
 import { useQecStudyUiStore } from '../../../stores/qecStudyUiStore';
@@ -22,25 +22,25 @@ const SOURCE_ICONS: Readonly<Record<QecStudySource['kind'], LucideIcon>> = {
   experiment: FlaskConical, noise: Database, session: Database,
 };
 
-function SourcesToggle({ collapsed, onToggle }: SourcesToggleProps): ReactElement {
+function SourcesToggle({ collapsed, onToggle, toggleRef }: SourcesToggleProps): ReactElement {
   const label = collapsed ? 'Show sources' : 'Hide sources';
   return (
-    <IconButton aria-label={label} aria-expanded={!collapsed} tooltip={{ label, placement: collapsed ? 'right' : 'below' }} onClick={onToggle}>
+    <IconButton ref={toggleRef} aria-label={label} aria-expanded={!collapsed} tooltip={{ label, placement: collapsed ? 'right' : 'below' }} onClick={onToggle}>
       {collapsed ? <PanelLeftOpen aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} /> : <PanelLeftClose aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} />}
     </IconButton>
   );
 }
 
-function SourcesHeading({ collapsed, onToggle }: SourcesToggleProps): ReactElement {
+function SourcesHeading({ collapsed, onToggle, toggleRef }: SourcesToggleProps): ReactElement {
   return (
     <header className="qec-zone-heading">
       <div><span className="qec-zone-heading__eyebrow">Study workspace</span><h2>Sources / Data</h2></div>
-      <SourcesToggle collapsed={collapsed} onToggle={onToggle} />
+      <SourcesToggle collapsed={collapsed} onToggle={onToggle} toggleRef={toggleRef} />
     </header>
   );
 }
 
-interface SourcesToggleProps { collapsed: boolean; onToggle(): void }
+interface SourcesToggleProps { collapsed: boolean; onToggle(): void; toggleRef?: Ref<HTMLButtonElement> }
 
 function LoadingStudies(): ReactElement {
   return <div className="qec-zone-empty" role="status" aria-label="Loading QEC Studies"><LoaderCircle aria-hidden="true" size={20} /><strong>Loading Studies…</strong><span>Parsing and validating Study manifests.</span></div>;
@@ -240,7 +240,23 @@ function validationIssueCount(errors: readonly QecStudyValidationError[]): numbe
   return errors.reduce((total, entry) => total + entry.errors.length, 0);
 }
 
+/**
+ * The pressed toggle unmounts (the rail and the full panel are different trees), so hand keyboard
+ * focus to whichever toggle is mounted next instead of dropping it to <body>.
+ */
+function useToggleFocus(collapsed: boolean, onToggle: () => void): { toggleRef: Ref<HTMLButtonElement>; toggle: () => void } {
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const pending = useRef(false);
+  useEffect(() => {
+    if (!pending.current) return;
+    pending.current = false;
+    toggleRef.current?.focus();
+  }, [collapsed]);
+  return { toggleRef, toggle: () => { pending.current = true; onToggle(); } };
+}
+
 export function QecSourcesPanel({ collapsed = false, onToggle = () => undefined }: Partial<SourcesToggleProps> = {}): ReactElement {
+  const { toggleRef, toggle } = useToggleFocus(collapsed, onToggle);
   const studies = useQecStudyStore((state) => state.studies);
   const errors = useQecStudyStore((state) => state.validationErrors);
   const loading = useQecStudyStore((state) => state.loading);
@@ -250,7 +266,7 @@ export function QecSourcesPanel({ collapsed = false, onToggle = () => undefined 
   if (collapsed) {
     return (
       <nav className="qec-sources qec-sources--rail" aria-label="QEC sources and data">
-        <SourcesToggle collapsed onToggle={onToggle} />
+        <SourcesToggle collapsed onToggle={toggle} toggleRef={toggleRef} />
         <FolderTree aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} className="qec-sources__rail-icon" />
         <span className="qec-sources__rail-count qec-mono" aria-label={countLabel(study?.sources.length ?? 0, 'file')}>{study?.sources.length ?? 0}</span>
       </nav>
@@ -258,7 +274,7 @@ export function QecSourcesPanel({ collapsed = false, onToggle = () => undefined 
   }
   return (
     <nav className="qec-sources" aria-label="QEC sources and data">
-      <SourcesHeading collapsed={false} onToggle={onToggle} />
+      <SourcesHeading collapsed={false} onToggle={toggle} toggleRef={toggleRef} />
       {loading ? <LoadingStudies /> : <SourcesContent study={study} preset={preset} errors={errors} hasStudies={studies.length > 0} />}
       {!loading && <SourcesFooter count={study?.sources.length ?? 0} issueCount={validationIssueCount(errors)} active={study !== null} />}
     </nav>
