@@ -175,7 +175,8 @@ export function Tooltip({ label, shortcut, placement = 'above', children }: Tool
             fontSize: 12, lineHeight: 1.3, fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
-          <span>{label}</span>
+          {/* pre-line: a label with newlines (a list of warnings) reads as one line per item. */}
+          <span style={{ whiteSpace: 'pre-line' }}>{label}</span>
           {shortcut && (
             <kbd style={{
               fontFamily: TYPOGRAPHY.fontMono, fontSize: 11, color: colors.textMuted,

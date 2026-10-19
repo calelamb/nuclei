@@ -22,6 +22,15 @@ describe('Tooltip', () => {
     expect(screen.getByRole('tooltip').textContent).toContain('Cycle UI mode');
   });
 
+  it('keeps a multi-line label (a list of warnings) one item per line', () => {
+    render(<Tooltip label={'saturated\ninterval includes 1'}><button>warn</button></Tooltip>);
+    fireEvent.mouseEnter(screen.getByText('warn'));
+    act(() => { vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS + 10); });
+    const text = screen.getByRole('tooltip').querySelector('span') as HTMLElement;
+    expect(text.style.whiteSpace).toBe('pre-line');
+    expect(text.textContent).toBe('saturated\ninterval includes 1');
+  });
+
   it('shows the shortcut as a kbd chip in glyph form', () => {
     setup();
     fireEvent.mouseEnter(screen.getByText('mode'));

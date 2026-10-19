@@ -136,7 +136,7 @@ function LambdaRow({ row, colors }: { row: LambdaRowView; colors: ThemeColors })
             size="sm"
             className="qec-lambda-warn"
             aria-label={`Warnings: ${row.flags.join('; ')}`}
-            tooltip={{ label: row.flags.join('; '), placement: 'below' }}
+            tooltip={{ label: row.flags.join('\n'), placement: 'below' }}
             style={{ color: colors.warning }}
           >
             <TriangleAlert size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} aria-hidden="true" />
