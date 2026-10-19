@@ -5,7 +5,40 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.15.0] - Unreleased
+## [0.15.0] - 2026-10-19
+
+Research-first release: a full UI pass across every workspace, the Learn
+workspace hidden by default, and a new identity.
+
+### Changed — research first
+
+- Nuclei opens in the Research workspace. The learning workspace (lessons,
+  challenges, the tutor) is hidden by default for everyone; turn it on in
+  Settings → General → "Learning workspace" or with a `?learn` link.
+  Lesson progress is kept.
+- The web build accepts `?view=<rail view>` (for example `/try/?view=qec`)
+  to open a view directly.
+- New logo (a ket, |n⟩) across the app, icons, the website and the docs. The
+  website and docs are restyled to match.
+
+### Changed — UI pass
+
+- Fifteen audit-and-fix waves across the shell, design system, interaction,
+  Learn, Research and QEC surfaces: shared primitives (Dialog, Menu,
+  ConfirmDialog, Tabs, Table, Tooltip), AA contrast with guard tests,
+  deterministic focus after every takeover, resize and keyboard route, honest
+  stale/stopped/failed states, platform-aware shortcut labels, ⌘↵ as a global
+  Run outside editor takeovers, and the histogram Shots field.
+- QEC: noise-model comparison, Λ table grouped by experiment with dropped
+  distances explained, import wizard with kernel-valid session ids.
+
+### Security
+
+- The lesson kernel connection reports ready only after the kernel's proof,
+  never retries after a rejected token or failed proof, and fails closed
+  without a token. Kernel restart removes a SIGKILLed kernel's runtime files,
+  and the kernel registers runtime-file cleanup before writing them.
+
 
 ### Browser runtime and status bar
 

@@ -61,9 +61,9 @@ export function highlightsFor(
 }
 
 export const WHATS_NEW: WhatsNewEntry = {
-  version: '0.14.0',
+  version: '0.15.0',
   title: 'QEC statistics you can cite',
-  tagline: 'Drop a sinter CSV, get sinter-grade numbers with their uncertainty, and a kernel that no longer trusts every local process.',
+  tagline: 'Drop a sinter CSV and get sinter-grade numbers with their uncertainty, in a workspace rebuilt for research.',
   webTagline: 'Drop a sinter CSV and get sinter-grade numbers with their uncertainty.',
   modeHeadlines: {
     learn: {

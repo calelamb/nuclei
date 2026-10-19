@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { headlineFor, highlightsFor, WHATS_NEW } from './whatsNew';
 
 describe('WHATS_NEW', () => {
-  it('describes the upcoming 0.14.0 release', () => {
-    expect(WHATS_NEW.version).toBe('0.14.0');
+  it('describes the 0.15.0 release', () => {
+    expect(WHATS_NEW.version).toBe('0.15.0');
   });
 
   it('covers kernel token, CSV plotting, statistics, Explain and nuclei-mcp', () => {
@@ -31,6 +31,6 @@ describe('WHATS_NEW', () => {
   it('does not claim a local-kernel change on the web build', () => {
     const head = headlineFor(WHATS_NEW, { platform: 'web', mode: 'research' });
     expect(head.tagline ?? '').not.toMatch(/kernel/i);
-    expect(headlineFor(WHATS_NEW, { platform: 'desktop', mode: 'research' }).tagline).toMatch(/kernel/i);
+    expect(headlineFor(WHATS_NEW, { platform: 'desktop', mode: 'research' }).tagline).toMatch(/research/i);
   });
 });
