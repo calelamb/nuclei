@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useDiracStore } from '../stores/diracStore';
-import type { ToolCall } from '../stores/diracStore';
+import type { ToolCall, DiracMessage } from '../stores/diracStore';
 import { useEditorStore } from '../stores/editorStore';
 import { useCircuitStore } from '../stores/circuitStore';
 import type { GateHighlight } from '../stores/circuitStore';
@@ -475,6 +475,49 @@ function executeToolById(toolId: string, accepted: boolean) {
   }
 }
 
+type ApiMessage = { role: string; content: unknown };
+
+/**
+ * Rebuild the Anthropic message list from the stored chat. Failed turns and
+ * stopped-before-first-token turns carry no content; sending them would be an
+ * empty assistant message, which the API rejects with a 400.
+ */
+export function buildApiMessages(
+  storeMessages: ReadonlyArray<DiracMessage>,
+  context: string,
+): ApiMessage[] {
+  const apiMessages: ApiMessage[] = [];
+  for (let i = 0; i < storeMessages.length; i++) {
+    const m = storeMessages[i];
+    if (m.role === 'assistant' && (m.error || (!m.content && !m.toolCalls?.length))) continue;
+    if (m.role === 'user') {
+      const isLast = i === storeMessages.length - 1;
+      apiMessages.push({
+        role: 'user',
+        content: isLast ? `<ide_context>\n${context}\n</ide_context>\n\n${m.content}` : m.content,
+      });
+    } else if (m.toolCalls && m.toolCalls.length > 0) {
+      const contentBlocks: unknown[] = [];
+      if (m.content) contentBlocks.push({ type: 'text', text: m.content });
+      for (const tc of m.toolCalls) {
+        contentBlocks.push({ type: 'tool_use', id: tc.id, name: tc.name, input: tc.input });
+      }
+      apiMessages.push({ role: 'assistant', content: contentBlocks });
+      apiMessages.push({
+        role: 'user',
+        content: m.toolCalls.map((tc) => ({
+          type: 'tool_result' as const,
+          tool_use_id: tc.id,
+          content: tc.result ?? 'Tool executed.',
+        })),
+      });
+    } else {
+      apiMessages.push({ role: 'assistant', content: m.content });
+    }
+  }
+  return apiMessages;
+}
+
 /** Controller of the in-flight chat request, if any (one reply streams at a time). */
 let activeRequest: AbortController | null = null;
 
@@ -541,37 +584,7 @@ export function useDirac() {
     const route = routeChat(userText, diracSettings);
     // Build API messages
     const storeMessages = useDiracStore.getState().messages;
-    const apiMessages: Array<{ role: string; content: unknown }> = [];
-
-    for (let i = 0; i < storeMessages.length; i++) {
-      const m = storeMessages[i];
-      // A failed turn carries no content; sending it would be an empty assistant message.
-      if (m.role === 'assistant' && m.error) continue;
-      if (m.role === 'user') {
-        const isLast = i === storeMessages.length - 1;
-        apiMessages.push({
-          role: 'user',
-          content: isLast ? `<ide_context>\n${context}\n</ide_context>\n\n${m.content}` : m.content,
-        });
-      } else {
-        if (m.toolCalls && m.toolCalls.length > 0) {
-          const contentBlocks: unknown[] = [];
-          if (m.content) contentBlocks.push({ type: 'text', text: m.content });
-          for (const tc of m.toolCalls) {
-            contentBlocks.push({ type: 'tool_use', id: tc.id, name: tc.name, input: tc.input });
-          }
-          apiMessages.push({ role: 'assistant', content: contentBlocks });
-          const toolResults = m.toolCalls.map((tc) => ({
-            type: 'tool_result' as const,
-            tool_use_id: tc.id,
-            content: tc.result ?? 'Tool executed.',
-          }));
-          apiMessages.push({ role: 'user', content: toolResults });
-        } else {
-          apiMessages.push({ role: 'assistant', content: m.content });
-        }
-      }
-    }
+    const apiMessages = buildApiMessages(storeMessages, context);
 
     addMessage({ role: 'assistant', content: '', toolCalls: [] });
 

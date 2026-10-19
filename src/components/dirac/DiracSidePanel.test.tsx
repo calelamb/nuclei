@@ -315,6 +315,41 @@ describe('DiracSidePanel', () => {
     });
   });
 
+  describe('Stop edge cases', () => {
+    it('does not offer Stop while only a compose draft is pending', () => {
+      resetStores('sk-ant-test');
+      useDiracStore.setState({
+        isLoading: true,
+        messages: [{ id: 'u', role: 'user', content: 'write a bell state', timestamp: new Date().toISOString() }],
+      });
+      render(<DiracSidePanel />);
+      expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
+    });
+
+    it('a follow-up after stopping before the first token sends no empty assistant turn', async () => {
+      resetStores('sk-ant-test');
+      const bodies: string[] = [];
+      const fetchMock = vi.fn((_u: unknown, init: RequestInit) => {
+        bodies.push(String(init.body));
+        return new Promise((_res, rej) => {
+          init.signal?.addEventListener('abort', () => rej(new DOMException('aborted', 'AbortError')));
+        });
+      });
+      vi.stubGlobal('fetch', fetchMock);
+      render(<DiracSidePanel />);
+      const box = screen.getByLabelText('Message Dirac');
+      fireEvent.change(box, { target: { value: 'Explain CNOT' } });
+      await act(async () => { fireEvent.keyDown(box, { key: 'Enter' }); });
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Stop' })); });
+      await waitFor(() => expect(useDiracStore.getState().isLoading).toBe(false));
+      fireEvent.change(box, { target: { value: 'And a GHZ state?' } });
+      await act(async () => { fireEvent.keyDown(box, { key: 'Enter' }); });
+      expect(bodies).toHaveLength(2);
+      const sent = JSON.parse(bodies[1]).messages as Array<{ role: string; content: unknown }>;
+      expect(sent.some((m) => m.role === 'assistant' && m.content === '')).toBe(false);
+    });
+  });
+
   describe('New conversation button (interaction-r-15)', () => {
     it('is hidden without an API key', () => {
       resetStores(null);

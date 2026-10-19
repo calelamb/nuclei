@@ -210,14 +210,17 @@ function ToolCallCard({ toolCall, onAction }: { toolCall: ToolCall; onAction: (i
 function ThinkingDots() {
   const colors = useThemeStore((s) => s.colors);
   return (
-    <div data-testid="dirac-thinking-dots" aria-hidden="true" style={{ display: 'flex', gap: 4, padding: '8px 0' }}>
-      {[0, 1, 2].map((i) => (
-        <div key={i} style={{
-          width: 5, height: 5, borderRadius: '50%',
-          backgroundColor: colors.dirac,
-          animation: prefersReducedMotion() ? 'none' : `nuclei-dots 1.2s ${EASING.enter} ${i * 150}ms infinite`,
-        }} />
-      ))}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0' }}>
+      <div data-testid="dirac-thinking-dots" aria-hidden="true" style={{ display: 'flex', gap: 4 }}>
+        {[0, 1, 2].map((i) => (
+          <div key={i} style={{
+            width: 6, height: 6, borderRadius: '50%',
+            backgroundColor: colors.dirac,
+            animation: prefersReducedMotion() ? 'none' : `nuclei-dots 1.2s ${EASING.enter} ${i * 150}ms infinite`,
+          }} />
+        ))}
+      </div>
+      <span style={{ fontSize: 12, color: colors.textMuted, fontFamily: TYPOGRAPHY.fontSans }}>Thinking…</span>
     </div>
   );
 }
@@ -227,6 +230,8 @@ export function DiracSidePanel() {
   const { messages, isLoading } = useDiracStore();
   const apiKey = useDiracStore((s) => s.apiKey);
   const { sendMessage, handleToolAction, stop } = useDirac();
+  // Only chat replies can be aborted; a compose draft has no cancellable request.
+  const canStop = isLoading && messages[messages.length - 1]?.role === 'assistant';
   const colors = useThemeStore((s) => s.colors);
   const shadow = useThemeStore((s) => s.shadow);
   const { isOpen, width, focusSignal, toggle, setWidth } = useDiracPanelStore();
@@ -576,7 +581,7 @@ export function DiracSidePanel() {
               el.style.height = Math.min(el.scrollHeight, 120) + 'px';
             }}
           />
-          {isLoading ? (
+          {isLoading ? (canStop && (
             <IconButton
               variant="secondary"
               onClick={stop}
@@ -586,7 +591,7 @@ export function DiracSidePanel() {
             >
               <Square size={12} />
             </IconButton>
-          ) : input.trim() && (
+          )) : input.trim() && (
             <IconButton
               variant="secondary"
               onClick={handleSend}
