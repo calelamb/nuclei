@@ -72,6 +72,21 @@ describe('DecoderWorkbench collision chip (qec-r-54)', () => {
     expect(chips.every((c) => !c.hasAttribute('title'))).toBe(true);
     expect(container.querySelector('tbody')!.textContent).not.toContain('s3-0.0');
   });
+
+  it('keeps chips out of the numeric d cell and out of the Tab order (qec-r-75)', () => {
+    load([row('s3-0.0100-aaaa', 3), row('s3-0.0100-bbbb', 3)]);
+    const { container } = render(<DecoderWorkbench />);
+    const rows = [...container.querySelectorAll('tbody tr')];
+    for (const tr of rows) {
+      const cells = [...tr.querySelectorAll('td')];
+      expect(cells[0].querySelector('.qec-collision-chip')).not.toBeNull();
+      expect(cells[1].textContent).toBe('3'); // d is only the number
+    }
+    for (const chip of container.querySelectorAll('.qec-collision-chip')) {
+      expect(chip.hasAttribute('tabindex')).toBe(false);
+    }
+    expect(container.textContent).toMatch(/task tag after the decoder name/);
+  });
 });
 
 describe('DecoderWorkbench web empty state', () => {
