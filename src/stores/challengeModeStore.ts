@@ -171,12 +171,13 @@ export const useChallengeModeStore = create<ChallengeModeState>((set, get) => ({
   inspectionView: 'circuit',
 
   enterChallengeMode: () => set({ isChallengeMode: true }),
-  exitChallengeMode: () => set({ isChallengeMode: false, activeProblem: null, inspection: null }),
+  // The open challenge survives leaving the takeover; only an explicit Back (setActiveProblem(null)) forgets it.
+  exitChallengeMode: () => set({ isChallengeMode: false, inspection: null }),
 
   setActiveProblem: (challenge) => {
     set({
       activeProblem: challenge,
-      activeProblemId: challenge?.id ?? get().activeProblemId,
+      activeProblemId: challenge?.id ?? null,
       activeFramework: challenge?.default_framework ?? get().activeFramework,
       currentTestResults: [],
       runningTestIndex: -1,

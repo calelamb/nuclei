@@ -147,3 +147,28 @@ describe('challengeModeStore addSubmission efficiency folding', () => {
     expect(useChallengeModeStore.getState().progress.c1.solvedOptimally).toBe(false);
   });
 });
+
+describe('challengeModeStore returning to place', () => {
+  beforeEach(() => {
+    useChallengeModeStore.setState({ challenges, activeProblem: null, activeProblemId: null, isChallengeMode: false });
+  });
+
+  it('keeps the open challenge across a mode round trip', () => {
+    const store = useChallengeModeStore.getState();
+    store.enterChallengeMode();
+    store.setActiveProblem(challenges[0]);
+    useChallengeModeStore.getState().exitChallengeMode();
+    useChallengeModeStore.getState().enterChallengeMode();
+    expect(useChallengeModeStore.getState().activeProblem?.id).toBe('easy-bell');
+  });
+
+  it('forgets the challenge after an explicit Back', () => {
+    const store = useChallengeModeStore.getState();
+    store.setActiveProblem(challenges[0]);
+    useChallengeModeStore.getState().setActiveProblem(null);
+    useChallengeModeStore.getState().exitChallengeMode();
+    useChallengeModeStore.getState().enterChallengeMode();
+    expect(useChallengeModeStore.getState().activeProblem).toBeNull();
+    expect(useChallengeModeStore.getState().activeProblemId).toBeNull();
+  });
+});
