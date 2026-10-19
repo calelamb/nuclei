@@ -209,7 +209,7 @@ describe('SettingsPanel platform and audience honesty (shell-r6-01, shell-r6-04)
     platform.web = true;
     render(<SettingsPanel />);
     expect(screen.queryByText('Agent hardware autonomy')).toBeNull();
-  });
+  }, 20_000); // three full panel renders; the default 5s timed out under the full parallel suite
 });
 
 describe('SettingsPanel destructive and platform chrome (r7-chrome)', () => {

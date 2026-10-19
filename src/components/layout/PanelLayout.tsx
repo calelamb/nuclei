@@ -33,6 +33,7 @@ import { useModeSwitchStore } from '../../stores/modeSwitchStore';
 import { useResearchTourStore } from '../../stores/researchTourStore';
 import { DEFAULT_EDITOR_PANE_WIDTH, computeEditorPaneWidth } from './layoutMath';
 import { useDisplaySnapshot } from '../../layout/useDisplaySnapshot';
+import { isSidebarShown } from '../../layout/takeover';
 import { useEditorStore } from '../../stores/editorStore';
 import { hasMeaningfulOutput, useSimulationStore } from '../../stores/simulationStore';
 import { sampledProbabilities } from '../histogram/histogramData';
@@ -155,8 +156,7 @@ export function PanelLayout() {
   // Beginner mode hides the Explorer; every other rail view still opens its sidebar.
   // Learn and Challenge own the whole area, except that Settings may open beside them.
   const fullViewOwnsArea = (isLearnMode || isChallengeMode) && activeView !== 'settings';
-  const showSidebar = !fullViewOwnsArea && activeView !== null
-    && (features.explorerSidebar || activeView !== 'files');
+  const showSidebar = isSidebarShown({ fullViewOwnsArea, activeView, explorerSidebar: features.explorerSidebar, isWeb: isWebBuild() });
   const topSplitRef = useRef<HTMLDivElement | null>(null);
   const [measureTopSplit, topSplitSize] = useElementSize<HTMLDivElement>();
   const setTopSplitRef = useCallback((el: HTMLDivElement | null) => {

@@ -126,7 +126,7 @@ export function EstimatorPanel() {
     return (
       <div style={shell}>
         <DesktopOnlyState title="Resource estimates need the desktop app">
-          The Azure Quantum Resource Estimator runs in the local Python kernel, which the browser build does not include.
+          The Azure Quantum Resource Estimator needs the desktop app's Python environment, which the browser build does not include.
         </DesktopOnlyState>
       </div>
     );

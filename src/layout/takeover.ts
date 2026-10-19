@@ -23,6 +23,27 @@ export function isMainAreaTakeover(f: TakeoverFacts): boolean {
   return f.activeView === 'qec' || f.activeView === 'transpiler' || (f.activeView === 'experiments' && f.experimentSelected);
 }
 
+export interface SidebarFacts {
+  /** A lesson or challenge owns the whole area (Settings may still open beside it). */
+  fullViewOwnsArea: boolean;
+  activeView: NavView | null;
+  /** False at Beginner, where the Explorer sidebar is hidden. */
+  explorerSidebar: boolean;
+  isWeb: boolean;
+}
+
+/**
+ * Whether the rail's active view gets a sidebar. On the web the QEC Workbench has no project
+ * folder, so its sidebar would be a 240px column holding one sentence; the analysis view says it
+ * instead and keeps the full width.
+ */
+export function isSidebarShown(f: SidebarFacts): boolean {
+  if (f.fullViewOwnsArea || f.activeView === null) return false;
+  if (f.activeView === 'files' && !f.explorerSidebar) return false;
+  if (f.activeView === 'qec' && f.isWeb) return false;
+  return true;
+}
+
 export function useMainAreaTakeover(): boolean {
   const isLearnMode = useLearnStore((s) => s.isLearnMode);
   const isChallengeMode = useChallengeModeStore((s) => s.isChallengeMode);

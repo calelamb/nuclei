@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isMainAreaTakeover, type TakeoverFacts } from './takeover';
+import { isMainAreaTakeover, isSidebarShown, type SidebarFacts, type TakeoverFacts } from './takeover';
 
 const base: TakeoverFacts = { isLearnMode: false, isChallengeMode: false, workspaceMode: 'research', activeView: 'files', experimentSelected: false };
 
@@ -19,5 +19,19 @@ describe('isMainAreaTakeover', () => {
   });
   it('the Research-only views never take over in Learn', () => {
     expect(isMainAreaTakeover({ ...base, workspaceMode: 'learn', activeView: 'qec' })).toBe(false);
+  });
+});
+
+describe('isSidebarShown', () => {
+  const side: SidebarFacts = { fullViewOwnsArea: false, activeView: 'qec', explorerSidebar: true, isWeb: false };
+  it('shows the QEC study sidebar on desktop', () => expect(isSidebarShown(side)).toBe(true));
+  it('drops the one-sentence QEC sidebar on the web so the analysis view gets the width', () => {
+    expect(isSidebarShown({ ...side, isWeb: true })).toBe(false);
+    expect(isSidebarShown({ ...side, isWeb: true, activeView: 'files' })).toBe(true);
+  });
+  it('hides the Explorer at Beginner and everything under a lesson or with no view', () => {
+    expect(isSidebarShown({ ...side, activeView: 'files', explorerSidebar: false })).toBe(false);
+    expect(isSidebarShown({ ...side, fullViewOwnsArea: true })).toBe(false);
+    expect(isSidebarShown({ ...side, activeView: null })).toBe(false);
   });
 });

@@ -5,6 +5,7 @@ import { firstFile, loadCsvFile } from '../../services/qecCsvFile';
 import { useCsvDrop } from './useCsvDrop';
 import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 import { QecCsvError } from './QecCsvError';
+import { isWebBuild } from '../../platform/buildTarget';
 
 export const CSV_ERROR_ID = 'qec-csv-error';
 
@@ -48,7 +49,11 @@ export function QecCsvDropZone() {
           e.target.value = ''; // allow re-picking the same file
         }}
       />
-      <div style={{ fontSize: 11, color: colors.textDim }}>Read in this app only — nothing is uploaded.</div>
+      <div style={{ fontSize: 11, color: colors.textDim, textAlign: 'center' }}>
+        Read in this app only — nothing is uploaded.
+        {/* The web build has no QEC sidebar, so the one thing it said lives here. */}
+        {isWebBuild() && <><br />Studies need a project folder, which the desktop app provides.</>}
+      </div>
     </div>
   );
 }
