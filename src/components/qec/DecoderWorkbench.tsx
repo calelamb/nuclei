@@ -14,12 +14,28 @@ import { formatNoise, formatRateInterval } from '../../lib/qecPlotFormat';
 import { downloadCsv } from '../../services/experimentExport';
 
 import { TYPOGRAPHY, ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
-import { Button } from '../ui';
+import { Button, Tooltip } from '../ui';
 import './qecAnalysis.css';
 import { Table, Thead, Tbody, Tr, Th, Td } from '../ui/Table';
 const DOCS = 'https://getnuclei.dev/docs/research/qec-studio/';
 /** Below this width an all-zero Discards column is dropped so the columns that matter stay on screen. */
 const NARROW_TABLE_WIDTH = 720;
+
+type WorkbenchRow = ReturnType<typeof decoderComparison>['rows'][number];
+
+/** 1-based ordinal of each colliding task within its (experiment, decoder, d, p) group, keyed by strong_id. */
+function collisionNumbers(rows: readonly WorkbenchRow[]): ReadonlyMap<string, number> {
+  const seen = new Map<string, number>();
+  const numbers = new Map<string, number>();
+  for (const w of rows) {
+    if (!w.collides) continue;
+    const key = `${w.experiment}|${w.decoder}|${w.distance}|${w.noise}`;
+    const n = (seen.get(key) ?? 0) + 1;
+    seen.set(key, n);
+    numbers.set(w.strongId, n);
+  }
+  return numbers;
+}
 
 /**
  * PRD 10 Phase E — the decoder workbench. Same campaign, same circuits: a
@@ -73,10 +89,12 @@ export function DecoderWorkbench({ tabs, showUnits = true }: { tabs?: ReactNode;
     );
   }
 
+  const taskNumbers = collisionNumbers(wb);
   const collisionTag = (w: (typeof wb)[number]) =>
     w.collides ? (
-      <span title={`Another task has the same experiment, d and p (strong_id ${w.strongId}); shown separately, not pooled.`}
-        style={{ color: colors.warning, marginLeft: 6 }}>task {w.strongId.slice(0, 6)}</span>
+      <Tooltip label={`Another task has the same experiment, d and p (strong_id ${w.strongId}); shown separately, not pooled.`} placement="below">
+        <span className="qec-collision-chip" tabIndex={0}>task {taskNumbers.get(w.strongId) ?? 1}</span>
+      </Tooltip>
     ) : null;
 
   return (
