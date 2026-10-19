@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
+import { useState } from 'react';
 import { render, cleanup, screen, fireEvent, act } from '@testing-library/react';
 import { LessonNavSidebar } from './LessonNavSidebar';
 import { useLearnStore } from '../../stores/learnStore';
@@ -56,5 +57,36 @@ describe('keyboard entry to a chooser section', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+function Harness() {
+  const [collapsed, setCollapsed] = useState(false);
+  return <LessonNavSidebar collapsed={collapsed} onToggleCollapsed={() => setCollapsed((c) => !c)} />;
+}
+
+describe('hide / show hand-off', () => {
+  it('hands focus between the Hide and Show buttons instead of dropping it to <body>', async () => {
+    render(<Harness />);
+    const hide = screen.getByRole('button', { name: 'Hide lesson navigation' });
+    act(() => { hide.focus(); });
+    fireEvent.click(hide);
+    await act(async () => { await new Promise((r) => setTimeout(r, 80)); });
+    const show = screen.getByRole('button', { name: 'Show lesson navigation' });
+    expect(document.activeElement).toBe(show);
+    fireEvent.click(show);
+    await act(async () => { await new Promise((r) => setTimeout(r, 80)); });
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Hide lesson navigation' }));
+  });
+
+  it('leaves focus alone when the toggle was not focused (a mouse click elsewhere)', async () => {
+    render(<Harness />);
+    const outside = document.createElement('input');
+    document.body.appendChild(outside);
+    outside.focus();
+    fireEvent.click(screen.getByRole('button', { name: 'Hide lesson navigation' }));
+    await act(async () => { await new Promise((r) => setTimeout(r, 80)); });
+    expect(document.activeElement).toBe(outside);
+    outside.remove();
   });
 });

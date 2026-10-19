@@ -45,6 +45,12 @@ interface LessonViewProps {
 
 const EDGE_PX = 8;
 
+/** Scroll to a restored block and hand it keyboard focus, so the next Tab continues from where the reader was. */
+function landOnBlock(index: number): void {
+  scrollLessonBlock(index, 'auto');
+  if (index > 0) document.getElementById(`block-${index}`)?.focus({ preventScroll: true });
+}
+
 /** Scroll fraction (0..1) plus the block to force current at either end of the lesson, else null. */
 function readPosition(scrollTop: number, scrollHeight: number, clientHeight: number, blockCount: number) {
   const max = scrollHeight - clientHeight;
@@ -82,7 +88,7 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
       setCurrentBlockIndex(restore.blockIndex);
       // Cleared only after the scroll lands, so a StrictMode remount (cleanup cancels the frame) can retry.
       const frame = requestAnimationFrame(() => {
-        scrollLessonBlock(restore.blockIndex, 'auto');
+        landOnBlock(restore.blockIndex);
         setRestore(null);
       });
       return () => cancelAnimationFrame(frame);
@@ -91,7 +97,7 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
     const remembered = recallLessonBlock(lesson.id, lesson.contentBlocks.length);
     if (remembered !== null) {
       setCurrentBlockIndex(remembered);
-      const frame = requestAnimationFrame(() => scrollLessonBlock(remembered, 'auto'));
+      const frame = requestAnimationFrame(() => landOnBlock(remembered));
       return () => cancelAnimationFrame(frame);
     }
     scrollRef.current?.scrollTo(0, 0);
@@ -211,7 +217,7 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
         </header>
 
         {lesson.contentBlocks.map((block, i) => (
-          <div key={`${lesson.id}:${i}`} id={`block-${i}`} data-block-index={i} className="lesson__block">
+          <div key={`${lesson.id}:${i}`} id={`block-${i}`} data-block-index={i} className="lesson__block" tabIndex={-1}>
             <ContentBlockRenderer block={block} />
           </div>
         ))}
