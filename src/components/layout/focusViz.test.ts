@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { focusNavLanding, focusVizLanding, NAV_LANDING_ATTR, VIZ_LANDING_ATTR } from './focusViz';
+import { focusAfterViewSelect, focusNavLanding, focusVizLanding, NAV_LANDING_ATTR, TAKEOVER_ATTR, VIZ_LANDING_ATTR } from './focusViz';
 
 afterEach(() => { document.body.innerHTML = ''; vi.useRealTimers(); });
 
@@ -44,6 +44,25 @@ describe('focusVizLanding', () => {
     heading.tabIndex = -1;
     heading.setAttribute(NAV_LANDING_ATTR, '');
     document.body.append(heading);
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    expect(document.activeElement).toBe(heading);
+  });
+});
+
+describe('focusAfterViewSelect', () => {
+  it('a newer keyboard route cancels the older one, so a stale takeover poll never steals focus later', async () => {
+    focusAfterViewSelect('learning');
+    focusAfterViewSelect('files');
+    const heading = document.createElement('h2');
+    heading.setAttribute(NAV_LANDING_ATTR, '');
+    heading.tabIndex = -1;
+    document.body.append(heading);
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(document.activeElement).toBe(heading);
+    const takeover = document.createElement('section');
+    takeover.setAttribute(TAKEOVER_ATTR, '');
+    takeover.append(document.createElement('h1'));
+    document.body.append(takeover);
     await new Promise((resolve) => setTimeout(resolve, 120));
     expect(document.activeElement).toBe(heading);
   });

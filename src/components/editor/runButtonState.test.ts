@@ -4,6 +4,14 @@ import { getRunButtonState, isAccidentalStop, STOP_GRACE_MS } from './runButtonS
 const base = { kernelReady: false, kernelStatus: 'idle' as const, kernelProgress: null, kernelError: null, isRunning: false };
 
 describe('getRunButtonState', () => {
+  it('names a lazy package install in the Run slot instead of Stop, and keeps it stoppable', () => {
+    const state = getRunButtonState({ ...base, kernelReady: true, kernelStatus: 'ready', isRunning: true, canStop: true, installing: 'Cirq' });
+    expect(state).toMatchObject({ kind: 'running', label: 'Installing Cirq…', stoppable: true });
+    expect(state.title).toMatch(/one-time download.*Click to stop/);
+    const plain = getRunButtonState({ ...base, kernelReady: true, kernelStatus: 'ready', isRunning: true, installing: 'Cirq' });
+    expect(plain).toMatchObject({ label: 'Installing Cirq…', disabled: true });
+  });
+
   it('is Run when the kernel is ready', () => {
     expect(getRunButtonState({ ...base, kernelReady: true, kernelStatus: 'ready' })).toMatchObject({
       kind: 'ready', label: 'Run', disabled: false,

@@ -59,7 +59,15 @@ export function focusTakeoverHeading(doc: Document = document): () => void {
   return () => cancelAnimationFrame(handle);
 }
 
-/** Where a keyboard route to `view` hands focus: the takeover's heading, or the sidebar's. */
+let cancelPendingRoute: (() => void) | null = null;
+
+/**
+ * Where a keyboard route to `view` hands focus: the takeover's heading, or the sidebar's. Only the latest route
+ * may land focus; an earlier route's poll is cancelled so it cannot pull focus back after the person moved on.
+ */
 export function focusAfterViewSelect(view: string, doc: Document = document): () => void {
-  return view === 'learning' || view === 'challenges' ? focusTakeoverHeading(doc) : focusNavLanding(doc);
+  cancelPendingRoute?.();
+  const cancel = view === 'learning' || view === 'challenges' ? focusTakeoverHeading(doc) : focusNavLanding(doc);
+  cancelPendingRoute = cancel;
+  return cancel;
 }

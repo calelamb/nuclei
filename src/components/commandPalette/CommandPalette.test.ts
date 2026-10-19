@@ -271,7 +271,7 @@ describe('palette Go-to follows the rail the person sees (shell-r6-03)', () => {
 describe('buildCommands while a lesson or challenge owns the main area', () => {
   const ids = (mainTakeover: CommandContext['mainTakeover'], mode: WorkspaceMode = 'learn') =>
     buildCommands(makeActions(), makeContext({ mode, mainTakeover, layoutPresets: true })).map((c) => c.id);
-  const EDITOR_ONLY = ['run', 'new', 'step-through', 'reset-step', 'layout-clean', 'toggle-panel-terminal', 'toggle-panel-circuit'];
+  const EDITOR_ONLY = ['run', 'new', 'open', 'save', 'step-through', 'reset-step', 'layout-clean', 'toggle-panel-terminal', 'toggle-panel-circuit'];
 
   it.each(['lesson', 'challenge'] as const)('omits every editor-only command in a %s', (kind) => {
     const present = ids(kind);
@@ -286,7 +286,7 @@ describe('buildCommands while a lesson or challenge owns the main area', () => {
 
   it('offers the editor commands again when nothing owns the area', () => {
     const present = ids(null);
-    for (const id of ['run', 'new', 'step-through', 'toggle-panel-terminal']) expect(present).toContain(id);
+    for (const id of ['run', 'new', 'open', 'save', 'step-through', 'toggle-panel-terminal']) expect(present).toContain(id);
   });
 
   it('leaves a Research takeover like the QEC Workbench alone', () => {

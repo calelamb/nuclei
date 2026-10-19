@@ -371,9 +371,12 @@ export function buildCommands(actions: CommandActions, context: CommandContext):
   // Static app commands.
   commands.push(
     ...(editorHidden ? [] : [{ id: 'run', label: bindingLabel('run'), category: 'Run', shortcut: sc('run'), keywords: ['execute', 'simulate', 'play'], action: actions.run }]),
-    { id: 'open', label: bindingLabel('open'), category: 'File', shortcut: sc('open'), action: actions.openFile },
-    { id: 'save', label: bindingLabel('save'), category: 'File', shortcut: sc('save'), action: actions.saveFile },
-    ...(editorHidden ? [] : [{ id: 'new', label: bindingLabel('new'), category: 'File', shortcut: sc('new'), action: actions.newFile }]),
+    // Open, Save and New act on the editor buffer, which a lesson or challenge hides.
+    ...(editorHidden ? [] : [
+      { id: 'open', label: bindingLabel('open'), category: 'File', shortcut: sc('open'), action: actions.openFile },
+      { id: 'save', label: bindingLabel('save'), category: 'File', shortcut: sc('save'), action: actions.saveFile },
+      { id: 'new', label: bindingLabel('new'), category: 'File', shortcut: sc('new'), action: actions.newFile },
+    ]),
     { id: 'theme', label: bindingLabel('toggle-theme'), category: 'View', shortcut: sc('toggle-theme'), keywords: ['dark', 'light', 'appearance', 'color', 'mode'], action: actions.toggleTheme },
     ...(context.mode === 'learn'
       ? [{ id: 'mode', label: bindingLabel('cycle-ui-mode'), category: 'View', shortcut: sc('cycle-ui-mode'), keywords: ['beginner', 'intermediate', 'advanced', 'simple', 'cycle', 'ui mode'], action: actions.cycleMode }]

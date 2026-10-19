@@ -4,6 +4,7 @@ import { useDebugStore } from '../../stores/debugStore';
 import { activeDebugStep } from '../../lib/debugTrace';
 import { useThemeStore } from '../../stores/themeStore';
 import { useEditorStore } from '../../stores/editorStore';
+import { installStepLabel } from '../layout/kernelStatusModel';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useDisplaySnapshot } from '../../layout/useDisplaySnapshot';
 import { usePreviewPending } from '../../layout/usePreviewPending';
@@ -172,6 +173,7 @@ export function CircuitRenderer() {
   const errorPending = useErrorPending();
   const errorLine = useEditorStore((s) => s.errors[0]?.line ?? null);
   const isRunning = useSimulationStore((s) => s.isRunning);
+  const installing = useEditorStore((s) => s.kernelInstalling);
   const highlights = useCircuitStore((s) => s.highlights);
   const stepMode = useCircuitStore((s) => s.stepMode);
   const stepIndex = useCircuitStore((s) => s.stepIndex);
@@ -260,7 +262,7 @@ export function CircuitRenderer() {
           )}
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {isRunning && <span role="status" style={{ fontSize: 11, color: colors.textMuted, fontFamily: TYPOGRAPHY.fontSans }}>Running…</span>}
+          {isRunning && <span role="status" style={{ fontSize: 11, color: colors.textMuted, fontFamily: TYPOGRAPHY.fontSans }}>{installing ? installStepLabel(installing).short : 'Running…'}</span>}
           <ExportMenu />
         </span>
       </div>

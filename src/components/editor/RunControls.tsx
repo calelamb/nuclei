@@ -26,6 +26,7 @@ export function RunControls({ density }: { density: TabBarDensity }) {
   const kernelReady = useEditorStore((s) => s.kernelReady);
   const kernelStatus = useEditorStore((s) => s.kernelStatus);
   const kernelError = useEditorStore((s) => s.kernelError);
+  const kernelInstalling = useEditorStore((s) => s.kernelInstalling);
   const kernelProgress = useEditorStore((s) => s.kernelProgress);
   const isRunning = useSimulationStore((s) => s.isRunning);
   const runQueued = useRunQueueStore((s) => s.queued);
@@ -39,7 +40,7 @@ export function RunControls({ density }: { density: TabBarDensity }) {
   }, [isRunning]);
 
   const platform = usePlatform();
-  const runState = getRunButtonState({ kernelReady, kernelStatus, kernelProgress, kernelError, isRunning, runQueued, canStop: canStopKernelRun(), engine: platform.getPlatform() === 'web' ? 'Python' : 'Kernel' });
+  const runState = getRunButtonState({ kernelReady, kernelStatus, kernelProgress, kernelError, isRunning, runQueued, installing: kernelInstalling, canStop: canStopKernelRun(), engine: platform.getPlatform() === 'web' ? 'Python' : 'Kernel' });
   const canRun = runState.kind === 'ready';
   const showFailed = runState.kind === 'failed';
 

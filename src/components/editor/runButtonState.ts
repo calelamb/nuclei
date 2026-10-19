@@ -1,6 +1,6 @@
 import type { KernelProgress, KernelStatus } from '../../stores/editorStore';
 import { kernelStartFailureTitle } from '../../lib/kernelErrors';
-import { bootStepLabel } from '../layout/kernelStatusModel';
+import { bootStepLabel, installStepLabel } from '../layout/kernelStatusModel';
 
 export type RunButtonKind = 'ready' | 'running' | 'loading' | 'failed';
 
@@ -30,10 +30,22 @@ interface RunButtonInput {
   engine?: 'Python' | 'Kernel';
   /** A run was requested (button or shortcut) while the kernel was still starting. */
   runQueued?: boolean;
+  /** A package (e.g. Cirq) is being installed before the run can start. */
+  installing?: string | null;
 }
 
 /** One truthful label for the toolbar's Run slot across every kernel state. */
 export function getRunButtonState(input: RunButtonInput): RunButtonState {
+  if (input.isRunning && input.installing) {
+    const stop = input.canStop ? ' Click to stop.' : '';
+    return {
+      kind: 'running',
+      label: installStepLabel(input.installing).short,
+      title: `${input.installing} is a one-time download of about 60 MB. Your run starts when it finishes.${stop}`,
+      disabled: !input.canStop,
+      stoppable: input.canStop || undefined,
+    };
+  }
   if (input.isRunning && input.canStop) {
     return {
       kind: 'running',
