@@ -7,17 +7,29 @@
 #
 # Venvs (default root: $NUCLEI_TEST_VENV_DIR, else ~/.cache/nuclei-test-venvs):
 #
-#   full      Python 3.12, Qiskit 1.x     kernel/requirements.txt + the whole CI
-#                                         optional stack (qdk, stim, sinter, ...)
+#   full      Python 3.12, Qiskit 1.x     kernel/requirements.txt with Qiskit pinned
+#                                         <2 (requirements.txt itself allows 2.x) +
+#                                         the whole CI optional stack (qdk, stim, ...)
 #                                         == the `pytest` and `corpus-full` jobs
+#                                         == corpus env `full`
 #   qk2       Python 3.13, Qiskit 2.x     same optional stack on Qiskit >=2,<3
 #                                         == the `pytest-qiskit2` job
-#   minimal   Python 3.12                 kernel/requirements.txt ONLY
-#                                         == `pytest-minimal-venv` / `corpus-minimal`
+#   minimal   Python 3.12, Qiskit 1.x     kernel/requirements.txt ONLY, Qiskit pinned
+#                                         <2 == `corpus-minimal` (corpus env `min`).
+#                                         NOTE: `pytest-minimal-venv` installs the bare
+#                                         requirements.txt (Qiskit 2.x); this venv does not.
 #   app-env   Python 3.13                 exactly what the desktop shell pip-installs:
 #                                         KERNEL_CORE_DEPS + the unpinned catalog
 #                                         entries parsed out of frameworks.rs
 #                                         == `corpus-app-env` (corpus env `qk2`)
+#
+# Running the research corpus locally (kernel/tests/research_corpus/README.md):
+#   NUCLEI_CORPUS_ENV=full "$(scripts/make-test-venvs.sh path full)"    -m pytest kernel/tests/test_research_corpus.py
+#   NUCLEI_CORPUS_ENV=min  "$(scripts/make-test-venvs.sh path minimal)" -m pytest kernel/tests/test_research_corpus.py
+#   NUCLEI_CORPUS_ENV=qk2 NUCLEI_CORPUS_PYTHON="$(scripts/make-test-venvs.sh path app-env)" \
+#     "$(scripts/make-test-venvs.sh path app-env)" -m pytest kernel/tests/test_research_corpus.py
+# qk2 MUST use the app-env venv (Qiskit >=2, qdk, NO stim); the CI `qk2` venv has stim and is
+# for the full pytest suite only. min/full need Qiskit 1.x, hence the pins below.
 #
 # Every venv also gets the test runners (pytest, pytest-asyncio, pytest-cov,
 # pyyaml). Existing venvs are reused; set NUCLEI_TEST_VENV_REBUILD=1 to rebuild.
@@ -35,6 +47,10 @@ FRAMEWORKS_RS="$REPO/src-tauri/src/commands/frameworks.rs"
 UV="${UV:-uv}"
 
 TEST_RUNNERS=(pytest pytest-asyncio pytest-cov pyyaml)
+
+# kernel/requirements.txt allows Qiskit 1.x and 2.x; corpus envs `min` and `full` are defined as
+# Qiskit 1.x (runner.env_problems), matching the CI `pytest` / corpus-minimal / corpus-full jobs.
+QISKIT1_PIN=("qiskit>=1.2,<2" "qiskit-aer>=0.15,<1")
 
 # The CI optional stack (keep in step with .github/workflows/kernel-tests.yml).
 OPTIONAL_STACK=(
@@ -129,7 +145,7 @@ for ident, _, pip_name in catalog:
 
 build_full() {
   create_venv full 3.12
-  pip_install full -r "$REPO/kernel/requirements.txt" "${OPTIONAL_STACK[@]}" "${TEST_RUNNERS[@]}"
+  pip_install full -r "$REPO/kernel/requirements.txt" "${QISKIT1_PIN[@]}" "${OPTIONAL_STACK[@]}" "${TEST_RUNNERS[@]}"
 }
 
 build_qk2() {
@@ -141,7 +157,7 @@ build_qk2() {
 
 build_minimal() {
   create_venv minimal 3.12
-  pip_install minimal -r "$REPO/kernel/requirements.txt" "${TEST_RUNNERS[@]}"
+  pip_install minimal -r "$REPO/kernel/requirements.txt" "${QISKIT1_PIN[@]}" "${TEST_RUNNERS[@]}"
 }
 
 build_app_env() {
