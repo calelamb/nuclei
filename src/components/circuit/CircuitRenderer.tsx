@@ -234,7 +234,7 @@ export function CircuitRenderer() {
   const { columns, svgWidth, svgHeight, classicalWireY, wireStart, wireEnd } = computeCircuitGeometry(snapshot);
 
   const awaiting = previewPending || errorPending;
-  const stalePill = stale || awaiting ? describeStale({ previewPaused, error, errorLine, previewPending: awaiting }) : null;
+  const stalePill = stale || awaiting ? describeStale({ previewPaused, error, errorLine, previewPending: awaiting, installing }) : null;
   const dimmed = stale || awaiting;
   const highlightSet = new Set(highlights.map((h) => h.gateIndex));
 
@@ -252,7 +252,7 @@ export function CircuitRenderer() {
               {qubit_count} {qubit_count === 1 ? 'qubit' : 'qubits'} · depth {depth}
             </span>
           )}
-          {stalePill && (
+          {stalePill && !(isRunning && installing) && (
             <StaleResultNotice
               inline
               label={stalePill.label}

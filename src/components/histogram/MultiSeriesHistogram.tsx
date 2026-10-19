@@ -1,6 +1,7 @@
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useThemeStore } from '../../stores/themeStore';
 import { formatProbabilityTick, getMultiSeriesHistogramData, PROBABILITY_TICKS, type HistogramSeriesInput } from './histogramData';
+import { hasMeasurements, tooltipOrder } from './multiSeriesHelpers';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
 export interface MultiSeriesHistogramSeries extends HistogramSeriesInput {
@@ -27,7 +28,10 @@ export function MultiSeriesHistogram({ series }: { series: MultiSeriesHistogramS
     );
   }
 
-  const data = getMultiSeriesHistogramData(series);
+  // A run with no measurements has nothing to plot: it stays in the legend (flagged by its
+  // label) but gets no bar and no tooltip row, so the tooltip never invents a 0.0000.
+  const plotted = series.filter(hasMeasurements);
+  const data = getMultiSeriesHistogramData(plotted);
 
   if (data.length === 0) {
     return (
@@ -40,7 +44,7 @@ export function MultiSeriesHistogram({ series }: { series: MultiSeriesHistogramS
   return (
     <div style={{ height: 260, display: 'flex', flexDirection: 'column' }}>
       <div style={{ flex: 1, minHeight: 0 }}>
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200} initialDimension={{ width: 480, height: 220 }}>
         <BarChart data={data} margin={{ top: 5, right: 10, bottom: 5, left: 10 }}>
           <XAxis
             dataKey="state"
@@ -57,17 +61,20 @@ export function MultiSeriesHistogram({ series }: { series: MultiSeriesHistogramS
             tickFormatter={formatProbabilityTick}
           />
           <Tooltip
+            cursor={{ fill: colors.bgElevated }}
             contentStyle={{
-              background: colors.bgPanel,
-              border: `1px solid ${colors.border}`,
+              background: colors.bgElevated,
+              border: `1px solid ${colors.borderStrong}`,
               borderRadius: 6,
               fontSize: 12,
               fontFamily: TYPOGRAPHY.fontMono,
             }}
             labelStyle={{ color: colors.text }}
-            formatter={(value) => [typeof value === 'number' ? value.toFixed(4) : String(value ?? ''), 'Probability']}
+            separator=": "
+            itemSorter={(item) => tooltipOrder(plotted, item.dataKey)}
+            formatter={(value, name) => [typeof value === 'number' ? value.toFixed(4) : String(value ?? ''), String(name ?? '')]}
           />
-          {series.map((s) => (
+          {plotted.map((s) => (
             <Bar key={s.label} dataKey={s.label} fill={s.color} radius={[3, 3, 0, 0]} />
           ))}
         </BarChart>

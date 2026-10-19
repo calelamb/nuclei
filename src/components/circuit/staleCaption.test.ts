@@ -4,6 +4,11 @@ import { describeStale, PENDING_LABEL } from './staleCaption';
 const quiet = { previewPaused: false, error: null, errorLine: null, previewPending: false };
 
 describe('describeStale', () => {
+  it('names the framework being installed instead of a generic Updating…', () => {
+    const pill = describeStale({ ...quiet, previewPending: true, installing: 'Cirq' });
+    expect(pill?.label).toBe('Installing Cirq…');
+  });
+
   it('says Updating… for a slow preview, in the same pill shape as Out of date', () => {
     const pill = describeStale({ ...quiet, previewPending: true });
     expect(pill?.label).toBe(PENDING_LABEL);

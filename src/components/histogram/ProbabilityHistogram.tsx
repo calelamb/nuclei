@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, type ReactNode } from 'react';
+import { useState, useRef, type ReactNode } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 'recharts';
 import { useElementSize } from '../../hooks/useElementSize';
 import { useSimulationStore } from '../../stores/simulationStore';
@@ -12,7 +12,8 @@ import { useScrollbarInset } from '../../hooks/useScrollbarInset';
 import { TYPOGRAPHY } from '../../styles/tokens';
 import { useThemeStore } from '../../stores/themeStore';
 import { ResultsEmptyState } from '../bloch/ResultsEmptyState';
-import { Button, SegmentedControl, TextInput, type SegmentedOption } from '../ui';
+import { ShotsField } from './ShotsField';
+import { Button, SegmentedControl, type SegmentedOption } from '../ui';
 import './histogram.css';
 const VIEW_OPTIONS: ReadonlyArray<SegmentedOption<HistogramViewMode>> = [
   { value: 'sampled', label: 'Sampled' },
@@ -170,8 +171,6 @@ function OutcomeCap({ shown, hiddenCount, hiddenProbability, evenlySpread, showA
 export function ProbabilityHistogram() {
   const colors = useThemeStore((s) => s.colors);
   const result = useSimulationStore((s) => s.result);
-  const shots = useSimulationStore((s) => s.shots);
-  const setShots = useSimulationStore((s) => s.setShots);
   const [viewMode, setViewMode] = useState<HistogramViewMode>('sampled');
   const [showAll, setShowAll] = useState(false);
   const chartRef = useRef<HTMLDivElement>(null);
@@ -182,13 +181,6 @@ export function ProbabilityHistogram() {
   const stepIndex = useCircuitStore((s) => s.stepIndex);
   const trace = useDebugStore((s) => s.trace);
   const step = stepMode ? activeDebugStep(trace, stepIndex) : null;
-
-  const handleShotsChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = parseInt(e.target.value, 10);
-    if (!isNaN(val) && val >= 100 && val <= 100000) {
-      setShots(val);
-    }
-  }, [setShots]);
 
   if (step) {
     const stepRows = getProbabilityHistogramData(step.probabilities);
@@ -247,22 +239,7 @@ export function ProbabilityHistogram() {
           options={VIEW_OPTIONS}
         />
 
-        {/* Shots control */}
-        <label style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, display: 'flex', alignItems: 'center', gap: 6 }}>
-          Shots:
-          <TextInput
-            type="number"
-            size="sm"
-            mono
-            value={shots}
-            onChange={handleShotsChange}
-            min={100}
-            max={100000}
-            step={100}
-            aria-label="Shots"
-            style={{ width: 80 }}
-          />
-        </label>
+        <ShotsField />
 
         <OutcomeCap shown={data.length} hiddenCount={view.hiddenCount} hiddenProbability={view.hiddenProbability} evenlySpread={view.evenlySpread} showAll={showAll} onToggle={() => setShowAll((v) => !v)} />
 
@@ -273,7 +250,7 @@ export function ProbabilityHistogram() {
 
         {/* Execution time */}
         <span style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontMono }}>
-          {result.execution_time_ms.toFixed(0)}ms
+          Ran in {result.execution_time_ms.toFixed(0)} ms
         </span>
       </div>
 

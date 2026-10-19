@@ -98,6 +98,36 @@ describe('<QecStudySidebar />', () => {
     await waitFor(() => expect(view.queryByLabelText('Study name')).toBeNull());
   });
 
+  it('returns focus to New study on Cancel and on Escape (qec-r-83)', async () => {
+    const fs = memoryStudyFs();
+    useProjectStore.setState({ projectRoot: '/project' });
+    const view = render(<QecStudySidebar fs={fs} />);
+    await waitFor(() => expect(useQecStudyStore.getState().loading).toBe(false));
+
+    fireEvent.click(view.getByRole('button', { name: 'New study' }));
+    fireEvent.click(view.getByRole('button', { name: 'Cancel' }));
+    expect(document.activeElement).toBe(view.getByRole('button', { name: 'New study' }));
+
+    fireEvent.click(view.getByRole('button', { name: 'New study' }));
+    fireEvent.keyDown(view.getByLabelText('Study name'), { key: 'Escape' });
+    expect(view.queryByLabelText('Study name')).toBeNull();
+    expect(document.activeElement).toBe(view.getByRole('button', { name: 'New study' }));
+  });
+
+  it('focuses the new study row and announces it after Create (qec-r-83)', async () => {
+    const fs = memoryStudyFs();
+    useProjectStore.setState({ projectRoot: '/project' });
+    const view = render(<QecStudySidebar fs={fs} />);
+    await waitFor(() => expect(useQecStudyStore.getState().loading).toBe(false));
+    fireEvent.click(view.getByRole('button', { name: 'New study' }));
+    fireEvent.change(view.getByLabelText('Study name'), { target: { value: 'Quick' } });
+    fireEvent.change(view.getByLabelText('Research question'), { target: { value: 'Fast?' } });
+    fireEvent.click(view.getByRole('button', { name: 'Create study' }));
+    await waitFor(() => expect(view.queryByLabelText('Study name')).toBeNull());
+    await waitFor(() => expect(document.activeElement?.getAttribute('aria-pressed')).toBe('true'));
+    expect(view.getByRole('status').textContent).toContain('Study created');
+  });
+
   it('creates a validated minimal Study and selects it', async () => {
     const fs = memoryStudyFs();
     useProjectStore.setState({ projectRoot: '/project' });

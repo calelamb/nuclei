@@ -64,3 +64,23 @@ describe('QecLambdaReadout warnings (qec-r-55)', () => {
     expect(container.querySelector('[role="img"][title]')).toBeNull();
   });
 });
+
+describe('QecLambdaReadout without a fit (qec-r-84)', () => {
+  afterEach(cleanup);
+
+  it('explains which distances were dropped instead of repeating the generic rule', () => {
+    const colors = useThemeStore.getState().colors;
+    const zero = (d: number): QecCampaignStatsRow => ({ ...row(d, 0.001, 0.01), errors: 0 });
+    const data = [row(3, 0.001, 0.01), row(5, 0.001, 0.001), zero(7), zero(9), zero(11)];
+    const estimates = lambdaEstimates(data, { units: 'per_shot' });
+    const { container } = render(<QecLambdaReadout decoders={['pymatching']} estimates={estimates} rows={data} units="per_shot" colors={colors} />);
+    expect(container.textContent).toContain('only d = 3 and 5 have logical errors at a shared p (d = 7, 9 and 11 had none)');
+    expect(container.textContent).not.toContain('needs ≥ 3 distances');
+  });
+
+  it('titles the panel in the primary text colour', () => {
+    const colors = useThemeStore.getState().colors;
+    render(<QecLambdaReadout decoders={[]} estimates={[]} units="per_shot" colors={colors} />);
+    expect(screen.getByRole('heading', { name: 'Error suppression Λ' }).style.color).not.toBe('');
+  });
+});

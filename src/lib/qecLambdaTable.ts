@@ -1,4 +1,6 @@
-import type { LambdaGroupEstimate, RateUnits } from './qecFit';
+import { MIN_LAMBDA_DISTANCES, rowProblem, rowRate, type LambdaGroupEstimate, type RateUnits } from './qecFit';
+import type { QecCampaignStatsRow } from '../types/qec';
+import { assignExperiments } from './qecExperiments';
 import { lambdaCaveats } from './qecLambdaText';
 import { experimentNames } from './qecExperimentName';
 import { formatLambda, formatNoise } from './qecPlotFormat';
@@ -131,4 +133,71 @@ export function lambdaRangeSummary(rows: readonly LambdaRowView[]): string {
   if (rows.length === 1) return `Λ ${low} at p = ${rows[0].p}`;
   const span = low === high ? low : `${low}–${high}`;
   return `Λ ${span} over ${rows.length} values of p`;
+}
+
+interface DecoderCell { distances: Set<number>; withErrors: Set<number> }
+
+function sortedList(values: Iterable<number>): number[] {
+  return [...values].sort((a, b) => a - b);
+}
+
+/**
+ * Per (experiment, p) cell: which distances were measured and which of them saw a logical error.
+ * Cells follow the estimator's own grouping (experiment key, p, units) so the explanation can
+ * never disagree with it.
+ */
+function decoderCells(
+  rows: readonly QecCampaignStatsRow[],
+  decoder: string,
+  units: RateUnits,
+): { cells: DecoderCell[]; allDistances: number[] } {
+  const experiments = assignExperiments(rows);
+  const cells = new Map<string, DecoderCell>();
+  const all = new Set<number>();
+  for (const row of rows) {
+    const meta = (row.json_metadata ?? {}) as Record<string, unknown>;
+    if (row.decoder !== decoder || typeof meta.d !== 'number' || typeof meta.p !== 'number' || rowProblem(row) === 'invalid') continue;
+    if (rowRate(row, { units }).units !== units) continue;
+    all.add(meta.d);
+    const key = `${experiments.get(row)?.key ?? ''}\u0000${meta.p}`;
+    const cell = cells.get(key) ?? { distances: new Set<number>(), withErrors: new Set<number>() };
+    cell.distances.add(meta.d);
+    if (row.errors > 0) cell.withErrors.add(meta.d);
+    cells.set(key, cell);
+  }
+  return { cells: [...cells.values()], allDistances: sortedList(all) };
+}
+
+function wasWere(list: readonly number[]): string {
+  return list.length === 1 ? 'was' : 'were';
+}
+
+/**
+ * Why a decoder has no Λ row, in terms of its own data: which distances saw logical errors at a
+ * shared p, which were measured but had none, and which were not measured at that p, so the panel
+ * never contradicts a legend that lists five distances.
+ */
+export function explainMissingLambda(rows: readonly QecCampaignStatsRow[], decoder: string, units: RateUnits = 'per_shot'): string {
+  const { cells, allDistances } = decoderCells(rows, decoder, units);
+  if (allDistances.length < MIN_LAMBDA_DISTANCES) {
+    const have = allDistances.length > 0 ? ` (this data has ${distanceList(allDistances)})` : '';
+    return `Λ not estimated: needs ≥ ${MIN_LAMBDA_DISTANCES} distances at the same p${have}`;
+  }
+  const best = cells.reduce<DecoderCell | null>((top, c) => (top === null || c.withErrors.size > top.withErrors.size ? c : top), null);
+  const withErrors = sortedList(best?.withErrors ?? []);
+  // Three distances with errors should have fitted; do not claim a cause the data does not show.
+  if (withErrors.length >= MIN_LAMBDA_DISTANCES) {
+    return `Λ not estimated: no single experiment has ${MIN_LAMBDA_DISTANCES} usable distances at one p`;
+  }
+  const measured = best?.distances ?? new Set<number>();
+  const none = sortedList([...measured].filter((d) => !best?.withErrors.has(d)));
+  const missing = allDistances.filter((d) => !measured.has(d));
+  const lead = withErrors.length === 0
+    ? 'no distance has logical errors at a shared p'
+    : `only ${distanceList(withErrors)} ${withErrors.length === 1 ? 'has' : 'have'} logical errors at a shared p`;
+  const notes = [
+    ...(none.length > 0 ? [`${distanceList(none)} had none`] : []),
+    ...(missing.length > 0 ? [`${distanceList(missing)} ${wasWere(missing)} not measured at that p`] : []),
+  ];
+  return `Λ not estimated: ${lead}${notes.length > 0 ? ` (${notes.join('; ')})` : ''}`;
 }

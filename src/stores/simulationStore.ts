@@ -1,5 +1,15 @@
 import { create } from 'zustand';
 import type { SimulationResult } from '../types/quantum';
+import { useSettingsStore } from './settingsStore';
+import { MAX_SHOTS, MIN_SHOTS } from '../components/histogram/shotsDraft';
+
+const FALLBACK_SHOTS = 1024;
+
+/** The run's shot count starts from Settings > Default shots, so a reload keeps what was chosen. */
+function initialShots(): number {
+  const saved = useSettingsStore.getState().kernel.defaultShots;
+  return Number.isInteger(saved) && saved >= MIN_SHOTS && saved <= MAX_SHOTS ? saved : FALLBACK_SHOTS;
+}
 
 // Cap terminal buffer to avoid unbounded memory growth and re-render cost
 // when a user's code prints in a tight loop. Older lines are trimmed FIFO.
@@ -90,7 +100,7 @@ export const useSimulationStore = create<SimulationState>((set) => ({
   lastRunFailed: false,
   lastRunNoCircuit: false,
   lastRunStopped: false,
-  shots: 1024,
+  shots: initialShots(),
   terminalOutput: [],
   beginRun: (runCode) => set({ runCode }),
   setResult: (result) => set((s) => ({

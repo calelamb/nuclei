@@ -161,7 +161,7 @@ export function ThresholdPanel({ part = 'all', tabs, bare = false }: { part?: Th
     : fullBox;
   const readoutBody = (
     <>
-      <QecLambdaReadout decoders={decoders} estimates={lambdas} units={units} colors={colors} hideTitle={part === 'lambda'} />
+      <QecLambdaReadout decoders={decoders} estimates={lambdas} rows={rows} units={units} colors={colors} hideTitle={part === 'lambda'} />
       <div style={{ fontSize: 11, color: colors.textMuted, marginTop: 6, lineHeight: 1.45 }}>
         {`Whiskers: sinter ${whiskerConvention()}, `}
         {hasDiscards ? 'on shots − discards. ' : 'on shots. '}

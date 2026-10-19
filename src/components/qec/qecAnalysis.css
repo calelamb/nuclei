@@ -7,8 +7,9 @@
  */
 .nuclei-table.qec-lambda-table { min-width: 0; table-layout: fixed; }
 .qec-lambda-table td.nuclei-table__text { white-space: normal; }
-.qec-lambda-table th:nth-child(1), .qec-lambda-table td:nth-child(1) { width: 66px; }
-.qec-lambda-table th:nth-child(2), .qec-lambda-table td:nth-child(2) { width: 46px; }
+.qec-lambda-table th:nth-child(1), .qec-lambda-table td:nth-child(1) { width: auto; }
+.qec-lambda-table th:nth-child(2), .qec-lambda-table td:nth-child(2) { width: 56px; }
+.qec-lambda-table th:nth-child(3), .qec-lambda-table td:nth-child(3) { width: 104px; }
 .qec-lambda-table th:nth-child(4), .qec-lambda-table td:nth-child(4) { width: 42px; }
 .qec-lambda-table th:nth-child(5), .qec-lambda-table td:nth-child(5) { width: 24px; padding-left: 0; }
 .qec-lambda-table td, .decoder-table td { font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
@@ -18,7 +19,7 @@
 
 /* Segmented options never wrap onto two lines, whatever the header width. */
 .nuclei-segmented__option { white-space: nowrap; }
-.nuclei-table.qec-lambda-table { max-width: 440px; }
+.nuclei-table.qec-lambda-table { max-width: 380px; }
 
 /* A quiet in-text action such as "Show all 12". */
 .qec-link-button {
@@ -68,5 +69,8 @@
   background: color-mix(in srgb, var(--color-warning) 14%, transparent); color: var(--color-warning-text);
   font-family: var(--font-sans); font-size: var(--font-size-caption); font-weight: var(--font-weight-medium); line-height: var(--line-height-caption);
 }
-.qec-lambda-group td { font-size: 11px; font-weight: 600; letter-spacing: 0.02em; padding-top: var(--space-2); }
-.qec-lambda-table .qec-lambda-warn { width: 20px; height: 20px; margin-block: -2px; } /* keeps flagged rows the height of their neighbours */
+.qec-lambda-group td { font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); letter-spacing: 0.02em; padding-top: var(--space-2); }
+.qec-lambda-table .qec-lambda-warn { display: flex; width: 20px; height: 20px; margin-block: -4px; } /* keeps flagged rows the height of their neighbours */
+/* Every Λ row is the same height, flagged or not: the warn button never decides the row. */
+.qec-lambda-table td:not(.nuclei-table__text) { height: 24px; padding-block: 0; }
+.qec-lambda-table td .qec-lambda-warn { vertical-align: middle; margin-block: 0; }

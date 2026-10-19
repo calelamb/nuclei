@@ -15,11 +15,15 @@ export interface StalePill {
  * What the pill over a dimmed (last-good) diagram says, or null when nothing explains the staleness yet.
  * A pending preview outranks an error: that error belongs to the older code, and the new code is on its way.
  */
-export function describeStale(input: { previewPaused: boolean; error: string | null; errorLine: number | null; previewPending?: boolean }): StalePill | null {
+export function describeStale(input: { previewPaused: boolean; error: string | null; errorLine: number | null; previewPending?: boolean; installing?: string | null }): StalePill | null {
   if (input.previewPaused) {
     return { label: 'Preview paused', tooltip: PREVIEW_PAUSED_CAPTION, line: null, action: 'run' };
   }
   if (input.previewPending) {
+    if (input.installing) {
+      const label = `Installing ${input.installing}…`;
+      return { label, tooltip: `${label} The first run of a framework downloads it; the diagram updates when it is ready.`, line: null };
+    }
     return { label: PENDING_LABEL, tooltip: 'The diagram shows the previous code while the preview catches up.', line: null };
   }
   if (input.errorLine !== null) {

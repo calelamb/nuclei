@@ -36,6 +36,19 @@ function seriesLabel(run: RunRecord): string {
   return run.manifest.status === 'failed' ? `${label} (failed, no measurements)` : label;
 }
 
+function buildSeries(
+  runs: readonly RunRecord[],
+  measurementsByDir: Record<string, Record<string, number>>,
+  colors: ReturnType<typeof useThemeStore.getState>['colors'],
+): MultiSeriesHistogramSeries[] {
+  let slot = 0;
+  return runs.map((run) => {
+    const failed = run.manifest.status === 'failed';
+    const color = failed ? colors.textDim : seriesColor(colors, slot++);
+    return { label: seriesLabel(run), measurements: measurementsByDir[run.dir] ?? {}, color };
+  });
+}
+
 function placeholderStyle(colors: ReturnType<typeof useThemeStore.getState>['colors']) {
   return { padding: 24, color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans } as const;
 }
@@ -108,11 +121,8 @@ export function CompareView() {
     );
   }
 
-  const series: MultiSeriesHistogramSeries[] = runs.map((run, i) => ({
-    label: seriesLabel(run),
-    measurements: measurementsByDir[run.dir] ?? {},
-    color: seriesColor(colors, i),
-  }));
+  // Failed runs have no bars, so they must not consume a colour slot.
+  const series = buildSeries(runs, measurementsByDir, colors);
 
   const diff = diffManifests(runs.map((r) => r.manifest));
 
