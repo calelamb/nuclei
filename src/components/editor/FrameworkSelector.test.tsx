@@ -149,3 +149,47 @@ describe('FrameworkSelector — compact label', () => {
     expect(screen.getByLabelText('Framework').textContent).toBe('Qiskit (browser subset)');
   });
 });
+
+describe('FrameworkSelector — New X file (research-r-01)', () => {
+  const BELL = 'import cirq\n# bell.py on disk\n';
+  const pickTemplate = (name: string) => {
+    fireEvent.click(screen.getByLabelText('Framework'));
+    fireEvent.click(screen.getByRole('menuitem', { name }));
+  };
+  beforeEach(() => {
+    useEditorStore.setState({ code: BELL, framework: 'cirq', filePath: '/p/bell.py', isDirty: false, focusRequest: 0 });
+  });
+  afterEach(() => {
+    cleanup();
+    useEditorStore.setState({ code: STARTER_TEMPLATES.qiskit, framework: 'qiskit', filePath: null, isDirty: false });
+  });
+
+  it('never writes into a tab that has a filePath: the starter lands in an untitled buffer', () => {
+    renderSelector();
+    pickTemplate('New Cirq file');
+    const s = useEditorStore.getState();
+    expect(s.filePath).toBeNull();
+    expect(s.code).toBe(STARTER_TEMPLATES.cirq);
+    expect(s.isDirty).toBe(true); // untitled.py*, so Cmd+S asks for a name rather than overwriting bell.py
+    expect(s.focusRequest).toBeGreaterThan(0);
+  });
+
+  it('confirms before discarding unsaved edits, and leaves them alone when kept', async () => {
+    useEditorStore.setState({ code: `${BELL}# edit`, isDirty: true });
+    renderSelector();
+    pickTemplate('New Cirq file');
+    fireEvent.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(useEditorStore.getState().filePath).toBe('/p/bell.py');
+    expect(useEditorStore.getState().code).toBe(`${BELL}# edit`);
+  });
+
+  it('moves focus to the editor after a confirmed cross-language replace (interaction-r-16)', async () => {
+    useEditorStore.setState({ code: `${BELL}# edit`, isDirty: true });
+    renderSelector();
+    pickQsharp();
+    fireEvent.click(await screen.findByRole('button', { name: 'Replace' }));
+    await waitFor(() => expect(useEditorStore.getState().framework).toBe('qsharp'));
+    expect(useEditorStore.getState().focusRequest).toBeGreaterThan(0);
+  });
+});

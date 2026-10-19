@@ -34,6 +34,7 @@ export function FrameworkSelector({ compact = false }: { compact?: boolean } = {
   const code = useEditorStore((s) => s.code);
   const isDirty = useEditorStore((s) => s.isDirty);
   const filePath = useEditorStore((s) => s.filePath);
+  const requestEditorFocus = useEditorStore((s) => s.requestEditorFocus);
   const { confirm, confirmDialog } = useConfirm();
   const platform = usePlatform();
   const isWeb = platform.getPlatform() === 'web';
@@ -44,6 +45,17 @@ export function FrameworkSelector({ compact = false }: { compact?: boolean } = {
   const isDisabled = (f: Framework) => isWeb && f !== 'cirq' && f !== 'qiskit';
   const fullLabelFor = (f: Framework) => (isWeb && f === 'qiskit' ? 'Qiskit (browser subset)' : displayName(f));
   const labelFor = (f: Framework) => (compact ? displayName(f) : fullLabelFor(f));
+
+  /**
+   * Puts a framework's starter in an untitled buffer: detached from any open file, so saving asks
+   * for a name and can never overwrite the file that was open. The learner then types straight away.
+   */
+  const loadStarterAsUntitled = (f: Framework) => {
+    setFilePath(null);
+    setCode(STARTER_TEMPLATES[f]);
+    setFramework(f);
+    requestEditorFocus();
+  };
 
   const applyTemplate = async (f: Framework) => {
     if (isDirty) {
@@ -56,8 +68,7 @@ export function FrameworkSelector({ compact = false }: { compact?: boolean } = {
       });
       if (!ok) return;
     }
-    setCode(STARTER_TEMPLATES[f]);
-    setFramework(f);
+    loadStarterAsUntitled(f);
   };
 
   /**
@@ -94,9 +105,7 @@ export function FrameworkSelector({ compact = false }: { compact?: boolean } = {
         tone: 'danger',
       });
       if (!ok) return;
-      setCode(STARTER_TEMPLATES[f]);
-      setFramework(f);
-      setFilePath(null);
+      loadStarterAsUntitled(f);
       return;
     }
     setFramework(f);
