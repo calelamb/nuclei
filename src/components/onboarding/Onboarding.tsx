@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { NucleiMark } from '../brand/NucleiMark';
 import { useThemeStore } from '../../stores/themeStore';
 import { useLearnGateStore } from '../../stores/learnGateStore';
 import { QuantumPlayground } from './QuantumPlayground';
@@ -137,8 +138,10 @@ function ModeSelectScreen({ onSelectLearn, onSelectResearch }: {
           fontFamily: TYPOGRAPHY.fontSans,
           letterSpacing: -1,
           marginBottom: 8,
+          display: 'flex', alignItems: 'center', gap: 14,
           animation: prefersReducedMotion() ? 'none' : `nuclei-fade-in ${DURATION.emphasis}ms ${EASING.enter}`,
         }}>
+          <NucleiMark size={44} />
           NUCLEI
         </div>
         <p style={{
@@ -186,8 +189,10 @@ function WelcomeScreen({ onSelect, onBack }: { onSelect: (path: OnboardingPath) 
           fontFamily: TYPOGRAPHY.fontSans,
           letterSpacing: -1,
           marginBottom: 8,
+          display: 'flex', alignItems: 'center', gap: 14,
           animation: prefersReducedMotion() ? 'none' : `nuclei-fade-in ${DURATION.emphasis}ms ${EASING.enter}`,
         }}>
+          <NucleiMark size={44} />
           NUCLEI
         </div>
         <p style={{

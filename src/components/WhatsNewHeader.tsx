@@ -1,4 +1,4 @@
-import { Atom } from 'lucide-react';
+import { NucleiMark } from './brand/NucleiMark';
 import type { ThemeColors } from '../stores/themeStore';
 
 import { TYPOGRAPHY } from '../styles/tokens';
@@ -11,8 +11,7 @@ interface WhatsNewHeaderProps {
 }
 
 /**
- * The "release moment" header band: a rotating-ring atom chip (the one
- * quantum motif) plus the uppercase eyebrow and monospace version pill.
+ * The "release moment" header band: a rotating-ring chip holding the Nuclei mark plus the uppercase eyebrow and monospace version pill.
  */
 export function WhatsNewHeader({ versionLabel, accent, textDim, reduced }: WhatsNewHeaderProps) {
   return (
@@ -45,7 +44,7 @@ export function WhatsNewHeader({ versionLabel, accent, textDim, reduced }: Whats
             color: accent,
           }}
         >
-          <Atom size={20} strokeWidth={1.75} />
+          <NucleiMark size={22} />
         </div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
