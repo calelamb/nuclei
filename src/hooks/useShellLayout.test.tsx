@@ -6,6 +6,9 @@ import { useNavigationStore } from '../stores/navigationStore';
 import { useDiracPanelStore } from '../stores/diracPanelStore';
 import { useBottomPanelStore } from '../stores/bottomPanelStore';
 import { useLearnStore } from '../stores/learnStore';
+import { focusAfterViewSelect } from '../components/layout/focusViz';
+
+vi.mock('../components/layout/focusViz', () => ({ focusAfterViewSelect: vi.fn(() => () => {}) }));
 
 const VIEWS = ['files', 'experiments', 'settings'];
 
@@ -87,6 +90,8 @@ describe('useShellLayout takeover memory (shell-r10-01)', () => {
     renderHook(() => useShellLayout({ platform: platform as never, mode: 'learn', validViews: LV, canCollapseSidebar: true }));
     await waitFor(() => expect(useLearnStore.getState().isLearnMode).toBe(true));
     expect(useNavigationStore.getState().activeView).toBeNull();
+    // The editor that held focus unmounted: hand focus to the takeover heading, not the mode chip.
+    expect(focusAfterViewSelect).toHaveBeenCalledWith('learning');
   });
 });
 

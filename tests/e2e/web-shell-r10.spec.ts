@@ -23,8 +23,8 @@ test('@web twenty Runs leave the console free of WebGL context warnings (IR10-01
   await page.locator('.monaco-editor').first().click();
   for (let run = 1; run <= 20; run += 1) {
     await page.keyboard.press('ControlOrMeta+Enter');
-    await expect(page.getByText(/Done · /).first()).toBeVisible({ timeout: 30_000 });
-    await page.waitForTimeout(300);
+    // Each Run appends a 'Run at' separator: wait for run N so Runs never coalesce.
+    await expect(page.getByText(/Run at/)).toHaveCount(run, { timeout: 30_000 });
   }
   expect(warnings).toEqual([]);
 });

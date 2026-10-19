@@ -6,6 +6,7 @@ import { useLearnStore } from '../stores/learnStore';
 import { useChallengeModeStore } from '../stores/challengeModeStore';
 import { useDiracPanelStore } from '../stores/diracPanelStore';
 import { useBottomPanelStore } from '../stores/bottomPanelStore';
+import { focusAfterViewSelect } from '../components/layout/focusViz';
 import { bandsForWidth } from '../layout/breakpoints';
 import { parseShell, sameShell, shellStorageKey, type PersistedShell } from '../layout/shellPersistence';
 
@@ -76,7 +77,10 @@ export function useShellLayout({ platform, mode, validViews, canCollapseSidebar 
         const saved = parseShell(raw, validViewsRef.current);
         if ('activeView' in saved) useNavigationStore.setState({ activeView: saved.activeView ?? null, autoCollapsedView: null, lastNarrow: null });
         // A lesson or challenge owns the area (activeView is null under it): reopen it, not a bare sidebar.
-        if (saved.takeover) useNavigationStore.getState().selectView(saved.takeover, { toggle: false });
+        if (saved.takeover) {
+          useNavigationStore.getState().selectView(saved.takeover, { toggle: false });
+          focusAfterViewSelect(saved.takeover);
+        }
         useDiracPanelStore.getState().hydrate({ isOpen: saved.diracOpen, width: saved.diracWidth ?? undefined });
         if (saved.bottomCollapsed !== undefined) useBottomPanelStore.getState().setCollapsed(saved.bottomCollapsed);
         if (saved.bottomTab) useBottomPanelStore.getState().setActiveTab(saved.bottomTab);
