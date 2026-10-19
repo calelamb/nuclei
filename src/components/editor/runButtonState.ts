@@ -117,3 +117,6 @@ export const STOP_GRACE_MS = 500;
 export function isAccidentalStop(clickDetail: number, runStartedAt: number, now: number): boolean {
   return clickDetail > 1 || now - runStartedAt < STOP_GRACE_MS;
 }
+
+/** Marks the Run slot's button: where a failed start's Retry hands focus once the banner is gone. */
+export const RUN_BUTTON_SELECTOR = '[data-run-button]';

@@ -171,6 +171,31 @@ describe('PyodideKernel — worker-backed runtime', () => {
     ]);
   });
 
+  it('after Stop during an install, the preview parse stays quiet and never starts the install again', async () => {
+    const calls: string[] = [];
+    const captured: CapturedMessage[] = [];
+    const runtime = new PyodideRuntimeClient(() => new FakeWorker((req, reply) => {
+      if (req.type === 'init') { reply({ id: req.id, type: 'result', value: 'ready' }); return; }
+      calls.push(req.fn);
+      if (req.fn === 'nuclei_execute' && calls.length === 1) { reply({ type: 'installing', package: 'Cirq', active: true }); return; }
+      reply({ id: req.id, type: 'result', value: '{}' });
+    }));
+    const kernel = new PyodideKernel((m) => captured.push(m), runtime);
+    await kernel.init();
+    const sending = kernel.send({ type: 'execute', code: 'import cirq', shots: 10 });
+    await Promise.resolve();
+    await Promise.resolve();
+    runtime.stop();
+    await sending;
+    await kernel.init(); // Python reboots after the stop
+    await kernel.send({ type: 'parse', code: 'import cirq' });
+    expect(calls).toEqual(['nuclei_execute']);
+    expect(runtime.currentInstall()).toBeNull();
+    await kernel.send({ type: 'execute', code: 'x = 1', shots: 10 });
+    await kernel.send({ type: 'parse', code: 'x = 1' });
+    expect(calls).toEqual(['nuclei_execute', 'nuclei_execute', 'nuclei_parse']);
+  });
+
   it('skips parse requests while Python is not running instead of erroring', async () => {
     const { kernel, captured } = makeKernel({});
     await kernel.send({ type: 'parse', code: 'x = 1' });
@@ -206,5 +231,15 @@ describe('PyodideKernel — worker-backed runtime', () => {
     expect(captured.some((m) => m.type === 'output')).toBe(false);
     await kernel.send({ type: 'execute', code: 'import cirq', shots: 1 });
     expect(captured.filter((m) => m.type === 'output')).toEqual([{ type: 'output', text: 'Installing Cirq\n' }]);
+  });
+  it('resumes the preview when a paused buffer is edited away from the interrupted package', async () => {
+    const { kernel, captured, runtime } = makeKernel({ parse: { snapshot: { framework: 'qiskit' }, output: '', error: null } });
+    await kernel.init();
+    (runtime as unknown as { stoppedDuringInstall: boolean }).stoppedDuringInstall = true;
+    await kernel.send({ type: 'parse', code: 'import cirq' });
+    expect(captured.filter((m) => m.type === 'snapshot')).toHaveLength(0);
+    await kernel.send({ type: 'parse', code: 'from qiskit import QuantumCircuit' });
+    expect(runtime.previewPausedByStop()).toBe(false);
+    expect(captured.some((m) => m.type === 'snapshot')).toBe(true);
   });
 });

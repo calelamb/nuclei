@@ -69,10 +69,12 @@ describe('shortcuts sheet by workspace', () => {
     expect(research).toContain('Toggle theme');
   });
 
-  it('files Launch on hardware under Run, not View', () => {
+  it('files Launch on hardware next to Run circuit under Essential and has no one-row Run group', () => {
     const groups = shortcutGroups(true, false, 'research');
-    expect(groups.find((g) => g.title === 'View')?.shortcuts.map((s) => s.description)).not.toContain('Launch on hardware');
-    expect(groups.find((g) => g.title === 'Run')?.shortcuts.map((s) => s.description)).toEqual(['Launch on hardware']);
+    const essential = groups.find((g) => g.title === 'Essential')?.shortcuts.map((s) => s.description) ?? [];
+    expect(essential.indexOf('Launch on hardware')).toBe(essential.indexOf('Run circuit') + 1);
+    expect(groups.find((g) => g.title === 'Run')).toBeUndefined();
+    expect(groups.every((g) => g.shortcuts.length >= 2)).toBe(true);
   });
 
   it('the rendered sheet follows the live workspace', () => {
@@ -94,5 +96,19 @@ describe('shortcuts sheet is the shared Dialog', () => {
     expect(dialog.className).toContain('nuclei-dialog');
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(closed).toBe(1);
+  });
+});
+
+describe('shortcutGroups folds tiny groups', () => {
+  it('never shows a group of fewer than three rows (web Research View has one)', () => {
+    for (const mode of ['learn', 'research'] as const) {
+      for (const web of [true, false]) {
+        const groups = shortcutGroups(true, web, mode);
+        expect(groups.every((g) => g.shortcuts.length >= 3 || groups.length === 1)).toBe(true);
+      }
+    }
+    const web = shortcutGroups(false, true, 'research');
+    expect(web.some((g) => g.shortcuts.some((r) => r.description === 'Toggle terminal panel'))).toBe(true);
+    expect(web.find((g) => g.title === 'View')).toBeUndefined();
   });
 });

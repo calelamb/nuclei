@@ -103,14 +103,14 @@ describe('design guards', () => {
     expect(block(/:root\[data-theme='light'\]/)).toMatch(/color-scheme:\s*light\s*;/);
   });
 
-  it('draws a focused choice card as one band: the border takes the ring colour, no pale border between ring and accent stripe', () => {
+  it('keeps keyboard focus on a choice card distinct from hover: the standard offset ring, no border tint, no focus bar (shell-r11-04)', () => {
     const css = files.find((f) => f.rel === 'components/ui/ui.css')?.text ?? '';
     const rule = css.match(/\.nuclei-choice-card:focus-visible\s*\{([^}]*)\}/)?.[1] ?? '';
-    expect(rule).toMatch(/border-color:\s*var\(--focus-ring-color\)/);
-    expect(rule).not.toMatch(/border-color:\s*var\(--color-border-subtle\)/);
-    // The inset stripe takes the ring colour too, so the left edge is one colour rather than the accent inside the ring.
-    expect(rule).toMatch(/inset 3px 0 0 var\(--focus-ring-color\)/);
-    expect(rule).not.toMatch(/--choice-accent/);
+    expect(rule).toMatch(/outline:\s*var\(--focus-ring-width\)\s+solid\s+var\(--focus-ring-color\)/);
+    expect(rule).toMatch(/outline-offset:\s*var\(--focus-ring-offset\)/);
+    // Hover owns the border tint; focus must not borrow it, and adds no inset bar of its own.
+    expect(rule).not.toMatch(/border-color/);
+    expect(rule).not.toMatch(/box-shadow/);
   });
 
   it('balances the lines of centred empty-state copy', () => {

@@ -226,6 +226,11 @@ function ThinkingDots() {
 }
 
 /* ── Main Dirac Side Panel ── */
+/** A heading or block the app itself focused (tabindex -1, not a control): nothing the person is typing into. */
+function isLandingTarget(el: Element): boolean {
+  return el.getAttribute('tabindex') === '-1' && !el.matches('input, textarea, select, button, [contenteditable="true"]');
+}
+
 export function DiracSidePanel() {
   const { messages, isLoading } = useDiracStore();
   const apiKey = useDiracStore((s) => s.apiKey);
@@ -259,7 +264,8 @@ export function DiracSidePanel() {
   // on its own, or a different panel unmounting, must never pull focus here.
   const rootRef = useRef<HTMLDivElement>(null);
   const focusWasInDirac = useRef(false);
-  const wasAutoCollapsed = useRef(false);
+  // Set by the store itself at the moment of a flip: did the window band cause it (auto fold / unfold), or the person?
+  const flipBandDriven = useRef(false);
   useEffect(() => {
     const onFocusIn = (e: FocusEvent) => {
       const target = e.target as Node | null;
@@ -269,24 +275,32 @@ export function DiracSidePanel() {
     document.addEventListener('focusin', onFocusIn);
     return () => document.removeEventListener('focusin', onFocusIn);
   }, []);
+  useEffect(() => useDiracPanelStore.subscribe((state, prev) => {
+    if (state.isOpen !== prev.isOpen) flipBandDriven.current = state.autoCollapsed || state.lastNarrow !== prev.lastNarrow;
+  }), []);
   useEffect(() => {
     if (wasOpen.current === isOpen) return undefined;
     wasOpen.current = isOpen;
     // Band-driven flips (resize fold / unfold) need proof focus was in Dirac. User flips do not:
     // WebKit never focuses a button on click, so no focusin is seen for a mouse toggle.
-    const autoNow = useDiracPanelStore.getState().autoCollapsed;
-    const bandDriven = autoNow || wasAutoCollapsed.current;
-    wasAutoCollapsed.current = autoNow;
+    const bandDriven = flipBandDriven.current;
     const hadFocus = focusWasInDirac.current;
     focusWasInDirac.current = false;
     if (bandDriven && !hadFocus) return undefined;
-    const frame = requestAnimationFrame(() => {
+    // The sidebar may be folding away under focus (Dirac claiming room): wait a few frames for it to leave, then land.
+    let frame = 0;
+    let tries = 0;
+    const land = () => {
       const active = document.activeElement;
-      if (active && active !== document.body) return;
+      const onBody = !active || active === document.body || (!bandDriven && isLandingTarget(active));
+      const inFoldingSidebar = !onBody && active.closest('[data-tour-sidebar]') !== null && isOpen;
+      if (!onBody && !(inFoldingSidebar && tries < 6)) return;
+      if (!onBody) { tries += 1; frame = requestAnimationFrame(land); return; }
       // Opening lands on the field the person will type into (composer, or the key field with no key); Collapse is only a fallback.
       const entry = inputRef.current ?? document.querySelector<HTMLElement>('section[aria-label="Connect Dirac"] input');
       (isOpen ? entry ?? collapseRef.current : railRef.current)?.focus();
-    });
+    };
+    frame = requestAnimationFrame(land);
     return () => cancelAnimationFrame(frame);
   }, [isOpen]);
 
@@ -435,7 +449,7 @@ export function DiracSidePanel() {
   }
 
   return (
-    <div ref={rootRef} style={{
+    <div ref={rootRef} data-dirac-panel="" style={{
       width, height: '100%',
       display: 'flex', flexDirection: 'column',
       backgroundColor: colors.bg,

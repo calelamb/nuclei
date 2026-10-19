@@ -9,6 +9,7 @@
 import kernelRuntimeSource from './kernel_runtime.py?raw';
 import {
   BOOT_STAGES,
+  CIRQ_MENTION,
   type RuntimeFunction,
   type WorkerRequest,
   type WorkerResponse,
@@ -123,8 +124,6 @@ function ensureCirq(): Promise<void> {
   cirqPromise.catch(() => { cirqPromise = null; }); // allow a retry after a network failure
   return cirqPromise;
 }
-
-const CIRQ_MENTION = /\b(?:import|from)\s+cirq\b/;
 
 /** The call whose Python is running right now; live output is tagged with it. */
 let activeCallId: number | null = null;

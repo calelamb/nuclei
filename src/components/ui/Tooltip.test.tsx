@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup, act } from '@testing-library/react';
 import { Tooltip, TOOLTIP_OPEN_DELAY_MS, TOOLTIP_CLOSE_DELAY_MS } from './Tooltip';
 import { closeActiveTooltip, resetTooltipSingleton, TOOLTIP_WARMUP_MS } from './tooltipSingleton';
+import { focusQuietly } from './quietFocus';
 import { anchorTooltip, nudgeIntoView } from './tooltipPlacement';
 
 beforeEach(() => { vi.useFakeTimers(); resetTooltipSingleton(); });
@@ -106,6 +107,31 @@ describe('Tooltip', () => {
     fireEvent.mouseEnter(btn);
     act(() => { vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS + 10); });
     expect(screen.getByRole('tooltip')).toBeTruthy();
+  });
+
+  it('stays shut for a programmatic hand-off focus that carries the ring only', () => {
+    setup();
+    act(() => { focusQuietly(screen.getByText('mode')); });
+    act(() => { vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS + 10); });
+    expect(document.activeElement).toBe(screen.getByText('mode'));
+    expect(screen.queryByRole('tooltip')).toBeNull();
+  });
+
+  it('still opens for ordinary focus after a quiet one', () => {
+    setup();
+    act(() => { focusQuietly(screen.getByText('mode')); });
+    act(() => { screen.getByText('mode').blur(); screen.getByText('mode').focus(); });
+    act(() => { vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS + 10); });
+    expect(screen.getByRole('tooltip')).toBeTruthy();
+  });
+
+  it('closes an open tooltip when the window resizes so it cannot strand', () => {
+    setup();
+    fireEvent.focus(screen.getByText('mode'));
+    act(() => { vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS + 10); });
+    expect(screen.getByRole('tooltip')).toBeTruthy();
+    act(() => { window.dispatchEvent(new Event('resize')); });
+    expect(screen.queryByRole('tooltip')).toBeNull();
   });
 
   describe('viewport clamping', () => {
@@ -260,6 +286,15 @@ describe('Tooltip trigger that becomes disabled', () => {
     expect(screen.getByRole('tooltip')).toBeTruthy();
     view.rerender(<Tooltip label="Nothing to clear yet"><button disabled>new</button></Tooltip>);
     await act(async () => { await Promise.resolve(); });
+    expect(screen.queryByRole('tooltip')).toBeNull();
+  });
+  it('closes on a scroll that carries the trigger, ignores a scroll elsewhere', () => {
+    render(<div><div data-testid="other" /><div data-testid="holder"><Tooltip label="Hi"><button>t</button></Tooltip></div></div>);
+    fireEvent.focus(screen.getByText('t'));
+    act(() => { vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS + 10); });
+    fireEvent.scroll(screen.getByTestId('other'));
+    expect(screen.getByRole('tooltip')).toBeTruthy();
+    fireEvent.scroll(screen.getByTestId('holder'));
     expect(screen.queryByRole('tooltip')).toBeNull();
   });
 });

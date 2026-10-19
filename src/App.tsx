@@ -29,6 +29,7 @@ import { useHelpOverlayStore } from './stores/helpOverlayStore';
 import { useWhatsNewStore } from './stores/whatsNewStore';
 import { useUIModeStore } from './stores/uiModeStore';
 import { findBindingId } from './config/keybindings';
+import { runShortcutOwnedElsewhere, runShortcutHiddenEditor } from './config/runShortcut';
 import { usePersistedPrefs } from './hooks/usePersistedPrefs';
 import { scheduleLandingFocus } from './components/onboarding/focusLanding';
 import { applyOnboardingPath, type OnboardingChoice } from './components/onboarding/applyOnboardingPath';
@@ -46,7 +47,7 @@ import { openRunFolder } from './lib/openRunFolder';
 import { restorePersistedPlugins } from './plugins/pluginLoader';
 import { topRailViewsFor } from './layout/panelRegistry';
 import { featuresFor } from './layout/uiModeFeatures';
-import { useMainTakeoverKind } from './layout/takeover';
+import { useMainTakeoverKind, readMainTakeoverKind } from './layout/takeover';
 import { useUiFeatures } from './hooks/useUiFeatures';
 import type { PlatformBridge } from './platform/bridge';
 import type { Framework, KernelLanguage } from './types/quantum';
@@ -400,8 +401,11 @@ function AppInner() {
       }
       const id = findBindingId(e);
       if (!id) return;
+      // Run is global, but Monaco (which binds it too), dialogs and Dirac's panel keep the chord.
+      if (id === 'run' && (e.defaultPrevented || runShortcutOwnedElsewhere(e.target) || runShortcutHiddenEditor(readMainTakeoverKind()))) return;
       e.preventDefault();
       switch (id) {
+        case 'run': { const execute = getExecute(); if (execute) execute(); break; }
         case 'open': fileOps.openFile(); break;
         case 'save-as': fileOps.saveFileAs(); break;
         case 'save': fileOps.saveFile(); break;

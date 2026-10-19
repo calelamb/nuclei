@@ -34,6 +34,7 @@ const lesson = track.lessons[0];
 beforeEach(() => {
   observed.length = 0;
   localStorage.clear();
+  sessionStorage.clear();
   vi.stubGlobal('IntersectionObserver', NoopObserver);
   Element.prototype.scrollTo = vi.fn();
   Element.prototype.scrollIntoView = vi.fn();
@@ -77,6 +78,26 @@ describe('LessonView', () => {
       expect(useLearnSectionStore.getState().restore).toBeNull();
       resolve();
     }));
+  });
+
+  it('lands focus on the restored block so the first Tab continues from there, not from the off-screen heading', async () => {
+    useLearnSectionStore.setState({ restore: { trackId: track.id, lessonId: lesson.id, blockIndex: 2 } });
+    render(<LessonView lesson={lesson} trackId={track.id} />);
+    await act(async () => { await new Promise<void>((resolve) => requestAnimationFrame(() => resolve())); });
+    expect(document.activeElement?.id).toBe('block-2');
+  });
+
+  it('lands on the remembered block after a mode round trip too', async () => {
+    sessionStorage.setItem('nuclei-lesson-position', JSON.stringify({ [lesson.id]: 1 }));
+    render(<LessonView lesson={lesson} trackId={track.id} />);
+    await act(async () => { await new Promise<void>((resolve) => requestAnimationFrame(() => resolve())); });
+    expect(document.activeElement?.id).toBe('block-1');
+  });
+
+  it('keeps the heading landing for a fresh open', async () => {
+    render(<LessonView lesson={lesson} trackId={track.id} />);
+    await act(async () => { await new Promise<void>((resolve) => requestAnimationFrame(() => resolve())); });
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1 }));
   });
 
   it('still restores the reading position under StrictMode remounts', async () => {

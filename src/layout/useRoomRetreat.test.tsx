@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { useRoomRetreat } from './useRoomRetreat';
+import { consumeDiracClaimedRoom } from '../hooks/sidebarFoldReason';
 import { useDiracPanelStore } from '../stores/diracPanelStore';
 import { useNavigationStore } from '../stores/navigationStore';
 
@@ -60,5 +61,30 @@ describe('useRoomRetreat (window shrinks while Dirac is about to auto-fold)', ()
     useNavigationStore.setState({ activeView: 'settings', autoCollapsedView: null });
     renderHook(() => useRoomRetreat({ sidebarWidth: 300, vizWanted: false, canCollapseSidebar: true, sidebarOpen: true }));
     expect(useNavigationStore.getState().activeView).toBe('settings');
+  });
+});
+
+describe('useRoomRetreat (fold reason)', () => {
+  it('records that Dirac opening, not a resize, folded the sidebar', () => {
+    setViewport(1440);
+    consumeDiracClaimedRoom();
+    useDiracPanelStore.setState({ isOpen: false, width: 420, autoCollapsed: false });
+    useNavigationStore.setState({ activeView: 'settings', autoCollapsedView: null });
+    renderHook(() => useRoomRetreat({ sidebarWidth: 600, vizWanted: true, canCollapseSidebar: true, sidebarOpen: true }));
+    expect(useNavigationStore.getState().activeView).toBe('settings');
+    act(() => { useDiracPanelStore.setState({ isOpen: true }); });
+    expect(useNavigationStore.getState().activeView).toBeNull();
+    expect(consumeDiracClaimedRoom()).toBe(true);
+  });
+
+  it('does not record Dirac when a plain resize folds the sidebar', () => {
+    setViewport(1440);
+    consumeDiracClaimedRoom();
+    useDiracPanelStore.setState({ isOpen: true, width: 420, autoCollapsed: false });
+    useNavigationStore.setState({ activeView: 'settings', autoCollapsedView: null });
+    renderHook(() => useRoomRetreat({ sidebarWidth: 280, vizWanted: true, canCollapseSidebar: true, sidebarOpen: true }));
+    act(() => { setViewport(900); window.dispatchEvent(new Event('resize')); });
+    expect(useNavigationStore.getState().activeView).toBeNull();
+    expect(consumeDiracClaimedRoom()).toBe(false);
   });
 });

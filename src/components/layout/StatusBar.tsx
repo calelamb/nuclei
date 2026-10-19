@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Circle, Sun, Moon, X, Command } from 'lucide-react';
+import { Circle, Sun, Moon, X, Command, SquareTerminal } from 'lucide-react';
 import { usePlatform } from '../../platform/PlatformProvider';
 import { usePreviewPending } from '../../layout/usePreviewPending';
 import { useDisplaySnapshot } from '../../layout/useDisplaySnapshot';
@@ -15,7 +15,7 @@ import { useExerciseStore } from '../../stores/exerciseStore';
 import { useLayoutStore, type LayoutPreset } from '../../stores/layoutStore';
 import { ModeChip } from './ModeChip';
 import { IconButton, Menu, Tooltip, type MenuEntry } from '../ui';
-import { shortcutLabel } from '../../config/keybindings';
+import { isMacPlatform, shortcutLabel } from '../../config/keybindings';
 import { useEditorFocusStore } from '../../stores/editorFocusStore';
 import { compactTabFocusHint } from '../../lib/tabFocusHint';
 import { useHelpOverlayStore } from '../../stores/helpOverlayStore';
@@ -324,7 +324,8 @@ export function StatusBar() {
           className="statusbar-ctl"
           style={{ ...chipStyle, border: 'none', cursor: 'pointer', gap: 5 }}
         >
-          <Command size={12} />
+          {/* The Command glyph is the Mac key; elsewhere the button is a terminal-style prompt. */}
+          {isMacPlatform() ? <Command size={12} /> : <SquareTerminal size={12} />}
           <span>Commands</span>
         </button>
       </Tooltip>

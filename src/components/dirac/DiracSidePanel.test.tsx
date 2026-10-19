@@ -242,6 +242,38 @@ describe('DiracSidePanel', () => {
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Open Dirac panel' })));
   });
 
+  it('Cmd+D after the window auto-folded Dirac lands in the key field from a Settings heading (shell-r12-02)', async () => {
+    resetStores(null);
+    useDiracPanelStore.setState({ isOpen: true, autoCollapsed: false, lastNarrow: false });
+    const sidebar = document.createElement('div');
+    sidebar.setAttribute('data-tour-sidebar', '');
+    const heading = document.createElement('h2');
+    heading.tabIndex = -1;
+    sidebar.appendChild(heading);
+    document.body.appendChild(sidebar);
+    render(<DiracSidePanel />);
+    act(() => { useDiracPanelStore.getState().applyNarrow(true); }); // the window shrank: Dirac folded itself
+    heading.focus();
+    act(() => { useDiracPanelStore.getState().toggle(); }); // the person pressed Cmd+D
+    sidebar.remove(); // the sidebar folds away under the focused heading
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Anthropic API key')));
+  });
+
+  it('Cmd+D from a programmatic landing target in the main area (no fold) still lands in Dirac (shell-r12-02)', async () => {
+    resetStores(null);
+    useDiracPanelStore.setState({ isOpen: false, autoCollapsed: false, lastNarrow: false });
+    const main = document.createElement('main');
+    const heading = document.createElement('h2');
+    heading.tabIndex = -1;
+    main.appendChild(heading);
+    document.body.appendChild(main);
+    render(<DiracSidePanel />);
+    heading.focus();
+    act(() => { useDiracPanelStore.getState().toggle(); });
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Anthropic API key')));
+    main.remove();
+  });
+
   it('renders a rejected key as a friendly card with an Update key action (learn-14)', () => {
     resetStores('sk-ant-test');
     useDiracStore.setState({

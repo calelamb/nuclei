@@ -14,7 +14,7 @@ import {
   type PyodideRuntimeClient,
 } from './pyodide/pyodideClient';
 import { OutputBatcher } from './pyodide/outputBatcher';
-import type { RuntimeFunction } from './pyodide/workerProtocol';
+import { CIRQ_MENTION, type RuntimeFunction } from './pyodide/workerProtocol';
 import { currentUserFilename, displayFilename } from './pyodide/userFilename';
 
 type KernelMessage = { type: string; [key: string]: unknown };
@@ -95,6 +95,10 @@ export class PyodideKernel {
     // A live-preview parse arriving while Python (re)boots is simply skipped:
     // the next edit after boot re-parses, and nothing should reach the user.
     if (msg.type === 'parse' && !this.runtime.isReady()) return;
+    // After a Stop that cut a package install short the preview stays quiet until the next Run, so it cannot restart the install.
+    // Edited away from the interrupted package (it no longer imports Cirq): nothing to install, so the preview resumes.
+    if (msg.type === 'parse' && this.runtime.previewPausedByStop() && !CIRQ_MENTION.test(String(msg.code ?? ''))) this.runtime.releasePreviewPause();
+    if (msg.type === 'parse' && this.runtime.previewPausedByStop()) return;
     // Tracebacks name the file being run; a sender may say which, otherwise it is the active tab.
     const filename = typeof msg.filename === 'string' ? displayFilename(msg.filename) : currentUserFilename();
     if (msg.type === 'parse') await this.parse(msg.code as string, filename);

@@ -143,18 +143,18 @@
   cursor: pointer; text-align: left; font-family: var(--font-sans);
   border: 1px solid var(--color-border-subtle); border-radius: var(--radius-round);
   /* The accent stripe is an inset shadow so it follows the rounded corners instead of a square border edge. */
-  box-shadow: inset 3px 0 0 var(--choice-accent);
+  box-shadow: inset 3px 0 0 var(--choice-stripe, var(--choice-accent));
   background: var(--color-surface-sunken);
   transition: background-color var(--duration-normal) var(--ease-standard),
               border-color var(--duration-normal) var(--ease-standard);
 }
 .nuclei-choice-card:hover { background: var(--color-surface-raised); border-color: var(--choice-accent); }
-/* Keyboard focus draws the ring and the accent stripe as one shape; the border does not shift colour underneath it. */
+/* Keyboard focus is the one standard ring, offset so it reads as a separate shape from the hover border tint
+   (hover tints the border; focus never does). The resting accent stripe stays as it is. */
 .nuclei-choice-card:focus-visible {
-  /* The 1px border takes the ring colour and the outer shadow supplies the rest of the ring's width, so the ring is one
-     unbroken band; the stripe takes the ring colour while focused so the left edge is one colour, not blue inside teal. */
-  outline: none; border-color: var(--focus-ring-color);
-  box-shadow: inset 3px 0 0 var(--focus-ring-color), 0 0 0 calc(var(--focus-ring-width) - 1px) var(--focus-ring-color);
+  outline: var(--focus-ring-width) solid var(--focus-ring-color); outline-offset: var(--focus-ring-offset);
+  /* The ring is the signal now; a full-strength stripe beside it doubles the left edge. */
+  --choice-stripe: color-mix(in srgb, var(--choice-accent) 40%, transparent);
 }
 /* In the light theme the sunken surface reads as disabled; resting cards sit on the raised surface and lift to white. */
 :root[data-theme='light'] .nuclei-choice-card { background: var(--color-surface-raised); }

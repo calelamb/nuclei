@@ -21,7 +21,7 @@ const EDITOR_EXTRAS: Record<string, ShortcutRow> = {
   ghost: { keys: 'Tab', description: 'Accept ghost completion' },
 };
 
-const GROUP_ORDER: KeybindingGroup[] = ['Essential', 'Editor', 'Navigation', 'View', 'Run'];
+const GROUP_ORDER: KeybindingGroup[] = ['Essential', 'Editor', 'Navigation', 'View'];
 
 /**
  * Generated from the one keybinding registry, so the sheet matches reality: it omits chords the browser keeps
@@ -33,13 +33,27 @@ export function shortcutGroups(
   web: boolean = isWebBuild(),
   mode: KeybindingWorkspace = useWorkspaceStore.getState().mode,
 ): Array<{ title: string; shortcuts: ShortcutRow[] }> {
-  return GROUP_ORDER.map((title) => {
+  const groups = GROUP_ORDER.map((title) => {
     const rows: ShortcutRow[] = KEYBINDINGS
       .filter((b) => b.group === title && isBindingAvailable(b, web) && isBindingInMode(b, mode))
       .map((b) => ({ keys: formatKeys(b, mac), description: b.label }));
     if (title === 'Editor') rows.push(EDITOR_EXTRAS.ghost);
     return { title, shortcuts: rows };
   }).filter((g) => g.shortcuts.length > 0);
+  return foldSmallGroups(groups);
+}
+
+type ShortcutGroup = { title: string; shortcuts: ShortcutRow[] };
+const MIN_GROUP_ROWS = 3;
+
+/** A heading over one or two rows reads as clutter: fold such a group into the one before it, judged by the rows actually shown. */
+function foldSmallGroups(groups: ShortcutGroup[]): ShortcutGroup[] {
+  return groups.reduce<ShortcutGroup[]>((acc, group) => {
+    const prev = acc[acc.length - 1];
+    if (!prev || group.shortcuts.length >= MIN_GROUP_ROWS) return [...acc, group];
+    const merged = { title: `${prev.title} & ${group.title.toLowerCase()}`, shortcuts: [...prev.shortcuts, ...group.shortcuts] };
+    return [...acc.slice(0, -1), merged];
+  }, []);
 }
 
 export function KeyboardShortcuts({ onClose }: KeyboardShortcutsProps) {

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useThemeStore } from '../../stores/themeStore';
 import { TYPOGRAPHY } from '../../styles/tokens';
 import { anchorTooltip, nudgeIntoView, TOOLTIP_TRANSFORMS, type TooltipPosition, type TooltipSide } from './tooltipPlacement';
+import { isQuietFocus } from './quietFocus';
 import { claimTooltip, releaseTooltip, tooltipIsWarm } from './tooltipSingleton';
 
 export const TOOLTIP_OPEN_DELAY_MS = 400;
@@ -106,6 +107,23 @@ export function Tooltip({ label, shortcut, placement = 'above', children }: Tool
     return () => releaseTooltip(closeNow);
   }, [open, closeNow]);
 
+  // A window resize or a scroll moves the trigger out from under a fixed-position tip: close rather than strand it.
+  useEffect(() => {
+    if (!open) return undefined;
+    window.addEventListener('resize', closeNow);
+    // Only a scroll that carries the trigger moves it: streaming terminal output elsewhere must not dismiss the tip.
+    const onScroll = (e: Event) => {
+      const trigger = wrapRef.current?.firstElementChild;
+      const scrolled = e.target;
+      if (!trigger || !(scrolled instanceof Node) || scrolled.contains(trigger)) closeNow();
+    };
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      window.removeEventListener('resize', closeNow);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [open, closeNow]);
+
   // A trigger that turns disabled while the tip is up (focus just fell off it) must not leave the tip stranded.
   useEffect(() => {
     const target = wrapRef.current?.firstElementChild;
@@ -145,7 +163,7 @@ export function Tooltip({ label, shortcut, placement = 'above', children }: Tool
       onMouseEnter={(e) => { engaged.current.hover = true; pointerY.current = e.clientY; show(); }}
       onMouseMove={(e) => { if (!open) pointerY.current = e.clientY; }}
       onMouseLeave={() => { engaged.current.hover = false; suppressed.current = false; pointerY.current = null; hide(); }}
-      onFocus={() => { if (!pointerFocus.current && !focusFollowsPointer()) { engaged.current.focus = true; show(); } }}
+      onFocus={() => { if (!pointerFocus.current && !focusFollowsPointer() && !isQuietFocus()) { engaged.current.focus = true; show(); } }}
       onBlur={() => { engaged.current.focus = false; hide(true); }}
       onMouseDown={() => {
         suppressed.current = true;

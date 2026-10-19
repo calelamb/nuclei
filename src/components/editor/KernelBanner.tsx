@@ -1,10 +1,12 @@
 import { Button } from '../ui';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { AlertTriangle, Copy, ExternalLink, RotateCw } from 'lucide-react';
 import { useEditorStore } from '../../stores/editorStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { describeKernelFailure } from '../../lib/kernelErrors';
 import { registerKernelBannerFocus, retryKernel } from '../../lib/kernelControl';
+import { focusAfterUnmount } from '../../hooks/focusAfterUnmount';
+import { RUN_BUTTON_SELECTOR } from './runButtonState';
 import { openExternal } from '../../lib/openExternal';
 
 /**
@@ -35,6 +37,11 @@ export function KernelBanner() {
 
   if (failed) {
     const failure = describeKernelFailure(error);
+    // Retry unmounts this banner: hand focus to the Run slot (it re-enables as the kernel restarts) rather than <body>.
+    const retry = (e: MouseEvent<HTMLButtonElement>) => {
+      focusAfterUnmount(e.currentTarget, [RUN_BUTTON_SELECTOR]);
+      retryKernel();
+    };
     const copy = async () => {
       try {
         await navigator.clipboard.writeText(`${failure.title}\n${failure.message}`);
@@ -61,7 +68,7 @@ export function KernelBanner() {
             {failure.detail}
           </div>
           <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-            <Button size="sm" variant="primary" onClick={retryKernel} icon={<RotateCw size={12} />}>Retry</Button>
+            <Button size="sm" variant="primary" onClick={retry} icon={<RotateCw size={12} />}>Retry</Button>
             <Button size="sm" onClick={copy} icon={<Copy size={12} />}>{copied ? 'Copied' : 'Copy details'}</Button>
             <Button size="sm" onClick={() => { void openExternal(failure.docsUrl); }} icon={<ExternalLink size={12} />}>Troubleshooting</Button>
           </div>

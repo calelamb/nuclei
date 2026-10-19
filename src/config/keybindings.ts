@@ -7,7 +7,7 @@
 
 import { isWebBuild } from '../platform/buildTarget';
 
-export type KeybindingGroup = 'Essential' | 'Editor' | 'Navigation' | 'View' | 'Run';
+export type KeybindingGroup = 'Essential' | 'Editor' | 'Navigation' | 'View';
 
 export type KeybindingWorkspace = 'learn' | 'research';
 
@@ -20,7 +20,7 @@ export interface Keybinding {
   display?: string;
   label: string;
   group: KeybindingGroup;
-  /** `editor` bindings are owned by Monaco; they are listed but not dispatched by App. */
+  /** `editor` bindings are owned by Monaco; they are listed but not dispatched by App. Run is `app`: the App handler runs it from anywhere except where Monaco (which also binds it) or a modal owns the key. */
   owner: 'app' | 'editor';
   /** Another `e.key` the same chord reports (Shift+/ reports '?'). */
   alias?: string;
@@ -35,7 +35,8 @@ export interface Keybinding {
 }
 
 export const KEYBINDINGS: readonly Keybinding[] = [
-  { id: 'run', key: 'enter', display: '↵', label: 'Run circuit', group: 'Essential', owner: 'editor' },
+  { id: 'run', key: 'enter', display: '↵', label: 'Run circuit', group: 'Essential', owner: 'app' },
+  { id: 'launch', key: 'r', shift: true, label: 'Launch on hardware', group: 'Essential', owner: 'app' },
   { id: 'save', key: 's', label: 'Save file', group: 'Essential', owner: 'app' },
   { id: 'palette', key: 'p', shift: true, label: 'Command palette', group: 'Essential', owner: 'app' },
   { id: 'toggle-dirac', key: 'd', label: 'Toggle Dirac panel', group: 'Essential', owner: 'app' },
@@ -54,12 +55,11 @@ export const KEYBINDINGS: readonly Keybinding[] = [
   { id: 'save-as', key: 's', shift: true, label: 'Save as', group: 'Navigation', owner: 'app' },
   { id: 'settings', key: ',', label: 'Open settings', group: 'Navigation', owner: 'app' },
   { id: 'goto-rail-view', key: '1-9', display: '1–9', label: 'Jump to sidebar view', group: 'Navigation', owner: 'app' },
-  { id: 'toggle-bottom-panel', key: '`', label: 'Toggle terminal panel', group: 'Navigation', owner: 'app' },
   { id: 'switch-workspace', key: 'm', shift: true, label: 'Switch workspace mode', group: 'Navigation', owner: 'app' },
 
+  { id: 'toggle-bottom-panel', key: '`', label: 'Toggle terminal panel', group: 'View', owner: 'app' },
   { id: 'toggle-theme', key: 't', shift: true, label: 'Toggle theme', group: 'View', owner: 'app', browserReserved: true },
   { id: 'cycle-ui-mode', key: 'l', shift: true, label: 'Change level', group: 'View', owner: 'app', modes: ['learn'] },
-  { id: 'launch', key: 'r', shift: true, label: 'Launch on hardware', group: 'Run', owner: 'app' },
 ];
 
 export interface KeyLike {

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState, type ReactNode } from 'react';
-import { ChevronRight, ChevronDown, CheckCircle2, Circle, CircleDot, Maximize2, BookOpen, Network, Trophy, Library, PlayCircle } from 'lucide-react';
+import { ChevronRight, ChevronDown, CheckCircle2, Circle, CircleDot, Maximize2, BookOpen, Network, Flag, Library, PlayCircle } from 'lucide-react';
 import { useLearnStore } from '../../stores/learnStore';
 import { TRACKS } from '../../data/lessons/tracks';
 import { ConceptSummary } from './ConceptSummary';
@@ -25,7 +25,7 @@ function tab(value: TabKey, label: string, icon: ReactNode): TabOption<TabKey> {
 const TAB_OPTIONS: ReadonlyArray<TabOption<TabKey>> = [
   tab('tracks', 'Tracks', <BookOpen size={14} aria-hidden="true" />),
   tab('concepts', 'Concepts', <Network size={14} aria-hidden="true" />),
-  tab('capstones', 'Capstones', <Trophy size={14} aria-hidden="true" />),
+  tab('capstones', 'Capstones', <Flag size={14} aria-hidden="true" />),
   tab('glossary', 'Glossary', <Library size={14} aria-hidden="true" />),
   tab('videos', 'Videos', <PlayCircle size={14} aria-hidden="true" />),
 ];

@@ -1,6 +1,7 @@
+import { focusAfterUnmount } from '../../hooks/focusAfterUnmount';
 import { scheduleLandingFocus } from '../onboarding/focusLanding';
 import { useMemo } from 'react';
-import { CheckCircle2, Circle, CircleDot, PanelLeftClose, PanelLeft, Network, Trophy, Library, PlayCircle } from 'lucide-react';
+import { CheckCircle2, Circle, CircleDot, PanelLeftClose, PanelLeft, Network, Flag, Library, PlayCircle } from 'lucide-react';
 import { useLearnStore } from '../../stores/learnStore';
 import { getTrack } from '../../data/lessons/tracks';
 import type { ContentBlock } from '../../data/lessons/types';
@@ -10,9 +11,12 @@ import { LEARN_SECTION_LABELS, useLearnSectionStore, type LearnSection } from '.
 import { scrollLessonBlock } from './scrollLessonBlock';
 import './lessonNav.css';
 
+const SHOW_LABEL = 'Show lesson navigation';
+const HIDE_LABEL = 'Hide lesson navigation';
+
 const SECTION_LINKS: ReadonlyArray<{ section: LearnSection; icon: typeof Network }> = [
   { section: 'concepts', icon: Network },
-  { section: 'capstones', icon: Trophy },
+  { section: 'capstones', icon: Flag },
   { section: 'glossary', icon: Library },
   { section: 'videos', icon: PlayCircle },
 ];
@@ -46,12 +50,21 @@ export function LessonNavSidebar({
   const currentLesson = lessons.find((l) => l.id === currentLessonId);
   const completedInTrack = lessons.filter((l) => completedLessons.includes(l.id)).length;
 
+  // Hide and Show are different elements: when the pressed one has focus, hand focus to its counterpart.
+  const toggleKeepingFocus = (counterpart: string) => {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active.closest('.lnav')) {
+      focusAfterUnmount(active, [`.lnav button[aria-label="${counterpart}"]`]);
+    }
+    onToggleCollapsed();
+  };
+
   if (!track) return null;
 
   if (collapsed) {
     return (
       <div className="lnav lnav--collapsed">
-        <IconButton aria-label="Show lesson navigation" onClick={onToggleCollapsed}>
+        <IconButton aria-label={SHOW_LABEL} onClick={() => toggleKeepingFocus(HIDE_LABEL)}>
           <PanelLeft size={16} />
         </IconButton>
       </div>
@@ -68,7 +81,7 @@ export function LessonNavSidebar({
             <div className="lnav__eyebrow">Track</div>
             <div className="lnav__track">{track.title}</div>
           </div>
-          <IconButton size="sm" aria-label="Hide lesson navigation" onClick={onToggleCollapsed}>
+          <IconButton size="sm" aria-label={HIDE_LABEL} onClick={() => toggleKeepingFocus(SHOW_LABEL)}>
             <PanelLeftClose size={16} />
           </IconButton>
         </div>
