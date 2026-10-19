@@ -7,18 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- The Discovery Engine no longer fails as a whole when Stim and PyMatching are
-  not installed (the installed app's default). `discovery_evaluators` lists
-  `qec_memory` as `available: false` with the Research catalog entries to
-  install; `discovery_evaluate` and `discovery_audit` for it return a friendly
-  `missing_dependency` error, and the New Discovery wizard and definition panel
-  say what is needed and open Environment setup. State synthesis, VQE, the
-  trainability frontier, conjectures and the Trainability Lab work without
-  optional packages. The sandbox isolation probe no longer depends on Stim, so
-  it can no longer silently fall back to plain process isolation.
-
 ## [0.14.0] - 2026-10-18
 
 Quantum AI Lab release (PRD 14): two Research-mode instruments for the two
@@ -59,6 +47,10 @@ ships the Unified QEC Workbench and canonical QEC data import below.
 - **Conjecture Engine**: proposes falsifiable trainability conjectures from a
   run's archive and tests them on held-out circuits (supported / refuted with a
   counterexample / inconclusive), recorded in a ledger.
+- Works on a standard install: the QEC memory evaluator needs the QEC research
+  pack (Stim and PyMatching, from Environment setup) and says so; state
+  synthesis, VQE, the Frontier evaluator, conjectures and the Trainability Lab
+  need no optional packages.
 - Candidates run in a sandbox: macOS `sandbox-exec` blocks network access,
   writes outside a private scratch directory, and reads outside an allow-list.
 
