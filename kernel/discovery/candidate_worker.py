@@ -554,7 +554,7 @@ def _child_death(status: int) -> dict[str, Any] | None:
         return None
     sig = os.WTERMSIG(status)
     try:
-        name = signal.Signals(sig).name
+        name = f"signal {signal.Signals(sig).name} ({sig})"
     except ValueError:
         name = f"signal {sig}"
     return {"code": "worker_killed",
