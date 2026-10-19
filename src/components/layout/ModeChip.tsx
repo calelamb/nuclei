@@ -66,6 +66,7 @@ export function ModeChip() {
             className="mode-chip"
             aria-label="Switch workspace mode"
             data-tour-target="mode-chip"
+            data-focus-id="mode-chip"
             style={{
               display: 'flex',
               alignItems: 'center',
