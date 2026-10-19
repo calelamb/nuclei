@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import socket
 
 import websockets
 from websockets.asyncio.client import connect as ws_connect
@@ -130,7 +131,7 @@ def test_real_server_starts_with_the_small_pre_auth_limit():
     async def scenario():
         ws_server = await server._try_serve(0, CONFIG)
         try:
-            port = ws_server.sockets[0].getsockname()[1]
+            port = next(s for s in ws_server.sockets if s.family == socket.AF_INET).getsockname()[1]
             async with ws_connect(f"ws://127.0.0.1:{port}") as ws:
                 await ws.send("x" * (auth.PRE_AUTH_MAX_SIZE + 1))
                 try:

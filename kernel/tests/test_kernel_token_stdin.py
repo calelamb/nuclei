@@ -178,6 +178,8 @@ def test_token_is_not_recoverable_from_the_kernels_procargs(tmp_path):
 
 
 def test_qec_engine_reads_its_token_from_stdin_when_asked(monkeypatch):
+    pytest.importorskip("duckdb")
+    pytest.importorskip("pyarrow")
     from kernel.qec_data import server_entrypoint as entry
 
     monkeypatch.setenv(entry.TOKEN_STDIN_VARIABLE, "1")
@@ -188,6 +190,8 @@ def test_qec_engine_reads_its_token_from_stdin_when_asked(monkeypatch):
 
 
 def test_qec_engine_stdin_mode_without_a_line_yields_no_token(monkeypatch):
+    pytest.importorskip("duckdb")
+    pytest.importorskip("pyarrow")
     from kernel.qec_data import server_entrypoint as entry
 
     monkeypatch.setenv(entry.TOKEN_STDIN_VARIABLE, "1")
@@ -197,6 +201,8 @@ def test_qec_engine_stdin_mode_without_a_line_yields_no_token(monkeypatch):
 
 
 def test_qec_engine_still_accepts_an_env_token_for_manual_runs(monkeypatch):
+    pytest.importorskip("duckdb")
+    pytest.importorskip("pyarrow")
     from kernel.qec_data import server_entrypoint as entry
 
     monkeypatch.delenv(entry.TOKEN_STDIN_VARIABLE, raising=False)
