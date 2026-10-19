@@ -24,6 +24,7 @@ import { shortcutLabel, isMacPlatform, bindingLabel, railShortcutLabel } from '.
 
 import { TYPOGRAPHY } from '../../styles/tokens';
 import { closeActiveTooltip } from '../ui/tooltipSingleton';
+import { runShortcutHiddenEditor } from '../../config/runShortcut';
 export interface Command {
   id: string;
   label: string;
@@ -363,7 +364,8 @@ export function buildCommands(actions: CommandActions, context: CommandContext):
 
   // Static app commands.
   commands.push(
-    ...(editorHidden ? [] : [{ id: 'run', label: bindingLabel('run'), category: 'Run', shortcut: sc('run'), keywords: ['execute', 'simulate', 'play'], action: actions.run }]),
+    // Run acts on the editor buffer, which every main-area takeover hides (same rule as the global chord).
+    ...(runShortcutHiddenEditor(context.mainTakeover ?? null) ? [] : [{ id: 'run', label: bindingLabel('run'), category: 'Run', shortcut: sc('run'), keywords: ['execute', 'simulate', 'play'], action: actions.run }]),
     // Open, Save and New act on the editor buffer, which a lesson or challenge hides.
     ...(editorHidden ? [] : [
       { id: 'open', label: bindingLabel('open'), category: 'File', shortcut: sc('open'), action: actions.openFile },

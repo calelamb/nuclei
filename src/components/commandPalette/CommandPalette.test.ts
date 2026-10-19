@@ -289,7 +289,9 @@ describe('buildCommands while a lesson or challenge owns the main area', () => {
     for (const id of ['run', 'new', 'open', 'save', 'step-through', 'toggle-panel-terminal']) expect(present).toContain(id);
   });
 
-  it('leaves a Research takeover like the QEC Workbench alone', () => {
-    expect(ids('qec', 'research')).toContain('run');
+  it.each(['qec', 'transpiler', 'experiment'] as const)('drops only Run under the Research %s takeover', (kind) => {
+    const present = ids(kind, 'research');
+    expect(present).not.toContain('run');
+    expect(present).toContain('toggle-panel-terminal');
   });
 });

@@ -25,11 +25,11 @@ describe('runShortcutOwnedElsewhere', () => {
 });
 
 describe('runShortcutHiddenEditor', () => {
-  it('blocks the chord while a lesson or challenge hides the editor', async () => {
+  it('blocks the chord while any takeover hides the editor', async () => {
     const { runShortcutHiddenEditor } = await import('./runShortcut');
-    expect(runShortcutHiddenEditor('lesson')).toBe(true);
-    expect(runShortcutHiddenEditor('challenge')).toBe(true);
+    for (const kind of ['lesson', 'challenge', 'qec', 'transpiler', 'experiment'] as const) {
+      expect(runShortcutHiddenEditor(kind)).toBe(true);
+    }
     expect(runShortcutHiddenEditor(null)).toBe(false);
-    expect(runShortcutHiddenEditor('qec')).toBe(false);
   });
 });
