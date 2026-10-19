@@ -178,7 +178,13 @@ pub fn start_kernel(
     // Kill existing in-process handle if any — relevant during reconnect
     // flows where the user triggered a kernel restart from the UI.
     if let Some(ref mut child) = *guard {
+        let previous_pid = child.id();
         stop_child_gracefully(child, KERNEL_STOP_GRACE);
+        // Same backstop as stop(): a kernel that needed SIGKILL skipped its own
+        // cleanup; only files recording its pid are removed.
+        if let Some(dir) = ownership::runtime_dir() {
+            ownership::remove_kernel_runtime_files(&dir, KERNEL_PORT, previous_pid);
+        }
     }
     *guard = None;
 

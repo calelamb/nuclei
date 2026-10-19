@@ -332,7 +332,8 @@ export function useKernel() {
       void initPyodide();
       return;
     }
-    wsRef.current?.close();
+    // Detach first: the old socket's onclose would otherwise schedule a second connect beside the restart.
+    if (wsRef.current) { wsRef.current.onclose = null; wsRef.current.close(); }
     wsRef.current = null;
     void platform.stopKernel().catch(() => { /* nothing running is fine */ }).then(() => {
       if (mountedRef.current) return startDesktopKernel();

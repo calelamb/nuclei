@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePlatform } from '../../platform/PlatformProvider';
 import { KERNEL_WS_URL } from '../../config/kernel';
-import { openAuthenticatedKernelSocket } from '../../services/kernelSocket';
+import { KernelAuthRejectedError, KernelProofError, openKernelConnection } from '../../services/kernelSocket';
 import type { KernelResponse } from '../../types/quantum';
 import type { BootProgress } from '../../platform/pyodide/workerProtocol';
 import { useEditorStore } from '../../stores/editorStore';
@@ -146,8 +146,9 @@ export function useLessonKernel({ onMessage, onInitError, onReady }: Options): L
     let ws: WebSocket | null = null;
     let cancelled = false;
     let retries = 0;
-    function attach(socket: WebSocket) {
-      socket.onopen = () => { wsRef.current = socket; retries = 0; handlers.current.onReady?.(); };
+    // A rejected token or a failed proof is final: retrying would resend the token to whatever answers.
+    let refused = false;
+    function attach(socket: WebSocket, authenticated: Promise<void>) {
       socket.onmessage = (ev) => {
         try { handlers.current.onMessage(JSON.parse(ev.data)); } catch { /* malformed frame: ignore */ }
       };
@@ -156,12 +157,21 @@ export function useLessonKernel({ onMessage, onInitError, onReady }: Options): L
         if (retries < 3) { retries++; setTimeout(connect, 1000 * retries); }
       };
       socket.onerror = () => socket.close();
+      // Ready only once the kernel has proved it knows the token.
+      authenticated.then(
+        () => { if (!cancelled) { wsRef.current = socket; retries = 0; handlers.current.onReady?.(); } },
+        (err: unknown) => { if (err instanceof KernelAuthRejectedError || err instanceof KernelProofError) refused = true; },
+      );
     }
     function connect() {
-      void openAuthenticatedKernelSocket(KERNEL_WS_URL, platform.getKernelAuthToken?.bind(platform)).then((socket) => {
+      if (cancelled || refused) return;
+      openKernelConnection(KERNEL_WS_URL, platform.getKernelAuthToken?.bind(platform)).then(({ ws: socket, authenticated }) => {
         if (cancelled) { socket.close(); return; }
         ws = socket;
-        attach(socket);
+        attach(socket, authenticated);
+      }, () => {
+        // No token (kernel not started or not ours): fail closed, never connect unauthenticated.
+        wsRef.current = null;
       });
     }
     connect();

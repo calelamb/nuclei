@@ -428,11 +428,11 @@ def write_runtime_file(
         "pid": os.getpid(),
         "token": config.token,
     })
-    _write_private_atomic(directory, per_port_file_name(port), payload)
-    path = _write_private_atomic(directory, RUNTIME_FILE_NAME, payload)
+    # Cleanup first, so a failed second write never strands the per-port file (it holds the token).
     atexit.register(remove_runtime_files, directory, port, os.getpid())
     _install_cleanup_signal_handlers(directory, port, os.getpid())
-    return path
+    _write_private_atomic(directory, per_port_file_name(port), payload)
+    return _write_private_atomic(directory, RUNTIME_FILE_NAME, payload)
 
 
 def _install_cleanup_signal_handlers(directory: Path, port: int, pid: int) -> None:
