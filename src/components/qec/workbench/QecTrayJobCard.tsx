@@ -8,6 +8,7 @@ import { Button, IconButton } from '../../ui';
 import { formatByteSize, shortHash } from './formatBytes';
 import { useCopied } from './useCopied';
 import { CopyJobId } from './CopyJobId';
+import { PathText } from '../PathText';
 
 const ACTIVE_STATUSES: ReadonlySet<string> = new Set(['running', 'starting']);
 
@@ -15,8 +16,8 @@ function capitalise(word: string): string {
   return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
-function Field({ label, children }: { label: string; children: ReactElement | string }): ReactElement {
-  return <div><dt>{label}</dt><dd className="qec-mono">{children}</dd></div>;
+function Field({ label, path = false, children }: { label: string; path?: boolean; children: ReactElement | string }): ReactElement {
+  return <div><dt>{label}</dt><dd className={path ? 'qec-mono qec-path' : 'qec-mono'}>{children}</dd></div>;
 }
 
 function CopyIcon({ copied }: { copied: boolean }): ReactElement {
@@ -61,7 +62,7 @@ export function QecTrayJobCard({ job, client, onCancel }: QecTrayJobCardProps): 
         )}
       </div>
       <dl>
-        <Field label="Source">{job.source ?? 'Not recorded'}</Field>
+        <Field label="Source" path>{job.source ? <PathText path={job.source} /> : 'Not recorded'}</Field>
         <Field label="Adapter">{job.adapterId ?? 'Not recorded'}</Field>
         <Field label="Session">{job.sessionId ?? 'Not recorded'}</Field>
         <Field label="Size">{job.sourceByteSize == null ? 'Pending' : formatByteSize(job.sourceByteSize)}</Field>

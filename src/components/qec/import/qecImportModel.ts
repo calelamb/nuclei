@@ -29,6 +29,18 @@ export function sessionIdIssue(value: string): string | null {
   return null;
 }
 
+const FORBIDDEN_ID_CHARS = /[<>:"/\\|?*\u0000-\u001f]/g;
+
+/** `<file basename>-<YYYY-MM-DD>` — a valid, readable default so the Destination step never opens empty. */
+export function suggestSessionId(source: string, now: Date = new Date()): string {
+  const file = source.split(/[\\/]/).filter(Boolean).pop() ?? '';
+  const stem = file.replace(/\.[^.]*$/, '').replace(FORBIDDEN_ID_CHARS, '-').trim();
+  const day = [now.getFullYear(), now.getMonth() + 1, now.getDate()]
+    .map((part, index) => String(part).padStart(index === 0 ? 4 : 2, '0')).join('-');
+  const id = `${stem || 'import'}-${day}`;
+  return Array.from(id).length > 256 ? `import-${day}` : id;
+}
+
 export function supportedAdapters(probe: ImportProbeResult | null): ImportProbeResult['results'] {
   return Object.freeze(
     [...(probe?.results ?? [])]

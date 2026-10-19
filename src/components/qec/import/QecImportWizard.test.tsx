@@ -454,3 +454,49 @@ describe('<QecImportWizard />', () => {
     expect(screen.queryByRole('button', { name: 'Show session' })).toBeNull();
   });
 });
+
+describe('<QecImportWizard /> Destination step (qec-r-92)', () => {
+  async function reachDestination(): Promise<void> {
+    await reachMapping();
+    goNext();
+    goNext();
+    fireEvent.click(screen.getByRole('button', { name: 'Validate mapping' }));
+    await screen.findByText('Validation passed');
+    goNext();
+  }
+
+  it('opens clean with a suggested session id, no error, and Next enabled', async () => {
+    render(<QecImportWizard source="captures/repetition-d3.parquet" client={client()} />);
+    await reachDestination();
+    const input = screen.getByLabelText<HTMLInputElement>('Session ID');
+    expect(input.value).toMatch(/^repetition-d3-\d{4}-\d{2}-\d{2}$/);
+    expect(input.getAttribute('aria-invalid')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Next stage' }).disabled).toBe(false);
+    expect(screen.getByText(`${input.value}`, { selector: 'code' })).toBeTruthy();
+  });
+
+  it('complains only after the person edits the field, describing the error without role=alert', async () => {
+    render(<QecImportWizard source="captures/repetition-d3.parquet" client={client()} />);
+    await reachDestination();
+    const input = screen.getByLabelText<HTMLInputElement>('Session ID');
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: '' } });
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(screen.queryByRole('alert')).toBeNull();
+    const describedBy = input.getAttribute('aria-describedby');
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy ?? '')?.textContent).toBe('Choose a destination session ID');
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Next stage' }).disabled).toBe(true);
+    for (const char of 'my-run') fireEvent.change(input, { target: { value: input.value + char } });
+    expect(input.value).toBe('my-run');
+    expect(input.getAttribute('aria-invalid')).toBeNull();
+  });
+
+  it('keeps the <session-id> placeholder token in one element when the id is empty', async () => {
+    render(<QecImportWizard source="captures/repetition-d3.parquet" client={client()} />);
+    await reachDestination();
+    fireEvent.change(screen.getByLabelText('Session ID'), { target: { value: '' } });
+    expect(screen.getByText('<session-id>', { selector: 'code' })).toBeTruthy();
+  });
+});

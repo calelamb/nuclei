@@ -15,7 +15,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactElement } from 'react';
 
 import { Button, Checkbox, IconButton, Select, TextInput } from '../../ui';
 import { Table, Thead, Tbody, Tr, Th, Td } from '../../ui/Table';
@@ -26,6 +26,7 @@ import { formatByteSize, shortHash } from '../workbench/formatBytes';
 import './qecImportWizard.css';
 
 import type { QecImportClient as ClientContract } from '../../../services/qecDataClient';
+import { PathText } from '../PathText';
 import { useQecJobStore, type QecJobRecord } from '../../../stores/qecJobStore';
 import { useResearchSelectionStore } from '../../../stores/researchSelectionStore';
 import type {
@@ -43,6 +44,7 @@ import {
   countLabel,
   mappingIsReviewed,
   sessionIdIssue,
+  suggestSessionId,
   stageDescription,
   supportedAdapters,
   type MappingOptions,
@@ -91,8 +93,8 @@ function StepRail({ stage, finished }: { stage: number; finished: boolean }): Re
   );
 }
 
-function FieldValue({ label, value, title }: { label: string; value: string; title?: string }): ReactElement {
-  return <div><dt>{label}</dt><dd className="qec-mono" title={title}>{value}</dd></div>;
+function FieldValue({ label, value, title, path = false }: { label: string; value: string; title?: string; path?: boolean }): ReactElement {
+  return <div><dt>{label}</dt><dd className={path ? 'qec-mono qec-path' : 'qec-mono'} title={title}>{path ? <PathText path={value} /> : value}</dd></div>;
 }
 
 function SourceStage({ source, probe }: { source: string; probe: AsyncState<ImportProbeResult> }): ReactElement {
@@ -103,7 +105,7 @@ function SourceStage({ source, probe }: { source: string; probe: AsyncState<Impo
     <div className="qec-import-card">
       <header><FileCheck2 aria-hidden="true" size={20} /><div><strong>Project source</strong><span>No absolute or canonical data paths are accepted.</span></div></header>
       <dl className="qec-import-facts">
-        <FieldValue label="Source" value={source} />
+        <FieldValue label="Source" value={source} path />
         <FieldValue label="Source size" value={probe.value ? formatByteSize(probe.value.sourceByteSize) : 'Not reported'} />
         <FieldValue label="SHA-256" value={firstHash ? shortHash(firstHash) : 'Not reported'} title={firstHash ?? undefined} />
         <FieldValue label="Source spans" value="Recorded by adapter during import" />
@@ -271,12 +273,20 @@ interface DestinationStageProps {
 }
 
 function DestinationStage(props: DestinationStageProps): ReactElement {
-  const issue = sessionIdIssue(props.sessionId.trim());
+  const [touched, setTouched] = useState(false);
+  const errorId = useId();
+  const issue = touched ? sessionIdIssue(props.sessionId.trim()) : null;
   return (
     <div className="qec-import-destination">
-      <label>Session ID<TextInput mono aria-label="Session ID" value={props.sessionId} aria-invalid={issue !== null} onChange={(event) => props.onSessionId(event.target.value)} placeholder="capture-2026-07-22" invalid={issue !== null} />{issue && <small role="alert">{issue}</small>}</label>
+      <label>Session ID<TextInput
+        mono aria-label="Session ID" value={props.sessionId} placeholder="capture-2026-07-22" invalid={issue !== null}
+        aria-describedby={issue ? errorId : undefined}
+        onFocus={(event) => event.currentTarget.select()}
+        onBlur={() => setTouched(true)}
+        onChange={(event) => { setTouched(true); props.onSessionId(event.target.value); }}
+      />{issue && <small id={errorId} className="qec-import-destination__error">{issue[0].toUpperCase() + issue.slice(1)}</small>}</label>
       <label>Session kind<Select value={props.sessionKind} onChange={(event) => props.onSessionKind(event.target.value as DestinationStageProps['sessionKind'])}><option value="hardware_import">Hardware import</option><option value="simulation_campaign">Simulation campaign</option><option value="hardware_live">Hardware live</option><option value="replay">Replay</option></Select></label>
-      <div className="qec-import-policy"><Copy aria-hidden="true" size={16} /><strong>Destination: qec-data/sessions/{props.sessionId || '<session-id>'}</strong><span>The source is copied; the original file is never edited or referenced in place.</span></div>
+      <div className="qec-import-policy"><Copy aria-hidden="true" size={16} /><strong>Destination: qec-data/sessions/<code className="qec-import-token">{props.sessionId || '<session-id>'}</code></strong><span>The source is copied; the original file is never edited or referenced in place.</span></div>
     </div>
   );
 }
@@ -510,7 +520,7 @@ function useDefaultAdapter(probe: ImportProbeResult | null, adapterId: string, c
 
 function QecImportWizardSession({ source, client, onClose, hosted = false }: QecImportWizardProps): ReactElement {
   const [stage, setStage] = useState(0);
-  const [sessionId, setSessionId] = useState('');
+  const [sessionId, setSessionId] = useState(() => suggestSessionId(source));
   const [sessionKind, setSessionKind] = useState<DestinationStageProps['sessionKind']>('hardware_import');
   const probe = useSourceProbe(client, source);
   const requests = useImportRequests(client, source);

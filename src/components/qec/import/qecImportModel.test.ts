@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { adapterDisplayName, countLabel, buildMapping, completeRows, adapterNeedsNoMapping, mappingIsReviewed, sessionIdIssue, stageDescription, supportedAdapters } from './qecImportModel';
+import { adapterDisplayName, countLabel, buildMapping, completeRows, adapterNeedsNoMapping, mappingIsReviewed, sessionIdIssue, stageDescription, suggestSessionId, supportedAdapters } from './qecImportModel';
 
 const EMPTY_OPTIONS = {
   outputKind: '', detectorCount: '', observableCount: '', timestampUnit: '', bitOrder: '',
@@ -81,5 +81,15 @@ describe('wizard copy helpers (qec-r-19)', () => {
     expect(countLabel(1, 'canonical partition')).toBe('1 canonical partition');
     expect(countLabel(46, 'record')).toBe('46 records');
     expect(countLabel(0, 'partition')).toBe('0 partitions');
+  });
+
+  it('suggests a valid session id from the source basename and date', () => {
+    const day = new Date(2026, 6, 4);
+    expect(suggestSessionId('captures/repetition-d3.dets', day)).toBe('repetition-d3-2026-07-04');
+    expect(suggestSessionId('a\\b\\run:1?.csv', day)).toBe('run-1--2026-07-04');
+    expect(suggestSessionId('', day)).toBe('import-2026-07-04');
+    for (const source of ['captures/repetition-d3.dets', 'x/..', 'weird<>name.csv', '']) {
+      expect(sessionIdIssue(suggestSessionId(source, day))).toBeNull();
+    }
   });
 });
