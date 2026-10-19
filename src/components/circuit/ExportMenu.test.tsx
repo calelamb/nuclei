@@ -10,7 +10,7 @@ const copyCode = vi.fn();
 vi.mock('../../hooks/useCircuitExport', () => ({
   useCircuitExport: () => ({
     exportQasmFile: vi.fn(), exportSvg: vi.fn(async () => true), exportPng: vi.fn(async () => true),
-    copyCodeToClipboard: copyCode, copyQasmToClipboard: vi.fn(async () => {}), copyShareUrl: vi.fn(async () => ''),
+    copyCodeToClipboard: copyCode, copyQasmToClipboard: vi.fn(async () => {}),
     exportJsonSnapshot: vi.fn(),
   }),
 }));
@@ -35,7 +35,8 @@ describe('ExportMenu', () => {
     const trigger = screen.getByRole('button', { name: /export/i });
     expect(trigger.getAttribute('aria-haspopup')).toBe('menu');
     fireEvent.click(trigger);
-    expect(screen.getAllByRole('menuitem').length).toBe(7);
+    expect(screen.getAllByRole('menuitem').length).toBe(6);
+    expect(screen.queryByRole('menuitem', { name: /share url/i })).toBeNull(); // no /c/ route exists to open it
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
     expect(screen.queryByRole('menu')).toBeNull();
   });

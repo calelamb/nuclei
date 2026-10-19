@@ -1,5 +1,5 @@
 /* Interactive demo card (lessons). Tokens only; hover and focus live in CSS. */
-.demo { margin: var(--space-4) 0; overflow: hidden; border: 1px solid var(--color-border-strong); border-radius: var(--radius-round); background: var(--color-surface-raised); box-shadow: var(--shadow-sm); font-family: var(--font-sans); }
+.demo { position: relative; margin: var(--space-4) 0; overflow: hidden; border: 1px solid var(--color-border-strong); border-radius: var(--radius-round); background: var(--color-surface-raised); box-shadow: var(--shadow-sm); font-family: var(--font-sans); }
 .demo__head { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border-strong); }
 .demo__dot { width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; background: var(--color-accent-quantum); }
 .demo__kicker { font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-text-secondary); white-space: nowrap; }
@@ -31,7 +31,7 @@
 .prob-bars__pct { width: 42px; text-align: right; font: var(--font-size-caption) var(--font-mono); color: var(--color-text-secondary); }
 
 /* Exercise card shares the demo chrome; these are the parts only it has. */
-.exercise { margin: var(--space-4) 0; overflow: hidden; border: 1px solid var(--color-border-strong); border-radius: var(--radius-round); background: var(--color-surface-raised); box-shadow: var(--shadow-sm); font-family: var(--font-sans); transition: border-color var(--duration-slow) var(--ease-standard); }
+.exercise { position: relative; margin: var(--space-4) 0; overflow: hidden; border: 1px solid var(--color-border-strong); border-radius: var(--radius-round); background: var(--color-surface-raised); box-shadow: var(--shadow-sm); font-family: var(--font-sans); transition: border-color var(--duration-slow) var(--ease-standard); }
 .exercise[data-state='passed'] { border-color: var(--color-success); }
 .exercise[data-state='failed'] { border-color: var(--color-danger); }
 .exercise__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-warning); }
@@ -66,5 +66,12 @@
 .outcomes { display: flex; flex-direction: column; gap: var(--space-2); }
 .outcomes__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .outcomes__meta { font: var(--font-size-caption) var(--font-mono); color: var(--color-text-secondary); }
-.exercise__reset { min-width: 128px; }
-.demo__sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* Check solution while the last run is out of date: focusable but visibly waiting. Hover is restated because component CSS is unlayered. */
+.nuclei-btn.exercise__check--waiting,
+.nuclei-btn.exercise__check--waiting:hover {
+  background: var(--color-surface-raised);
+  border-color: var(--color-border-strong);
+  color: var(--color-text-tertiary);
+  cursor: not-allowed;
+}
+[data-stale] .exercise__output-lines { opacity: 0.6; }

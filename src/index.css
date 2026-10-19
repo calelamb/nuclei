@@ -23,7 +23,7 @@
   box-sizing: border-box;
 }
 
-body {
+html, body {
   overflow: hidden;
   background: var(--color-surface-base);
   color: var(--color-text-primary);

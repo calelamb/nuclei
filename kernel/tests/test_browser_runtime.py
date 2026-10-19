@@ -252,7 +252,7 @@ def test_cirq_bell_still_samples_and_reports_cirq_snapshot():
     out = run_browser("nuclei_execute", code, 200, 3)
     assert out["error"] is None, out["error"]
     assert set(out["result"]["measurements"]) <= {"00", "11"}
-    assert [g["type"] for g in out["snapshot"]["gates"]] == ["H", "CNOT", "Measure"]
+    assert [g["type"] for g in out["snapshot"]["gates"]] == ["H", "CNOT", "Measure", "Measure"]
 
 
 def test_mid_circuit_measurement_state_excludes_final_readout():

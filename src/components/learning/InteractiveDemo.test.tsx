@@ -152,4 +152,15 @@ describe('InteractiveDemo stale results (r7-learn-01)', () => {
     expect(screen.queryByText(/From last run/)).toBeNull();
     expect(screen.getByRole('list', { name: 'Outcome probabilities' })).toBeTruthy();
   });
+
+  it('keeps keyboard focus inside the demo when Reset disables itself (interaction-r-06)', async () => {
+    render(<InteractiveDemo code={CODE} framework="qiskit" description="demo" />);
+    await act(async () => { await Promise.resolve(); boot.resolveInit(); await Promise.resolve(); await Promise.resolve(); });
+    await act(async () => { mockEditorChange.current?.(CODE + '\nqc.x(0)'); });
+    const reset = screen.getByRole('button', { name: /Reset/ });
+    reset.focus();
+    fireEvent.click(reset);
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement?.closest('.demo')).toBeTruthy();
+  });
 });

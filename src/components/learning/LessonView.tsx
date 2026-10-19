@@ -13,6 +13,7 @@ import type { Lesson, ContentBlock } from '../../data/lessons/types';
 import { ArrowLeft, ChevronLeft, ChevronRight, CheckCircle } from 'lucide-react';
 import { Badge, Button, IconButton } from '../ui';
 import { LESSON_LEVEL_TONE } from './levelTone';
+import { scrollLessonBlock } from './scrollLessonBlock';
 import './lessonView.css';
 
 function ContentBlockRenderer({ block }: { block: ContentBlock }) {
@@ -80,7 +81,7 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
       setCurrentBlockIndex(restore.blockIndex);
       // Cleared only after the scroll lands, so a StrictMode remount (cleanup cancels the frame) can retry.
       const frame = requestAnimationFrame(() => {
-        document.getElementById(`block-${restore.blockIndex}`)?.scrollIntoView({ block: 'start' });
+        scrollLessonBlock(restore.blockIndex, 'auto');
         setRestore(null);
       });
       return () => cancelAnimationFrame(frame);

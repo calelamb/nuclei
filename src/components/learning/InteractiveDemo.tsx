@@ -12,6 +12,7 @@ import { useLessonKernel } from './useLessonKernel';
 import { LessonRunButton } from './LessonRunButton';
 import { StaleResultNotice } from '../layout/StaleResultNotice';
 import { formatCircuitMeta } from './outcomeDistribution';
+import { focusBlockEditor } from './focusBlockEditor';
 import './demo.css';
 
 type ResultView = 'output' | 'probabilities';
@@ -38,6 +39,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
   // The code the shown result came from; an edit after a run makes that result stale.
   const [ranCode, setRanCode] = useState<string | null>(null);
   const localCodeRef = useRef(initialCode);
+  const blockRef = useRef<HTMLDivElement>(null);
   // Bumped on every Run and on cancel, so a Run queued behind the Python boot can be withdrawn.
   const runTokenRef = useRef(0);
 
@@ -133,6 +135,8 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
 
   const handleReset = () => {
     // Restores the code only: the last result stays, marked stale, until the next run.
+    // Focus moves into the editor first: Reset disables itself once the code matches the original.
+    focusBlockEditor(blockRef.current);
     localCodeRef.current = initialCode;
     setLocalCode(initialCode);
     setError(null);
@@ -172,7 +176,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
   ];
 
   return (
-    <div className="demo">
+    <div ref={blockRef} className="demo">
       <div className="demo__head">
         <span className="demo__dot" aria-hidden="true" />
         <span className="demo__kicker">Interactive demo</span>

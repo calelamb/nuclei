@@ -26,7 +26,7 @@ export function ExportMenu() {
   const { snapshot, stale } = useDisplaySnapshot();
   const errorLine = useEditorStore((s) => s.errors[0]?.line ?? null);
   const previewPaused = useCircuitStore((s) => s.previewPaused);
-  const { exportQasmFile, exportSvg, exportPng, copyCodeToClipboard, copyQasmToClipboard, copyShareUrl, exportJsonSnapshot } = useCircuitExport();
+  const { exportQasmFile, exportSvg, exportPng, copyCodeToClipboard, copyQasmToClipboard, exportJsonSnapshot } = useCircuitExport();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
@@ -79,7 +79,6 @@ export function ExportMenu() {
   const entries: MenuEntry[] = [
     { id: 'copy-code', label: 'Copy code', onSelect: () => { void copy(copyCodeToClipboard, 'Code copied'); } },
     { id: 'copy-qasm', label: 'Copy QASM', onSelect: () => { void copy(copyQasmToClipboard, 'QASM copied'); } },
-    { id: 'copy-url', label: 'Copy share URL', onSelect: () => { void copy(copyShareUrl, 'Share URL copied'); } },
     { id: 'sep', separator: true },
     { id: 'qasm-file', label: 'Export QASM file', onSelect: exportQasmFile },
     { id: 'svg', label: 'Export SVG', onSelect: () => { void exportImage(exportSvg()); } },

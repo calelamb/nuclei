@@ -10,6 +10,9 @@ import { OutcomeResults } from './OutcomeResults';
 import { useLessonKernel } from './useLessonKernel';
 import { LessonRunButton } from './LessonRunButton';
 import { Button } from '../ui';
+import { StaleResultNotice } from '../layout/StaleResultNotice';
+import { CheckSolutionButton } from './CheckSolutionButton';
+import { focusBlockEditor } from './focusBlockEditor';
 import '../dirac/dirac.css';
 import './demo.css';
 
@@ -60,6 +63,9 @@ export function ExerciseBlock({
   const [hintsRevealed, setHintsRevealed] = useState(0);
   const [showDiracPrompt, setShowDiracPrompt] = useState(false);
   const [hasRun, setHasRun] = useState(false);
+  // The code the shown result came from; an edit after a run makes that result stale.
+  const [ranCode, setRanCode] = useState<string | null>(null);
+  const blockRef = useRef<HTMLDivElement>(null);
 
   const inactivityRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const codeRef = useRef(localCode);
@@ -197,7 +203,10 @@ export function ExerciseBlock({
   };
 
   const handleReset = () => {
+    // Focus moves into the editor first: Reset disables itself once the code matches the starter.
+    focusBlockEditor(blockRef.current);
     setResetArmed(false);
+    setRanCode(null);
     if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
     draftTimerRef.current = null;
     codeRef.current = starterCode;
@@ -230,6 +239,7 @@ export function ExerciseBlock({
     setOutput([]);
     setResult(null);
     setHasRun(false);
+    setRanCode(localCode);
 
     // Learning content is Python-only today, so the language is fixed.
     const message = isQuantumCode(localCode)
@@ -264,10 +274,11 @@ export function ExerciseBlock({
   const hasProbabilities = Boolean(result && Object.values(result.probabilities).some((p) => p > 0.001));
   const ranEmpty = hasRun && !isRunning && hasExpectations && !feedback && !error && !unsupported
     && output.length === 0 && !hasProbabilities;
+  const isStale = ranCode !== null && ranCode !== localCode && !isRunning && (hasProbabilities || output.length > 0);
   const state = isPassed ? 'passed' : feedback?.success === false ? 'failed' : 'open';
 
   return (
-    <div className="exercise" data-state={state}>
+    <div ref={blockRef} className="exercise" data-state={state}>
       <div className="demo__head">
         <span className="exercise__dot" aria-hidden="true" />
         <span className="demo__kicker">Exercise</span>
@@ -295,11 +306,11 @@ export function ExerciseBlock({
           icon={<RotateCcw size={12} aria-hidden="true" />}
           title="Restore the starter code"
         >
-          {resetArmed ? 'Discard edits?' : 'Reset'}
+          {resetArmed ? 'Discard?' : 'Reset'}
         </Button>
-        <span className="demo__sr" aria-live="polite">{resetArmed ? 'Press again to discard your edits' : ''}</span>
-        {hasRun && hasExpectations && !isRunning && (
-          <Button onClick={checkSolution} icon={<CheckCircle size={12} aria-hidden="true" />}>Check solution</Button>
+        <span className="nuclei-sr-only" aria-live="polite">{resetArmed ? 'Press again to discard your edits' : ''}</span>
+        {(hasRun || (ranCode !== null && ranCode !== localCode)) && hasExpectations && !isRunning && (
+          <CheckSolutionButton ready={hasRun} onCheck={checkSolution} />
         )}
         {hasRun && !hasExpectations && (
           <span className="exercise__ok"><CheckCircle size={12} aria-hidden="true" /> Ran. Compare {output.length > 0 ? 'the output above' : 'your output'} with the task.</span>
@@ -338,15 +349,19 @@ export function ExerciseBlock({
         </div>
       )}
 
+      {isStale && (
+        <div className="demo__stale"><StaleResultNotice inline label="From last run · Run again" onActivate={handleRun} /></div>
+      )}
+
       {output.length > 0 && (
-        <div className="exercise__output">
+        <div className="exercise__output" data-stale={isStale || undefined}>
           <div className="exercise__output-label"><Terminal size={12} aria-hidden="true" /> Output</div>
           <div className="exercise__output-lines">{output.map((line, i) => <div key={i}>{line}</div>)}</div>
         </div>
       )}
 
       {result && hasProbabilities && (
-        <div className="exercise__results"><OutcomeResults result={result} expectedKets={expectedKets} /></div>
+        <div className="exercise__results" data-stale={isStale || undefined}><OutcomeResults result={result} expectedKets={expectedKets} /></div>
       )}
 
       {showDiracPrompt && !isPassed && (

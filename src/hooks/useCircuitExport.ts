@@ -95,23 +95,6 @@ function downloadDataUrl(dataUrl: string, filename: string) {
   if (dataUrl.startsWith('blob:')) URL.revokeObjectURL(dataUrl);
 }
 
-function encodeCircuitToUrl(snapshot: CircuitSnapshot): string {
-  const compressed = JSON.stringify({
-    f: snapshot.framework,
-    q: snapshot.qubit_count,
-    c: snapshot.classical_bit_count,
-    g: snapshot.gates.map((g) => ({
-      t: g.type,
-      r: g.targets,
-      c: g.controls,
-      p: g.params,
-      l: g.layer,
-    })),
-  });
-  const encoded = btoa(encodeURIComponent(compressed));
-  return `${window.location.origin}/c/${encoded}`;
-}
-
 export function useCircuitExport() {
   const exportQasm = useCallback(() => {
     const snapshot = useCircuitStore.getState().snapshot;
@@ -156,18 +139,6 @@ export function useCircuitExport() {
     if (qasm) await navigator.clipboard.writeText(qasm);
   }, [exportQasm]);
 
-  const getShareUrl = useCallback(() => {
-    const snapshot = useCircuitStore.getState().snapshot;
-    if (!snapshot) return null;
-    return encodeCircuitToUrl(snapshot);
-  }, []);
-
-  const copyShareUrl = useCallback(async () => {
-    const url = getShareUrl();
-    if (url) await navigator.clipboard.writeText(url);
-    return url;
-  }, [getShareUrl]);
-
   const exportJsonSnapshot = useCallback(() => {
     const snapshot = useCircuitStore.getState().snapshot;
     if (!snapshot) return;
@@ -183,8 +154,6 @@ export function useCircuitExport() {
     exportPng,
     copyCodeToClipboard,
     copyQasmToClipboard,
-    getShareUrl,
-    copyShareUrl,
     exportJsonSnapshot,
   };
 }
