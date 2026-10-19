@@ -9,5 +9,5 @@
   line-height: 1.5;
 }
 .lesson-engine-failed__text { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; column-gap: var(--space-2); }
-.lesson-engine-failed__title { font-weight: var(--font-weight-semibold, 600); color: var(--color-danger); }
+.lesson-engine-failed__title { font-weight: var(--font-weight-semibold, 600); color: var(--color-danger-text); }
 .lesson-engine-failed__detail { color: var(--color-text-secondary); }

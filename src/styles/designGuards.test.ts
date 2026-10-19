@@ -157,4 +157,23 @@ describe('design guards', () => {
     const css = files.find((f) => f.rel === 'components/ui/ui.css')?.text ?? '';
     expect(css).toMatch(/\.nuclei-field-group\s*>\s*\.nuclei-bare-input:focus-visible\s*\{[^}]*box-shadow:\s*none/);
   });
+
+  it('never paints text in var(--color-danger) in a stylesheet that washes a surface in danger; text on the wash needs --color-danger-text (AA)', () => {
+    const offending = files
+      .filter((f) => f.rel.endsWith('.css'))
+      .filter((f) => /background[^;]*color-mix\([^;]*var\(--color-danger\)/.test(f.text) && /(?:^|[;{\s])color:\s*var\(--color-danger\)\s*[;}]/.test(f.text))
+      .map((f) => f.rel);
+    expect(offending).toEqual([]);
+  });
+
+  it('resolves every var(--x): a custom property used without a fallback is declared somewhere', () => {
+    const all = files.map((f) => f.text).join('\n');
+    const declared = (name: string) => new RegExp(`${name}\\s*:|['"\`]${name}['"\`]|${name}\\$\\{|setProperty\\(\\s*['"]${name}`).test(all);
+    const used = new Set<string>();
+    for (const f of files) {
+      for (const m of f.text.matchAll(/var\(\s*(--[\w-]+)\s*\)/g)) used.add(m[1]);
+    }
+    const undeclared = [...used].filter((name) => !declared(name)).sort();
+    expect(undeclared).toEqual([]);
+  });
 });

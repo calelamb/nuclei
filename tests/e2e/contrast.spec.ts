@@ -170,3 +170,42 @@ test.describe('Danger text on danger washes stays AA (design-r10-01)', () => {
     });
   }
 });
+
+test.describe('Danger text on the engine-failed band and demo error stays AA (design-r11-01)', () => {
+  for (const theme of THEMES) {
+    test(`${theme}: the Python-didn't-start title and the demo error are at least ${MIN_TEXT_CONTRAST}:1`, async ({ page }) => {
+      await page.goto('/?e2eProject=qec-project');
+      await page.evaluate((t) => {
+        document.documentElement.dataset.theme = t;
+        const host = document.createElement('div');
+        host.innerHTML = '<div class="lesson-engine-failed"><span class="lesson-engine-failed__title">Python did not start</span></div>'
+          + '<div class="demo__error">Traceback</div>';
+        document.body.appendChild(host);
+      }, theme);
+      for (const selector of ['.lesson-engine-failed__title', '.demo__error']) {
+        const ratio = await page.evaluate(PAINTED_CONTRAST_SCRIPT, selector);
+        expect(ratio, `${theme} ${selector}`).not.toBeNull();
+        expect(ratio as number, `${theme} ${selector}`).toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST);
+      }
+    });
+  }
+});
+
+test.describe('Accent badge stays AA on every surface in light (design-r11-02)', () => {
+  test('light: the accent badge on raised, overlay and sunken surfaces', async ({ page }) => {
+    await page.goto('/?e2eProject=qec-project');
+    await page.evaluate(() => {
+      document.documentElement.dataset.theme = 'light';
+      for (const surface of ['base', 'raised', 'overlay', 'sunken']) {
+        const host = document.createElement('div');
+        host.style.background = `var(--color-surface-${surface})`;
+        host.innerHTML = `<span id="badge-${surface}" class="nuclei-badge nuclei-badge--accent">Qiskit</span>`;
+        document.body.appendChild(host);
+      }
+    });
+    for (const surface of ['base', 'raised', 'overlay', 'sunken']) {
+      const ratio = await page.evaluate(PAINTED_CONTRAST_SCRIPT, `#badge-${surface}`);
+      expect(ratio as number, surface).toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST);
+    }
+  });
+});
