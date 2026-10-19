@@ -109,7 +109,7 @@
 .qec-import-warnings { display: grid; gap: 5px; }
 .qec-import-warnings li { display: flex; align-items: center; gap: 6px; color: var(--qec-warning); font-size: var(--font-size-chrome-label); }
 
-.qec-import-destination { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr); gap: 10px; padding: 12px; }
+.qec-import-destination { display: grid; align-items: start; grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr); gap: 10px; padding: 12px; }
 .qec-import-destination .qec-import-policy { grid-column: 1 / -1; margin: 0; }
 /* The destination token stays in one piece; only a genuinely overlong id may break. */
 .qec-import-token { display: inline-block; max-width: 100%; font: inherit; vertical-align: bottom; overflow-wrap: anywhere; }
