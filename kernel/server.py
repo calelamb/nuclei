@@ -7,8 +7,16 @@ import sys
 import os
 from importlib import metadata as importlib_metadata
 
-# Add project root to path so kernel package is importable
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Make the `kernel` package importable and keep Nuclei's own modules from leaking into a researcher's
+# imports. Launched as `python <kernel_dir>/server.py` the script's directory is sys.path[0], which
+# would make `models`, `adapters` or `auth` importable as top-level names; launched as
+# `python -m kernel.server` it is the cwd. Strip it either way and put the repo root first (design
+# note section 2.15). Run workers build their own sys.path from scratch under `-I`.
+_KERNEL_DIR = os.path.dirname(os.path.abspath(__file__))
+_REPO_ROOT = os.path.dirname(_KERNEL_DIR)
+sys.path[:] = [p for p in sys.path if os.path.realpath(p or os.getcwd()) != _KERNEL_DIR]
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 
 # Opt out of Microsoft qdk's Azure Application Insights telemetry for the
 # whole kernel process — must precede any qdk import, including user code
@@ -22,10 +30,13 @@ os.environ.setdefault("QDK_PYTHON_TELEMETRY", "none")
 # ``process_request(path, headers)`` hook has a different signature: on the
 # pinned 13.x the auth hook crashed every handshake with HTTP 500.
 from websockets.asyncio.server import serve as ws_serve
-from kernel import auth
-from kernel.executor import ADAPTER_SPECS, Executor
+from kernel import auth, framework_detect, run_context, run_worker
+from kernel.executor import Executor, ruff_base_cmd
 from kernel.hardware.manager import HardwareManager
 from kernel.models import KernelError
+from kernel.models.errors import error_payload
+from kernel.run_hardware import extract_circuit_for_provider as _extract_circuit_for_provider
+from kernel.run_routes import ROUTED_TYPES, RunRoutes
 
 logger = logging.getLogger(__name__)
 
@@ -136,62 +147,9 @@ def get_campaign_manager():
     return _campaign_manager
 
 
-def _extract_circuit_for_provider(namespace: dict, provider: str):
-    """Find the circuit object a student defined in their code.
-
-    Provider-specific search order so Qiskit code submitted to a Qiskit-native
-    provider (IBM, IonQ, Quantinuum, Braket, Azure) finds a QuantumCircuit
-    before any Cirq Circuit that may also be defined. Returns None if nothing
-    recognizable is defined — caller should surface a friendly error."""
-    # Provider → preferred framework(s) order
-    order_map = {
-        "ibm": ("qiskit", "cirq", "cudaq"),
-        "ionq": ("qiskit", "cirq", "cudaq"),
-        "braket": ("qiskit", "cirq", "cudaq"),
-        "azure": ("qiskit", "cirq", "cudaq"),
-        "quantinuum": ("qiskit", "cirq", "cudaq"),
-        "nvidia": ("cudaq", "qiskit", "cirq"),
-        "simulator": ("qiskit", "cirq", "cudaq"),
-    }
-    order = order_map.get(provider, ("qiskit", "cirq", "cudaq"))
-
-    for kind in order:
-        if kind == "qiskit":
-            try:
-                from qiskit import QuantumCircuit
-                for v in namespace.values():
-                    if isinstance(v, QuantumCircuit):
-                        return v
-            except ImportError:
-                pass
-        elif kind == "cirq":
-            try:
-                import cirq
-                for v in namespace.values():
-                    if isinstance(v, cirq.Circuit):
-                        return v
-            except ImportError:
-                pass
-        elif kind == "cudaq":
-            try:
-                import cudaq  # noqa: F401
-                # CUDA-Q kernels are functions decorated with @cudaq.kernel —
-                # detect by having an __kernel_name__ attribute the decorator
-                # attaches (fall back to any callable named 'kernel').
-                for v in namespace.values():
-                    if callable(v) and (
-                        hasattr(v, "__kernel_name__") or getattr(v, "__name__", "") in ("kernel", "circuit")
-                    ):
-                        return v
-            except ImportError:
-                pass
-    return None
-
-
-# The Q# spec's detect pattern is the single source of truth for "does this
+# `framework_detect.looks_like_qsharp` is the single source of truth for "does this
 # source look like Q#?" — reused here so hardware submissions from older
 # clients (which omit the `language` field) still route correctly.
-_QSHARP_SPEC = next(spec for spec in ADAPTER_SPECS if spec.framework == "qsharp")
 
 # Providers whose submit path can accept a Q# program: the local simulator
 # re-runs raw source through the executor, Azure Quantum accepts compiled QIR.
@@ -215,9 +173,7 @@ def _prepare_hardware_payload(
     - Python → real hardware: exec + extract a concrete circuit object,
       exactly as before.
     """
-    is_qsharp = (
-        language == "qsharp" or _QSHARP_SPEC.detect_pattern.search(code) is not None
-    )
+    is_qsharp = language == "qsharp" or framework_detect.looks_like_qsharp(code)
 
     if is_qsharp:
         if provider not in _QSHARP_HARDWARE_PROVIDERS:
@@ -245,6 +201,10 @@ def _prepare_hardware_payload(
     if provider == "simulator":
         return code
 
+    # The kernel server never gets here: `hardware_submit` runs the program in a run worker
+    # (`RunRoutes.prepare_python_circuit`). This stays for embedders and unit tests, and the tripwire
+    # makes a server-process caller fail loudly.
+    run_context.assert_inprocess_exec_allowed("_prepare_hardware_payload")
     namespace = {"__builtins__": __builtins__}
     exec(code, namespace)
     circuit_obj = _extract_circuit_for_provider(namespace, provider)
@@ -317,27 +277,36 @@ def _build_environment_payload() -> dict:
     }
 
 
-def error_payload(error: KernelError, phase: str) -> dict:
-    payload = {
-        "type": "error",
-        "message": error.message,
-        "code": error.code,
-        "phase": phase,
-    }
-    if error.traceback:
-        payload["traceback"] = error.traceback
-    if error.framework:
-        payload["framework"] = error.framework
-    if error.dependency:
-        payload["dependency"] = error.dependency
-    return payload
-
-
 async def handle_message(websocket):
-    # Per-connection executor — prevents parse/execute state bleeding across
-    # concurrent WS clients (e.g. reconnect races).
-    executor = Executor()
+    from kernel.lab_context import owner_for_connection
 
+    # Per-connection executor (handed to the Lab handlers) — prevents state bleeding across
+    # concurrent WS clients (e.g. reconnect races). It never runs user code in this process.
+    executor = Executor()
+    routes = RunRoutes(websocket, owner_for_connection(websocket), asyncio.get_running_loop())
+    try:
+        await _message_loop(websocket, executor, routes)
+    finally:
+        await routes.aclose()
+
+
+async def _hardware_payload(routes: RunRoutes, msg: dict, code: str, provider: str, backend: str, language, shots):
+    """What ``hardware_manager.submit_job`` receives, with user code only ever running in a worker.
+
+    - local simulator: the program runs on the run lane (any language) and the finished run is
+      handed over (``PrecomputedRun``), instead of blocking the event loop in-process;
+    - Python for a real device: a worker runs the program and returns the circuit it defines;
+    - Q# for Azure Quantum (compiled to QIR, no Python exec): ``_prepare_hardware_payload``, off-thread.
+    """
+    is_qsharp = language == "qsharp" or framework_detect.looks_like_qsharp(code)
+    if provider == "simulator":
+        return await routes.simulate_for_hardware(msg, code, shots if isinstance(shots, int) else 1024, language)
+    if is_qsharp:
+        return await asyncio.to_thread(_prepare_hardware_payload, code, provider, backend, language)
+    return await routes.prepare_python_circuit(msg, code, provider, language)
+
+
+async def _message_loop(websocket, executor: Executor, routes: RunRoutes):
     async for raw in websocket:
         try:
             msg = json.loads(raw)
@@ -355,235 +324,11 @@ async def handle_message(websocket):
         # omitted by older clients, in which case detection stays regex-based.
         language = msg.get("language")
 
-        if msg_type == "parse":
-            # Offload blocking parse to a thread so the event loop stays
-            # responsive to heartbeats and other messages.
-            snapshot, stdout, stderr, error = await asyncio.to_thread(
-                executor.parse, code, language=language
-            )
-
-            if stdout:
-                await websocket.send(json.dumps({
-                    "type": "output",
-                    "text": stdout,
-                }))
-
-            if stderr:
-                await websocket.send(json.dumps({
-                    "type": "stderr",
-                    "text": stderr,
-                }))
-
-            await websocket.send(json.dumps({
-                "type": "snapshot",
-                "data": snapshot.to_dict() if snapshot else None,
-            }))
-
-            # QEC sidecar (protocol v1.2 / PRD 10 Phase A): stim circuits
-            # additionally get detector-graph + coordinate data. Additive —
-            # non-stim frameworks and older clients see no new messages.
-            if snapshot is not None and snapshot.framework == "stim":
-                qec_payload, qec_error = await asyncio.to_thread(
-                    executor.qec_snapshot_payload
-                )
-                if qec_payload is not None and qec_error is None:
-                    await websocket.send(json.dumps({
-                        "type": "qec_snapshot",
-                        "data": qec_payload,
-                    }))
-
-            if error:
-                await websocket.send(json.dumps(error_payload(error, "parse")))
-
-        elif msg_type == "execute":
-            shots = msg.get("shots", 1024)
-
-            # Optional protocol v1.1 fields (PRD 09 Phase B) — both
-            # additive, omitted by older clients. Validate defensively at
-            # this boundary rather than trusting the wire payload: a
-            # malformed `params` degrades to "no params" instead of
-            # crashing the connection, and a non-numeric `seed` is dropped
-            # the same way.
-            params = msg.get("params")
-            if not isinstance(params, dict):
-                params = None
-
-            seed = msg.get("seed")
-            if seed is not None:
-                try:
-                    seed = int(seed)
-                except (TypeError, ValueError):
-                    seed = None
-
-            # Simulation can take multiple seconds — must not block the loop.
-            result, snapshot, stdout, stderr, error = await asyncio.to_thread(
-                executor.execute, code, shots, language=language, params=params, seed=seed
-            )
-
-            if stdout:
-                await websocket.send(json.dumps({
-                    "type": "output",
-                    "text": stdout,
-                }))
-
-            if stderr:
-                await websocket.send(json.dumps({
-                    "type": "stderr",
-                    "text": stderr,
-                }))
-
-            if snapshot or (error and error.code in {"unsupported_framework", "missing_dependency", "no_circuit", "execution_error", "adapter_error"}):
-                await websocket.send(json.dumps({
-                    "type": "snapshot",
-                    "data": snapshot.to_dict() if snapshot else None,
-                }))
-
-            # QEC sidecar (protocol v1.2 / PRD 10 Phase A) — see the parse
-            # handler. Sent between snapshot and result so clients that
-            # await `result` as the exchange terminator see it in-stream.
-            if snapshot is not None and snapshot.framework == "stim" and error is None:
-                qec_payload, qec_error = await asyncio.to_thread(
-                    executor.qec_snapshot_payload
-                )
-                if qec_payload is not None and qec_error is None:
-                    await websocket.send(json.dumps({
-                        "type": "qec_snapshot",
-                        "data": qec_payload,
-                    }))
-
-            if error:
-                # Send error before result:None so the frontend can display it
-                # without a flash of "success with no data".
-                await websocket.send(json.dumps(error_payload(error, "execute")))
-                await websocket.send(json.dumps({
-                    "type": "result",
-                    "data": None,
-                }))
-            else:
-                await websocket.send(json.dumps({
-                    "type": "result",
-                    "data": result.to_dict() if result else None,
-                }))
-
-        elif msg_type == "run_python":
-            stdout, stderr, error = await asyncio.to_thread(executor.run_python, code)
-
-            if stdout:
-                await websocket.send(json.dumps({
-                    "type": "output",
-                    "text": stdout,
-                }))
-
-            if stderr:
-                await websocket.send(json.dumps({
-                    "type": "stderr",
-                    "text": stderr,
-                }))
-
-            if error:
-                # Send error before python_result so the frontend doesn't flash
-                # a "success" state with a dump of stdout.
-                await websocket.send(json.dumps(error_payload(error, "python")))
-
-            await websocket.send(json.dumps({
-                "type": "python_result",
-                "success": error is None,
-            }))
-
-        elif msg_type == "transpile":
-            # Transpiler Explorer (dev tools Phase 1): run a Qiskit preset
-            # PassManager for a target and stream back before/after snapshots,
-            # metric deltas, and pass-by-pass data. Additive — unknown to
-            # older clients, and Qiskit-only (the only introspectable compiler).
-            #
-            # Validate the target defensively at this boundary: a malformed
-            # basis_gates / coupling_map / optimization_level degrades to the
-            # unconstrained default rather than crashing the connection.
-            basis_gates = msg.get("basis_gates")
-            if not (isinstance(basis_gates, list) and all(isinstance(g, str) for g in basis_gates)):
-                basis_gates = None
-
-            coupling_map = msg.get("coupling_map")
-            if isinstance(coupling_map, list) and all(
-                isinstance(edge, (list, tuple))
-                and len(edge) == 2
-                and all(isinstance(q, int) for q in edge)
-                for edge in coupling_map
-            ):
-                coupling_map = [[int(a), int(b)] for a, b in coupling_map]
-            else:
-                coupling_map = None
-
-            optimization_level = msg.get("optimization_level", 1)
-            if not isinstance(optimization_level, int) or optimization_level not in (0, 1, 2, 3):
-                optimization_level = 1
-
-            # Transpilation can run many passes — offload so heartbeats flow.
-            payload, stdout, stderr, error = await asyncio.to_thread(
-                executor.transpile_explore,
-                code,
-                basis_gates=basis_gates,
-                coupling_map=coupling_map,
-                optimization_level=optimization_level,
-                language=language,
-            )
-
-            if stdout:
-                await websocket.send(json.dumps({
-                    "type": "output",
-                    "text": stdout,
-                }))
-
-            if stderr:
-                await websocket.send(json.dumps({
-                    "type": "stderr",
-                    "text": stderr,
-                }))
-
-            if error:
-                await websocket.send(json.dumps(error_payload(error, "transpile")))
-                await websocket.send(json.dumps({
-                    "type": "transpile_result",
-                    "data": None,
-                }))
-            else:
-                await websocket.send(json.dumps({
-                    "type": "transpile_result",
-                    "data": payload,
-                }))
-
-        elif msg_type == "debug_trace":
-            # Quantum Debugger (dev tools Phase 3): compute the per-gate state
-            # trajectory in one call so the frontend scrubber shows the state at
-            # each step instantly. Additive; Qiskit/Cirq only. Off-thread — a
-            # long trajectory must not block heartbeats.
-            payload, stdout, stderr, error = await asyncio.to_thread(
-                executor.debug_trace, code, language=language
-            )
-
-            if stdout:
-                await websocket.send(json.dumps({
-                    "type": "output",
-                    "text": stdout,
-                }))
-
-            if stderr:
-                await websocket.send(json.dumps({
-                    "type": "stderr",
-                    "text": stderr,
-                }))
-
-            if error:
-                await websocket.send(json.dumps(error_payload(error, "debug")))
-                await websocket.send(json.dumps({
-                    "type": "debug_trace_result",
-                    "data": None,
-                }))
-            else:
-                await websocket.send(json.dumps({
-                    "type": "debug_trace_result",
-                    "data": payload,
-                }))
+        if msg_type in ROUTED_TYPES:
+            # Everything that executes user code goes through the warm run-worker pool
+            # (kernel/run_routes.py): the server process never runs it, a runaway program cannot
+            # wedge this connection, and the loop keeps reading (run_cancel, newer parses).
+            routes.dispatch(msg_type, msg)
 
         elif msg_type == "lint":
             # Editor diagnostics via ruff (dev tools Phase 4). Additive;
@@ -593,10 +338,10 @@ async def handle_message(websocket):
             )
             if error:
                 await websocket.send(json.dumps(error_payload(error, "lint")))
-            await websocket.send(json.dumps({
-                "type": "lint_result",
-                "diagnostics": diagnostics,
-            }))
+            lint_frame = {"type": "lint_result", "diagnostics": diagnostics, "available": True}
+            if language != "qsharp" and ruff_base_cmd() is None:
+                lint_frame.update(available=False, reason="The linter (ruff) is not installed in this kernel's environment.")
+            await websocket.send(json.dumps(lint_frame))
 
         elif msg_type == "format":
             # Format the buffer via ruff (dev tools Phase 4). Additive;
@@ -668,75 +413,6 @@ async def handle_message(websocket):
                     "phase": "qec_generate",
                     "framework": "stim",
                     "dependency": "stim",
-                }))
-
-        elif msg_type == "qec_snapshot":
-            # Protocol v1.2 (PRD 10 Phase A): (re)compute the QEC sidecar,
-            # optionally at a caller-chosen DEM edge cap ("render anyway").
-            # With `code` it is stateless; without, it reuses the last stim
-            # circuit this connection parsed or executed.
-            max_edges = msg.get("max_edges")
-            if max_edges is not None:
-                try:
-                    max_edges = int(max_edges)
-                except (TypeError, ValueError):
-                    max_edges = None
-            qec_code = msg.get("code") if isinstance(msg.get("code"), str) else None
-            qec_payload, qec_error = await asyncio.to_thread(
-                lambda: executor.qec_snapshot_payload(
-                    code=qec_code, language=language, max_edges=max_edges
-                )
-            )
-            if qec_error is not None:
-                await websocket.send(json.dumps(error_payload(qec_error, "qec_snapshot")))
-            else:
-                await websocket.send(json.dumps({
-                    "type": "qec_snapshot",
-                    "data": qec_payload,
-                }))
-
-        elif msg_type == "qec_materialize":
-            # Protocol v1.2 (PRD 10 Phase C): run a campaign's Python entry
-            # source and collect its labeled circuits via the
-            # nuclei_circuits(noise) contract.
-            from kernel.qec.materialize import materialize_circuits
-
-            noise = msg.get("noise")
-            circuits, mat_stdout, mat_stderr, mat_error = await asyncio.to_thread(
-                materialize_circuits, executor, code, noise
-            )
-            if mat_stdout:
-                await websocket.send(json.dumps({"type": "output", "text": mat_stdout}))
-            if mat_stderr:
-                await websocket.send(json.dumps({"type": "stderr", "text": mat_stderr}))
-            if mat_error is not None:
-                await websocket.send(json.dumps(error_payload(mat_error, "qec_materialize")))
-            else:
-                await websocket.send(json.dumps({
-                    "type": "qec_circuits",
-                    "circuits": circuits,
-                }))
-
-        elif msg_type == "qec_estimate":
-            # Protocol v1.2 (PRD 10 Phase F): Azure Quantum Resource Estimator
-            # over Q# source or OpenQASM 3. Off-thread (estimation can take
-            # several seconds); the estimator itself runs on the pinned qdk
-            # interpreter thread inside estimate_resources.
-            from kernel.qec.estimate import estimate_resources
-
-            est_language = msg.get("language", "qsharp")
-            est_options = msg.get("options")
-            if not isinstance(est_options, dict):
-                est_options = None
-            payload, est_error = await asyncio.to_thread(
-                estimate_resources, code, est_language, est_options
-            )
-            if est_error is not None:
-                await websocket.send(json.dumps(error_payload(est_error, "qec_estimate")))
-            else:
-                await websocket.send(json.dumps({
-                    "type": "qec_estimate_result",
-                    "data": payload,
                 }))
 
         elif msg_type == "qec_campaign_start":
@@ -904,14 +580,7 @@ async def handle_message(websocket):
             shots = msg.get("shots", 1024)
             code = msg.get("code", "")
             try:
-                # Routing (simulator passthrough, Q# → QIR for Azure, exec +
-                # extract for Python on real hardware) lives in
-                # _prepare_hardware_payload so it's unit-testable.
-                # Off-thread because QIR compilation can take seconds and
-                # would otherwise freeze the event loop for every client.
-                payload = await asyncio.to_thread(
-                    _prepare_hardware_payload, code, provider, backend, language
-                )
+                payload = await _hardware_payload(routes, msg, code, provider, backend, language, shots)
                 handle = hardware_manager.submit_job(provider, payload, backend, shots)
                 await websocket.send(json.dumps({
                     "type": "hardware_job_submitted",
@@ -1141,6 +810,8 @@ async def _handle_connection(websocket):
         # leaves a gradient sweep or discovery evaluation burning CPU.
         from kernel.lab_context import owner_for_connection, release_owner
         release_owner(owner_for_connection(websocket))
+        if run_worker.pool_started():
+            run_worker.get_pool().release_owner(owner_for_connection(websocket))
 
 
 async def _try_serve(port: int, auth_config: auth.KernelAuthConfig):
@@ -1183,6 +854,12 @@ async def main():
         print(f"Nuclei kernel refused to start: {e}", file=sys.stderr, flush=True)
         raise SystemExit(2) from e
 
+    # User code never runs in this process: it runs in the run-worker pool. The tripwire turns a
+    # missed path into a loud InProcessExecForbidden instead of a silent in-process exec.
+    run_context.forbid_inprocess_exec()
+    # Matplotlib must never open a window for user code (audit R-12); workers also get this.
+    os.environ.setdefault("MPLBACKEND", "Agg")
+
     # The desktop app hardcodes the canonical port; when it owns the launch it
     # must not silently fall back to a neighbouring port.
     strict_port = os.environ.get(auth.STRICT_PORT_ENV) == "1"
@@ -1201,8 +878,14 @@ async def main():
 
         # Print chosen port on its own line so the Rust side can parse it if needed.
         print(f"Nuclei kernel ready on ws://localhost:{port}", flush=True)
-        async with server:
-            await asyncio.Future()  # Run forever
+        # Warm the run workers only after the ready line, so the import cost never eats into the
+        # shell's startup timeout; the first parse waits for them exactly as an in-process import did.
+        run_worker.get_pool().start()
+        try:
+            async with server:
+                await asyncio.Future()  # Run forever
+        finally:
+            run_worker.shutdown_pool()
         return
 
     raise RuntimeError(

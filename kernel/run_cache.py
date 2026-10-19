@@ -51,7 +51,7 @@ def make_key(
     executable: str,
 ) -> str:
     canonical = json.dumps(params or {}, sort_keys=True, default=repr, separators=(",", ":"))
-    parts = (KEY_VERSION, language or "", code, canonical, project_root or "", file_path or "", executable)
+    parts = (KEY_VERSION, language or "python", code, canonical, project_root or "", file_path or "", executable)
     return hashlib.sha256("\0".join(parts).encode("utf-8", "surrogatepass")).hexdigest()
 
 

@@ -81,6 +81,13 @@ def in_worker() -> bool:
     return _runtime is not None
 
 
+def call_user(fn: Callable[..., Any], *args: Any, program: LoadedProgram | None = None) -> Any:
+    """Call a function the user's program defined: inside the user context in a worker, directly elsewhere."""
+    if _runtime is None:
+        return fn(*args)
+    return _runtime.call_user(fn, *args, program=program)
+
+
 # ------------------------------------------------------------------- errors / text
 
 
@@ -601,7 +608,7 @@ class WorkerRuntime:
         assert request is not None, "load_program needs an active request"
         params = request.params if params is None else params
         key = run_cache.make_key(
-            language or request.language, code, params, request.project_root, request.file_path, sys.executable
+            language or request.language or "python", code, params, request.project_root, request.file_path, sys.executable
         )
         reading = allow_cache and request.cache == "use" and seed is None
         if reading:

@@ -362,16 +362,15 @@ class RunPool:
             self._submit_spawn(run_ops.RUN).add_done_callback(self._spare_spawned)
 
     def _spare_spawned(self, future: concurrent.futures.Future) -> None:
-        with self._lock:
+        with self._cv:
             self._spawning_spares -= 1
             if future.exception() is not None:
                 logger.warning("run spare failed to start: %s", future.exception())
-                return
-            worker = future.result()
-            if self._closing:
-                worker.close()
+            elif self._closing:
+                future.result().close()
             else:
-                self._spares.append(worker)
+                self._spares.append(future.result())
+            self._cv.notify_all()
 
     # -- janitor: idle spares, package changes -----------------------------
 
@@ -513,14 +512,21 @@ class RunPool:
             self._top_up_spares()
 
     def _take_run_worker(self, handle: _Handle) -> WorkerProc | None:
-        with self._lock:
-            while self._spares:
-                spare = self._spares.pop(0)
-                if spare.alive():
+        """A warm spare if there is one (or one is about to finish importing), else a fresh process."""
+        with self._cv:
+            while True:
+                while self._spares:
+                    spare = self._spares.pop(0)
+                    if spare.alive():
+                        break
+                    spare.close()
+                else:
+                    spare = None
+                if spare is not None or self._spawning_spares == 0:
                     break
-                spare.close()
-            else:
-                spare = None
+                if handle.cancelled.is_set() or self._closing:
+                    return None
+                self._cv.wait(TICK_S)
         if spare is not None:
             self._top_up_spares()
             return spare

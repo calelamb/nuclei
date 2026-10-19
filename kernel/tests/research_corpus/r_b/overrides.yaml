@@ -1,0 +1,33 @@
+# R-B closes R-3, R-6, R-7, R-8, R-9, R-10, R-11, R-12, R-20 and R-22: flip the scout/gates entries that were
+# waiting on them (the base files are never edited; the loader applies this after every base entry).
+e06-sys-exit: {xfail: null}
+r01-main-guard: {xfail: null}
+r03-multiprocessing-pool:
+  parse: ok  # the program runs for real now, in parse as in execute
+  xfail: null
+r04-large-stdout-100k-lines: {xfail: null}
+z04-infinite-loop-timeout:
+  # The run lane's default wall is 600 s (research runs are long); a researcher or the Experiments
+  # runner passes `limits.wall_s` to bound a run, exactly as this entry does.
+  options: {request: {limits: {wall_s: 3}}}
+  xfail: null
+g01-30-qubit-ghz:
+  xfail: null
+  max_seconds: 3
+  note: >-
+    cold start: the first Run after a kernel launch waits ~1.3 s for its warm run worker to finish
+    importing. The warm bound (under 1 s) is asserted by test_executor_run_path.py::test_n30_too_many_qubits_fast.
+g02-22-qubit-ghz: {xfail: null}
+g03-plt-show-with-display: {xfail: null}
+g04-slow-program-queued-parses: {xfail: null}
+# R-3 is closed (parse works); the rest of these entries is R-A's (R-2 library gates, R-4 unbound parameters).
+q09-EfficientSU2-bound-measure_all:
+  xfail: {id: R-2, reason: "detection now works; the library gate reaches Aer untranspiled", current: {parse: ok, execute: 'error:simulation_error'}}
+q10-EfficientSU2-unbound:
+  xfail: {id: R-4, reason: "detection now works; the unbound ansatz surfaces as simulation_error, not unbound_parameters", current: {parse: ok, execute: 'error:simulation_error'}}
+q11-TwoLocal-bound:
+  xfail: {id: R-2, reason: "detection now works; the library gate reaches Aer untranspiled", current: {parse: ok, execute: 'error:simulation_error'}}
+q12-ZZFeatureMap-bound:
+  xfail: {id: R-2, reason: "detection now works; the library gate reaches Aer untranspiled", current: {parse: ok, execute: 'error:simulation_error'}}
+q13-RealAmplitudes-bound:
+  xfail: {id: R-2, reason: "detection now works; the library gate reaches Aer untranspiled", current: {parse: ok, execute: 'error:simulation_error'}}

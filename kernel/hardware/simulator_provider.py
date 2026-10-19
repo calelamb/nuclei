@@ -1,4 +1,5 @@
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from kernel.hardware.base import HardwareProvider, BackendInfo, JobHandle
@@ -39,6 +40,14 @@ SIMULATED_BACKENDS = [
 ]
 
 
+@dataclass(frozen=True)
+class PrecomputedRun:
+    """A simulator run the server already performed in a run worker (``result`` / ``error`` wire dicts)."""
+
+    result: dict | None = None
+    error: dict | None = None
+
+
 class SimulatorProvider(HardwareProvider):
     def __init__(self):
         self._executor = Executor()
@@ -54,7 +63,11 @@ class SimulatorProvider(HardwareProvider):
         job_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
 
-        # Use the executor to run the simulation via the appropriate adapter
+        if isinstance(circuit_obj, PrecomputedRun):
+            return self._finish(job_id, now, backend, shots, circuit_obj.result, circuit_obj.error)
+
+        # Source passed directly (tests, embedders): run it here. The kernel server never gets
+        # here with user code; it hands over a PrecomputedRun produced in a run worker.
         code = circuit_obj if isinstance(circuit_obj, str) else ""
         result, snapshot, stdout, stderr, error = self._executor.execute(code, shots)
         # stderr from the simulated backend is currently unused — the outer
@@ -62,6 +75,11 @@ class SimulatorProvider(HardwareProvider):
         # exposes it for future surfacing.
         _ = stderr
 
+        return self._finish(
+            job_id, now, backend, shots, result.to_dict() if result else {}, error.to_dict() if error else None
+        )
+
+    def _finish(self, job_id: str, now: str, backend: str, shots: int, result: dict | None, error: dict | None) -> JobHandle:
         if error:
             handle = JobHandle(
                 id=job_id,
@@ -72,7 +90,7 @@ class SimulatorProvider(HardwareProvider):
                 shots=shots,
                 submitted_at=now,
             )
-            self._results[job_id] = {"error": error.to_dict()}
+            self._results[job_id] = {"error": error}
         else:
             handle = JobHandle(
                 id=job_id,
@@ -83,7 +101,7 @@ class SimulatorProvider(HardwareProvider):
                 shots=shots,
                 submitted_at=now,
             )
-            self._results[job_id] = result.to_dict() if result else {}
+            self._results[job_id] = result or {}
 
         return handle
 

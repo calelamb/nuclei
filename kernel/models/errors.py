@@ -31,3 +31,22 @@ class KernelError:
             traceback=data.get("traceback"), framework=data.get("framework"),
             dependency=data.get("dependency"), extra=extra or None,
         )
+
+
+def error_payload(error: KernelError, phase: str) -> dict:
+    """The ``error`` frame for ``error``; its structured ``extra`` fields sit at the top level."""
+    payload = {
+        "type": "error",
+        "message": error.message,
+        "code": error.code,
+        "phase": phase,
+    }
+    if error.traceback:
+        payload["traceback"] = error.traceback
+    if error.framework:
+        payload["framework"] = error.framework
+    if error.dependency:
+        payload["dependency"] = error.dependency
+    for key, value in (error.extra or {}).items():
+        payload.setdefault(key, value)
+    return payload

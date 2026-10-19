@@ -12,13 +12,15 @@ point; the kernel executes the code, calls ``nuclei_circuits(noise)``, and
 returns ``{label: circuit_text}``. Arbitrary custom noise stays possible —
 the user applies the dict however they like (or ignores it).
 
-Execution reuses the Executor's ``_run_code`` sandboxing (stdout/stderr
-capture, timeout on the main thread) rather than a bare ``exec``, so entry
+Execution reuses the Executor's ``_run_code`` (a run-worker program load; in-process only in
+tests and the disposable agent worker) rather than a bare ``exec``, and ``nuclei_circuits`` itself is
+called inside the user context (the project on ``sys.path``, Nuclei's own modules hidden), so entry
 sources behave exactly like `parse`/`execute` code does.
 """
 
 from __future__ import annotations
 
+from kernel import run_context
 from kernel.models import KernelError
 
 # A campaign is capped kernel-side at 10k tasks; a single materialization
@@ -63,7 +65,7 @@ def materialize_circuits(
         )
 
     try:
-        result = fn(noise_dict)
+        result = run_context.call_user(fn, noise_dict, program=getattr(executor, "program", None))
     except Exception as exc:
         first = str(exc).strip().splitlines()[0] if str(exc).strip() else type(exc).__name__
         return None, stdout, stderr, KernelError(

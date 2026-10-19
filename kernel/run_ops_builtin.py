@@ -11,7 +11,7 @@ from __future__ import annotations
 import sys
 from typing import Any
 
-from kernel import run_hardware
+from kernel import preview_static, run_hardware
 from kernel.executor import Executor
 from kernel.models import KernelError
 from kernel.run_ops import PREVIEW, RUN, worker_op
@@ -51,8 +51,31 @@ def _qec_sidecar(executor: Executor) -> dict:
     return sidecar
 
 
+def _static_snapshot(runtime: Any, code: str, language: str | None) -> dict | None:
+    """R-8 d: the diagram of a straight-line program without running it; ``None`` to run it instead."""
+    if runtime.request is None or runtime.request.cache != "use" or language in ("qsharp", "stim"):
+        return None
+    static = preview_static.try_static(code)
+    if static is None:
+        return None
+    executor = Executor()
+    spec = executor._spec_named(static.framework)
+    adapter, load_error = executor._load_adapter(spec) if spec is not None else (None, None)
+    if adapter is None or load_error is not None:
+        return None
+    try:
+        snapshot = adapter.extract_snapshot(static.circuit)
+    except Exception:  # noqa: BLE001 - the real run will report it properly
+        return None
+    runtime.stats.cache = "static"
+    return {"snapshot": snapshot.to_dict(), "preview": "static", "elapsed_ms": 0.0, "slow": False}
+
+
 @worker_op("parse", lane=PREVIEW, cached=True, wall_s=10.0, takes_runtime=True)
 def parse_op(runtime: Any, args: dict) -> tuple[dict, dict | None]:
+    static = _static_snapshot(runtime, args.get("code", ""), args.get("language"))
+    if static is not None:
+        return static, None
     executor = Executor()
     snapshot, stdout, stderr, error = executor.parse(args.get("code", ""), language=args.get("language"))
     _emit(stdout, stderr)
