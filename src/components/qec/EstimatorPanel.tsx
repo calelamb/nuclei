@@ -17,6 +17,8 @@ import type { Framework } from '../../types/quantum';
 
 import { TYPOGRAPHY, ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
 import { Button, Select, TextInput } from '../ui';
+import { DesktopOnlyState } from '../hardware/DesktopOnlyState';
+import { isWebBuild } from '../../platform/buildTarget';
 const DOCS = 'https://getnuclei.dev/docs/research/resource-estimation/';
 
 // Frameworks the Azure Quantum Resource Estimator can cost. Q# is estimated
@@ -119,6 +121,16 @@ export function EstimatorPanel() {
     color: colors.text,
     fontFamily: TYPOGRAPHY.fontSans,
   };
+
+  if (isWebBuild()) {
+    return (
+      <div style={shell}>
+        <DesktopOnlyState title="Resource estimates need the desktop app">
+          The Azure Quantum Resource Estimator runs in the local Python kernel, which the browser build does not include.
+        </DesktopOnlyState>
+      </div>
+    );
+  }
 
   if (!supported) {
     return (

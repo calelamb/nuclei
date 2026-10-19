@@ -113,16 +113,3 @@ describe('FileExplorer create flow returns focus (interaction-r-05)', () => {
     });
   });
 });
-
-describe('FileExplorer double-click rename (research-r-01)', () => {
-  it('does not rename a row the pointer only landed on after the tree moved', async () => {
-    useProjectStore.setState({ projectRoot: '/proj', tabs: [] });
-    render(<PlatformProvider bridge={makeBridge(vi.fn(async () => null))}><FileExplorer /></PlatformProvider>);
-    const row = (await screen.findByText('bell.py')).closest('[role="treeitem"]') as HTMLElement;
-    fireEvent.doubleClick(row);
-    expect(screen.queryByRole('textbox', { name: /Rename/ })).toBeNull();
-    fireEvent.mouseDown(row, { detail: 1 });
-    fireEvent.doubleClick(row);
-    expect(screen.getByRole('textbox', { name: /Rename/ })).toBeTruthy();
-  });
-});

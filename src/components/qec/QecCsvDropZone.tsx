@@ -3,21 +3,29 @@ import { Upload } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { firstFile, loadCsvFile } from '../../services/qecCsvFile';
 import { useCsvDrop } from './useCsvDrop';
+import { useQecCampaignStore } from '../../stores/qecCampaignStore';
+import { QecCsvError } from './QecCsvError';
+
+export const CSV_ERROR_ID = 'qec-csv-error';
 
 import { ICON_SIZE, ICON_STROKE, TYPOGRAPHY } from '../../styles/tokens';
 import { Button } from '../ui';
 /** Drop target + file picker for a sinter stats CSV. Parsing happens locally;
- * nothing is uploaded. Load errors are shown by QecAnalysisView's banner. */
+ * nothing is uploaded. A rejected file is explained inside this card. */
 export function QecCsvDropZone() {
   const colors = useThemeStore((s) => s.colors);
   const inputRef = useRef<HTMLInputElement>(null);
   const { over, handlers } = useCsvDrop();
+  const csvError = useQecCampaignStore((s) => s.csvError);
+  // With results on screen, QecAnalysisView's compact line owns the message instead.
+  const hasData = useQecCampaignStore((s) => Object.keys(s.rowsByStrongId).length > 0);
+  const showError = csvError !== null && !hasData;
   return (
     <div
       data-testid="csv-drop-zone"
       {...handlers}
       style={{
-        marginTop: 8, padding: '14px 18px', borderRadius: 'var(--radius-round)', maxWidth: 340,
+        marginTop: 8, padding: '14px 18px', borderRadius: 'var(--radius-round)', maxWidth: 360,
         border: `1.5px dashed ${over ? colors.accent : colors.border}`,
         background: over ? `${colors.accent}14` : 'transparent',
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
@@ -26,7 +34,8 @@ export function QecCsvDropZone() {
     >
       <Upload size={16} color={colors.textMuted} aria-hidden="true" />
       <div style={{ fontSize: 12, color: colors.text }}>Drop a sinter stats CSV to plot it</div>
-      <Button size="sm" onClick={() => inputRef.current?.click()}>Choose file…</Button>
+      {showError && <QecCsvError id={CSV_ERROR_ID} message={csvError} />}
+      <Button size="sm" aria-describedby={showError ? CSV_ERROR_ID : undefined} onClick={() => inputRef.current?.click()}>Choose file…</Button>
       <input
         ref={inputRef}
         type="file"

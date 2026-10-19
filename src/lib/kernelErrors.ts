@@ -136,3 +136,8 @@ export function describeDesktopCommandError(error: unknown): string {
   if (/reading '(?:invoke|transformCallback)'|__TAURI/i.test(raw)) return DESKTOP_ONLY_MESSAGE;
   return raw;
 }
+
+/** One sentence for "this feature has no engine in the browser", so a stray call never claims Python is down. */
+export function desktopOnlyMessage(feature: string): string {
+  return `${feature} run in the desktop app.`;
+}

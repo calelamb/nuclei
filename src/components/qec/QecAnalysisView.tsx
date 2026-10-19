@@ -11,7 +11,8 @@ import { ThresholdPanel } from './ThresholdPanel';
 import { DecoderWorkbench } from './DecoderWorkbench';
 import { isWebBuild } from '../../platform/buildTarget';
 import { CsvMappingPreview } from './CsvMappingPreview';
-import { QecCsvDropZone } from './QecCsvDropZone';
+import { QecCsvDropZone, CSV_ERROR_ID } from './QecCsvDropZone';
+import { QecCsvError } from './QecCsvError';
 import { QecEmptyState } from './QecEmptyState';
 import { QEC_PLOT_CSV_DOCS } from '../../config/docsLinks';
 import { useCsvDrop } from './useCsvDrop';
@@ -103,12 +104,8 @@ export function QecAnalysisView({ embedded = false, actionsInHeader = false }: {
           {`Reading ${csvLoading}…`}
         </div>
       )}
-      {csvError && (
-        <div role="alert" style={{ padding: '6px 12px', fontSize: 12, color: colors.error, borderBottom: `1px solid ${colors.border}`, fontFamily: TYPOGRAPHY.fontSans }}>
-          {csvError}
-          {csvSource ? ` Still showing ${csvSource}.` : ''}
-        </div>
-      )}
+      {/* With no data the drop-zone card explains a rejected file where the person acted; otherwise a compact line does. */}
+      {csvError && (hasData || csvSource) && <QecCsvError compact id={CSV_ERROR_ID} message={csvError} stillShowing={csvSource} />}
       {(running || resumable) && (
         <div
           aria-live="polite"
@@ -141,8 +138,8 @@ export function QecAnalysisView({ embedded = false, actionsInHeader = false }: {
           <QecEmptyState
             title="No campaign results yet"
             body={webOnly
-              ? 'Open or drop a sinter stats CSV to see logical error rate vs physical error and compare decoders.'
-              : 'Open or drop a sinter stats CSV, or run a QEC campaign from Experiments, to see logical error rate vs physical error and compare decoders.'}
+              ? 'See logical error rate vs physical error and compare decoders.'
+              : 'Run a QEC campaign from Experiments, or load existing results, to see logical error rate vs physical error and compare decoders.'}
             docsHref={QEC_PLOT_CSV_DOCS}
             align={embedded ? 'top' : 'center'}
           >

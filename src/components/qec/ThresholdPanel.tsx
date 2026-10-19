@@ -91,8 +91,8 @@ export function ThresholdPanel({ part = 'all', tabs, bare = false }: { part?: Th
   const emptyBody = csvImport
     ? 'Nothing to plot yet: choose the column that holds the physical error rate p under Edit mapping.'
     : isWebBuild()
-      ? 'Drop a sinter stats CSV to see logical error rate vs physical error, per distance.'
-      : 'Run a QEC campaign over a noise sweep, or drop a sinter stats CSV, to see logical error rate vs physical error, per distance.';
+      ? 'See logical error rate vs physical error, per distance.'
+      : 'Run a QEC campaign over a noise sweep, or load existing results, to see logical error rate vs physical error, per distance.';
 
   const exportSvg = () => {
     if (!model) return;
