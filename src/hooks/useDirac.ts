@@ -475,8 +475,20 @@ function executeToolById(toolId: string, accepted: boolean) {
   }
 }
 
+/** Controller of the in-flight chat request, if any (one reply streams at a time). */
+let activeRequest: AbortController | null = null;
+
+/** Abort the reply that is currently streaming; a no-op when nothing is pending. */
+export function stopDirac(): void {
+  activeRequest?.abort();
+}
+
+function isAbort(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError';
+}
+
 export function useDirac() {
-  const { addMessage, updateLastAssistant, updateLastThinking, updateLastToolCalls, failLastAssistant, setLoading } = useDiracStore();
+  const { addMessage, updateLastAssistant, updateLastThinking, updateLastToolCalls, failLastAssistant, markLastStopped, setLoading } = useDiracStore();
 
   // API key is now initialized in diracStore (from localStorage / env).
   // No mount-time override needed.
@@ -563,6 +575,9 @@ export function useDirac() {
 
     addMessage({ role: 'assistant', content: '', toolCalls: [] });
 
+    const controller = new AbortController();
+    activeRequest = controller;
+
     try {
       const body: Record<string, unknown> = {
         model: route.model,
@@ -587,6 +602,7 @@ export function useDirac() {
           'anthropic-dangerous-direct-browser-access': 'true',
         },
         body: JSON.stringify(body),
+        signal: controller.signal,
       });
 
       if (!response.ok) {
@@ -681,14 +697,20 @@ export function useDirac() {
 
       setLoading(false);
     } catch (e) {
-      failLastAssistant(describeThrownError(e));
+      if (isAbort(e) || controller.signal.aborted) {
+        markLastStopped();
+      } else {
+        failLastAssistant(describeThrownError(e));
+      }
       setLoading(false);
+    } finally {
+      if (activeRequest === controller) activeRequest = null;
     }
-  }, [addMessage, updateLastAssistant, updateLastThinking, updateLastToolCalls, failLastAssistant, setLoading]);
+  }, [addMessage, updateLastAssistant, updateLastThinking, updateLastToolCalls, failLastAssistant, markLastStopped, setLoading]);
 
   const handleToolAction = useCallback((toolId: string, accepted: boolean) => {
     executeToolById(toolId, accepted);
   }, []);
 
-  return { sendMessage, handleToolAction };
+  return { sendMessage, handleToolAction, stop: stopDirac };
 }
