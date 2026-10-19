@@ -38,4 +38,20 @@ describe('focusAfterUnmount', () => {
     vi.advanceTimersByTime(100);
     expect(document.activeElement?.id).toBe('other');
   });
+
+  it('re-lands when the target itself remounts a frame after it took focus', () => {
+    mount('<button id="origin">x</button><button id="chip">Expand histogram</button>');
+    const origin = document.getElementById('origin') as HTMLElement;
+    origin.focus();
+    focusAfterUnmount(origin, ['#chip']);
+    origin.remove();
+    vi.advanceTimersByTime(40); // focus lands on the chip
+    expect(document.activeElement?.id).toBe('chip');
+    // The rail re-lays out: the chip is replaced by a fresh node and focus falls to <body>.
+    document.getElementById('chip')?.remove();
+    mount('<button id="chip">Expand histogram</button>');
+    expect(document.activeElement).toBe(document.body);
+    vi.advanceTimersByTime(100);
+    expect(document.activeElement?.id).toBe('chip');
+  });
 });
