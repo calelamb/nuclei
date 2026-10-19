@@ -31,10 +31,11 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString
  * The loaded sinter CSV's json_metadata mapping. After a load it is one line
  * (file, counts, what is mapped) with the editor behind "Edit mapping";
  * anything the person must decide (colliding tasks, unsplit blocks, a guessed
- * x-axis, rejected rows) stays visible above the plot. Changing a control
+ * x-axis, rejected rows) stays visible above the plot. `showName` is off where the
+ * page header already names the file (web). Changing a control
  * re-plots immediately (store.setCsvMapping).
  */
-export function CsvMappingPreview() {
+export function CsvMappingPreview({ showName = true }: { showName?: boolean } = {}) {
   const colors = useThemeStore((s) => s.colors);
   const csv = useQecCampaignStore((s) => s.csvImport);
   const setMapping = useQecCampaignStore((s) => s.setCsvMapping);
@@ -124,8 +125,8 @@ export function CsvMappingPreview() {
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: colors.textMuted, minWidth: 0 }}>
         <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${counts.join(' · ')} · ${mapped}`}>
-          <strong style={{ color: colors.text }}>{csv.sourceName}</strong>
-          {` · ${counts.join(' · ')} · ${mapped}`}
+          {showName && <strong style={{ color: colors.text }}>{csv.sourceName}</strong>}
+          {`${showName ? ' · ' : ''}${counts.join(' · ')} · ${mapped}`}
         </div>
         <Button
           size="sm" variant="ghost" aria-expanded={open} aria-controls="qec-mapping-editor"

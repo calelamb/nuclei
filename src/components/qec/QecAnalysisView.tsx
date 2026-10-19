@@ -113,7 +113,11 @@ export function QecAnalysisView({ embedded = false, actionsInHeader = false }: {
         </div>
       )}
       {/* With no data the drop-zone card explains a rejected file where the person acted; otherwise a compact line does. */}
-      {csvError && (hasData || csvSource) && <QecCsvError compact id={CSV_ERROR_ID} message={csvError} stillShowing={csvSource} onDismissed={() => rootRef.current?.focus()} />}
+      {csvError && (hasData || csvSource) && (
+        <div className={webPage ? 'qec-web-body' : undefined}>
+          <QecCsvError compact id={CSV_ERROR_ID} message={csvError} stillShowing={csvSource} onDismissed={() => rootRef.current?.focus()} />
+        </div>
+      )}
       {(running || resumable) && (
         <div
           aria-live="polite"
@@ -142,7 +146,7 @@ export function QecAnalysisView({ embedded = false, actionsInHeader = false }: {
       )}
       {embedded && !hasData ? (
         <>
-          <CsvMappingPreview />
+          <CsvMappingPreview showName={!webPage} />
           <QecEmptyState
             title="No campaign results yet"
             body={webOnly
@@ -159,7 +163,7 @@ export function QecAnalysisView({ embedded = false, actionsInHeader = false }: {
            instead of squeezing the plot and the decoder table to slivers. */
         <div ref={scrollRef} data-testid="qec-analysis-scroll" className={webPage ? 'qec-web-body' : undefined} style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
           {/* The mapping summary and its editor scroll with the figure: opening the editor must not take height from the plot. */}
-          <CsvMappingPreview />
+          <CsvMappingPreview showName={!webPage} />
           {tabbed ? (
             <>
               {/* flex: none: a tall table must not squeeze the tab strip down to its border. */}

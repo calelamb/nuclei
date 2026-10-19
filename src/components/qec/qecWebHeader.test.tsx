@@ -38,6 +38,27 @@ describe('web QEC Workbench page header (design-r8-02)', () => {
     expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toContain('Decoder Workbench');
   });
 
+  it('shows the file name once on the web, but keeps it in the desktop summary (qec-r-76)', () => {
+    useQecCampaignStore.getState().loadFromCsv([HEADER, ...csv].join('\n'), 'd.csv');
+    const web = render(<QecAnalysisView />);
+    const summary = web.container.querySelector('[aria-label="CSV column mapping"]')!;
+    expect(summary.textContent).not.toContain('d.csv');
+    expect(summary.textContent).toMatch(/^3 rows/);
+    web.unmount();
+    platform.web = false;
+    const desktop = render(<QecAnalysisView />);
+    expect(desktop.container.querySelector('[aria-label="CSV column mapping"]')!.textContent).toContain('d.csv');
+  });
+
+  it('keeps the compact CSV error inside the capped body column (qec-r-76)', () => {
+    useQecCampaignStore.getState().loadFromCsv([HEADER, ...csv].join('\n'), 'd.csv');
+    useQecCampaignStore.setState({ csvError: 'This is not a sinter stats CSV.' });
+    const { container } = render(<QecAnalysisView />);
+    const alert = container.querySelector('[role="alert"]')!;
+    expect(alert.closest('.qec-web-body')).toBeTruthy();
+    expect(container.querySelector('.qec-web-header')).toBeTruthy();
+  });
+
   it('caps the analysis body so tables stop running edge to edge', () => {
     const { container } = render(<QecAnalysisView />);
     expect(container.querySelector('.qec-web-body')).toBeTruthy();

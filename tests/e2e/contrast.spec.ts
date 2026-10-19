@@ -68,3 +68,50 @@ test.describe('button hover states keep AA text contrast', () => {
     });
   }
 });
+
+/** Resolved colour of `el` composited over its opaque ancestors' background, as [r,g,b]. */
+const CARD_TEXT_SCRIPT = () => {
+  const card = document.querySelector<HTMLElement>('.launch-grid button[data-provider="ibm"]');
+  if (!card) return null;
+  const channels = (css: string) => {
+    const m = /rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)/.exec(css) ?? /color\(srgb ([\d.]+) ([\d.]+) ([\d.]+)/.exec(css);
+    if (!m) return null;
+    const scale = css.startsWith('color(') ? 255 : 1;
+    return [Number(m[1]) * scale, Number(m[2]) * scale, Number(m[3]) * scale];
+  };
+  const pick = (el: Element | null) => ({
+    fg: channels(getComputedStyle(el as Element).color),
+    opacity: Number(getComputedStyle(el as Element).opacity),
+  });
+  return {
+    bg: channels(getComputedStyle(card).backgroundColor),
+    ariaDisabled: card.getAttribute('aria-disabled'),
+    cursor: getComputedStyle(card).cursor,
+    name: pick(card.querySelector('.launch-grid__name')),
+    tagline: pick(card.querySelector('.launch-grid__name')?.nextElementSibling ?? null),
+  };
+};
+
+test.describe('Launch cards stay AA-legible', () => {
+  for (const theme of THEMES) {
+    test(`${theme}: a desktop-only card is activatable and its name and tagline are at least ${MIN_TEXT_CONTRAST}:1`, async ({ page }) => {
+      await page.goto(FIXTURE_URL);
+      await expect(page.locator('.monaco-editor')).toBeVisible();
+      await page.evaluate((t) => { document.documentElement.dataset.theme = t; }, theme);
+      await page.getByRole('button', { name: /^Launch/ }).first().click();
+      await expect(page.locator('.launch-grid button[data-provider="ibm"]')).toBeVisible();
+      const sample = await page.evaluate(CARD_TEXT_SCRIPT);
+      expect(sample).not.toBeNull();
+      if (!sample?.bg || !sample.name.fg || !sample.tagline.fg) throw new Error('unreadable card colours');
+      expect(sample.ariaDisabled, 'activatable cards are not aria-disabled').toBeNull();
+      expect(sample.cursor).toBe('pointer');
+      expect(sample.name.opacity).toBe(1);
+      expect(sample.tagline.opacity).toBe(1);
+      const bg = sample.bg as [number, number, number];
+      for (const [label, fg] of [['name', sample.name.fg], ['tagline', sample.tagline.fg]] as const) {
+        const [hi, lo] = [luminance(bg), luminance(fg as [number, number, number])].sort((a, b) => b - a);
+        expect((hi + 0.05) / (lo + 0.05), `${theme} ${label}`).toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST);
+      }
+    });
+  }
+});
