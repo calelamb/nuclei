@@ -134,12 +134,19 @@ class DiscoveryManager:
         """The verified isolation tier (the first call probes the host, so call it off the event loop)."""
         return self._isolation()
 
-    def check_consent(self, request: EvaluateRequest) -> iso.IsolationInfo:
-        """Raise :class:`ConsentRequiredError` on a process-only host unless the request carries consent."""
+    def require_consent(self, consent: bool) -> iso.IsolationInfo:
+        """Raise :class:`ConsentRequiredError` on a process-only host unless ``consent`` was given.
+
+        Shared by every message that runs a client-supplied candidate program (``discovery_evaluate``
+        and the Red Queen ``discovery_audit``)."""
         info = self.isolation_info()
-        if info.needs_consent and not request.isolation_consent:
+        if info.needs_consent and not consent:
             raise ConsentRequiredError()
         return info
+
+    def check_consent(self, request: EvaluateRequest) -> iso.IsolationInfo:
+        """Raise :class:`ConsentRequiredError` on a process-only host unless the request carries consent."""
+        return self.require_consent(request.isolation_consent)
 
     # --- bookkeeping ---------------------------------------------------------
 

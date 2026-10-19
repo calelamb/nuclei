@@ -55,7 +55,7 @@ async def evaluate(name: str, stage: str = "full", seed: int = 7) -> dict:
         ws.push({
             "type": "discovery_evaluate", "run_id": "r-1", "candidate_id": "c-1",
             "evaluator": {"kind": kind, "config": config}, "program": read_seed(name), "seed": seed,
-            "stage": stage,
+            "stage": stage, "isolation_consent": True,  # a process-only host asks for it; an OS sandbox ignores it
         })
         message = (await ws.wait_for(lambda m: m.get("type") == "discovery_evaluation", 120.0))[0]
     finally:
@@ -126,7 +126,7 @@ async def test_seed_runs_under_default_isolation(monkeypatch):
     isolation.reset_for_tests()
     ev = await evaluate("w_state", stage="screen")
     assert ev["status"] == "scored", ev
-    assert ev["isolation"] in ("process", "sandbox-exec", "bwrap")
+    assert ev["isolation"] in isolation.ALL_MODES
 
 
 @pytest.mark.parametrize("name,const", [("w_state", "W_STATE_SEED"), ("tfim_ansatz", "TFIM_SEED")])

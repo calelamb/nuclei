@@ -107,7 +107,10 @@ def _pid_alive(pid: int) -> bool:
     return True
 
 
-def test_setsid_and_double_fork_leave_no_survivor(tmp_path):
+def test_setsid_and_double_fork_leave_no_survivor(tmp_path, monkeypatch):
+    # This test exercises the worker's own defenses against hostile code, so the static pre-screen (which
+    # every untrusted or process-tier run now gets, and which would reject this program outright) is off.
+    monkeypatch.setattr("kernel.discovery.sandbox.prescreen_response", lambda *args, **kwargs: None)
     # CR-H4 / RT-M3: every escape primitive must either raise or be reaped by the group kill.
     log = tmp_path / "log.txt"
     pids = tmp_path / "pids.txt"

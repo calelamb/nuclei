@@ -204,9 +204,10 @@ def run_candidate(
 ) -> dict[str, Any]:
     """Run ``request`` in a fresh candidate worker; never raises.
 
-    ``origin`` names who wrote the program. For an untrusted origin (``"claude"``) the static
-    pre-screen runs before anything executes, at every tier; on a plain-``process`` tier it runs
-    whenever ``origin`` is given (and always on the process fallback after a wrapper failed).
+    ``origin`` names who wrote the program. A missing ``origin`` is untrusted (``"claude"``), like in
+    the manager: the static pre-screen then runs before anything executes, at every tier. Callers that
+    run their own code on purpose pass an explicit trusted origin (``"user"``). On a plain-``process``
+    tier the pre-screen runs for every origin (and always on the process fallback after a wrapper failed).
     ``project_root`` is made readable (never writable) where the tier can grant that.
     """
     info = isolation if isolation is not None else iso.detect_isolation()
@@ -217,14 +218,14 @@ def run_candidate(
     if len(payload) > MAX_REQUEST_BYTES:
         return _error("protocol_error", f"Request exceeds {MAX_REQUEST_BYTES} bytes.", info)
     extra_roots = (project_root,) if project_root else ()
+    effective_origin = origin if origin is not None else UNTRUSTED_ORIGINS[0]
 
     try:
         with iso.private_scratch_dir() as scratch:
             for attempt_info in (info, iso.IsolationInfo(iso.MODE_PROCESS)):
-                if origin is not None or attempt_info is not info:
-                    rejected = prescreen_response(str(request.get("program", "")), attempt_info, origin or "claude")
-                    if rejected is not None:
-                        return rejected
+                rejected = prescreen_response(str(request.get("program", "")), attempt_info, effective_origin)
+                if rejected is not None:
+                    return rejected
                 command = attempt_info.command(python_command(_WORKER_PATH), scratch, extra_roots)
                 result = run_process(
                     command, payload, wall_seconds=wall_seconds,

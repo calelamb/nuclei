@@ -59,8 +59,8 @@ The ruleset:
 - **Read and write:** one private scratch directory per evaluation (mode 0700,
   deleted afterwards). Nothing can be executed from it.
 - **Read-only on request:** the project root, for candidates that import sibling
-  modules or read project data. Where a tier cannot grant that, the candidate is
-  reported as unverifiable ("needs project files"), never silently rejected.
+  modules or read project data (a caller passes `project_root` to the sandbox;
+  the discovery manager does not pass one yet).
 - **Network:** TCP `connect` and `bind` are denied on ABI 4 and later. Older
   kernels cannot do this; the record then says `network: unrestricted`.
 - **Signals and abstract sockets** to processes outside the sandbox are denied on
@@ -133,6 +133,12 @@ request carries `isolation_consent: true`, and answers instead with
   "message": "…the same text…"
 }
 ```
+
+The same gate covers `discovery_audit` (Red Queen audits re-run the candidate in
+fresh sandboxes): it takes the same `isolation_consent` and `origin` fields, answers
+with the same error, and runs the pre-screen before the audit is accepted
+(`prescreen_rejected` error). `discovery_evaluate` and `discovery_audit` treat a
+missing `origin` as untrusted (`claude`), and so does the sandbox itself.
 
 The consent dialog shows `capability_text` verbatim. Consent is **per request and
 never remembered by the kernel**: the client sends it for the runs the user has

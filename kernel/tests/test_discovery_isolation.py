@@ -526,8 +526,8 @@ def test_landlock_denies_rmtree(tier, tmp_path):
     victim.mkdir()
     (victim / "keep.txt").write_text("important")
     info = _tier(tier)
-    # OS tiers get NO pre-screen help (origin=None): the sandbox alone must stop the delete.
-    origin = "claude" if tier == "process" else None
+    # OS tiers get NO pre-screen help (a trusted origin): the sandbox alone must stop the delete.
+    origin = "claude" if tier == "process" else "user"
     request = default_request("stim_circuit", RMTREE.format(victim=str(victim)), "build", CALL)
     response = run_candidate(request, wall_seconds=120, isolation=info, origin=origin)
     assert (victim / "keep.txt").read_text() == "important", response
@@ -550,11 +550,12 @@ def test_wrapper_failure_falls_back_to_process_with_the_prescreen_applied(tmp_pa
     )
     hostile = run_candidate(
         default_request("stim_circuit", RMTREE.format(victim=str(victim)), "build", CALL), wall_seconds=60, isolation=broken,
+        origin="user",  # trusted: only the fallback to a plain process brings the pre-screen in
     )
     assert hostile["error"]["code"] == ERR_PRESCREEN and hostile["isolation"] == "process"
     assert (victim / "keep.txt").exists()
     clean = run_candidate(default_request("stim_circuit", GOOD, "build", [{"args": [3, 3], "kwargs": {}}]),
-                          wall_seconds=120, isolation=broken)
+                          wall_seconds=120, isolation=broken, origin="user")
     assert clean["status"] == "ok" and clean["isolation"] == "process"
     assert clean["isolation_detail"] == PROCESS_DETAIL
 
@@ -710,3 +711,105 @@ async def test_untrusted_origin_is_prescreened_even_under_an_os_sandbox(tmp_path
     done = evaluations(ws)
     assert done["c-claude"]["failure"]["code"] == ERR_PRESCREEN
     assert done["c-user"]["failure"]["code"] == "worker_no_output", "a user's own code is trusted under an OS sandbox"
+
+
+# --- the Red Queen audit path: same consent gate, same pre-screen, a missing origin is untrusted ---
+
+from kernel.discovery.audits import runner as audit_runner  # noqa: E402
+from kernel.discovery.audits.runner import AuditManager  # noqa: E402
+from kernel.tests.test_discovery_audit_protocol import audit_msg, canned  # noqa: E402
+
+HOSTILE_AUDIT_PROGRAM = "import shutil\ndef build(d, r):\n    shutil.rmtree('/tmp/not-yours')\n"
+AUDIT_RUNS: list = []
+
+
+def _install_audit_manager() -> None:
+    AUDIT_RUNS.clear()
+    inner = canned()
+
+    def run(request, cancel_event, *, cache_dir=None):
+        AUDIT_RUNS.append(request)
+        return inner(request, cancel_event, cache_dir=cache_dir)
+
+    audit_runner.set_audit_manager(AuditManager(max_workers=1, job_runner=run))
+
+
+def _errors(ws) -> list[dict]:
+    return [m for m in ws.sent if m["type"] == "error"]
+
+
+@pytest.fixture
+def _audit_on_a_process_host(_process_only_host):
+    _install_audit_manager()
+    yield
+    audit_runner.set_audit_manager(None)
+
+
+@pytest.mark.asyncio
+async def test_audit_without_consent_on_a_process_host_asks_for_it(_audit_on_a_process_host):
+    ws = await session([audit_msg(candidate_id="c-9", run_id="run-9")], [lambda m: m.get("type") == "error"])
+    (error,) = _errors(ws)
+    assert error["code"] == "isolation_consent_required" and error["phase"] == "discovery"
+    assert error["run_id"] == "run-9" and error["candidate_id"] == "c-9"
+    assert error["message"] == iso.PROCESS_CAPABILITY_TEXT == error["capability_text"]
+    assert not any(m["type"] == "discovery_audit_accepted" for m in ws.sent)
+    assert AUDIT_RUNS == [], "no audit may start without consent"
+
+
+@pytest.mark.asyncio
+async def test_audit_with_consent_runs_on_a_process_host(_audit_on_a_process_host):
+    ws = await session(
+        [audit_msg(isolation_consent=True)], [is_type("discovery_audit_accepted"), is_type("discovery_audit_result")],
+    )
+    assert _errors(ws) == [] and len(AUDIT_RUNS) == 1
+
+
+@pytest.mark.asyncio
+async def test_audit_consent_is_not_remembered_between_requests(_audit_on_a_process_host):
+    await session([audit_msg(isolation_consent=True)], [is_type("discovery_audit_result")])
+    second = await session([audit_msg(candidate_id="c-2")], [lambda m: m.get("type") == "error"])
+    assert [m["code"] for m in _errors(second)] == ["isolation_consent_required"]
+
+
+@pytest.mark.asyncio
+async def test_audit_prescreen_rejects_a_hostile_program_even_with_consent(_audit_on_a_process_host):
+    msg = {**audit_msg(isolation_consent=True), "program": HOSTILE_AUDIT_PROGRAM}
+    ws = await session([msg], [lambda m: m.get("type") == "error"])
+    (error,) = _errors(ws)
+    assert error["code"] == ERR_PRESCREEN and error["message"].startswith("prescreen: shutil")
+    assert not any(m["type"] == "discovery_audit_accepted" for m in ws.sent)
+    assert AUDIT_RUNS == []
+
+
+@pytest.mark.asyncio
+async def test_audit_prescreens_an_untrusted_origin_under_an_os_sandbox_and_trusts_a_user(tmp_path):
+    _install_manager(tmp_path, iso.IsolationInfo(iso.MODE_LANDLOCK, reads="restricted", writes="scratch-only"))
+    _install_audit_manager()
+    hostile = {**audit_msg(), "program": HOSTILE_AUDIT_PROGRAM}
+    try:
+        untrusted = await session([hostile], [lambda m: m.get("type") == "error"])
+        default = await session([{**hostile, "candidate_id": "c-2"}], [lambda m: m.get("type") == "error"])
+        trusted = await session([{**hostile, "origin": "user"}], [is_type("discovery_audit_result")])
+    finally:
+        manager_module.set_manager(None)
+        audit_runner.set_audit_manager(None)
+    assert [m["code"] for m in _errors(untrusted)] == [ERR_PRESCREEN], "no origin means untrusted"
+    assert [m["code"] for m in _errors(default)] == [ERR_PRESCREEN]
+    assert _errors(trusted) == [] and len(AUDIT_RUNS) == 1
+
+
+@pytest.mark.asyncio
+async def test_audit_rejects_a_malformed_consent_flag_and_an_unknown_origin(_audit_on_a_process_host):
+    bad_flag = await session([audit_msg(isolation_consent="yes")], [lambda m: m.get("type") == "error"])
+    bad_origin = await session([audit_msg(isolation_consent=True, origin="mallory")], [lambda m: m.get("type") == "error"])
+    assert [m["code"] for m in _errors(bad_flag)] == ["invalid_request"]
+    assert [m["code"] for m in _errors(bad_origin)] == ["invalid_request"]
+
+
+@pytest.mark.parametrize("mode", [iso.MODE_PROCESS, iso.MODE_LANDLOCK])
+def test_run_candidate_treats_a_missing_origin_as_untrusted(mode):
+    request = default_request("stim_circuit", HOSTILE_AUDIT_PROGRAM, "build", [{"args": [3, 3], "kwargs": {}}])
+    info = iso.IsolationInfo(mode)
+    for origin in (None, "claude"):
+        response = run_candidate(request, wall_seconds=30, isolation=info, origin=origin)
+        assert response["status"] == "error" and response["error"]["code"] == ERR_PRESCREEN

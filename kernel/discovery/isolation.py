@@ -47,6 +47,8 @@ MODE_PROCESS = "process"
 MODE_BWRAP = "bwrap"
 MODE_SANDBOX_EXEC = "sandbox-exec"
 MODE_LANDLOCK = "landlock"
+# Every tier a record can report as ``isolation`` (tests and docs assert membership instead of a literal list).
+ALL_MODES = (MODE_PROCESS, MODE_BWRAP, MODE_SANDBOX_EXEC, MODE_LANDLOCK)
 READS_RESTRICTED = "restricted"
 READS_UNRESTRICTED = "unrestricted"
 WRITES_SCRATCH_ONLY = "scratch-only"
