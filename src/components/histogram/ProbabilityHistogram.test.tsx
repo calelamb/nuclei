@@ -93,6 +93,6 @@ describe('<ProbabilityHistogram> honesty about the sample', () => {
     act(() => useEditorStore.getState().setCode('qc.x(0)'));
     expect(screen.getByTestId('stale-result-notice').textContent).toMatch(/From last run/);
     expect(container.querySelector('.histogram-stale')).not.toBeNull();
-    expect(screen.getByTestId('histogram-caption').textContent).toMatch(/Ran in 1 ms · from last run/);
+    expect(screen.getByTestId('histogram-caption').textContent).toMatch(/^.*Ran in 1 ms$/);
   });
 });

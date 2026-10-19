@@ -28,10 +28,7 @@
   border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--color-text-secondary); cursor: help;
 }
 .histogram-chip__info:hover { color: var(--color-text-primary); }
-.histogram-chip__caption { display: flex; min-width: 0; flex: 0 1 auto; white-space: nowrap; }
-.histogram-chip__caption-name { flex-shrink: 0; }
-/* pre keeps the separator's leading space: flex items otherwise collapse it ("Nuclei sample· 1,024 shots"). */
-.histogram-chip__caption-shots { flex-shrink: 0; white-space: pre; }
+.histogram-chip__caption { display: block; min-width: 0; flex: 0 1 auto; white-space: nowrap; }
 
 /* The expanded histogram after a code change or Stop: same dimming as the viz column (vizRail.css). */
 .histogram-stale .recharts-bar-rectangle { opacity: var(--stale-graphic-opacity); transition: opacity var(--duration-fast) var(--ease-standard); }

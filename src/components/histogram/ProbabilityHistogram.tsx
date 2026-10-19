@@ -180,13 +180,13 @@ interface SampleCaptionProps {
   sampleShots: number;
   nextShots: number;
   executionMs: number;
-  stale: boolean;
 }
 
 /** What the bars are: this run's own sample (not the Shots setting), whether the setting has moved on, and how long it took. */
-function SampleCaption({ mode, sampleShots, nextShots, executionMs, stale }: SampleCaptionProps) {
+function SampleCaption({ mode, sampleShots, nextShots, executionMs }: SampleCaptionProps) {
   const what = mode === 'ideal' ? 'Ideal probabilities · no sampling' : `${SAMPLE_LABEL} · ${shotsPhrase(sampleShots)}`;
-  const ran = `Ran in ${executionMs.toFixed(0)} ms${stale ? ' · from last run' : ''}`;
+  // The stale notice above already says "From last run", so the caption does not repeat it.
+  const ran = `Ran in ${executionMs.toFixed(0)} ms`;
   const nextDiffers = mode === 'sampled' && nextShots !== sampleShots;
   return (
     <div className="histogram-caption" data-testid="histogram-caption">
@@ -281,7 +281,7 @@ export function ProbabilityHistogram() {
       </div>
 
       {stale && <StaleResultNotice />}
-      <SampleCaption mode={viewMode} sampleShots={result.shot_count} nextShots={nextShots} executionMs={result.execution_time_ms} stale={stale} />
+      <SampleCaption mode={viewMode} sampleShots={result.shot_count} nextShots={nextShots} executionMs={result.execution_time_ms} />
 
       {/* Chart */}
       <div ref={chartRef} className={stale ? 'histogram-stale' : undefined} style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
