@@ -62,9 +62,10 @@ export function RunHistogram({ measurements }: { measurements: Record<string, nu
             tickFormatter={formatProbabilityTick}
           />
           <Tooltip
+            cursor={{ fill: colors.bgElevated }}
             contentStyle={{
-              background: colors.bgPanel,
-              border: `1px solid ${colors.border}`,
+              background: colors.bgElevated,
+              border: `1px solid ${colors.borderStrong}`,
               borderRadius: 'var(--radius-soft)',
               fontSize: 12,
               fontFamily: TYPOGRAPHY.fontMono,
