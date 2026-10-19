@@ -55,7 +55,7 @@ def test_parallel_gates_share_depth():
 
 
 def test_stim_counter_flattens_repeat_and_skips_classical_control():
-    import stim
+    stim = pytest.importorskip("stim")
 
     circuit = stim.Circuit(
         """
@@ -75,7 +75,7 @@ def test_stim_counter_flattens_repeat_and_skips_classical_control():
 
 
 def test_stim_cost_matches_generated_surface_code_cx_count():
-    import stim
+    stim = pytest.importorskip("stim")
 
     circuit = stim.Circuit.generated("surface_code:rotated_memory_z", distance=3, rounds=3)
     expected = sum(

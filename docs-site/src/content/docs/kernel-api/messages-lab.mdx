@@ -153,6 +153,18 @@ the order and the kinds; the other fields are summarized as `"<any>"`.
 
 Kinds: `qec_memory`, `state_synthesis`, `vqe_ground_state`, `trainability_frontier`.
 
+Every entry also carries `available` (boolean). The installed app does not ship
+Stim or PyMatching (they come from the in-app Research catalog), so `qec_memory`
+is still listed but reports `available: false` together with `missing` (import
+names, for example `["stim", "pymatching"]`) and `install`
+(`{catalog_ids, hint}`, the Research catalog entry ids). `discovery_evaluate`
+and `discovery_audit` for such an evaluator fail fast with
+`{type: "error", phase: "discovery", code: "missing_dependency", message, missing, install}`.
+The other evaluators, conjectures and the whole Trainability Lab need only
+numpy and the quantum frameworks. Clients on older kernels see no `available`
+field and should treat that as available. The fixture above was recorded with
+the research packages installed, so every entry is available.
+
 ### `discovery_evaluate`
 
 Scores one candidate program. Required: `run_id`, `candidate_id`, `evaluator`

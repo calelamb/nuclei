@@ -19,7 +19,16 @@ from kernel.discovery.constants import (
     ERR_UNKNOWN_EVALUATOR,
     VALID_STAGES,
 )
-from kernel.discovery.evaluators import EVALUATORS, InvalidConfig, normalize_config
+from kernel.discovery._optional import missing_message
+from kernel.discovery.evaluators import (
+    ERR_MISSING_DEPENDENCY,
+    EVALUATORS,
+    InvalidConfig,
+    describe,
+    error_fields,
+    missing_for,
+    normalize_config,
+)
 from kernel.discovery.manager import BusyError, EvaluateRequest, get_manager
 from kernel.discovery.mutate import MutationError, mutate
 from kernel.lab_protocol import request_id_problem, with_request_id
@@ -34,14 +43,25 @@ _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 class RequestError(Exception):
-    def __init__(self, code: str, message: str):
+    def __init__(self, code: str, message: str, extra: dict[str, Any] | None = None):
         super().__init__(message)
         self.code = code
         self.message = message
+        self.extra = extra or {}
 
 
-def _error(code: str, message: str, msg: dict[str, Any] | None = None) -> dict[str, Any]:
+def require_evaluator_available(kind: str) -> None:
+    """Fail fast with ``missing_dependency`` when an evaluator's optional packages are absent."""
+    absent = missing_for(kind)
+    if absent:
+        raise RequestError(ERR_MISSING_DEPENDENCY, missing_message(absent), error_fields(absent))
+
+
+def _error(
+    code: str, message: str, msg: dict[str, Any] | None = None, extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     payload: dict[str, Any] = {"type": "error", "phase": "discovery", "code": code, "message": message}
+    payload.update(extra or {})
     for key in ("run_id", "candidate_id"):
         value = (msg or {}).get(key)
         if isinstance(value, str) and _ID_RE.match(value):
@@ -91,6 +111,7 @@ def parse_evaluate(msg: dict[str, Any]) -> EvaluateRequest:
     spec = EVALUATORS.get(evaluator["kind"])
     if spec is None:
         raise RequestError(ERR_UNKNOWN_EVALUATOR, f"Unknown evaluator '{evaluator['kind']}'.")
+    require_evaluator_available(spec.kind)
     try:
         config = normalize_config(spec, evaluator.get("config"))
     except InvalidConfig as exc:
@@ -173,7 +194,7 @@ async def handle(msg: dict[str, Any], ctx) -> None:
         if msg_type == "discovery_evaluators":
             await ctx.send_json(with_request_id({
                 "type": "discovery_evaluators_result",
-                "evaluators": [spec.to_json() for spec in EVALUATORS.values()],
+                "evaluators": [describe(spec) for spec in EVALUATORS.values()],
             }, msg))
         elif msg_type == "discovery_evaluate":
             await _evaluate(msg, ctx)
@@ -194,6 +215,6 @@ async def handle(msg: dict[str, Any], ctx) -> None:
         else:
             await ctx.send_json(_error(ERR_INVALID_REQUEST, f"Unknown discovery message '{msg_type}'.", msg))
     except RequestError as exc:
-        await ctx.send_json(_error(exc.code, exc.message, msg))
+        await ctx.send_json(_error(exc.code, exc.message, msg, exc.extra))
     except Exception as exc:  # noqa: BLE001 - the connection must survive a handler bug
         await ctx.send_json(_error("discovery_internal", f"{type(exc).__name__}: {exc}", msg))

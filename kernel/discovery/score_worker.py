@@ -65,6 +65,12 @@ def evaluate(request: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(evaluator, dict) or evaluator.get("kind") not in EVALUATORS:
         return failed("unknown_evaluator", f"Unknown evaluator {evaluator!r}.")
     spec = EVALUATORS[evaluator["kind"]]
+    from kernel.discovery._optional import missing_message
+    from kernel.discovery.evaluators import missing_for
+
+    absent = missing_for(spec.kind)
+    if absent:  # the handler fails fast; this covers a package removed after the job was queued
+        return failed("missing_dependency", missing_message(absent))
     stage = request.get("stage", DEFAULT_STAGE)
     if stage not in VALID_STAGES:
         return failed("protocol_error", f"Invalid stage {stage!r}.")

@@ -21,7 +21,9 @@ from kernel.discovery.constants import (
     ERR_BUSY, ERR_INVALID_CONFIG, ERR_INVALID_REQUEST, ERR_UNKNOWN_EVALUATOR,
 )
 from kernel.discovery.evaluators import EVALUATORS, InvalidConfig, normalize_config
-from kernel.discovery.handlers import RequestError, _error, _IDENT, _integer, _program, _text
+from kernel.discovery.handlers import (
+    RequestError, _error, _IDENT, _integer, _program, _text, require_evaluator_available,
+)
 
 ERR_AUDIT_UNAVAILABLE = "audit_unavailable"
 _EVALUATION_STATUSES = ("scored", "rejected", "failed")
@@ -36,6 +38,7 @@ def parse_audit(msg: dict[str, Any]) -> AuditRequest:
     spec = EVALUATORS.get(evaluator["kind"])
     if spec is None:
         raise RequestError(ERR_UNKNOWN_EVALUATOR, f"Unknown evaluator '{evaluator['kind']}'.")
+    require_evaluator_available(spec.kind)  # an audit re-runs the evaluator's toolchain
     if not has_audit(spec.kind):
         raise RequestError(ERR_AUDIT_UNAVAILABLE, f"No audit exists for evaluator '{spec.kind}'.")
     try:
@@ -88,6 +91,6 @@ async def handle(msg: dict[str, Any], ctx) -> None:
         else:
             await ctx.send_json(_error(ERR_INVALID_REQUEST, f"Unknown discovery message '{msg_type}'.", msg))
     except RequestError as exc:
-        await ctx.send_json(_error(exc.code, exc.message, msg))
+        await ctx.send_json(_error(exc.code, exc.message, msg, exc.extra))
     except Exception as exc:  # noqa: BLE001 - the connection must survive a handler bug
         await ctx.send_json(_error("discovery_internal", f"{type(exc).__name__}: {exc}", msg))
