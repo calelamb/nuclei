@@ -272,4 +272,99 @@ describe('DiracSidePanel', () => {
     expect(screen.queryByRole('button', { name: /ambient narration/i })).toBeNull();
     useSettingsStore.setState({ dirac: original });
   });
+  describe('pending reply (interaction-r-03)', () => {
+    function sendPending() {
+      let rejectFetch: (e: unknown) => void = () => {};
+      const fetchMock = vi.fn().mockImplementation((_url: string, init: RequestInit) => new Promise<Response>((_res, rej) => {
+        rejectFetch = rej;
+        init.signal?.addEventListener('abort', () => rej(new DOMException('aborted', 'AbortError')));
+      }));
+      vi.stubGlobal('fetch', fetchMock);
+      return { fetchMock, rejectFetch: () => rejectFetch };
+    }
+
+    it('shows thinking dots in the bubble, a Stop button and a live message list', async () => {
+      resetStores('sk-ant-test');
+      sendPending();
+      render(<DiracSidePanel />);
+      const box = screen.getByLabelText('Message Dirac');
+      fireEvent.change(box, { target: { value: 'What is a Bell state?' } });
+      await act(async () => { fireEvent.keyDown(box, { key: 'Enter' }); });
+      const log = screen.getByRole('log');
+      expect(log.getAttribute('aria-live')).toBe('polite');
+      expect(log.querySelector('[data-testid="dirac-thinking-dots"]')).not.toBeNull();
+      expect(screen.getByRole('button', { name: 'Stop' })).toBeTruthy();
+      // the pending bubble has no timestamp yet: only the user message does
+      expect(log.querySelectorAll('[data-testid="dirac-timestamp"]')).toHaveLength(1);
+    });
+
+    it('Stop aborts the request, re-enables the composer and marks the reply stopped', async () => {
+      resetStores('sk-ant-test');
+      sendPending();
+      render(<DiracSidePanel />);
+      const box = screen.getByLabelText('Message Dirac');
+      fireEvent.change(box, { target: { value: 'hi' } });
+      await act(async () => { fireEvent.keyDown(box, { key: 'Enter' }); });
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Stop' })); });
+      await waitFor(() => expect(useDiracStore.getState().isLoading).toBe(false));
+      const last = useDiracStore.getState().messages.at(-1);
+      expect(last?.stopped).toBe(true);
+      expect(last?.error).toBeUndefined();
+      expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
+      expect(screen.getByText('Stopped')).toBeTruthy();
+    });
+  });
+
+  describe('Stop edge cases', () => {
+    it('does not offer Stop while only a compose draft is pending', () => {
+      resetStores('sk-ant-test');
+      useDiracStore.setState({
+        isLoading: true,
+        messages: [{ id: 'u', role: 'user', content: 'write a bell state', timestamp: new Date().toISOString() }],
+      });
+      render(<DiracSidePanel />);
+      expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
+    });
+
+    it('a follow-up after stopping before the first token sends no empty assistant turn', async () => {
+      resetStores('sk-ant-test');
+      const bodies: string[] = [];
+      const fetchMock = vi.fn((_u: unknown, init: RequestInit) => {
+        bodies.push(String(init.body));
+        return new Promise((_res, rej) => {
+          init.signal?.addEventListener('abort', () => rej(new DOMException('aborted', 'AbortError')));
+        });
+      });
+      vi.stubGlobal('fetch', fetchMock);
+      render(<DiracSidePanel />);
+      const box = screen.getByLabelText('Message Dirac');
+      fireEvent.change(box, { target: { value: 'Explain CNOT' } });
+      await act(async () => { fireEvent.keyDown(box, { key: 'Enter' }); });
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Stop' })); });
+      await waitFor(() => expect(useDiracStore.getState().isLoading).toBe(false));
+      fireEvent.change(box, { target: { value: 'And a GHZ state?' } });
+      await act(async () => { fireEvent.keyDown(box, { key: 'Enter' }); });
+      expect(bodies).toHaveLength(2);
+      const sent = JSON.parse(bodies[1]).messages as Array<{ role: string; content: unknown }>;
+      expect(sent.some((m) => m.role === 'assistant' && m.content === '')).toBe(false);
+    });
+  });
+
+  describe('New conversation button (interaction-r-15)', () => {
+    it('is hidden without an API key', () => {
+      resetStores(null);
+      render(<DiracSidePanel />);
+      expect(screen.queryByRole('button', { name: /New/ })).toBeNull();
+    });
+
+    it('is disabled on an empty chat and enabled once there are messages', () => {
+      resetStores('sk-ant-test');
+      render(<DiracSidePanel />);
+      expect((screen.getByRole('button', { name: /New/ }) as HTMLButtonElement).disabled).toBe(true);
+      cleanup();
+      useDiracStore.setState({ messages: [{ id: 'a', role: 'user', content: 'hi', timestamp: new Date().toISOString() }] });
+      render(<DiracSidePanel />);
+      expect((screen.getByRole('button', { name: /New/ }) as HTMLButtonElement).disabled).toBe(false);
+    });
+  });
 });

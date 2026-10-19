@@ -4,7 +4,9 @@ from collections import namedtuple
 
 import numpy as np
 
-from _nuclei_unsupported import unsupported, UnsupportedAttribute
+from _nuclei_unsupported import (
+    unsupported, UnsupportedAttribute, is_real_circuit_attribute, unknown_circuit_attribute,
+)
 from qiskit.exceptions import QiskitError
 from qiskit.circuit import gates as g
 from qiskit.circuit.bits import (
@@ -424,4 +426,6 @@ class QuantumCircuit:
     def __getattr__(self, name):
         if name.startswith("_"):
             raise AttributeError(name)
-        raise UnsupportedAttribute(f"QuantumCircuit.{name}()")
+        if is_real_circuit_attribute(name):
+            raise UnsupportedAttribute(f"QuantumCircuit.{name}()")
+        raise unknown_circuit_attribute(self, name)

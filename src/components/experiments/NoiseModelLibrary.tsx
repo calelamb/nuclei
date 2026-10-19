@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { X, Copy, GitCompare } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Copy, GitCompare } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
-import { useEscapeToClose } from '../../hooks/useEscapeToClose';
 import { createTauriExperimentFs } from '../../services/experimentFs';
 import { discoverNoiseModels } from '../../services/experimentStore';
 import { duplicateNoiseModel } from '../../services/noiseModelScaffold';
@@ -13,7 +12,7 @@ import {
   type NoiseModelDef,
 } from '../../types/noiseModel';
 import { TYPOGRAPHY, ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
-import { Button, IconButton, Select, TextInput } from '../ui';
+import { Button, Dialog, Select, TextInput } from '../ui';
 import { Table, Thead, Tbody, Tr, Th, Td } from '../ui/Table';
 import './experiments.css';
 
@@ -33,6 +32,14 @@ export function NoiseModelLibrary({ projectRoot, onClose }: { projectRoot: strin
   const [dupOpen, setDupOpen] = useState(false);
   const [dupName, setDupName] = useState('');
   const [dupError, setDupError] = useState<string | null>(null);
+
+  const dupTriggerRef = useRef<HTMLButtonElement>(null);
+  const wasDupOpen = useRef(false);
+  // Closing the inline form unmounts its focused input; hand focus back to its trigger.
+  useEffect(() => {
+    if (wasDupOpen.current && !dupOpen) dupTriggerRef.current?.focus();
+    wasDupOpen.current = dupOpen;
+  }, [dupOpen]);
 
   const reload = () => {
     void discoverNoiseModels(projectRoot, createTauriExperimentFs()).then((r) => {
@@ -59,40 +66,54 @@ export function NoiseModelLibrary({ projectRoot, onClose }: { projectRoot: strin
     }
   };
 
-  // Escape cancels the inline duplicate form if it's open, otherwise closes
-  // the whole library — so a stray Escape mid-edit doesn't lose the modal.
-  const handleEscape = useCallback(() => {
-    if (dupOpen) setDupOpen(false);
-    else onClose();
-  }, [dupOpen, onClose]);
-  useEscapeToClose(handleEscape);
+  // Escape cancels the inline duplicate form if it's open, otherwise the Dialog
+  // closes the whole library. A capture-phase listener claims the key first so a
+  // stray Escape mid-edit doesn't lose the modal.
+  useEffect(() => {
+    if (!dupOpen) return undefined;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      setDupOpen(false);
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
+  }, [dupOpen]);
+
+  const duplicateForm = dupOpen ? (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
+      <label htmlFor="noise-copy-name" style={{ fontSize: 12, color: colors.textMuted }}>Copy name</label>
+      <TextInput
+        id="noise-copy-name"
+        mono
+        value={dupName}
+        onChange={(e) => setDupName(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && dupName.trim()) {
+            e.preventDefault();
+            void doDuplicate();
+          }
+        }}
+        autoFocus
+        style={{ flex: 1 }}
+      />
+      {dupError && <span role="alert" style={{ color: colors.error, fontSize: 11 }}>{dupError}</span>}
+      <Button variant="ghost" onClick={() => setDupOpen(false)}>Cancel</Button>
+      <Button variant="primary" onClick={() => { void doDuplicate(); }}>Create</Button>
+    </div>
+  ) : undefined;
+
+  const entryOnlyCompare = compare !== null && (selected.generator_args === null || compare.generator_args === null);
 
   return (
-    <div
-      role="dialog"
-      aria-label="Noise model library"
-      style={{
-        position: 'fixed', inset: 0, zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'rgba(0,0,0,0.5)', fontFamily: TYPOGRAPHY.fontSans,
-      }}
-      onClick={onClose}
-    >
+    <Dialog title="Noise model library" onClose={onClose} width={720} flush footer={duplicateForm}>
       <div
-        onClick={(e) => e.stopPropagation()}
         style={{
-          width: 720, maxWidth: '92vw', height: 520, maxHeight: '88vh', display: 'flex', flexDirection: 'column',
-          background: colors.bg, border: `1px solid ${colors.borderStrong}`, borderRadius: 'var(--radius-round)', overflow: 'hidden',
-          boxShadow: 'var(--shadow-lg)',
+          height: 'min(460px, 66vh)', display: 'flex', flexDirection: 'column',
+          fontFamily: TYPOGRAPHY.fontSans,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', padding: '8px 16px', borderBottom: `1px solid ${colors.border}` }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: colors.text }}>Noise models</span>
-          <div style={{ flex: 1 }} />
-          <IconButton aria-label="Close" onClick={onClose}>
-            <X size={ICON_SIZE.md} strokeWidth={ICON_STROKE} />
-          </IconButton>
-        </div>
-
         <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
           {/* List */}
           <div style={{ width: 220, borderRight: `1px solid ${colors.border}`, overflow: 'auto', flexShrink: 0 }}>
@@ -129,7 +150,7 @@ export function NoiseModelLibrary({ projectRoot, onClose }: { projectRoot: strin
                 {selected.builtin ? 'built-in' : 'project'}
               </span>
               <div style={{ flex: 1 }} />
-              <Button size="sm" onClick={() => { setDupName(`${selected.name}-copy`); setDupOpen(true); setDupError(null); }} icon={<Copy size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />}>
+              <Button ref={dupTriggerRef} size="sm" onClick={() => { setDupName(`${selected.name}-copy`); setDupOpen(true); setDupError(null); }} icon={<Copy size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />}>
                 Duplicate to edit
               </Button>
             </div>
@@ -177,6 +198,11 @@ export function NoiseModelLibrary({ projectRoot, onClose }: { projectRoot: strin
                 </div>
               ) : (
                 <div style={{ marginTop: 8 }}>
+                  {entryOnlyCompare && (
+                    <p style={{ fontSize: 11, color: colors.textMuted, margin: '0 0 8px' }}>
+                      — means an entry-only model: no per-gate rates to compare.
+                    </p>
+                  )}
                   <Table label="Generator argument differences" dense>
                     <Thead>
                       <Tr>
@@ -206,30 +232,8 @@ export function NoiseModelLibrary({ projectRoot, onClose }: { projectRoot: strin
           </div>
         </div>
 
-        {dupOpen && (
-          <div style={{ padding: '8px 16px', borderTop: `1px solid ${colors.border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <label htmlFor="noise-copy-name" style={{ fontSize: 12, color: colors.textMuted }}>Copy name</label>
-            <TextInput
-              id="noise-copy-name"
-              mono
-              value={dupName}
-              onChange={(e) => setDupName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && dupName.trim()) {
-                  e.preventDefault();
-                  void doDuplicate();
-                }
-              }}
-              autoFocus
-              style={{ flex: 1 }}
-            />
-            {dupError && <span style={{ color: colors.error, fontSize: 11 }}>{dupError}</span>}
-            <Button variant="ghost" onClick={() => setDupOpen(false)}>Cancel</Button>
-            <Button variant="primary" onClick={() => { void doDuplicate(); }}>Create</Button>
-          </div>
-        )}
       </div>
-    </div>
+    </Dialog>
   );
 }
 

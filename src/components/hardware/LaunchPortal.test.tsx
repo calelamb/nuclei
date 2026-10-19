@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { shortcutLabel } from '../../config/keybindings';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render, cleanup, fireEvent } from '@testing-library/react';
 import { PlatformProvider } from '../../platform/PlatformProvider';
@@ -65,6 +66,12 @@ describe('LaunchPortal — Q# provider gating', () => {
     expect(container.querySelectorAll('.launch-grid > button[title]').length).toBe(0);
   });
 
+  it('shows the real launch shortcut for the platform, not a hard-coded Mac glyph (shell-r9-04b)', () => {
+    const { container } = renderDesktop();
+    const kbd = container.querySelector('button kbd');
+    expect(kbd?.textContent).toBe(shortcutLabel('launch'));
+  });
+
   it('sets provider names a step above their 11px description', () => {
     const { container } = renderDesktop();
     const name = container.querySelector('.launch-grid__name') as HTMLElement;
@@ -81,14 +88,20 @@ describe('LaunchPortal on the web build (interaction-r-04)', () => {
     useHardwareStore.setState({ launchOpen: false, selectedProvider: null });
   });
 
-  it('badges real providers "Desktop app" and keeps them focusable but aria-disabled', () => {
+  it('badges real providers "Desktop app"; they activate, so they are not aria-disabled or not-allowed (design-r9-01)', () => {
     const { container } = renderWeb();
     for (const label of ['IBM Quantum', 'IonQ', 'Quantinuum', 'AWS Braket', 'Azure Quantum', 'NVIDIA CUDA-Q']) {
       const card = providerButton(container, label);
-      expect(card.getAttribute('aria-disabled')).toBe('true');
+      expect(card.getAttribute('aria-disabled')).toBeNull();
+      expect(card.style.cursor).toBe('pointer');
       expect(card.disabled).toBe(false);
       expect(card.textContent).toContain('Desktop app');
+      const badge = container.querySelector(`#${card.getAttribute('aria-describedby')}`);
+      expect(badge?.textContent).toContain('Desktop app');
+      // name and tagline keep full opacity so they stay AA-legible
+      expect((card.querySelector('.launch-grid__name') as HTMLElement).style.opacity).toBe('');
     }
+    expect(providerButton(container, 'Google Quantum AI').getAttribute('aria-disabled')).toBe('true');
     const sim = providerButton(container, 'Local Simulator');
     expect(sim.getAttribute('aria-disabled')).toBeNull();
     expect(sim.textContent).not.toContain('Desktop app');

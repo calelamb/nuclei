@@ -93,7 +93,7 @@ export function DecoderWorkbench({ tabs, showUnits = true }: { tabs?: ReactNode;
   const collisionTag = (w: (typeof wb)[number]) =>
     w.collides ? (
       <Tooltip label={`Another task has the same experiment, d and p (strong_id ${w.strongId}); shown separately, not pooled.`} placement="below">
-        <span className="qec-collision-chip" tabIndex={0}>task {taskNumbers.get(w.strongId) ?? 1}</span>
+        <span className="qec-collision-chip">task {taskNumbers.get(w.strongId) ?? 1}</span>
       </Tooltip>
     ) : null;
 
@@ -118,9 +118,9 @@ export function DecoderWorkbench({ tabs, showUnits = true }: { tabs?: ReactNode;
           <Tbody>
             {wb.map((w) => (
               <Tr key={`${w.experiment}|${w.decoder}|${w.distance}|${w.noise}|${w.strongId}`}>
-                <Td text style={{ fontWeight: 500 }}>{w.decoder}</Td>
-                {showExperiment && <Td text>{w.context}{collisionTag(w)}</Td>}
-                <Td numeric>{w.distance ?? '—'}{!showExperiment && collisionTag(w)}</Td>
+                <Td text style={{ fontWeight: 500 }}>{w.decoder}{collisionTag(w)}</Td>
+                {showExperiment && <Td text>{w.context}</Td>}
+                <Td numeric>{w.distance ?? '—'}</Td>
                 <Td numeric>{w.noise === null ? '—' : formatNoise(w.noise)}</Td>
                 <Td numeric>{formatRateInterval(w.rate.p, w.rate.lo, w.rate.hi)}</Td>
                 <Td numeric>{w.kept.toLocaleString()}</Td>
@@ -139,7 +139,7 @@ export function DecoderWorkbench({ tabs, showUnits = true }: { tabs?: ReactNode;
         }}
       >
         {!showExperiment && contexts[0] !== '' && `Experiment: ${contexts[0]}. `}
-        {`Rate = errors / (shots − discards)${units === 'per_round' ? ', converted to a per-round rate' : ''}, sinter likelihood-ratio interval (factor ${cmp.maxLikelihoodFactor}, about 3.7σ). One row per task (experiment, d, p); tasks sharing metadata are listed separately, never pooled.`}
+        {`Rate = errors / (shots − discards)${units === 'per_round' ? ', converted to a per-round rate' : ''}, sinter likelihood-ratio interval (factor ${cmp.maxLikelihoodFactor}, about 3.7σ). One row per task (experiment, d, p); tasks sharing metadata are listed separately, never pooled${taskNumbers.size > 0 ? ' (a task tag after the decoder name marks them)' : ''}.`}
         {cmp.skipped > 0 && ` ${cmp.skipped} malformed or fully-discarded row(s) skipped.`}
       </div>
     </div>

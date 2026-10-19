@@ -59,6 +59,8 @@
 .qec-web-header__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-caption); color: var(--color-text-tertiary); }
 .qec-web-header__title { display: inline-flex; align-items: center; gap: 7px; margin: 0; flex: 0 0 auto; font-family: var(--font-sans); font-size: 13px; font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
 .qec-web-body { padding-inline: max(0px, calc((100% - 1280px) / 2)); }
+/* The header's rule stays full-bleed; its content aligns with the capped body's edges. */
+.qec-web-header { padding-inline: max(var(--space-3), calc((100% - 1280px) / 2 + var(--space-3))); }
 
 /* Collision chip: marks one of several tasks that share experiment, d and p. */
 .qec-collision-chip {

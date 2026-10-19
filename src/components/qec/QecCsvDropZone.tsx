@@ -11,6 +11,23 @@ export const CSV_ERROR_ID = 'qec-csv-error';
 
 import { ICON_SIZE, ICON_STROKE, TYPOGRAPHY } from '../../styles/tokens';
 import { Button } from '../ui';
+/** Marks the header button that survives the empty state's unmount (focus handoff target). */
+export const OPEN_CSV_ATTR = 'data-qec-open-csv';
+
+/**
+ * Picking a file from the empty state unmounts the drop zone and the focused
+ * "Choose file…" button with it. Once the new view has rendered, hand focus to
+ * the header's "Open CSV" button so keyboard users are not dropped on <body>.
+ * Never steals focus that is already somewhere real.
+ */
+function restoreFocusAfterLoad(): void {
+  requestAnimationFrame(() => {
+    const active = document.activeElement;
+    if (active && active !== document.body) return;
+    document.querySelector<HTMLElement>(`[${OPEN_CSV_ATTR}]`)?.focus();
+  });
+}
+
 /** Drop target + file picker for a sinter stats CSV. Parsing happens locally;
  * nothing is uploaded. A rejected file is explained inside this card. */
 export function QecCsvDropZone() {
@@ -45,7 +62,7 @@ export function QecCsvDropZone() {
         style={{ display: 'none' }}
         onChange={(e) => {
           const file = firstFile(e.target.files);
-          if (file) void loadCsvFile(file);
+          if (file) void loadCsvFile(file).then(restoreFocusAfterLoad);
           e.target.value = ''; // allow re-picking the same file
         }}
       />
@@ -65,6 +82,7 @@ export function QecCsvOpenButton() {
     <>
       <Button
         size="sm"
+        {...{ [OPEN_CSV_ATTR]: '' }}
         onClick={() => inputRef.current?.click()}
         icon={<Upload size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} aria-hidden="true" />}
       >

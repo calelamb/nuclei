@@ -19,7 +19,7 @@ import { DiracErrorCard } from './DiracErrorCard';
 import { SlashCommandMenu } from './SlashCommandMenu';
 import { SLASH_COMMANDS, filterSlashCommands, isUnfinishedSlashInput, type SlashCommand } from '../../lib/diracCommands';
 import { formatMessageTime } from '../../lib/formatMessageTime';
-import { ChevronRight, ChevronDown, Plus, ArrowUp } from 'lucide-react';
+import { ChevronRight, ChevronDown, Plus, ArrowUp, Square } from 'lucide-react';
 import { Button, IconButton, TextArea, Tooltip } from '../ui';
 import { shortcutLabel } from '../../config/keybindings';
 import './dirac.css';
@@ -210,14 +210,17 @@ function ToolCallCard({ toolCall, onAction }: { toolCall: ToolCall; onAction: (i
 function ThinkingDots() {
   const colors = useThemeStore((s) => s.colors);
   return (
-    <div style={{ display: 'flex', gap: 4, padding: '8px 0' }}>
-      {[0, 1, 2].map((i) => (
-        <div key={i} style={{
-          width: 5, height: 5, borderRadius: '50%',
-          backgroundColor: colors.dirac,
-          animation: prefersReducedMotion() ? 'none' : `nuclei-dots 1.2s ${EASING.enter} ${i * 150}ms infinite`,
-        }} />
-      ))}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0' }}>
+      <div data-testid="dirac-thinking-dots" aria-hidden="true" style={{ display: 'flex', gap: 4 }}>
+        {[0, 1, 2].map((i) => (
+          <div key={i} style={{
+            width: 6, height: 6, borderRadius: '50%',
+            backgroundColor: colors.dirac,
+            animation: prefersReducedMotion() ? 'none' : `nuclei-dots 1.2s ${EASING.enter} ${i * 150}ms infinite`,
+          }} />
+        ))}
+      </div>
+      <span style={{ fontSize: 12, color: colors.textMuted, fontFamily: TYPOGRAPHY.fontSans }}>Thinking…</span>
     </div>
   );
 }
@@ -226,7 +229,9 @@ function ThinkingDots() {
 export function DiracSidePanel() {
   const { messages, isLoading } = useDiracStore();
   const apiKey = useDiracStore((s) => s.apiKey);
-  const { sendMessage, handleToolAction } = useDirac();
+  const { sendMessage, handleToolAction, stop } = useDirac();
+  // Only chat replies can be aborted; a compose draft has no cancellable request.
+  const canStop = isLoading && messages[messages.length - 1]?.role === 'assistant';
   const colors = useThemeStore((s) => s.colors);
   const shadow = useThemeStore((s) => s.shadow);
   const { isOpen, width, focusSignal, toggle, setWidth } = useDiracPanelStore();
@@ -436,11 +441,22 @@ export function DiracSidePanel() {
           fontFamily: TYPOGRAPHY.fontSans,
         }}>Dirac</span>
         <div style={{ flex: 1 }} />
-        <Tooltip label="New conversation" placement="below">
-          <Button size="sm" variant="ghost" icon={<Plus size={12} />} onClick={() => clearHistory()}>
-            New
-          </Button>
-        </Tooltip>
+        {hasApiKey && (
+          <Tooltip
+            label={messages.length === 0 ? 'Nothing to clear yet' : 'New conversation'}
+            placement="below"
+          >
+            <Button
+              size="sm"
+              variant="ghost"
+              icon={<Plus size={12} />}
+              onClick={() => clearHistory()}
+              disabled={messages.length === 0}
+            >
+              New
+            </Button>
+          </Tooltip>
+        )}
         <IconButton ref={collapseRef} size="sm" onClick={toggle} aria-label="Collapse Dirac panel" tooltip={{ label: 'Collapse Dirac', shortcut: shortcutLabel('toggle-dirac'), placement: 'below' }}>
           <ChevronRight size={14} />
         </IconButton>
@@ -458,13 +474,16 @@ export function DiracSidePanel() {
       {/* Ambient narration feed — dim one-liners that Dirac emits automatically */}
       <AmbientFeed />
       {/* Messages */}
-      <div ref={scrollRef} onScroll={handleScroll} style={{
+      <div ref={scrollRef} onScroll={handleScroll} role="log" aria-label="Conversation with Dirac" aria-live="polite" aria-relevant="additions" style={{
         flex: 1, minHeight: 0, overflow: 'auto', padding: '8px 12px',
         display: 'flex', flexDirection: 'column', gap: 10,
       }}>
         {messages.length === 0 && <DiracEmptyState onPick={submit} />}
 
-        {messages.map((msg) => (
+        {messages.map((msg, index) => {
+          const pending = isLoading && index === messages.length - 1 && msg.role === 'assistant'
+            && !msg.content && !msg.error && !msg.toolCalls?.length;
+          return (
           <div key={msg.id} style={{
             animation: prefersReducedMotion() ? 'none' : `nuclei-slide-up ${DURATION.normal}ms ${EASING.enter}`,
           }}>
@@ -493,12 +512,17 @@ export function DiracSidePanel() {
                 {msg.content && (
                   <DiracMarkdown content={msg.content} />
                 )}
+                {pending && <ThinkingDots />}
+                {msg.stopped && (
+                  <div style={{ fontSize: 12, color: colors.textMuted, fontFamily: TYPOGRAPHY.fontSans }}>Stopped</div>
+                )}
                 {msg.toolCalls?.map((tc) => (
                   <ToolCallCard key={tc.id} toolCall={tc} onAction={handleToolAction} />
                 ))}
               </div>
             )}
-            <div style={{
+            {!pending && (
+            <div data-testid="dirac-timestamp" style={{
               fontSize: 11, color: colors.textDim,
               fontFamily: TYPOGRAPHY.fontSans,
               marginTop: 2,
@@ -507,8 +531,10 @@ export function DiracSidePanel() {
             }}>
               {formatMessageTime(msg.timestamp)}
             </div>
+            )}
           </div>
-        ))}
+          );
+        })}
 
         {isLoading && messages.length > 0 && messages[messages.length - 1].role !== 'assistant' && (
           <div style={{ paddingLeft: 12, borderLeft: `2px solid ${colors.dirac}` }}>
@@ -555,7 +581,17 @@ export function DiracSidePanel() {
               el.style.height = Math.min(el.scrollHeight, 120) + 'px';
             }}
           />
-          {input.trim() && (
+          {isLoading ? (canStop && (
+            <IconButton
+              variant="secondary"
+              onClick={stop}
+              className="dirac-send"
+              aria-label="Stop"
+              tooltip={{ label: 'Stop generating', placement: 'above' }}
+            >
+              <Square size={12} />
+            </IconButton>
+          )) : input.trim() && (
             <IconButton
               variant="secondary"
               onClick={handleSend}

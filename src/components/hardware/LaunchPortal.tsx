@@ -16,6 +16,7 @@ import type { HardwareProviderType } from '../../types/hardware';
 
 import './launchPortal.css';
 import { TYPOGRAPHY } from '../../styles/tokens';
+import { shortcutLabel } from '../../config/keybindings';
 function fmtElapsed(startIso: string): string {
   const ms = Date.now() - new Date(startIso).getTime();
   if (ms < 1000) return 'just now';
@@ -30,6 +31,7 @@ export function LaunchPortal() {
   const { confirm, confirmDialog } = useConfirm();
   const colors = useThemeStore((s) => s.colors);
   const isWeb = usePlatform().getPlatform() === 'web';
+  const launchShortcut = shortcutLabel('launch');
   const jobs = useHardwareStore((s) => s.jobs);
   const providerList = useHardwareStore((s) => s.providers);
   const cudaqInstalled = useFrameworksStore((s) => s.status?.installed.includes('cuda-q') ?? false);
@@ -229,7 +231,8 @@ export function LaunchPortal() {
                 provider={p}
                 status={status}
                 reason={reason}
-                inert={comingSoon || desktopOnly || qsharpBlocked}
+                inert={comingSoon || qsharpBlocked}
+                muted={desktopOnly}
                 onPick={() => handlePickProvider(p.name, status)}
               />
             );
@@ -238,7 +241,17 @@ export function LaunchPortal() {
 
         <Button variant="primary" style={{ marginTop: 10, width: '100%' }} onClick={openLaunchBlank} icon={<Rocket size={14} />}>
           Open full launcher
-          <span style={{ fontSize: 11, opacity: 0.7, marginLeft: 4 }}>⌘⇧R</span>
+          {launchShortcut && (
+            <kbd
+              style={{
+                fontSize: 11, fontFamily: TYPOGRAPHY.fontMono, marginLeft: 4, padding: '1px 6px', borderRadius: 4,
+                background: 'color-mix(in srgb, currentColor 16%, transparent)',
+                border: '1px solid color-mix(in srgb, currentColor 36%, transparent)',
+              }}
+            >
+              {launchShortcut}
+            </kbd>
+          )}
         </Button>
       </div>
 

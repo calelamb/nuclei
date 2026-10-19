@@ -8,7 +8,7 @@ import { QecCampaignActions } from './QecCampaignActions';
  */
 export function QecWebHeader({ fileName }: { fileName: string | null }) {
   return (
-    <div className="nuclei-pane-header">
+    <div className="nuclei-pane-header qec-web-header">
       <h1 className="qec-web-header__title">
         <Atom size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} aria-hidden="true" /> QEC Workbench
       </h1>

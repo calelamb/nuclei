@@ -11,8 +11,10 @@ interface PortalProviderCardProps {
   readonly status: ProviderStatus;
   /** Why the card is inert (coming soon, Q# gating), shown on a shared Tooltip; null when there is no reason to show. */
   readonly reason: string | null;
-  /** aria-disabled + muted. A desktop-only card is still activatable: it opens the launcher's Download note. */
+  /** Truly unavailable (coming soon, Q# gating): aria-disabled, dimmed, not-allowed cursor. */
   readonly inert: boolean;
+  /** Desktop-only: still activates (opens the launcher's Download note), so it is neither aria-disabled nor dimmed; only the logo is softened. */
+  readonly muted?: boolean;
   readonly onPick: () => void;
 }
 
@@ -20,16 +22,19 @@ interface PortalProviderCardProps {
  * One destination in the Launch sidebar. Name and description come from the shared provider catalog,
  * so the sidebar, the full launcher and the Hardware panel can never describe a provider differently.
  */
-export function PortalProviderCard({ provider, status, reason, inert, onPick }: PortalProviderCardProps) {
+export function PortalProviderCard({ provider, status, reason, inert, muted = false, onPick }: PortalProviderCardProps) {
   const colors = useThemeStore((s) => s.colors);
-  // Dim only the logo and copy; the "Desktop app" reason must stay legible.
-  const dim: React.CSSProperties = inert ? { opacity: 0.5 } : {};
+  // Dim only the logo; copy stays AA-legible, and so does the "Desktop app" reason.
+  const dim: React.CSSProperties = inert || muted ? { opacity: 0.5 } : {};
+  const copyDim: React.CSSProperties = inert ? { opacity: 0.5 } : {};
+  const badgeId = `portal-badge-${provider.name}`;
   const card = (
     <button
       className={inert ? undefined : 'nuclei-hover-lift'}
       data-provider={provider.name}
       onClick={onPick}
       aria-disabled={inert || undefined}
+      aria-describedby={muted && !inert ? badgeId : undefined}
       style={{
         textAlign: 'left',
         background: colors.bgElevated,
@@ -53,17 +58,17 @@ export function PortalProviderCard({ provider, status, reason, inert, onPick }: 
       >
         <ProviderLogo provider={provider.name} size={20} />
       </div>
-      <div className="launch-grid__name" style={{ ...dim, fontSize: 12, fontWeight: 600, color: colors.text }}>{provider.label}</div>
+      <div className="launch-grid__name" style={{ ...copyDim, fontSize: 12, fontWeight: 600, color: muted ? colors.textMuted : colors.text }}>{provider.label}</div>
       <div
         style={{
-          ...dim, fontSize: 11, color: colors.textMuted, lineHeight: 1.4, overflow: 'hidden',
+          ...copyDim, fontSize: 11, color: muted ? colors.textDim : colors.textMuted, lineHeight: 1.4, overflow: 'hidden',
           display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' as const,
         }}
       >
         {provider.tagline}
       </div>
       {status.kind === 'desktop-only' && (
-        <span data-testid="portal-badge-cell" style={{ alignSelf: 'flex-start', display: 'flex' }}>
+        <span id={badgeId} data-testid="portal-badge-cell" style={{ alignSelf: 'flex-start', display: 'flex' }}>
           <ProviderStatusBadge status={status} />
         </span>
       )}
