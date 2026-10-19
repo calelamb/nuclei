@@ -88,7 +88,9 @@ def test_resolve_framework_selects_adapter_without_executing_source(tmp_path):
     assert not marker.exists()
 
 
-def test_resolve_framework_is_lexical_selection_not_import_confinement():
+def test_resolve_framework_is_static_selection_not_import_confinement():
+    # R-3: selection reads the parsed imports, so a comment no longer counts, while a literal
+    # importlib.import_module("cirq") does. It still never executes or confines anything.
     code = (
         "# import qiskit\n"
         "import importlib\n"
@@ -97,7 +99,7 @@ def test_resolve_framework_is_lexical_selection_not_import_confinement():
 
     framework = Executor().resolve_framework(code, language="python")
 
-    assert framework == "qiskit"
+    assert framework == "cirq"
 
 
 def test_parse_returns_missing_dependency_when_adapter_module_unavailable(monkeypatch):
