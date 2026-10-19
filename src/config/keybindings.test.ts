@@ -94,8 +94,23 @@ describe('workspace-scoped bindings', () => {
     expect(shortcutLabel('cycle-ui-mode', true, false)).toBe('⌘⇧L');
   });
 
-  it('Launch on hardware lives under Run', () => {
-    expect(bindingFor('launch').group).toBe('Run');
+  it('Launch on hardware sits under Essential right after Run circuit (no one-row group)', () => {
+    const essential = KEYBINDINGS.filter((b) => b.group === 'Essential').map((b) => b.id);
+    expect(essential.indexOf('launch')).toBe(essential.indexOf('run') + 1);
+  });
+
+  it('leaves no shortcut group with fewer than three rows in Learn', () => {
+    const counts = new Map<string, number>();
+    for (const b of KEYBINDINGS) {
+      if (isBindingInMode(b, 'learn')) counts.set(b.group, (counts.get(b.group) ?? 0) + 1);
+    }
+    for (const [group, n] of counts) expect(n, group).toBeGreaterThanOrEqual(3);
+  });
+
+  it('dispatches Mod+Enter from App (the editor also binds it, so App skips it inside Monaco)', () => {
+    expect(findBindingId(ev('Enter'))).toBe('run');
+    expect(findBindingId(ev('Enter', { metaKey: false, ctrlKey: true }))).toBe('run');
+    expect(findBindingId(ev('Enter', { shiftKey: true }))).toBeNull();
   });
 });
 

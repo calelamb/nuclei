@@ -21,7 +21,7 @@ const EDITOR_EXTRAS: Record<string, ShortcutRow> = {
   ghost: { keys: 'Tab', description: 'Accept ghost completion' },
 };
 
-const GROUP_ORDER: KeybindingGroup[] = ['Essential', 'Editor', 'Navigation', 'View', 'Run'];
+const GROUP_ORDER: KeybindingGroup[] = ['Essential', 'Editor', 'Navigation', 'View'];
 
 /**
  * Generated from the one keybinding registry, so the sheet matches reality: it omits chords the browser keeps

@@ -69,10 +69,12 @@ describe('shortcuts sheet by workspace', () => {
     expect(research).toContain('Toggle theme');
   });
 
-  it('files Launch on hardware under Run, not View', () => {
+  it('files Launch on hardware next to Run circuit under Essential and has no one-row Run group', () => {
     const groups = shortcutGroups(true, false, 'research');
-    expect(groups.find((g) => g.title === 'View')?.shortcuts.map((s) => s.description)).not.toContain('Launch on hardware');
-    expect(groups.find((g) => g.title === 'Run')?.shortcuts.map((s) => s.description)).toEqual(['Launch on hardware']);
+    const essential = groups.find((g) => g.title === 'Essential')?.shortcuts.map((s) => s.description) ?? [];
+    expect(essential.indexOf('Launch on hardware')).toBe(essential.indexOf('Run circuit') + 1);
+    expect(groups.find((g) => g.title === 'Run')).toBeUndefined();
+    expect(groups.every((g) => g.shortcuts.length >= 2)).toBe(true);
   });
 
   it('the rendered sheet follows the live workspace', () => {

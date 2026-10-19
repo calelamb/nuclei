@@ -442,7 +442,7 @@ export function DiracSidePanel() {
   }
 
   return (
-    <div ref={rootRef} style={{
+    <div ref={rootRef} data-dirac-panel="" style={{
       width, height: '100%',
       display: 'flex', flexDirection: 'column',
       backgroundColor: colors.bg,
