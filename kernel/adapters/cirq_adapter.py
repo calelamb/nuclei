@@ -2,12 +2,9 @@ import re
 import numpy as np
 from kernel.adapters.base import FrameworkAdapter
 from kernel.adapters._math import step_state_payload
-from kernel.models.snapshot import (
-    UNBOUND_PARAMETERS_MESSAGE,
-    CircuitSnapshot,
-    Gate,
-    SimulationResult,
-)
+from kernel.adapters.binding import free_parameter_names
+from kernel.adapters.errors import UnboundParametersError
+from kernel.models.snapshot import CircuitSnapshot, Gate, SimulationResult
 
 try:
     import cirq
@@ -134,7 +131,7 @@ class CirqAdapter(FrameworkAdapter):
         import time
 
         if cirq.is_parameterized(circuit_obj):
-            raise ValueError(UNBOUND_PARAMETERS_MESSAGE)
+            raise UnboundParametersError(free_parameter_names(circuit_obj))
 
         start = time.time()
         all_qubits = sorted(circuit_obj.all_qubits())
@@ -149,7 +146,13 @@ class CirqAdapter(FrameworkAdapter):
         # Strip measurements for statevector
         circuit_no_meas = cirq.Circuit(
             op for moment in circuit_obj.moments for op in moment.operations
-            if not isinstance(op.gate, cirq.MeasurementGate)
+            if not cirq.is_measurement(op)
+        )
+        has_measurements = any(cirq.is_measurement(op) for op in circuit_obj.all_operations())
+        # The state vector is a fixed function of the circuit only when every
+        # measurement is terminal and every other op is unitary (no noise).
+        exact = circuit_obj.are_all_measurements_terminal() and all(
+            cirq.has_unitary(op) for op in circuit_no_meas.all_operations()
         )
 
         # Statevector simulation. Reuse the same seeded simulator for the
@@ -165,17 +168,20 @@ class CirqAdapter(FrameworkAdapter):
             if abs(c) ** 2 > 1e-10
         }
 
-        # Sampled measurements
-        result_meas = sim.run(circuit_obj, repetitions=shots)
+        # Sampled measurements. A circuit with none is never sampled (Cirq
+        # raises) and never given a measurement it did not ask for: it returns
+        # exact probabilities with an empty `measurements`.
         measurements: dict[str, int] = {}
-        # Combine all measurement keys into bitstrings
-        if result_meas.measurements:
-            keys = sorted(result_meas.measurements.keys())
-            arrays = [result_meas.measurements[k] for k in keys]
-            combined = np.concatenate(arrays, axis=1)
-            for row in combined:
-                bitstring = "".join(str(b) for b in row)
-                measurements[bitstring] = measurements.get(bitstring, 0) + 1
+        if has_measurements:
+            result_meas = sim.run(circuit_obj, repetitions=shots)
+            # Combine all measurement keys into bitstrings
+            if result_meas.measurements:
+                keys = sorted(result_meas.measurements.keys())
+                arrays = [result_meas.measurements[k] for k in keys]
+                combined = np.concatenate(arrays, axis=1)
+                for row in combined:
+                    bitstring = "".join(str(b) for b in row)
+                    measurements[bitstring] = measurements.get(bitstring, 0) + 1
 
         # Bloch coordinates
         bloch_coords = []
@@ -196,6 +202,8 @@ class CirqAdapter(FrameworkAdapter):
             execution_time_ms=round(elapsed, 1),
             shot_count=shots,
             seed_honored=seed_honored,
+            measurements_source="sampled" if has_measurements else "none",
+            probabilities_exact=exact,
         )
 
 

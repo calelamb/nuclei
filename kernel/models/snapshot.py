@@ -1,8 +1,9 @@
 from dataclasses import dataclass, field, asdict
 
 
-# Raised (as a plain ValueError) when a circuit with free parameters is
-# simulated; surfaces to the user as a `simulation_error`.
+# Legacy wording from before PRD 15 R-4. The adapters no longer raise it: they raise
+# `kernel.adapters.errors.UnboundParametersError` (info-class code `unbound_parameters`,
+# naming the parameters). Kept only because existing tests pin this text.
 UNBOUND_PARAMETERS_MESSAGE = (
     "bind circuit parameters before simulating (Trainability Lab analyzes free parameters)"
 )
@@ -34,15 +35,22 @@ class CircuitSnapshot:
     classical_bit_count: int
     depth: int
     gates: list[Gate]
+    # PRD 15 R-A: honest caveats about how this snapshot was derived (an
+    # expansion that hit its cap, an instruction that could not be read).
+    # Omitted from the wire when empty so ordinary snapshots stay byte-identical.
+    notes: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
-        return {
+        data = {
             "framework": self.framework,
             "qubit_count": self.qubit_count,
             "classical_bit_count": self.classical_bit_count,
             "depth": self.depth,
             "gates": [g.to_dict() for g in self.gates],
         }
+        if self.notes:
+            data["notes"] = list(self.notes)
+        return data
 
 
 @dataclass
@@ -63,9 +71,23 @@ class SimulationResult:
     # to_dict below). When a seed WAS requested, this is True/False
     # depending on whether the backend actually honored it.
     seed_honored: bool | None = None
+    # PRD 15 R-A (all omitted from the wire when None, so adapters that do not
+    # report them are unchanged):
+    # - `measurements_source`: "sampled" (shots from the simulator), "none" (the
+    #   circuit has no measurements: `measurements` is {} and nothing is passed
+    #   off as shots), or "sampled_from_statevector".
+    # - `probabilities_exact`: `probabilities` is the deterministic state-vector
+    #   distribution, not one trajectory of a non-unitary program.
+    # - `bound_at`: the parameter point a parameterised circuit was run at.
+    measurements_source: str | None = None
+    probabilities_exact: bool | None = None
+    bound_at: dict[str, float] | None = None
+
+    _OPTIONAL_ON_WIRE = ("seed_honored", "measurements_source", "probabilities_exact", "bound_at")
 
     def to_dict(self) -> dict:
         data = asdict(self)
-        if self.seed_honored is None:
-            data.pop("seed_honored", None)
+        for key in self._OPTIONAL_ON_WIRE:
+            if data.get(key) is None:
+                data.pop(key, None)
         return data

@@ -19,6 +19,20 @@ class FrameworkAdapter(ABC):
         """Extract gate sequence without simulation."""
         pass
 
+    def try_extract_snapshot(
+        self, circuit_obj, **options
+    ) -> tuple[CircuitSnapshot | None, str | None]:
+        """``(snapshot, None)``, or ``(None, "snapshot unavailable: <why>")``.
+
+        Snapshot extraction must never block a run (PRD 15 R-13): a caller that
+        wants to keep going shows the reason in place of the diagram and still
+        simulates. `options` pass through to `extract_snapshot`.
+        """
+        try:
+            return self.extract_snapshot(circuit_obj, **options), None
+        except Exception as exc:
+            return None, f"snapshot unavailable: {exc}"
+
     @abstractmethod
     def simulate(self, circuit_obj, shots: int, seed: int | None = None) -> SimulationResult:
         """Run full simulation and return results.

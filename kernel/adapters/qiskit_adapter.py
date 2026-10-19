@@ -1,12 +1,20 @@
 import re
 from kernel.adapters.base import FrameworkAdapter
 from kernel.adapters._math import assign_layer, partial_trace_qubit, step_state_payload
-from kernel.models.snapshot import (
-    UNBOUND_PARAMETERS_MESSAGE,
-    CircuitSnapshot,
-    Gate,
-    SimulationResult,
+from kernel.adapters._qiskit_aer import (
+    has_measurements,
+    is_deterministic,
+    prepare_for_aer,
+    run_on_aer,
 )
+from kernel.adapters._qiskit_expand import expand_blocks as _expand_blocks
+from kernel.adapters._qiskit_params import UNAVAILABLE_LABEL, params_and_symbols as _params_and_symbols
+from kernel.adapters.binding import free_parameter_names
+from kernel.adapters.errors import UnboundParametersError
+from kernel.models.snapshot import CircuitSnapshot, Gate, SimulationResult
+
+# Upper bound on the gates a block-expanded snapshot may hold (R-2).
+MAX_EXPANDED_GATES = 2000
 
 
 # Map Qiskit gate class names to canonical names
@@ -33,25 +41,60 @@ GATE_NAME_MAP = {
 }
 
 
-def _params_and_symbols(op) -> tuple[list[float], list[str | None]]:
-    """Numeric params plus parallel symbol names.
+_PLAIN_NAMES = {"cx": "CNOT", "cz": "CZ", "h": "H", "x": "X", "y": "Y",
+                "z": "Z", "s": "S", "t": "T", "rx": "RX", "ry": "RY",
+                "rz": "RZ", "swap": "SWAP", "ccx": "Toffoli", "measure": "Measure"}
 
-    A parameter that still has free symbols is emitted as ``0.0`` with its
-    symbol name (a bare ``Parameter``) or expression text; bound or numeric
-    values are emitted as floats with a ``None`` symbol.
-    """
-    from qiskit.circuit import Parameter
 
-    params: list[float] = []
-    symbols: list[str | None] = []
-    for p in op.params or []:
-        if getattr(p, "parameters", None):
-            params.append(0.0)
-            symbols.append(p.name if isinstance(p, Parameter) else str(p))
-        else:
-            params.append(float(p))
-            symbols.append(None)
-    return params, symbols
+def _canonical_name(op) -> str:
+    mapped = GATE_NAME_MAP.get(type(op).__name__)
+    if mapped is not None:
+        return mapped
+    # Fallback: try mapping by op.name
+    return _PLAIN_NAMES.get(op.name.lower(), op.name.upper())
+
+
+def _split_controls(gate_name: str, qubits: list[int]) -> tuple[list[int], list[int]]:
+    """``(controls, targets)`` for the gates whose leading qubits control."""
+    if gate_name in ("CNOT", "CZ"):
+        return qubits[:1], qubits[1:]
+    if gate_name == "Toffoli":
+        return qubits[:2], qubits[2:]
+    return [], qubits
+
+
+def _safe_params(op, notes: list[str]) -> tuple[list[float], list[str | None]]:
+    try:
+        return _params_and_symbols(op)
+    except Exception:
+        # why: a diagram with one unlabelled gate beats no diagram (R-13)
+        notes.append(f"Could not read the parameters of instruction '{op.name}'.")
+        return [0.0], [UNAVAILABLE_LABEL]
+
+
+def _gate_for(instruction, index_of: dict, qubit_layers: dict[int, int], notes: list[str]) -> Gate:
+    op = instruction.operation
+    qubits = [index_of[q] for q in instruction.qubits]
+    gate_name = _canonical_name(op)
+    params, symbols = _safe_params(op, notes)
+    controls, targets = _split_controls(gate_name, qubits)
+
+    # Greedy layer assignment: place gate in the earliest layer
+    # where all involved qubits are free
+    layer = assign_layer(qubit_layers, controls + targets)
+    return Gate(
+        type=gate_name,
+        targets=targets,
+        controls=controls,
+        params=params,
+        layer=layer,
+        symbols=symbols if any(x is not None for x in symbols) else None,
+    )
+
+
+def _expand(circuit_obj):
+    # Looked up at call time so the cap is one module constant.
+    return _expand_blocks(circuit_obj, MAX_EXPANDED_GATES)
 
 
 class QiskitAdapter(FrameworkAdapter):
@@ -64,68 +107,49 @@ class QiskitAdapter(FrameworkAdapter):
         circuits = [v for v in namespace.values() if isinstance(v, QuantumCircuit)]
         return circuits[-1] if circuits else None
 
-    def extract_snapshot(self, circuit_obj) -> CircuitSnapshot:
-        gates = []
-        # Track qubit occupancy for layer assignment
+    def extract_snapshot(self, circuit_obj, *, expand_blocks: bool = False) -> CircuitSnapshot:
+        """Gate list without simulating. Total: no instruction can make it raise.
+
+        ``expand_blocks`` (opt-in) draws each composite block (``QFT``,
+        ``EfficientSU2``...) as its own definition, one level deep and capped
+        at ``MAX_EXPANDED_GATES``; a skipped expansion is explained in ``notes``.
+        """
+        notes: list[str] = []
+        circuit = circuit_obj
+        if expand_blocks:
+            circuit, notes = _expand(circuit_obj)
+
+        index_of = {qubit: i for i, qubit in enumerate(circuit.qubits)}
         qubit_layers: dict[int, int] = {}
-
-        for instruction in circuit_obj.data:
-            op = instruction.operation
-            qubits = [circuit_obj.qubits.index(q) for q in instruction.qubits]
-
-            class_name = type(op).__name__
-            gate_name = GATE_NAME_MAP.get(class_name, None)
-            if gate_name is None:
-                # Fallback: try mapping by op.name
-                name_lower = op.name.lower()
-                name_map = {"cx": "CNOT", "cz": "CZ", "h": "H", "x": "X", "y": "Y",
-                            "z": "Z", "s": "S", "t": "T", "rx": "RX", "ry": "RY",
-                            "rz": "RZ", "swap": "SWAP", "ccx": "Toffoli", "measure": "Measure"}
-                gate_name = name_map.get(name_lower, op.name.upper())
-            params, symbols = _params_and_symbols(op)
-
-            if gate_name in ("CNOT", "CZ"):
-                controls = qubits[:1]
-                targets = qubits[1:]
-            elif gate_name == "Toffoli":
-                controls = qubits[:2]
-                targets = qubits[2:]
-            elif gate_name == "SWAP":
-                controls = []
-                targets = qubits
-            else:
-                controls = []
-                targets = qubits
-
-            # Greedy layer assignment: place gate in the earliest layer
-            # where all involved qubits are free
-            layer = assign_layer(qubit_layers, controls + targets)
-
-            gates.append(Gate(
-                type=gate_name,
-                targets=targets,
-                controls=controls,
-                params=params,
-                layer=layer,
-                symbols=symbols if any(x is not None for x in symbols) else None,
-            ))
-
+        gates = [
+            _gate_for(instruction, index_of, qubit_layers, notes)
+            for instruction in circuit.data
+        ]
         depth = max(qubit_layers.values()) if qubit_layers else 0
 
         return CircuitSnapshot(
             framework="qiskit",
-            qubit_count=circuit_obj.num_qubits,
-            classical_bit_count=circuit_obj.num_clbits,
+            qubit_count=circuit.num_qubits,
+            classical_bit_count=circuit.num_clbits,
             depth=depth,
             gates=gates,
+            notes=notes,
         )
 
     def simulate(self, circuit_obj, shots: int, seed: int | None = None) -> SimulationResult:
+        """Exact state vector plus, when the circuit measures, sampled counts.
+
+        A circuit with no measurement instruction returns exact probabilities
+        and ``measurements == {}`` (``measurements_source == "none"``); no
+        ``measure_all`` is ever added. Library blocks are transpiled into
+        Aer's basis first (``UnsupportedInstructionError`` names what cannot be).
+        """
         import time
         from qiskit_aer import AerSimulator
 
-        if circuit_obj.num_parameters:
-            raise ValueError(UNBOUND_PARAMETERS_MESSAGE)
+        unbound = free_parameter_names(circuit_obj)
+        if unbound:
+            raise UnboundParametersError(unbound)
 
         start = time.time()
 
@@ -134,32 +158,33 @@ class QiskitAdapter(FrameworkAdapter):
         # always honors an explicit integer seed, so seed_honored tracks
         # only whether one was requested, not whether it "worked".
         seed_honored = True if seed is not None else None
+        n_qubits = circuit_obj.num_qubits
 
-        # Get statevector
-        sim_sv = AerSimulator(method="statevector", seed_simulator=seed)
         circuit_sv = circuit_obj.copy()
         circuit_sv.remove_final_measurements()
-        circuit_sv.save_statevector()
-        result_sv = sim_sv.run(circuit_sv, shots=1).result()
-        sv = result_sv.get_statevector()
-        sv_data = sv.data
+        exact = is_deterministic(circuit_sv)
+        sim_sv = AerSimulator(method="statevector", seed_simulator=seed)
+        prepared = prepare_for_aer(circuit_sv, sim_sv)
+        prepared.save_statevector()
+        sv_data = run_on_aer(sim_sv, prepared, 1).get_statevector().data
 
         state_vector = [{"re": float(c.real), "im": float(c.imag)} for c in sv_data]
         probabilities = {
-            format(i, f"0{circuit_obj.num_qubits}b"): float(abs(c) ** 2)
+            format(i, f"0{n_qubits}b"): float(abs(c) ** 2)
             for i, c in enumerate(sv_data)
             if abs(c) ** 2 > 1e-10
         }
 
-        # Run sampled measurements
-        sim_qasm = AerSimulator(seed_simulator=seed)
-        result_qasm = sim_qasm.run(circuit_obj, shots=shots).result()
-        counts = result_qasm.get_counts()
-        measurements = {k: int(v) for k, v in counts.items()}
+        measurements: dict[str, int] = {}
+        source = "none"
+        if has_measurements(circuit_obj):
+            sim_qasm = AerSimulator(seed_simulator=seed)
+            counts = run_on_aer(sim_qasm, prepare_for_aer(circuit_obj, sim_qasm), shots).get_counts()
+            measurements = {k: int(v) for k, v in counts.items()}
+            source = "sampled"
 
         # Compute Bloch coordinates for single-qubit states
         bloch_coords = []
-        n_qubits = circuit_obj.num_qubits
         for i in range(n_qubits):
             # Partial trace to get single-qubit density matrix.
             # why: partial_trace_qubit reshapes C-order, so its axis 0 is
@@ -183,8 +208,9 @@ class QiskitAdapter(FrameworkAdapter):
             execution_time_ms=round(elapsed, 1),
             shot_count=shots,
             seed_honored=seed_honored,
+            measurements_source=source,
+            probabilities_exact=exact,
         )
-
 
     def state_trace(self, circuit_obj) -> list[dict]:
         """Per-gate state trajectory via incremental Statevector evolution.
