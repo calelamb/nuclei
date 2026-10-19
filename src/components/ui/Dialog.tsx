@@ -5,6 +5,7 @@ import { IconButton } from './IconButton';
 import { ICON_SIZE } from '../../styles/tokens';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { cx } from './cx';
+import { closeActiveTooltip } from './tooltipSingleton';
 
 export interface DialogProps {
   /** Visible title; it names the dialog (aria-labelledby). */
@@ -53,6 +54,9 @@ export function Dialog({
   const descId = useId();
   const onCloseRef = useRef(onClose);
   useEffect(() => { onCloseRef.current = onClose; });
+
+  // A tooltip left open by the trigger that opened this dialog would float above the scrim.
+  useEffect(() => { closeActiveTooltip(); }, []);
 
   useFocusTrap(panelRef, { restoreFocus: true, autoFocus: true, autoFocusSkip: '.nuclei-dialog__header' });
 

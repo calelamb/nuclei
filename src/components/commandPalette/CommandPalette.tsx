@@ -20,9 +20,10 @@ import type { MainTakeover } from '../../layout/takeover';
 import type { Framework } from '../../types/quantum';
 import type { LayoutPreset } from '../../stores/layoutStore';
 import { rankCommands } from './rankCommands';
-import { shortcutLabel, isMacPlatform, bindingLabel } from '../../config/keybindings';
+import { shortcutLabel, isMacPlatform, bindingLabel, railShortcutLabel } from '../../config/keybindings';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
+import { closeActiveTooltip } from '../ui/tooltipSingleton';
 export interface Command {
   id: string;
   label: string;
@@ -57,7 +58,7 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
   // Focus stays on the input (the combobox); the trap keeps Tab inside and hands focus back to
   // whatever had it (the editor, a button) when the palette closes.
   useFocusTrap(panelRef, { autoFocus: false, restoreFocus: true });
-  useEffect(() => { inputRef.current?.focus(); }, []);
+  useEffect(() => { closeActiveTooltip(); inputRef.current?.focus(); }, []);
 
   const searching = query.trim() !== '';
   // Unfiltered: grouped under one header per category. Searching: a flat list ranked by relevance.
@@ -221,14 +222,6 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
   );
 }
 
-/** ⌘1..9 map onto the first nine top-rail views, in registry order (PRD 11
- * Phase D). Exported so App.tsx binds the same mapping the palette displays. */
-// eslint-disable-next-line react-refresh/only-export-components
-export function railShortcutFor(index: number, mac: boolean = isMacPlatform()): string | undefined {
-  if (index >= 9) return undefined;
-  return mac ? `⌘${index + 1}` : `Ctrl+${index + 1}`;
-}
-
 export interface CommandContext {
   mode: WorkspaceMode;
   developerViews: boolean;
@@ -316,7 +309,7 @@ export function buildCommands(actions: CommandActions, context: CommandContext):
   let railIndex = 0;
   for (const view of views) {
     const isTop = !bottomPinned.has(view);
-    const shortcut = view === 'settings' ? sc('settings') : isTop ? railShortcutFor(railIndex, mac) : undefined;
+    const shortcut = view === 'settings' ? sc('settings') : isTop ? railShortcutLabel(railIndex, mac) : undefined;
     if (isTop) railIndex += 1;
     commands.push({
       id: `goto-${view}`,

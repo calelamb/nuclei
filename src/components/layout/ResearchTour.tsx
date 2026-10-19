@@ -33,6 +33,8 @@ interface Rect {
 const EDITOR_SELECTOR = '.monaco-editor textarea, [aria-label="Editor content"]';
 const MODE_CHIP_SELECTOR = '[aria-label="Switch workspace mode"]';
 const EDITOR_WAIT_MS = 500;
+/** A control that starts the tour and must get focus back when it ends carries this attribute (its value is a stable key). */
+export const TOUR_RETURN_ATTR = 'data-tour-return';
 
 /**
  * Put focus back where the person was. The editor may be mid-remount (the QEC
@@ -44,8 +46,16 @@ function restoreFocus(opener: HTMLElement | null) {
     opener.focus();
     return;
   }
+  // An opener that was unmounted while the tour showed other panes (Settings -> Replay) re-mounts when the view is
+  // restored; it names itself so the replacement button, not the editor, gets focus back.
+  const returnKey = opener?.getAttribute(TOUR_RETURN_ATTR) ?? null;
   const deadline = performance.now() + EDITOR_WAIT_MS;
   const attempt = () => {
+    if (returnKey) {
+      const replacement = document.querySelector<HTMLElement>(`[${TOUR_RETURN_ATTR}="${returnKey}"]`);
+      if (replacement) { replacement.focus(); return; }
+      if (performance.now() < deadline) { requestAnimationFrame(attempt); return; }
+    }
     // The editor can be mounted yet hidden (display: none) while the takeover is still on screen; focus() then does nothing, so keep waiting until it sticks.
     const editor = document.querySelector<HTMLElement>(EDITOR_SELECTOR);
     if (editor) {

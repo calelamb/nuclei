@@ -21,6 +21,12 @@ function offenders(test: (f: { rel: string; text: string }) => boolean): string[
 }
 
 describe('design guards', () => {
+  it('never hard-codes the ⌘ glyph in shell chrome; labels come from config/keybindings so Windows says Ctrl', () => {
+    const shell = (f: { rel: string }) => /^components\/(layout|ui|commandPalette|settings|onboarding|transpiler|editor\/inlineEdit)\//.test(f.rel);
+    const code = (text: string) => text.split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*|\{\/\*)/.test(l)).join('\n');
+    expect(offenders((f) => shell(f) && /⌘/.test(code(f.text)))).toEqual([]);
+  });
+
   it('has no inline outline:none that would hide the shared focus ring', () => {
     expect(offenders((f) => /outline:\s*['"]none['"]/.test(f.text))).toEqual([]);
   });

@@ -1,6 +1,8 @@
 import { Files, Search, Cpu, GraduationCap, Blocks, Settings, Server, Users, Trophy, Rocket, FlaskConical, Calculator, Shuffle, Atom } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { Tooltip } from '../ui/Tooltip';
+import { railShortcutLabel, shortcutLabel } from '../../config/keybindings';
+import './activityBar.css';
 import { bottomViewsForMode } from './panelRegistry';
 import type { WorkspaceMode } from '../../stores/workspaceStore';
 
@@ -68,7 +70,7 @@ function ActivityIcon({ item, isActive, onClick, shortcut }: {
         aria-label={item.label}
         aria-pressed={isActive}
         data-active={isActive}
-        className="nuclei-quiet"
+        className="nuclei-quiet activity-btn"
         data-tour-target={`activity-${item.id}`}
         style={{
           width: 48, height: 44,
@@ -113,7 +115,7 @@ export function ActivityBar({ active, onSelect, visibleViews, workspaceMode }: A
           isActive={active === id}
           onClick={() => onSelect(id)}
           // ⌘1..9 map onto the first nine top-rail views (PRD 11 Phase D).
-          shortcut={i < 9 ? `⌘${i + 1}` : undefined}
+          shortcut={railShortcutLabel(i)}
         />
       ))}
       <div style={{ flex: 1 }} />
@@ -123,6 +125,7 @@ export function ActivityBar({ active, onSelect, visibleViews, workspaceMode }: A
           item={{ id, ...ITEM_META[id] }}
           isActive={active === id}
           onClick={() => onSelect(id)}
+          shortcut={id === 'settings' ? shortcutLabel('settings') : undefined}
         />
       ))}
     </div>

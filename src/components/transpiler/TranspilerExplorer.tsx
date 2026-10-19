@@ -39,7 +39,7 @@ export function TranspilerExplorer() {
   return (
     <div style={shell(colors)}>
       <div className="nuclei-pane-header">
-        <h1 style={{ display: 'flex', alignItems: 'center', gap: 7, margin: 0, fontSize: 13, fontWeight: 600 }}>
+        <h1 data-nav-landing="" tabIndex={-1} style={{ display: 'flex', alignItems: 'center', gap: 7, margin: 0, fontSize: 13, fontWeight: 600 }}>
           <Shuffle size={14} aria-hidden="true" /> Transpiler Explorer
         </h1>
         <div style={{ flex: 1 }} />

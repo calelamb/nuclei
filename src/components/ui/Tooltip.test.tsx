@@ -2,7 +2,7 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup, act } from '@testing-library/react';
 import { Tooltip, TOOLTIP_OPEN_DELAY_MS, TOOLTIP_CLOSE_DELAY_MS } from './Tooltip';
-import { resetTooltipSingleton, TOOLTIP_WARMUP_MS } from './tooltipSingleton';
+import { closeActiveTooltip, resetTooltipSingleton, TOOLTIP_WARMUP_MS } from './tooltipSingleton';
 import { anchorTooltip, nudgeIntoView } from './tooltipPlacement';
 
 beforeEach(() => { vi.useFakeTimers(); resetTooltipSingleton(); });
@@ -210,5 +210,35 @@ describe('side placement on a tall trigger', () => {
     fireEvent.mouseEnter(screen.getByText('rail'));
     act(() => { vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS + 10); });
     expect(screen.getByRole('tooltip').style.transform).toBe('translate(-100%, -50%)');
+  });
+
+  it('a modal taking focus closes a tooltip that is already showing (shell-r9-03)', () => {
+    render(<Tooltip label="Switch workspace mode"><button>mode</button></Tooltip>);
+    const btn = screen.getByText('mode');
+    fireEvent.mouseEnter(btn);
+    act(() => { vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS + 10); });
+    expect(screen.getByRole('tooltip')).toBeTruthy();
+    act(() => { closeActiveTooltip(); });
+    expect(screen.queryByRole('tooltip')).toBeNull();
+  });
+
+  it('a blur before React re-renders still cancels the open tip', () => {
+    render(<Tooltip label="Switch workspace mode"><button>mode</button></Tooltip>);
+    const btn = screen.getByText('mode');
+    act(() => {
+      fireEvent.mouseEnter(btn);
+      vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS + 10);
+      fireEvent.blur(btn);
+    });
+    expect(screen.queryByRole('tooltip')).toBeNull();
+  });
+
+  it('does not open for a trigger the pointer already left when the warm timer fires', () => {
+    render(<Tooltip label="Switch workspace mode"><button>mode</button></Tooltip>);
+    const btn = screen.getByText('mode');
+    fireEvent.mouseEnter(btn);
+    fireEvent.mouseLeave(btn);
+    act(() => { vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS + 10); });
+    expect(screen.queryByRole('tooltip')).toBeNull();
   });
 });

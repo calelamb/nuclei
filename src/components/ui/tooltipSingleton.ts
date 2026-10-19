@@ -10,6 +10,13 @@ export function claimTooltip(close: () => void): void {
   activeClose = close;
 }
 
+/** Close whichever tooltip is showing (a modal opening must not leave one floating above its scrim). */
+export function closeActiveTooltip(): void {
+  const close = activeClose;
+  activeClose = null;
+  close?.();
+}
+
 /** Called when a tooltip closes. */
 export function releaseTooltip(close: () => void): void {
   if (activeClose === close) activeClose = null;

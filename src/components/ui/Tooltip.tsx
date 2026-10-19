@@ -49,7 +49,12 @@ export function Tooltip({ label, shortcut, placement = 'above', children }: Tool
   useEffect(trackPointerDown, []);
   const [pos, setPos] = useState<TooltipPosition | null>(null);
   const pointerY = useRef<number | null>(null);
-  const [open, setOpen] = useState(false);
+  const [open, setOpenState] = useState(false);
+  // Mirrors `open` synchronously: a blur that fires before React re-renders must still see the tip as open.
+  const openRef = useRef(false);
+  const setOpen = useCallback((value: boolean) => { openRef.current = value; setOpenState(value); }, []);
+  // Whether the pointer rests on, or keyboard focus sits in, the trigger. A delayed open re-checks this.
+  const engaged = useRef({ hover: false, focus: false });
   const wrapRef = useRef<HTMLSpanElement>(null);
   const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -94,7 +99,7 @@ export function Tooltip({ label, shortcut, placement = 'above', children }: Tool
     if (openTimer.current) { clearTimeout(openTimer.current); openTimer.current = null; }
     if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; }
     setOpen(false);
-  }, []);
+  }, [setOpen]);
   useEffect(() => {
     if (!open) return undefined;
     claimTooltip(closeNow);
@@ -104,10 +109,11 @@ export function Tooltip({ label, shortcut, placement = 'above', children }: Tool
   const show = () => {
     if (suppressed.current) return;
     if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; }
-    if (open || openTimer.current) return;
+    if (openRef.current || openTimer.current) return;
     // Moving along a row of icons (or while another tip is up) opens the next one straight away.
     openTimer.current = setTimeout(() => {
       openTimer.current = null;
+      if (!engaged.current.hover && !engaged.current.focus) return;
       measure();
       setOpen(true);
     }, tooltipIsWarm() ? 0 : TOOLTIP_OPEN_DELAY_MS);
@@ -115,7 +121,7 @@ export function Tooltip({ label, shortcut, placement = 'above', children }: Tool
 
   const hide = (immediate = false) => {
     if (openTimer.current) { clearTimeout(openTimer.current); openTimer.current = null; }
-    if (!open) return;
+    if (!openRef.current) return;
     if (immediate) { setOpen(false); return; }
     if (closeTimer.current) clearTimeout(closeTimer.current);
     closeTimer.current = setTimeout(() => { closeTimer.current = null; setOpen(false); }, TOOLTIP_CLOSE_DELAY_MS);
@@ -127,11 +133,11 @@ export function Tooltip({ label, shortcut, placement = 'above', children }: Tool
     <span
       ref={wrapRef}
       style={{ display: 'contents' }}
-      onMouseEnter={(e) => { pointerY.current = e.clientY; show(); }}
+      onMouseEnter={(e) => { engaged.current.hover = true; pointerY.current = e.clientY; show(); }}
       onMouseMove={(e) => { if (!open) pointerY.current = e.clientY; }}
-      onMouseLeave={() => { suppressed.current = false; pointerY.current = null; hide(); }}
-      onFocus={() => { if (!pointerFocus.current && !focusFollowsPointer()) show(); }}
-      onBlur={() => hide(true)}
+      onMouseLeave={() => { engaged.current.hover = false; suppressed.current = false; pointerY.current = null; hide(); }}
+      onFocus={() => { if (!pointerFocus.current && !focusFollowsPointer()) { engaged.current.focus = true; show(); } }}
+      onBlur={() => { engaged.current.focus = false; hide(true); }}
       onMouseDown={() => {
         suppressed.current = true;
         hide(true);

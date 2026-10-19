@@ -53,7 +53,7 @@ import { useLayoutSettled } from '../../layout/useLayoutSettled';
 import { railViewsFor } from '../../layout/panelRegistry';
 import { isWebBuild } from '../../platform/buildTarget';
 import { Tooltip } from '../ui';
-import { focusVizLanding } from './focusViz';
+import { focusVizLanding, keepFocusOn } from './focusViz';
 import { useUnseenResult } from './useUnseenResult';
 import { useBottomPanelStore } from '../../stores/bottomPanelStore';
 
@@ -372,7 +372,12 @@ export function PanelLayout() {
 
   const handleMouseUp = () => { setIsDraggingH(false); setIsDraggingV(false); };
 
-  const handleActivitySelect = (view: ActivityView) => selectView(view, { toggle: true });
+  const handleActivitySelect = (view: ActivityView) => {
+    const clicked = document.activeElement;
+    selectView(view, { toggle: true });
+    // A takeover exit re-mounts the editor, which autofocuses; keep the rail button the person just used.
+    if (clicked instanceof HTMLElement && clicked.classList.contains('activity-btn')) keepFocusOn(clicked);
+  };
 
   const effectiveBottomHeight = bottomCollapsed ? 28 : bottomHeight;
 
@@ -406,7 +411,7 @@ export function PanelLayout() {
 
         {isChallengeMode ? (
           /* Challenge Mode — full content area */
-          <div data-takeover="" style={{
+          <div data-takeover="challenges" style={{
             flex: 1, minWidth: 0, overflow: 'hidden',
             animation: 'nuclei-fade-in 200ms ease',
           }}>
@@ -416,7 +421,7 @@ export function PanelLayout() {
           </div>
         ) : isLearnMode ? (
           /* Learn Mode — full content area + Dirac */
-          <div data-takeover="" style={{
+          <div data-takeover="learning" style={{
             flex: 1, minWidth: 0, overflow: 'hidden',
             animation: 'nuclei-fade-in 200ms ease',
           }}>

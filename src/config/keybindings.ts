@@ -135,6 +135,12 @@ export function shortcutLabel(
   return formatKeys(binding, mac);
 }
 
+/** ⌘1..9 / Ctrl+1..9 for the Nth top-rail view; undefined past the ninth. One source for the rail, the palette and the keys. */
+export function railShortcutLabel(index: number, mac: boolean = isMacPlatform()): string | undefined {
+  if (index < 0 || index >= 9) return undefined;
+  return mac ? `⌘${index + 1}` : `Ctrl+${index + 1}`;
+}
+
 /** For tooltips: "Run simulation (⌘↵)". */
 export function withShortcut(label: string, id: string, mac: boolean = isMacPlatform()): string {
   const keys = shortcutLabel(id, mac);
