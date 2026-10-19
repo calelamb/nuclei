@@ -15,6 +15,14 @@ describe('Breadcrumbs', () => {
     expect(container.textContent).toContain('untitled-1.py');
   });
 
+  it('shows only the file name for an in-memory project path, not its internal id', () => {
+    useEditorStore.setState({ filePath: 'memory://project-1760123456/main.py' });
+    const { container } = render(<Breadcrumbs />);
+    expect(container.textContent).toContain('main.py');
+    expect(container.textContent).not.toContain('project-1760');
+    expect(container.textContent).not.toContain('memory');
+  });
+
   it('shows the folder trail for a real path', () => {
     useEditorStore.setState({ filePath: '/proj/circuits/bell.py' });
     const { container } = render(<Breadcrumbs />);

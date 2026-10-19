@@ -44,6 +44,17 @@ describe('NoiseModelLibrary as a dialog (research-r-09)', () => {
     fireEvent.keyDown(input, { key: 'Escape' });
     expect(screen.queryByLabelText('Copy name')).toBeNull();
     expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: /Duplicate to edit/ }));
+  });
+
+  it('Cancel on the duplicate form also returns focus to its trigger', async () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Noise models' }));
+    await screen.findByRole('dialog');
+    fireEvent.click(screen.getByRole('button', { name: /Duplicate to edit/ }));
+    await screen.findByLabelText('Copy name');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: /Duplicate to edit/ }));
   });
 
   it('explains the dash when comparing against an entry-only model', async () => {

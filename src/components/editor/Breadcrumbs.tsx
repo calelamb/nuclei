@@ -50,12 +50,19 @@ function UnsavedCrumb({ name }: { name: string }) {
   );
 }
 
+/** Display name of an in-memory buffer: the last path segment, never the internal project id. */
+function unsavedName(filePath: string): string {
+  const rest = filePath.slice(MEMORY_PREFIX.length);
+  const segments = rest.split(/[\\/]/).filter(Boolean);
+  return segments[segments.length - 1] ?? 'untitled.py';
+}
+
 export function Breadcrumbs() {
   const filePath = useEditorStore((s) => s.filePath);
   const colors = useThemeStore((s) => s.colors);
 
   if (isMemoryPath(filePath)) {
-    return <UnsavedCrumb name={filePath!.slice(MEMORY_PREFIX.length) || 'untitled.py'} />;
+    return <UnsavedCrumb name={unsavedName(filePath!)} />;
   }
 
   const allSegments = filePath

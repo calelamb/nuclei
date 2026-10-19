@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Copy, GitCompare } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { createTauriExperimentFs } from '../../services/experimentFs';
@@ -32,6 +32,14 @@ export function NoiseModelLibrary({ projectRoot, onClose }: { projectRoot: strin
   const [dupOpen, setDupOpen] = useState(false);
   const [dupName, setDupName] = useState('');
   const [dupError, setDupError] = useState<string | null>(null);
+
+  const dupTriggerRef = useRef<HTMLButtonElement>(null);
+  const wasDupOpen = useRef(false);
+  // Closing the inline form unmounts its focused input; hand focus back to its trigger.
+  useEffect(() => {
+    if (wasDupOpen.current && !dupOpen) dupTriggerRef.current?.focus();
+    wasDupOpen.current = dupOpen;
+  }, [dupOpen]);
 
   const reload = () => {
     void discoverNoiseModels(projectRoot, createTauriExperimentFs()).then((r) => {
@@ -142,7 +150,7 @@ export function NoiseModelLibrary({ projectRoot, onClose }: { projectRoot: strin
                 {selected.builtin ? 'built-in' : 'project'}
               </span>
               <div style={{ flex: 1 }} />
-              <Button size="sm" onClick={() => { setDupName(`${selected.name}-copy`); setDupOpen(true); setDupError(null); }} icon={<Copy size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />}>
+              <Button ref={dupTriggerRef} size="sm" onClick={() => { setDupName(`${selected.name}-copy`); setDupOpen(true); setDupError(null); }} icon={<Copy size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />}>
                 Duplicate to edit
               </Button>
             </div>
@@ -190,6 +198,11 @@ export function NoiseModelLibrary({ projectRoot, onClose }: { projectRoot: strin
                 </div>
               ) : (
                 <div style={{ marginTop: 8 }}>
+                  {entryOnlyCompare && (
+                    <p style={{ fontSize: 11, color: colors.textMuted, margin: '0 0 8px' }}>
+                      — means an entry-only model: no per-gate rates to compare.
+                    </p>
+                  )}
                   <Table label="Generator argument differences" dense>
                     <Thead>
                       <Tr>
@@ -208,11 +221,6 @@ export function NoiseModelLibrary({ projectRoot, onClose }: { projectRoot: strin
                       ))}
                     </Tbody>
                   </Table>
-                  {entryOnlyCompare && (
-                    <p style={{ fontSize: 11, color: colors.textMuted, margin: '8px 0 0' }}>
-                      — means an entry-only model: no per-gate rates to compare.
-                    </p>
-                  )}
                 </div>
               )
             )}
