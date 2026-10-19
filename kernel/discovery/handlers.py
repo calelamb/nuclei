@@ -29,10 +29,13 @@ from kernel.discovery.evaluators import (
     missing_for,
     normalize_config,
 )
-from kernel.discovery.manager import BusyError, EvaluateRequest, get_manager
+from kernel.discovery.manager import BusyError, ConsentRequiredError, EvaluateRequest, get_manager
 from kernel.discovery.mutate import MutationError, mutate
+from kernel.discovery.sandbox import prescreen_response
 from kernel.lab_protocol import request_id_problem, with_request_id
 
+ERR_CONSENT_REQUIRED = "isolation_consent_required"
+VALID_ORIGINS = ("claude", "ast", "symmetry", "user")
 MAX_PROGRAM_BYTES = 400_000
 MAX_MUTATIONS = 64
 MAX_ID_LENGTH = 200
@@ -123,12 +126,57 @@ def parse_evaluate(msg: dict[str, Any]) -> EvaluateRequest:
     stage = msg.get("stage") or DEFAULT_STAGE
     if stage not in VALID_STAGES:
         raise RequestError(ERR_INVALID_REQUEST, f"'stage' must be one of {list(VALID_STAGES)}.")
-    return EvaluateRequest(run_id, candidate_id, spec.kind, config, program, entry, _integer(msg, "seed"), stage)
+    return EvaluateRequest(
+        run_id, candidate_id, spec.kind, config, program, entry, _integer(msg, "seed"), stage,
+        isolation_consent=_consent(msg), origin=_origin(msg),
+    )
+
+
+def _consent(msg: dict[str, Any]) -> bool:
+    value = msg.get("isolation_consent", False)
+    if not isinstance(value, bool):
+        raise RequestError(ERR_INVALID_REQUEST, "'isolation_consent' must be a boolean.")
+    return value
+
+
+def _origin(msg: dict[str, Any]) -> str | None:
+    value = msg.get("origin")
+    if value is None:
+        return None
+    if value not in VALID_ORIGINS:
+        raise RequestError(ERR_INVALID_REQUEST, f"'origin' must be one of {list(VALID_ORIGINS)}.")
+    return value
+
+
+async def _require_consent(manager, consent: bool):
+    """The verified isolation tier, or ``isolation_consent_required`` on a process-only host without consent."""
+    try:
+        # The first call probes the host (a worker run through each wrapper), so keep it off the loop.
+        return await asyncio.to_thread(manager.require_consent, consent)
+    except ConsentRequiredError as exc:
+        raise RequestError(
+            ERR_CONSENT_REQUIRED, exc.capability_text, {"capability_text": exc.capability_text, "isolation": "process"},
+        ) from exc
+
+
+async def _gate_audit(msg: dict[str, Any]) -> None:
+    """Red Queen audits re-run client-supplied candidate programs, so they pass the same gate as an evaluation.
+
+    Consent first (a process-only host runs the program with the user's full file access), then the static
+    pre-screen: mandatory on a process tier and for every untrusted origin (a missing ``origin`` is untrusted,
+    exactly as in ``discovery_evaluate``)."""
+    consent, origin = _consent(msg), _origin(msg)
+    info = await _require_consent(get_manager(), consent)
+    rejected = prescreen_response(_program(msg), info, origin or "claude")
+    if rejected is not None:
+        error = rejected["error"]
+        raise RequestError(error["code"], error["message"])
 
 
 async def _evaluate(msg: dict[str, Any], ctx) -> None:
     request = parse_evaluate(msg)
     manager = get_manager()
+    await _require_consent(manager, request.isolation_consent)
     try:
         job, position = manager.enqueue(ctx.owner, request, ctx.emit_threadsafe)
     except BusyError as exc:
@@ -207,6 +255,8 @@ async def handle(msg: dict[str, Any], ctx) -> None:
         elif isinstance(msg_type, str) and msg_type.startswith("discovery_audit"):
             # Red Queen mode (addendum §F): independent audits of scored artifacts.
             from kernel.discovery.audits.handlers import handle as handle_audit
+            if msg_type == "discovery_audit":
+                await _gate_audit(msg)
             await handle_audit(msg, ctx)
         elif isinstance(msg_type, str) and msg_type.startswith("discovery_conjecture"):
             # Conjecture Engine (addendum §G): held-out tests of proposed conjectures.

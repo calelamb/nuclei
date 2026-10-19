@@ -28,7 +28,8 @@ from kernel.discovery.constants import (
     SANDBOX_WALL_SLACK_SECONDS,
 )
 from kernel.discovery.evaluators import EVALUATORS, effective_config, fingerprint, normalize_config
-from kernel.discovery.sandbox import default_request, run_candidate
+from kernel.discovery import isolation as iso
+from kernel.discovery.sandbox import default_request, prescreen_response, run_candidate
 from kernel.discovery.scoring import run_scorer
 
 # stage -> (scorer cpu seconds, scorer wall seconds)
@@ -48,6 +49,17 @@ class BusyError(RuntimeError):
     """The owner (or the whole kernel) has too many unfinished jobs."""
 
 
+class ConsentRequiredError(RuntimeError):
+    """No OS sandbox exists on this host and the request did not carry ``isolation_consent``.
+
+    ``capability_text`` is the exact wording the consent dialog must show (the user agrees to
+    precisely what will happen, not to a generic prompt)."""
+
+    def __init__(self, capability_text: str = iso.PROCESS_CAPABILITY_TEXT):
+        super().__init__(capability_text)
+        self.capability_text = capability_text
+
+
 @dataclass
 class EvaluateRequest:
     run_id: str
@@ -58,6 +70,10 @@ class EvaluateRequest:
     entry: str
     seed: int
     stage: str = DEFAULT_STAGE
+    # Per-request, never remembered: the user agreed to run candidates without an OS sandbox.
+    isolation_consent: bool = False
+    # Who wrote the program ("claude" | "ast" | "symmetry" | "user"); unknown is treated as untrusted.
+    origin: str | None = None
 
 
 @dataclass
@@ -95,6 +111,7 @@ class DiscoveryManager:
         cache_dir: str | None = None,
         sandbox_runner=run_candidate,
         scorer_runner=run_scorer,
+        isolation_provider: Callable[[], iso.IsolationInfo] = iso.detect_isolation,
     ):
         self.max_workers = max_workers or max(1, min(4, (os.cpu_count() or 2) - 1))
         self.max_queued_global = max_queued_global
@@ -103,12 +120,33 @@ class DiscoveryManager:
         self._cache_dir = cache_dir
         self._sandbox = sandbox_runner
         self._scorer = scorer_runner
+        self._isolation = isolation_provider
         self._lock = threading.Lock()
         self._active: dict[int, list[Job]] = {}
 
     @property
     def cache_dir(self) -> str:
         return self._cache_dir or default_cache_dir()
+
+    # --- isolation consent -----------------------------------------------------
+
+    def isolation_info(self) -> iso.IsolationInfo:
+        """The verified isolation tier (the first call probes the host, so call it off the event loop)."""
+        return self._isolation()
+
+    def require_consent(self, consent: bool) -> iso.IsolationInfo:
+        """Raise :class:`ConsentRequiredError` on a process-only host unless ``consent`` was given.
+
+        Shared by every message that runs a client-supplied candidate program (``discovery_evaluate``
+        and the Red Queen ``discovery_audit``)."""
+        info = self.isolation_info()
+        if info.needs_consent and not consent:
+            raise ConsentRequiredError()
+        return info
+
+    def check_consent(self, request: EvaluateRequest) -> iso.IsolationInfo:
+        """Raise :class:`ConsentRequiredError` on a process-only host unless the request carries consent."""
+        return self.require_consent(request.isolation_consent)
 
     # --- bookkeeping ---------------------------------------------------------
 
@@ -200,6 +238,23 @@ class DiscoveryManager:
         record["timings_ms"] = {**timings, "total": _ms(time.monotonic() - started)}
         return record
 
+    @staticmethod
+    def _apply_sandbox_record(record: dict[str, Any], sandbox: dict[str, Any]) -> None:
+        record["isolation"] = sandbox.get("isolation", "process")
+        record["isolation_detail"] = sandbox.get("isolation_detail", {"reads": "unrestricted"})
+        record["stdout"], record["stderr"] = sandbox.get("stdout", ""), sandbox.get("stderr", "")
+
+    def _sandbox_failed(
+        self, record: dict[str, Any], sandbox: dict[str, Any], started: float, timings: dict[str, int], job: Job,
+    ) -> dict[str, Any]:
+        self._apply_sandbox_record(record, sandbox)
+        error = sandbox.get("error") or {"code": "worker_bad_output", "message": "Sandbox failed."}
+        if error.get("code") == "cancelled" or job.cancel_event.is_set():
+            return self._cancelled(record, "sandbox", started, timings)
+        record["failure"] = {"stage": "sandbox", "code": error["code"], "message": error["message"]}
+        record["timings_ms"] = {**timings, "total": _ms(time.monotonic() - started)}
+        return record
+
     def _evaluate(self, job: Job) -> dict[str, Any]:
         started = time.monotonic()
         req = job.request
@@ -210,6 +265,10 @@ class DiscoveryManager:
         timings = {"sandbox": 0, "score": 0}
         if job.cancel_event.is_set():
             return self._cancelled(record, "sandbox", started, timings)
+
+        rejected = prescreen_response(req.program, self.isolation_info(), req.origin or "claude")
+        if rejected is not None:
+            return self._sandbox_failed(record, rejected, started, timings, job)
 
         key = cache_key(req.program, fp, req.seed, req.stage, req.entry)
         hit = self.cache.get(key)
@@ -223,19 +282,12 @@ class DiscoveryManager:
         t0 = time.monotonic()
         sandbox = self._sandbox(
             request, wall_seconds=CANDIDATE_CPU_DEFAULT + SANDBOX_WALL_SLACK_SECONDS,
-            cancel_event=job.cancel_event,
+            cancel_event=job.cancel_event, origin=req.origin or "claude",
         )
         timings["sandbox"] = _ms(time.monotonic() - t0)
-        record["isolation"] = sandbox.get("isolation", "process")
-        record["isolation_detail"] = sandbox.get("isolation_detail", {"reads": "unrestricted"})
-        record["stdout"], record["stderr"] = sandbox.get("stdout", ""), sandbox.get("stderr", "")
         if sandbox.get("status") != "ok":
-            error = sandbox.get("error") or {"code": "worker_bad_output", "message": "Sandbox failed."}
-            if error.get("code") == "cancelled" or job.cancel_event.is_set():
-                return self._cancelled(record, "sandbox", started, timings)
-            record["failure"] = {"stage": "sandbox", "code": error["code"], "message": error["message"]}
-            record["timings_ms"] = {**timings, "total": _ms(time.monotonic() - started)}
-            return record
+            return self._sandbox_failed(record, sandbox, started, timings, job)
+        self._apply_sandbox_record(record, sandbox)
 
         cpu, wall = SCORER_BUDGETS[req.stage]
         t1 = time.monotonic()

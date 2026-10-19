@@ -11,6 +11,9 @@ Conventions
 * Qubit order: Qiskit index is the IR qubit; Cirq sorted qubits map to 0..n-1.
 * Global phases are dropped (they never change an expectation value).
 * Angles are linear in at most one parameter: ``coeff * value + offset``.
+* Composite instructions (library circuits, user sub-circuit blocks, ``CircuitOperation``...) are
+  expanded to a fixed point, at most ``MAX_DECOMPOSE_LEVELS`` deep (``_decompose``); every gate a
+  composite expands to shares the composite's ``source_index``, and the level is reported in ``notes``.
 """
 
 from __future__ import annotations
@@ -18,6 +21,15 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from kernel.trainability._decompose import (
+    MAX_DECOMPOSE_LEVELS,
+    DecompositionLog,
+    cirq_decompose_once,
+    decompose_enabled,
+    is_composite_cirq,
+    qiskit_leaves,
+    too_deep,
+)
 from kernel.trainability.gates import GATE_SPECS
 from kernel.trainability.ir import (
     MAX_IR_QUBITS,
@@ -40,6 +52,8 @@ _QISKIT_DIRECT = {
     "cry": "CRY", "crz": "CRZ", "cp": "CP", "cu1": "CP", "u1": "P",
 }
 _QISKIT_U = {"u", "u3", "u2"}
+# Names the converter handles itself; everything else that is a composite block is decomposed.
+_QISKIT_KNOWN = frozenset(_QISKIT_DIRECT) | _QISKIT_U | {"barrier", "measure", "reset"}
 _HALF_PI = math.pi / 2
 
 
@@ -131,38 +145,69 @@ def _qiskit_gates(b: _Builder, name: str, qubits: list[int], angles: list[Angle]
     b.emit(ir_name, qubits, tuple(angles), idx, line)
 
 
-def from_qiskit(circuit: Any, line_map: GateLineMap | None = None) -> ParamCircuit:
-    """Convert a Qiskit ``QuantumCircuit`` (free parameters allowed)."""
-    n = circuit.num_qubits
-    _check_width(n)
-    b = _Builder(n, "qiskit", [p.name for p in circuit.parameters])
-    measured: set[int] = set()
-    n_meas = n_barrier = 0
-    for idx, inst in enumerate(circuit.data):
-        op = inst.operation
-        qubits = [circuit.find_bit(q).index for q in inst.qubits]
+class _QiskitState:
+    """Per-conversion bookkeeping for :func:`from_qiskit`."""
+
+    def __init__(self, builder: _Builder) -> None:
+        self.b = builder
+        self.measured: set[int] = set()
+        self.n_meas = self.n_barrier = 0
+        self.log = DecompositionLog()
+
+    def lower_leaf(self, op: Any, qubits: list[int], idx: int, line, depth: int, top: str) -> None:
         name = op.name
+        inside = f" (inside composite '{top}')" if depth else ""
         if _is_conditioned(op):
-            raise IrError("unsupported_gate", f"classically conditioned '{name}' is not supported")
+            raise IrError("unsupported_gate", f"classically conditioned '{name}' is not supported{inside}")
         if name == "barrier":
-            n_barrier += 1
-            continue
+            self.n_barrier += 0 if depth else 1
+            return
         if name == "measure":
-            n_meas += 1
-            measured.update(qubits)
-            continue
+            if depth:
+                raise IrError("unsupported_gate", f"measurement inside composite '{top}' is not supported")
+            self.n_meas += 1
+            self.measured.update(qubits)
+            return
         if name == "reset":
-            raise IrError("unsupported_gate", "reset is not supported (non-unitary)")
-        if measured.intersection(qubits):
+            raise IrError("unsupported_gate", f"reset is not supported (non-unitary){inside}")
+        if name not in _QISKIT_KNOWN:
+            raise IrError("unsupported_gate", f"gate '{name}' is not supported by the Trainability Lab{inside}")
+        if self.measured.intersection(qubits):
             raise IrError(
                 "mid_circuit_measurement",
                 f"gate '{name}' acts on a qubit after it was measured; mid-circuit measurement is not supported",
             )
         angles = [_qiskit_angle(p) for p in op.params]
+        _qiskit_gates(self.b, name, qubits, angles, idx, line)
+
+
+def from_qiskit(circuit: Any, line_map: GateLineMap | None = None, *, decompose: bool | None = None) -> ParamCircuit:
+    """Convert a Qiskit ``QuantumCircuit`` (free parameters allowed).
+
+    ``decompose=None`` follows ``NUCLEI_IR_DECOMPOSE`` (on by default); ``False`` keeps the pre-PRD-15
+    behaviour where a composite block is an unsupported gate.
+    """
+    expand = decompose_enabled(decompose)
+    n = circuit.num_qubits
+    _check_width(n)
+    b = _Builder(n, "qiskit", [p.name for p in circuit.parameters])
+    state = _QiskitState(b)
+    for idx, inst in enumerate(circuit.data):
+        op = inst.operation
+        qubits = [circuit.find_bit(q).index for q in inst.qubits]
+        if _is_conditioned(op):
+            raise IrError("unsupported_gate", f"classically conditioned '{op.name}' is not supported")
         line = line_map.qiskit_line(circuit, idx) if line_map else None
-        _qiskit_gates(b, name, qubits, angles, idx, line)
-    b.note_dropped("measurement", n_meas)
-    b.note_dropped("barrier", n_barrier)
+        deepest = 0
+        leaves = qiskit_leaves(op, qubits, _QISKIT_KNOWN) if expand else iter([(op, qubits, 0)])
+        for leaf, leaf_qubits, depth in leaves:
+            state.lower_leaf(leaf, leaf_qubits, idx, line, depth, op.name)
+            deepest = max(deepest, depth)
+        if deepest:
+            state.log.record(op.name, deepest)
+    b.note_dropped("measurement", state.n_meas)
+    b.note_dropped("barrier", state.n_barrier)
+    b.notes.extend(state.log.notes())
     return b.build()
 
 
@@ -260,8 +305,63 @@ def _cirq_gates(b: _Builder, cirq: Any, gate: Any, qubits: list[int], idx: int, 
     raise unsupported
 
 
-def from_cirq(circuit: Any, line_map: GateLineMap | None = None) -> ParamCircuit:
-    """Convert a Cirq ``Circuit`` (symbolic exponents allowed)."""
+class _CirqState:
+    """Per-conversion bookkeeping for :func:`from_cirq`."""
+
+    def __init__(self, cirq: Any, builder: _Builder, index: dict, expand: bool = True) -> None:
+        self.cirq, self.b, self.index, self.expand = cirq, builder, index, expand
+        self.measured: set[int] = set()
+        self.n_meas = self.n_phase = 0
+        self.log = DecompositionLog()
+
+    def lower(self, op: Any, idx: int, line, depth: int = 0, top: str = "") -> int:
+        """Lower ``op`` (decomposing composites); returns the deepest level used."""
+        cirq, gate = self.cirq, op.gate
+        composite = self.expand and is_composite_cirq(cirq, op)
+        if gate is None and not composite:
+            raise IrError("unsupported_gate", f"operation '{op}' has no gate and is not supported")
+        qubits = [self.index[q] for q in op.qubits]
+        if isinstance(gate, cirq.MeasurementGate):
+            if depth:
+                raise IrError("unsupported_gate", f"measurement inside composite '{top}' is not supported")
+            self.n_meas += 1
+            self.measured.update(qubits)
+            return depth
+        if self.measured.intersection(qubits):
+            raise IrError(
+                "mid_circuit_measurement",
+                f"gate '{gate}' acts on a qubit after it was measured; mid-circuit measurement is not supported",
+            )
+        if gate is not None:
+            mark = len(self.b.gates)
+            try:
+                if not _cirq_gates(self.b, cirq, gate, qubits, idx, line):
+                    self.n_phase += 1
+                return depth
+            except IrError as exc:
+                if exc.code != "unsupported_gate" or not composite:
+                    raise
+                del self.b.gates[mark:]  # nothing is emitted before an unsupported verdict; belt and braces
+        return self._expand(op, idx, line, depth, top or _cirq_name(op))
+
+    def _expand(self, op: Any, idx: int, line, depth: int, top: str) -> int:
+        if depth >= MAX_DECOMPOSE_LEVELS:
+            raise too_deep(top)
+        parts = cirq_decompose_once(self.cirq, op)
+        if parts is None:
+            raise IrError("unsupported_gate", f"gate '{op.gate or op}' is not supported by the Trainability Lab")
+        deepest = depth + 1
+        for part in parts:
+            deepest = max(deepest, self.lower(part, idx, line, depth + 1, top))
+        return deepest
+
+
+def _cirq_name(op: Any) -> str:
+    return type(op.gate).__name__ if op.gate is not None else type(op).__name__
+
+
+def from_cirq(circuit: Any, line_map: GateLineMap | None = None, *, decompose: bool | None = None) -> ParamCircuit:
+    """Convert a Cirq ``Circuit`` (symbolic exponents allowed); ``decompose`` as in :func:`from_qiskit`."""
     import cirq
 
     all_qubits = sorted(circuit.all_qubits())
@@ -269,37 +369,25 @@ def from_cirq(circuit: Any, line_map: GateLineMap | None = None) -> ParamCircuit
     _check_width(n)
     index = {q: i for i, q in enumerate(all_qubits)}
     b = _Builder(n, "cirq", sorted(cirq.parameter_names(circuit)))
-    measured: set[int] = set()
-    n_meas = n_phase = 0
+    state = _CirqState(cirq, b, index, decompose_enabled(decompose))
     idx = -1
     for moment in circuit.moments:
         for op in moment.operations:
             idx += 1
-            gate = op.gate
-            if gate is None:
-                raise IrError("unsupported_gate", f"operation '{op}' has no gate and is not supported")
-            qubits = [index[q] for q in op.qubits]
-            if isinstance(gate, cirq.MeasurementGate):
-                n_meas += 1
-                measured.update(qubits)
-                continue
-            if measured.intersection(qubits):
-                raise IrError(
-                    "mid_circuit_measurement",
-                    f"gate '{gate}' acts on a qubit after it was measured; mid-circuit measurement is not supported",
-                )
             line = line_map.cirq_line(op) if line_map else None
-            if not _cirq_gates(b, cirq, gate, qubits, idx, line):
-                n_phase += 1
-    b.note_dropped("measurement", n_meas)
-    b.note_dropped("global phase gate", n_phase)
+            deepest = state.lower(op, idx, line)
+            if deepest:
+                state.log.record(_cirq_name(op), deepest)
+    b.note_dropped("measurement", state.n_meas)
+    b.note_dropped("global phase gate", state.n_phase)
+    b.notes.extend(state.log.notes())
     return b.build()
 
 
 # ---------------------------------------------------------------- dispatch
 
 
-def from_object(obj: Any, line_map: GateLineMap | None = None) -> ParamCircuit:
+def from_object(obj: Any, line_map: GateLineMap | None = None, *, decompose: bool | None = None) -> ParamCircuit:
     """Dispatch on the circuit type; raises ``IrError("unsupported_object")``."""
     if isinstance(obj, ParamCircuit):
         return obj
@@ -309,16 +397,16 @@ def from_object(obj: Any, line_map: GateLineMap | None = None) -> ParamCircuit:
         from qiskit import QuantumCircuit
 
         if isinstance(obj, QuantumCircuit):
-            return from_qiskit(obj, line_map)
+            return from_qiskit(obj, line_map, decompose=decompose)
     except ImportError:
         pass
     try:
         import cirq
 
         if isinstance(obj, cirq.Circuit):
-            return from_cirq(obj, line_map)
+            return from_cirq(obj, line_map, decompose=decompose)
         if isinstance(obj, cirq.FrozenCircuit):
-            return from_cirq(obj.unfreeze(), line_map)
+            return from_cirq(obj.unfreeze(), line_map, decompose=decompose)
     except ImportError:
         pass
     raise IrError("unsupported_object", f"cannot convert object of type {type(obj).__name__}")
