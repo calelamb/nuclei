@@ -193,3 +193,20 @@ def test_quantum_circuit_branch_rejects_wrong_type():
     pytest.importorskip("qiskit")
     response = run("def build(n):\n    return 3\n", calls=[{"args": [2], "kwargs": {}}], task="quantum_circuit")
     assert code(response) == "bad_return_type"
+
+
+@pytest.mark.parametrize("returncode", [-24, 128 + 24, 128 + 9])
+def test_signal_deaths_are_worker_killed_under_every_wrapper(returncode):
+    """A bare worker reports a signal death as a negative code; ``bwrap`` (Linux CI) as 128 + signum."""
+    from kernel.discovery.procrun import ProcResult
+    from kernel.discovery.sandbox import _interpret
+
+    response = _interpret(ProcResult(returncode=returncode), "bwrap")
+    assert response["error"]["code"] == "worker_killed"
+
+
+def test_a_clean_exit_with_no_output_is_still_worker_no_output():
+    from kernel.discovery.procrun import ProcResult
+    from kernel.discovery.sandbox import _interpret
+
+    assert _interpret(ProcResult(returncode=0), "process")["error"]["code"] == "worker_no_output"
