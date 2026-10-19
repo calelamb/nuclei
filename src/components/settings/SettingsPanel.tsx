@@ -477,7 +477,7 @@ function FrameworksSection() {
     <Section title="Environment" defaultOpen={false}>
       <EnvironmentPanel />
       {!isWebBuild() && (
-        <Button variant="ghost" size="sm" className="nuclei-framework-btn" style={{ marginTop: 12 }} onClick={() => openModal(false)}>
+        <Button variant="ghost" size="sm" className="nuclei-framework-btn settings-link" onClick={() => openModal(false)}>
           Open the setup wizard…
         </Button>
       )}

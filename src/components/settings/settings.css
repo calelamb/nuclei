@@ -1,3 +1,24 @@
 /* Section headers sit flush against the clipped settings scroller: draw their focus ring inside the box
    so all four edges stay visible (an outside ring is cut to a single underline). */
 .settings-section__header:focus-visible { outline-offset: -2px; border-radius: var(--radius-soft); }
+
+/* ── Setting rows: label and control on one line; a long hint runs the full width underneath ── */
+.setting-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: var(--space-2); row-gap: 2px;
+  align-items: center; padding: 6px 0;
+}
+.setting-row__label { grid-area: label; font: var(--font-size-chrome-label) var(--font-sans); color: var(--color-text-secondary); }
+.setting-row__hint { grid-area: hint; font: var(--font-size-caption) var(--font-sans); line-height: 1.4; color: var(--color-text-tertiary); }
+.setting-row__control { grid-area: control; display: flex; justify-content: flex-end; min-width: 0; }
+.setting-row[data-layout='plain'] { grid-template-areas: 'label control'; }
+.setting-row[data-layout='short'] { grid-template-areas: 'label control' 'hint control'; }
+.setting-row[data-layout='long'] { grid-template-areas: 'label control' 'hint hint'; }
+.setting-row[data-layout='stacked'] { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'label' 'hint' 'control'; row-gap: 6px; align-items: start; }
+.setting-row[data-layout='stacked'] .setting-row__control { justify-content: flex-start; }
+.setting-row[data-layout='stacked'] .setting-row__hint { margin-top: -4px; }
+/* A slider row is label + slider + value: the label never wraps to make room. */
+.setting-row:has(input[type='range']) .setting-row__label { white-space: nowrap; }
+
+/* Inline text-link button: its text sits on the label column, not inset by the button padding. */
+.settings-link.nuclei-btn { padding-inline: 0; margin-top: var(--space-3); }
+.settings-link.nuclei-btn:hover:not(:disabled) { background: transparent; text-decoration: underline; }

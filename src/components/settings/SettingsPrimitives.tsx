@@ -10,25 +10,18 @@ import { TYPOGRAPHY } from '../../styles/tokens';
 export const RowLabelContext = createContext<string | undefined>(undefined);
 
 
+/** A hint longer than this takes the whole row width under the label instead of a 120-170px column beside the control. */
+export const LONG_HINT_CHARS = 40;
+
 export function SettingRow({ label, hint, stacked = false, children }: { label: string; hint?: string; /** Put the control under the label (for wide controls in the 240px sidebar). */ stacked?: boolean; children: ReactNode }) {
-  const colors = useThemeStore((s) => s.colors);
+  const layout = stacked ? 'stacked' : hint && hint.length > LONG_HINT_CHARS ? 'long' : hint ? 'short' : 'plain';
   return (
-    <div style={{
-      display: 'flex', alignItems: stacked ? 'flex-start' : 'center', justifyContent: 'space-between',
-      flexDirection: stacked ? 'column' : 'row',
-      padding: '6px 0', gap: stacked ? 6 : 8,
-    }}>
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <span style={{ fontSize: 12, color: colors.textMuted, fontFamily: TYPOGRAPHY.fontSans }}>
-          {label}
-        </span>
-        {hint && (
-          <span style={{ fontSize: 11, color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans, lineHeight: 1.4 }}>
-            {hint}
-          </span>
-        )}
+    <div className="setting-row" data-layout={layout}>
+      <span className="setting-row__label">{label}</span>
+      {hint && <span className="setting-row__hint">{hint}</span>}
+      <div className="setting-row__control">
+        <RowLabelContext.Provider value={label}>{children}</RowLabelContext.Provider>
       </div>
-      <RowLabelContext.Provider value={label}>{children}</RowLabelContext.Provider>
     </div>
   );
 }
