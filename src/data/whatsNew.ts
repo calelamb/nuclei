@@ -73,6 +73,16 @@ export const WHATS_NEW: WhatsNewEntry = {
   },
   highlights: [
     {
+      icon: 'analysis',
+      title: 'Nuclei opens in the Research workspace',
+      text: 'The learning workspace (lessons, challenges and the tutor) is now hidden by default. Turn it back on in Settings → General → "Learning workspace", or open a link ending in ?learn. Your lesson progress is kept.',
+    },
+    {
+      icon: 'chart',
+      title: 'A new logo',
+      text: 'Nuclei has a new mark, a quantum ket, in the app, the browser tab and the app icon.',
+    },
+    {
       icon: 'chart',
       title: 'Drop a sinter CSV to plot it',
       text: 'Drop a sinter stats CSV on the QEC Workbench for logical error rate vs p per distance. Read locally; nothing is uploaded.',
