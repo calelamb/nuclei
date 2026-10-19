@@ -20,11 +20,24 @@ test('@web twenty Runs leave the console free of WebGL context warnings (IR10-01
   const warnings: string[] = [];
   page.on('console', (m) => { if (/too many active webgl contexts/i.test(m.text())) warnings.push(m.text()); });
   await openResearch(page);
+  await page.evaluate(() => {
+    const w = window as unknown as { __runsStarted: number };
+    w.__runsStarted = 0;
+    let running = document.body.innerText.includes('Running…');
+    new MutationObserver(() => {
+      const now = document.body.innerText.includes('Running…');
+      if (now && !running) w.__runsStarted += 1;
+      running = now;
+    }).observe(document.body, { subtree: true, childList: true, characterData: true });
+  });
   await page.locator('.monaco-editor').first().click();
   for (let run = 1; run <= 20; run += 1) {
     await page.keyboard.press('ControlOrMeta+Enter');
-    // Each Run appends a 'Run at' separator: wait for run N so Runs never coalesce.
-    await expect(page.getByText(/Run at/)).toHaveCount(run, { timeout: 30_000 });
+    // 'Running…' appears once per Run (the terminal is a canvas, so count it in the DOM): wait for run N to start
+    // and finish, so Runs never coalesce into fewer mounts than the loop claims.
+    await page.waitForFunction((n) => (window as unknown as { __runsStarted: number }).__runsStarted >= n, run, { timeout: 30_000 });
+    await expect(page.getByText(/Done · /).first()).toBeVisible({ timeout: 30_000 });
+    await page.waitForFunction(() => !document.body.innerText.includes('Running…'), undefined, { timeout: 30_000 });
   }
   expect(warnings).toEqual([]);
 });
