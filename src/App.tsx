@@ -22,7 +22,7 @@ import { useActiveTabSync } from './hooks/useActiveTabSync';
 import { useKeychainKeyMigration } from './hooks/useKeychainKeyMigration';
 import { useProjectStore } from './stores/projectStore';
 import { useThemeStore, isThemePreference } from './stores/themeStore';
-import { getResolvedVisibility, togglePanelResolved } from './layout/resolvedVisibility';
+import { cycleTerminalShortcut, togglePanelResolved } from './layout/resolvedVisibility';
 import { useEditorStore } from './stores/editorStore';
 import { useHelpOverlayStore } from './stores/helpOverlayStore';
 import { useWhatsNewStore } from './stores/whatsNewStore';
@@ -432,19 +432,7 @@ function AppInner() {
           }
           break;
         }
-        case 'toggle-bottom-panel': {
-          // Opening the bottom panel always focuses the terminal tab so
-          // print-debug output is immediately visible. A terminal the layout
-          // preset keeps hidden (Clean, no output yet) is forced visible first.
-          const store = useBottomPanelStore.getState();
-          if (!getResolvedVisibility().terminal) {
-            useLayoutStore.getState().setPanelOverride('terminal', true);
-            store.focusTerminal();
-          } else if (store.collapsed) store.focusTerminal();
-          else if (store.activeTab !== 'terminal') store.setActiveTab('terminal');
-          else store.setCollapsed(true);
-          break;
-        }
+        case 'toggle-bottom-panel': cycleTerminalShortcut(); break;
         default: break;
       }
     };

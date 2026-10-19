@@ -41,3 +41,25 @@ export function togglePanelResolved(id: PanelId): void {
     useBottomPanelStore.getState().focusTerminal();
   }
 }
+
+/**
+ * The Cmd+` cycle: reveal the terminal (even one the layout preset hides), bring it back from another
+ * tab, and on the last press put it away. A terminal visible only because this shortcut forced it open
+ * goes back to the preset (hidden) rather than staying as a collapsed strip with no way back.
+ */
+export function cycleTerminalShortcut(): void {
+  const bottom = useBottomPanelStore.getState();
+  const layout = useLayoutStore.getState();
+  if (!getResolvedVisibility().terminal) {
+    layout.setPanelOverride('terminal', true);
+    bottom.focusTerminal();
+    return;
+  }
+  if (bottom.collapsed) { bottom.focusTerminal(); return; }
+  if (bottom.activeTab !== 'terminal') { bottom.setActiveTab('terminal'); return; }
+  if (layout.overrides.terminal === true) {
+    layout.clearPanelOverride('terminal');
+    if (!getResolvedVisibility().terminal) return; // back to what the preset shows
+  }
+  bottom.setCollapsed(true);
+}

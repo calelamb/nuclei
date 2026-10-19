@@ -4,7 +4,7 @@ import { useSimulationStore } from '../stores/simulationStore';
 import { useCircuitStore } from '../stores/circuitStore';
 import { useWorkspaceStore } from '../stores/workspaceStore';
 import { useBottomPanelStore } from '../stores/bottomPanelStore';
-import { getResolvedVisibility, togglePanelResolved } from './resolvedVisibility';
+import { getResolvedVisibility, togglePanelResolved, cycleTerminalShortcut } from './resolvedVisibility';
 
 describe('resolved panel visibility', () => {
   beforeEach(() => {
@@ -49,3 +49,43 @@ describe('resolved panel visibility', () => {
     expect(useLayoutStore.getState().overrides.terminal).toBeUndefined();
   });
 });
+
+describe('the terminal shortcut cycle (Cmd+`)', () => {
+  beforeEach(() => {
+    useLayoutStore.setState({ preset: 'clean', overrides: {}, histogramChipDismissed: false });
+    useSimulationStore.setState({ terminalOutput: [], result: null, lastRunFailed: false });
+    useCircuitStore.setState({ snapshot: null });
+    useWorkspaceStore.setState({ mode: 'research' });
+    useBottomPanelStore.setState({ collapsed: false, activeTab: 'terminal' });
+  });
+
+  it('in Clean, the second press hides the terminal again instead of leaving a collapsed strip', () => {
+    cycleTerminalShortcut();
+    expect(getResolvedVisibility().terminal).toBe(true);
+    cycleTerminalShortcut();
+    expect(getResolvedVisibility().terminal).toBe(false);
+    expect(useLayoutStore.getState().overrides.terminal).toBeUndefined();
+  });
+
+  it('when the preset already shows the terminal, the last press collapses it', () => {
+    useLayoutStore.setState({ preset: 'full' });
+    expect(getResolvedVisibility().terminal).toBe(true);
+    cycleTerminalShortcut();
+    expect(useBottomPanelStore.getState().collapsed).toBe(true);
+  });
+
+  it('a collapsed terminal opens first', () => {
+    useLayoutStore.setState({ preset: 'full' });
+    useBottomPanelStore.setState({ collapsed: true });
+    cycleTerminalShortcut();
+    expect(useBottomPanelStore.getState().collapsed).toBe(false);
+  });
+
+  it('another tab comes back to Terminal before anything closes', () => {
+    useLayoutStore.setState({ preset: 'full' });
+    useBottomPanelStore.setState({ activeTab: 'histogram' });
+    cycleTerminalShortcut();
+    expect(useBottomPanelStore.getState()).toMatchObject({ activeTab: 'terminal', collapsed: false });
+  });
+});
+
