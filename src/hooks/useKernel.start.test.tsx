@@ -89,7 +89,7 @@ describe('useKernel desktop start', () => {
     await waitFor(() => expect(useEditorStore.getState().kernelStatus).toBe('failed'));
 
     expect(requestTranspile('qc', { optimizationLevel: 1 })).toBe(true);
-    expect(useTranspileStore.getState().error).toBe("Kernel didn't start. Check the status bar, then retry.");
+    expect(useTranspileStore.getState().error).toBe("Kernel didn't start. Use Retry to start it again.");
   });
 
   it('Retry stops the stale kernel, starts again and connects', async () => {

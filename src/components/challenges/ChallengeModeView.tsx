@@ -24,7 +24,8 @@ export function ChallengeModeView() {
 
         <span className="cmode__sep" aria-hidden="true" />
         <Trophy className="cmode__trophy" size={16} aria-hidden="true" />
-        <span className="cmode__title">Quantum challenges</span>
+        {/* The takeover title is the landing heading for keyboard routes: focus lands here, ring-free. */}
+        <h1 className="cmode__title" data-landing tabIndex={-1}>Quantum challenges</h1>
 
         {activeProblem && (
           <>

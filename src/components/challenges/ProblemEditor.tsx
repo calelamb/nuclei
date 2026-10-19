@@ -88,11 +88,6 @@ export function ProblemEditor({ challenge }: ProblemEditorProps) {
           fontFamily: TYPOGRAPHY.fontSans,
         }}>
           <Badge tone="accent">{isValueContract ? 'Python value' : frameworkLabel}</Badge>
-          <span>
-            {isValueContract
-              ? 'Return a JSON-serializable value. The harness injects test inputs.'
-              : 'Implement the solver only. The harness injects test inputs.'}
-          </span>
         </div>
       </div>
 
