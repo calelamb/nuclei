@@ -5,6 +5,6 @@
   background: var(--color-surface-raised);
   /* Dimmed with tokens, not opacity: opacity would also fade the focus ring below 3:1. */
   color: var(--color-text-tertiary);
-  border-color: var(--color-border);
+  border-color: var(--color-border-strong);
   cursor: not-allowed;
 }
