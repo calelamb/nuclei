@@ -25,6 +25,7 @@ import { shortcutLabel, isMacPlatform, bindingLabel, railShortcutLabel } from '.
 import { TYPOGRAPHY } from '../../styles/tokens';
 import { closeActiveTooltip } from '../ui/tooltipSingleton';
 import { runShortcutHiddenEditor } from '../../config/runShortcut';
+import { isLearnEnabled } from '../../stores/learnGateStore';
 export interface Command {
   id: string;
   label: string;
@@ -299,7 +300,7 @@ export function buildCommands(actions: CommandActions, context: CommandContext):
   const sc = (id: string) => shortcutLabel(id, mac, undefined, context.mode);
 
   // Workspace + orientation.
-  commands.push({ id: 'workspace-mode', label: bindingLabel('switch-workspace'), category: 'Navigate', shortcut: sc('switch-workspace'), keywords: ['learn', 'research', 'workspace'], action: actions.switchWorkspaceMode });
+  if (isLearnEnabled()) commands.push({ id: 'workspace-mode', label: bindingLabel('switch-workspace'), category: 'Navigate', shortcut: sc('switch-workspace'), keywords: ['learn', 'research', 'workspace'], action: actions.switchWorkspaceMode });
   if (context.mode === 'research') {
     commands.push({ id: 'research-tour', label: 'Replay Research tour', category: 'Help', action: actions.startResearchTour });
   }

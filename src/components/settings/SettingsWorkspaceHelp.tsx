@@ -1,5 +1,6 @@
 import { FlaskConical, GraduationCap } from 'lucide-react';
 import { useWorkspaceStore, type WorkspaceMode } from '../../stores/workspaceStore';
+import { useLearnGateStore } from '../../stores/learnGateStore';
 import { useModeSwitchStore } from '../../stores/modeSwitchStore';
 import { useResearchTourStore } from '../../stores/researchTourStore';
 import { useHelpOverlayStore } from '../../stores/helpOverlayStore';
@@ -14,10 +15,11 @@ export function WorkspaceSection() {
   // Through the in-flight-work guard, like the status-bar chip and the palette.
   const requestSwitch = useModeSwitchStore((s) => s.requestSwitch);
   const startTour = useResearchTourStore((s) => s.start);
+  const learnEnabled = useLearnGateStore((s) => s.learnEnabled);
 
   return (
     <Section id="workspace" title="Workspace" defaultOpen>
-      <SettingRow label="Workspace mode" stacked hint={mode === 'learn' ? 'Lessons, challenges and Dirac as your tutor.' : 'Projects, experiments and Dirac as a terse collaborator.'}>
+      {learnEnabled && <SettingRow label="Workspace mode" stacked hint={mode === 'learn' ? 'Lessons, challenges and Dirac as your tutor.' : 'Projects, experiments and Dirac as a terse collaborator.'}>
         <SegmentedControl<WorkspaceMode>
           aria-label="Workspace mode"
           value={mode}
@@ -27,7 +29,7 @@ export function WorkspaceSection() {
             { value: 'research', label: 'Research', icon: <FlaskConical size={12} /> },
           ]}
         />
-      </SettingRow>
+      </SettingRow>}
       {mode === 'research' && (
         <SettingRow label="Research tour" hint="A three-step walkthrough of the Research workspace.">
           <Button size="sm" onClick={startTour} data-tour-return="settings-replay">Replay</Button>

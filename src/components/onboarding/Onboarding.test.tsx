@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeAll, vi } from 'vitest';
+import '../../test/learnGateOn';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { Onboarding } from './Onboarding';
 import { researchCardDescription } from './researchCardCopy';
+import { useLearnGateStore } from '../../stores/learnGateStore';
 
 beforeAll(() => {
   window.matchMedia = ((query: string) => ({
@@ -136,5 +138,26 @@ describe('Research card copy', () => {
   });
   it('keeps the multi-file experiments promise on desktop', () => {
     expect(researchCardDescription(false)).toMatch(/parameter sweeps/);
+  });
+});
+
+describe('Onboarding with the Learn workspace gated off', () => {
+  afterEach(() => useLearnGateStore.getState().setLearnEnabled(true));
+
+  it('offers no Learn path: a first launch goes straight into Research', () => {
+    useLearnGateStore.getState().setLearnEnabled(false);
+    const onComplete = vi.fn();
+    render(<Onboarding onComplete={onComplete} />);
+    expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(onComplete).toHaveBeenCalledWith('research');
+    expect(screen.queryByRole('button', { name: 'Learn quantum computing' })).toBeNull();
+  });
+
+  it('"Start fresh" from the returning screen also skips the chooser', () => {
+    useLearnGateStore.getState().setLearnEnabled(false);
+    const onComplete = vi.fn();
+    render(<Onboarding onComplete={onComplete} isReturningUser />);
+    fireEvent.click(screen.getByRole('button', { name: 'Start fresh' }));
+    expect(onComplete).toHaveBeenCalledWith('research');
   });
 });

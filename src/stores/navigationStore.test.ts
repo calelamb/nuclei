@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import '../test/learnGateOn';
 import { useNavigationStore } from './navigationStore';
 import { useLearnStore } from './learnStore';
 import { useChallengeModeStore } from './challengeModeStore';

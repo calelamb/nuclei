@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeAll, beforeEach, vi } from 'vitest';
+import '../../test/learnGateOn';
 import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-library/react';
 import { API_KEY_PRIVACY_NOTE } from '../../config/apiKeyCopy';
 import { SettingsPanel } from './SettingsPanel';
 import { useThemeStore } from '../../stores/themeStore';
 import { useNavigationStore } from '../../stores/navigationStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
+import { useLearnGateStore, LEARN_ENABLED_KEY } from '../../stores/learnGateStore';
 import { useHelpOverlayStore } from '../../stores/helpOverlayStore';
 import { useWhatsNewStore } from '../../stores/whatsNewStore';
 import { useUIModeStore } from '../../stores/uiModeStore';
@@ -241,5 +243,32 @@ describe('SettingsPanel destructive and platform chrome (r7-chrome)', () => {
     render(<SettingsPanel />);
     expect(screen.queryByText('Environment')).toBeNull();
     expect(screen.getByText(/runs Python in your browser via Pyodide/)).toBeTruthy();
+  });
+});
+
+describe('SettingsPanel Learning workspace switch', () => {
+  beforeEach(() => useLearnGateStore.getState().setLearnEnabled(false));
+  afterEach(() => useLearnGateStore.getState().setLearnEnabled(true));
+
+  it('is a named switch, off by default, that turns the gate on and persists it', () => {
+    render(<SettingsPanel />);
+    const sw = screen.getByRole('switch', { name: 'Learning workspace', hidden: true });
+    expect(sw.getAttribute('aria-checked')).toBe('false');
+    expect(screen.queryByRole('radiogroup', { name: 'Workspace mode' })).toBeNull();
+    fireEvent.click(sw);
+    expect(useLearnGateStore.getState().learnEnabled).toBe(true);
+    expect(sw.getAttribute('aria-checked')).toBe('true');
+    expect(window.localStorage.getItem(LEARN_ENABLED_KEY)).toBe('1');
+    // With Learn on, the mode picker comes back.
+    expect(screen.getByRole('radiogroup', { name: 'Workspace mode' })).toBeTruthy();
+  });
+
+  it('turning it off from Learn lands in Research', () => {
+    useLearnGateStore.getState().setLearnEnabled(true);
+    useWorkspaceStore.getState().setMode('learn');
+    render(<SettingsPanel />);
+    fireEvent.click(screen.getByRole('switch', { name: 'Learning workspace', hidden: true }));
+    expect(useLearnGateStore.getState().learnEnabled).toBe(false);
+    expect(useWorkspaceStore.getState().mode).toBe('research');
   });
 });

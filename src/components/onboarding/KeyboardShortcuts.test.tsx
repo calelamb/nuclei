@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeAll } from 'vitest';
+import '../../test/learnGateOn';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { KeyboardShortcuts, shortcutGroups } from './KeyboardShortcuts';
 import { KEYBINDINGS } from '../../config/keybindings';

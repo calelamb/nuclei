@@ -1,5 +1,6 @@
 import { useUIModeStore, type UIMode } from '../../stores/uiModeStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
+import { isLearnEnabled } from '../../stores/learnGateStore';
 import { useLearnStore } from '../../stores/learnStore';
 import { useNavigationStore } from '../../stores/navigationStore';
 import { isWebBuild } from '../../platform/buildTarget';
@@ -44,6 +45,8 @@ function openTrackChooser(): void {
  */
 export function applyOnboardingPath(path: OnboardingChoice | undefined): void {
   if (!path) return;
+  // Learn is hidden by default: a Learn path (stale caller, test hook) falls back to Research.
+  if (path !== 'research' && !isLearnEnabled()) path = 'research';
   const uiMode = UI_MODE_FOR_PATH[path];
   if (uiMode) {
     useWorkspaceStore.getState().setMode('learn');

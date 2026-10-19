@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import '../test/learnGateOn';
 
 // The vitest "node" environment (see vitest.config.ts) has no browser
 // localStorage global. workspaceStore reads/writes it directly (guarded by

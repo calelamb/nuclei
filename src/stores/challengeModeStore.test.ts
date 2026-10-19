@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import '../test/learnGateOn';
 import { filterChallenges, getVisibleChallenge, useChallengeModeStore } from './challengeModeStore';
 import type { CircuitMetrics, EfficiencyReport, ProblemProgress, QuantumChallenge, Submission } from '../types/challenge';
 

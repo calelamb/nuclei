@@ -2,6 +2,7 @@ import { X } from 'lucide-react';
 import { useMemo } from 'react';
 import { IconButton, Dialog } from '../ui';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
+import { isLearnEnabled, useLearnGateStore } from '../../stores/learnGateStore';
 import {
   KEYBINDINGS, formatKeys, isBindingAvailable, isBindingInMode, isMacPlatform, shortcutLabel,
   type KeybindingGroup, type KeybindingWorkspace,
@@ -35,7 +36,7 @@ export function shortcutGroups(
 ): Array<{ title: string; shortcuts: ShortcutRow[] }> {
   const groups = GROUP_ORDER.map((title) => {
     const rows: ShortcutRow[] = KEYBINDINGS
-      .filter((b) => b.group === title && isBindingAvailable(b, web) && isBindingInMode(b, mode))
+      .filter((b) => b.group === title && isBindingAvailable(b, web) && isBindingInMode(b, mode) && (b.id !== 'switch-workspace' || isLearnEnabled()))
       .map((b) => ({ keys: formatKeys(b, mac), description: b.label }));
     if (title === 'Editor') rows.push(EDITOR_EXTRAS.ghost);
     return { title, shortcuts: rows };
@@ -58,7 +59,9 @@ function foldSmallGroups(groups: ShortcutGroup[]): ShortcutGroup[] {
 
 export function KeyboardShortcuts({ onClose }: KeyboardShortcutsProps) {
   const mode = useWorkspaceStore((s) => s.mode);
-  const groups = useMemo(() => shortcutGroups(isMacPlatform(), isWebBuild(), mode), [mode]);
+  const learnEnabled = useLearnGateStore((s) => s.learnEnabled);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- learnEnabled is read inside shortcutGroups
+  const groups = useMemo(() => shortcutGroups(isMacPlatform(), isWebBuild(), mode), [mode, learnEnabled]);
   const web = isWebBuild();
 
   return (

@@ -1,4 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import '../../test/learnGateOn';
 import { buildCommands, type CommandActions, type CommandContext } from './CommandPalette';
 import {
   PANEL_REGISTRY,
@@ -7,6 +8,7 @@ import {
 import type { WorkspaceMode } from '../../stores/workspaceStore';
 import { KEYBINDINGS } from '../../config/keybindings';
 import { shortcutGroups } from '../onboarding/KeyboardShortcuts';
+import { useLearnGateStore } from '../../stores/learnGateStore';
 
 function noop() {}
 
@@ -293,5 +295,20 @@ describe('buildCommands while a lesson or challenge owns the main area', () => {
     const present = ids(kind, 'research');
     expect(present).not.toContain('run');
     expect(present).toContain('toggle-panel-terminal');
+  });
+});
+
+describe('with the Learn workspace gated off', () => {
+  beforeEach(() => useLearnGateStore.getState().setLearnEnabled(false));
+  afterEach(() => useLearnGateStore.getState().setLearnEnabled(true));
+
+  it('the palette has no "Switch workspace mode" command', () => {
+    const commands = buildCommands(makeActions(), makeContext());
+    expect(commands.some((c) => c.id === 'workspace-mode' || /switch workspace mode/i.test(c.label))).toBe(false);
+  });
+
+  it('the shortcuts sheet does not list the mode-switch chord', () => {
+    const rows = shortcutGroups(true, false, 'research').flatMap((g) => g.shortcuts.map((s) => s.description));
+    expect(rows).not.toContain('Switch workspace mode');
   });
 });

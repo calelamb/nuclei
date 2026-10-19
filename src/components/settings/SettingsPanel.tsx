@@ -4,6 +4,8 @@ import { useThemeStore, type ThemePreference } from '../../stores/themeStore';
 import { useNavigationStore } from '../../stores/navigationStore';
 import { useUIModeStore, type UIMode } from '../../stores/uiModeStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
+import { useLearnGateStore } from '../../stores/learnGateStore';
+import { useModeSwitchStore } from '../../stores/modeSwitchStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useDiracStore } from '../../stores/diracStore';
@@ -189,6 +191,9 @@ export function SettingsPanel() {
   const setThemePreference = useThemeStore((s) => s.setPreference);
   const uiMode = useUIModeStore((s) => s.mode);
   const workspaceMode = useWorkspaceStore((s) => s.mode);
+  const learnEnabled = useLearnGateStore((s) => s.learnEnabled);
+  // Through modeSwitchStore so turning it off from Learn lands in Research with focus kept.
+  const setLearnEnabled = useModeSwitchStore((s) => s.setLearnEnabled);
   const setUIMode = useUIModeStore((s) => s.setMode);
 
   const editor = useSettingsStore((s) => s.editor);
@@ -432,6 +437,10 @@ export function SettingsPanel() {
           <SettingRow label="Animations">
             <Toggle value={general.animationsEnabled}
               onChange={(v) => updateGeneral({ animationsEnabled: v })} />
+          </SettingRow>
+          <SettingRow label="Learning workspace"
+            hint="Lessons, challenges and the tutor, for teaching a course. Off by default.">
+            <Toggle value={learnEnabled} onChange={setLearnEnabled} />
           </SettingRow>
           <SettingRow label="Developer views"
             hint="Adds the Search and Circuit-inspector views to the activity bar in both modes. Everything else is chosen by workspace mode.">

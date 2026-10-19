@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import '../../test/learnGateOn';
 import { render, cleanup, fireEvent } from '@testing-library/react';
 import { StatusBar } from './StatusBar';
 import { PlatformProvider } from '../../platform/PlatformProvider';
@@ -12,6 +13,7 @@ import { useExperimentRunStore } from '../../stores/experimentRunStore';
 import { useLearnStore } from '../../stores/learnStore';
 import { useUIModeStore } from '../../stores/uiModeStore';
 import { useNavigationStore } from '../../stores/navigationStore';
+import { useLearnGateStore } from '../../stores/learnGateStore';
 
 const bridge: PlatformBridge = {
   async startKernel() { return 'ok'; },
@@ -298,5 +300,20 @@ describe('Commands button glyph (IR10-07)', () => {
     renderStatusBar();
     expect(iconClass()).not.toContain('lucide-command');
     expect(iconClass()).toContain('lucide-square-terminal');
+  });
+});
+
+describe('<StatusBar> with the Learn workspace gated off', () => {
+  beforeEach(() => {
+    useLearnGateStore.getState().setLearnEnabled(false);
+    useExperimentRunStore.setState({ active: null });
+  });
+  afterEach(() => useLearnGateStore.getState().setLearnEnabled(true));
+
+  it('has no workspace-mode pill and no Level menu', () => {
+    const { queryByRole, queryByText } = renderStatusBar();
+    expect(queryByRole('button', { name: 'Switch workspace mode' })).toBeNull();
+    expect(queryByText('LEARN')).toBeNull();
+    expect(queryByRole('button', { name: /^Level/ })).toBeNull();
   });
 });
