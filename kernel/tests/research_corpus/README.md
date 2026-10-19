@@ -7,10 +7,21 @@ resource gates (memory refusal, frame size, `plt.show()`, queued parses).
 
 ```bash
 scripts/make-test-venvs.sh all                       # full, qk2, minimal, app-env
-NUCLEI_CORPUS_ENV=full  <full>/bin/python -m pytest kernel/tests/test_research_corpus.py
-NUCLEI_CORPUS_ENV=min   <minimal>/bin/python -m pytest kernel/tests/test_research_corpus.py
-scripts/check-app-env.sh                             # env qk2, exactly the shell's pip lists
+V=scripts/make-test-venvs.sh
+# env full: Qiskit 1.x + qdk + stim
+NUCLEI_CORPUS_ENV=full "$($V path full)"    -m pytest kernel/tests/test_research_corpus.py
+# env min: Qiskit 1.x, requirements.txt only (no qdk, no stim)
+NUCLEI_CORPUS_ENV=min  "$($V path minimal)" -m pytest kernel/tests/test_research_corpus.py
+# env qk2: Qiskit >= 2 + qdk, NO stim == what the desktop app installs. Use the app-env
+# venv (NOT the CI `qk2` venv, which has stim), with NUCLEI_CORPUS_PYTHON pointing at it:
+NUCLEI_CORPUS_ENV=qk2 NUCLEI_CORPUS_PYTHON="$($V path app-env)" \
+  "$($V path app-env)" -m pytest kernel/tests/test_research_corpus.py
+scripts/check-app-env.sh                             # same qk2 run in a fresh venv built from the shell's pip lists
 ```
+
+`requirements.txt` allows Qiskit 1.x and 2.x, so `full` and `minimal` venvs (and the
+corpus-minimal / corpus-full CI jobs) pin `qiskit>=1.2,<2`; the harness refuses to start
+an env whose Qiskit major does not match.
 
 Without `NUCLEI_CORPUS_ENV` only the structural tests run (no kernel is started).
 

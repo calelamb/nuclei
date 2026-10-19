@@ -8,7 +8,11 @@ one flips the build until its entry is updated. See ``research_corpus/loader.py`
 Run (the corpus CI jobs and the wave gate do exactly this)::
 
     NUCLEI_CORPUS_ENV=full pytest kernel/tests/test_research_corpus.py
-    NUCLEI_CORPUS_ENV=qk2 NUCLEI_CORPUS_PYTHON=/path/to/app-env/bin/python ...
+    NUCLEI_CORPUS_ENV=min  <minimal-venv>/bin/python -m pytest ...   # Qiskit 1.x, requirements only
+    NUCLEI_CORPUS_ENV=qk2 NUCLEI_CORPUS_PYTHON=<app-env>/bin/python <app-env>/bin/python -m pytest ...
+
+See research_corpus/README.md and scripts/make-test-venvs.sh (min/full need Qiskit 1.x; qk2 must be
+the app-env venv, not the CI qk2 venv which has stim).
 
 Without ``NUCLEI_CORPUS_ENV`` only the structural tests below run (no kernel).
 """
