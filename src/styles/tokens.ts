@@ -47,6 +47,9 @@ export interface ColorTokens {
   warningText: string;
   dangerText: string;
   danger: string;
+  /** Solid destructive fill under on-danger text (hover of the danger button): AA at 12px. */
+  dangerStrong: string;
+  onDanger: string;
   info: string;
   /** Modal backdrop colour (dialogs, palette, shortcuts sheet). */
   scrim: string;
@@ -143,6 +146,8 @@ export const DARK_COLORS: ColorTokens = {
   warning: '#F59E0B',
   warningText: '#F59E0B',
   danger: '#EF4444',
+  dangerStrong: '#DC2626',
+  onDanger: '#FFFFFF',
   dangerText: '#F87171',
   info: '#3B82F6',
   scrim: 'rgba(0, 0, 0, 0.5)',
@@ -188,6 +193,8 @@ export const LIGHT_COLORS: ColorTokens = {
   warning: '#A8580A',
   warningText: '#8A4708',
   danger: '#DC2626',
+  dangerStrong: '#B91C1C',
+  onDanger: '#FFFFFF',
   dangerText: '#B91C1C',
   info: '#2563EB',
   scrim: 'rgba(15, 23, 42, 0.28)',
