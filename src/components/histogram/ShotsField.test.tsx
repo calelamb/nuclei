@@ -79,7 +79,7 @@ describe('<ShotsField>', () => {
     const input = screen.getByLabelText('Shots') as HTMLInputElement;
     focusLikeAPerson(input);
     typeText(input, '50');
-    fireEvent.blur(input);
+    act(() => { input.blur(); });
     expect(useSimulationStore.getState().shots).toBe(1024);
     expect(useSettingsStore.getState().kernel.defaultShots).toBe(1024);
     expect(screen.getByRole('status').textContent).toMatch(/Minimum is 100/);
@@ -113,7 +113,7 @@ describe('<ShotsField>', () => {
     const input = screen.getByLabelText('Shots') as HTMLInputElement;
     focusLikeAPerson(input);
     typeText(input, '5');
-    fireEvent.blur(input);
+    act(() => { input.blur(); });
     expect(screen.getByRole('status').textContent).toMatch(/Minimum/);
     focusLikeAPerson(input);
     expect(screen.queryByRole('status')).toBeNull();
