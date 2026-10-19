@@ -34,13 +34,14 @@ export interface SidebarFacts {
 
 /**
  * Whether the rail's active view gets a sidebar. On the web the QEC Workbench has no project
- * folder, so its sidebar would be a 240px column holding one sentence; the analysis view says it
- * instead and keeps the full width.
+ * folder and the Transpiler Explorer cannot run, so their sidebars would be 240px columns holding
+ * one sentence; the main view says it instead and keeps the full width.
  */
 export function isSidebarShown(f: SidebarFacts): boolean {
   if (f.fullViewOwnsArea || f.activeView === null) return false;
   if (f.activeView === 'files' && !f.explorerSidebar) return false;
-  if (f.activeView === 'qec' && f.isWeb) return false;
+  // The web build has no project folder (QEC) and no transpiler engine: their sidebars would hold one sentence.
+  if ((f.activeView === 'qec' || f.activeView === 'transpiler') && f.isWeb) return false;
   return true;
 }
 

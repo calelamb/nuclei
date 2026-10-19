@@ -36,7 +36,6 @@ import { useModeSwitchStore } from './stores/modeSwitchStore';
 import { useResearchTourStore } from './stores/researchTourStore';
 import { useModeIdentity } from './hooks/useModeIdentity';
 import { useDiracPanelStore } from './stores/diracPanelStore';
-import { useBottomPanelStore } from './stores/bottomPanelStore';
 import { useNavigationStore } from './stores/navigationStore';
 import { useLayoutStore } from './stores/layoutStore';
 import { useSettingsStore } from './stores/settingsStore';

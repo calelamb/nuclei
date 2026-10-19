@@ -29,6 +29,10 @@ describe('isSidebarShown', () => {
     expect(isSidebarShown({ ...side, isWeb: true })).toBe(false);
     expect(isSidebarShown({ ...side, isWeb: true, activeView: 'files' })).toBe(true);
   });
+  it('drops the one-sentence Transpiler sidebar on the web too, keeping it on desktop', () => {
+    expect(isSidebarShown({ ...side, activeView: 'transpiler', isWeb: true })).toBe(false);
+    expect(isSidebarShown({ ...side, activeView: 'transpiler', isWeb: false })).toBe(true);
+  });
   it('hides the Explorer at Beginner and everything under a lesson or with no view', () => {
     expect(isSidebarShown({ ...side, activeView: 'files', explorerSidebar: false })).toBe(false);
     expect(isSidebarShown({ ...side, fullViewOwnsArea: true })).toBe(false);
