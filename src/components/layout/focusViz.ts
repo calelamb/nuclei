@@ -37,6 +37,9 @@ const PANE_TITLE_SELECTOR = '.nuclei-pane-header :is(h1, h2)';
 const PANE_FALLBACK_FRAME = 8;
 // After landing, watch this many frames for the editor re-mounting and taking focus back.
 const STABLE_FRAMES = 6;
+const KEEP_FOCUS_FRAMES = 40;
+/** Set on a pane title a keyboard route landed on; the ring rule treats it like a sidebar landing heading. */
+export const NAV_LANDED_ATTR = 'data-nav-landed';
 
 /** Focus has been dropped to nowhere or to the code editor that a re-mount just autofocused. */
 function focusWasStolen(doc: Document, target: HTMLElement): boolean {
@@ -55,11 +58,16 @@ interface PollOptions {
 function pollAndFocus({ find, maxFrames, doc }: PollOptions): () => void {
   let frame = 0;
   let handle = 0;
+  // A pointer press is the person choosing where focus goes; stop watching once they do (not before the first landing).
+  const onPointer = () => { cancel(); };
+  const cancel = () => { cancelAnimationFrame(handle); doc.removeEventListener('pointerdown', onPointer, true); };
+  doc.addEventListener('pointerdown', onPointer, true);
   let landedAt = -1;
   let landed: HTMLElement | null = null;
   const land = (target: HTMLElement) => {
     if (!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1');
     target.focus({ preventScroll: true });
+    if (target.closest('.nuclei-pane-header')) target.setAttribute(NAV_LANDED_ATTR, '');
     landed = target;
     landedAt = frame;
   };
@@ -69,6 +77,7 @@ function pollAndFocus({ find, maxFrames, doc }: PollOptions): () => void {
       if (focusWasStolen(doc, landed)) {
         landed = null;
       } else if (frame - landedAt >= STABLE_FRAMES) {
+        cancel();
         return;
       }
     }
@@ -77,9 +86,32 @@ function pollAndFocus({ find, maxFrames, doc }: PollOptions): () => void {
       if (target) land(target);
     }
     if (frame < maxFrames) handle = requestAnimationFrame(attempt);
+    else cancel();
   };
   handle = requestAnimationFrame(attempt);
-  return () => cancelAnimationFrame(handle);
+  return cancel;
+}
+
+/**
+ * Leaving a takeover re-mounts the editor, which autofocuses itself. After a rail click, hold focus on the clicked
+ * button for a few frames so the person is not dropped into the code. A pointer press elsewhere ends the watch.
+ */
+export function keepFocusOn(target: HTMLElement, doc: Document = document): () => void {
+  let frame = 0;
+  let handle = 0;
+  const cancel = () => { cancelAnimationFrame(handle); doc.removeEventListener('pointerdown', onPointer, true); };
+  const onPointer = () => { cancel(); };
+  const attempt = () => {
+    frame += 1;
+    const active = doc.activeElement;
+    const lost = active === null || active === doc.body || active.closest('.monaco-editor') !== null;
+    if (lost && target.isConnected) target.focus({ preventScroll: true });
+    if (frame < KEEP_FOCUS_FRAMES) handle = requestAnimationFrame(attempt);
+    else cancel();
+  };
+  doc.addEventListener('pointerdown', onPointer, true);
+  handle = requestAnimationFrame(attempt);
+  return cancel;
 }
 
 /** After a keyboard navigation to a rail view, move focus into that view's sidebar (or the pane's own title). */

@@ -116,3 +116,19 @@ test.describe('every route lands focus on a visible heading, cold or warm', () =
     await expect(replay).toBeFocused();
   });
 });
+
+test.describe('rail clicks keep focus on the rail', () => {
+  test('leaving a takeover by clicking a rail icon does not drop focus into the editor', async ({ page }) => {
+    await page.goto(LEARN_URL);
+    await page.getByRole('button', { name: /^Learning/ }).first().click();
+    await expect.poll(async () => (await page.evaluate(SURFACE)).takeover).not.toBeNull();
+    const explorer = page.getByRole('button', { name: /^Explorer/ }).first();
+    await explorer.click();
+    await expect.poll(async () => (await page.evaluate(SURFACE)).takeover).toBeNull();
+    for (const wait of [50, 300, 1200]) {
+      await page.waitForTimeout(wait);
+      expect(await page.evaluate(() => document.activeElement?.closest('.monaco-editor') ?? null)).toBeNull();
+    }
+    await expect(explorer).toBeFocused();
+  });
+});

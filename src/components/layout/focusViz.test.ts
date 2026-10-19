@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { focusAfterViewSelect, focusNavLanding, focusVizLanding, NAV_LANDING_ATTR, TAKEOVER_ATTR, VIZ_LANDING_ATTR } from './focusViz';
+import { focusAfterViewSelect, focusNavLanding, keepFocusOn, focusVizLanding, NAV_LANDING_ATTR, TAKEOVER_ATTR, VIZ_LANDING_ATTR } from './focusViz';
 
 afterEach(() => { document.body.innerHTML = ''; vi.useRealTimers(); });
 
@@ -138,5 +138,62 @@ describe('takeover routing (shell-r9-01, shell-r9-02)', () => {
     await wait(250);
     expect(document.activeElement).toBe(header.querySelector('h1'));
     expect(header.querySelector('h1')?.getAttribute('tabindex')).toBe('-1');
+  });
+});
+
+describe('focus is not fought over', () => {
+  const frames = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  it('a deliberate click into the editor right after a route cancels the landing watch', async () => {
+    const heading = document.createElement('h2');
+    heading.setAttribute(NAV_LANDING_ATTR, '');
+    const wrap = document.createElement('div');
+    wrap.className = 'monaco-editor';
+    const editor = document.createElement('textarea');
+    wrap.append(editor);
+    document.body.append(heading, wrap);
+    focusNavLanding(document, 0);
+    await frames(60);
+    expect(document.activeElement).toBe(heading);
+    editor.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    editor.focus();
+    await frames(150);
+    expect(document.activeElement).toBe(editor);
+  });
+
+  it('keepFocusOn returns focus to a rail button when the editor re-mount steals it', async () => {
+    const rail = document.createElement('button');
+    const editor = document.createElement('textarea');
+    editor.className = 'monaco-editor';
+    document.body.append(rail, editor);
+    rail.focus();
+    keepFocusOn(rail);
+    editor.focus();
+    await frames(80);
+    expect(document.activeElement).toBe(rail);
+  });
+
+  it('keepFocusOn yields once the person clicks elsewhere', async () => {
+    const rail = document.createElement('button');
+    const other = document.createElement('input');
+    document.body.append(rail, other);
+    rail.focus();
+    keepFocusOn(rail);
+    other.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    other.focus();
+    await frames(150);
+    expect(document.activeElement).toBe(other);
+  });
+
+  it('marks the pane-title fallback as landed so the ring rule matches sidebar landings', async () => {
+    const header = document.createElement('div');
+    header.className = 'nuclei-pane-header';
+    const h1 = document.createElement('h1');
+    header.append(h1);
+    document.body.append(header);
+    focusNavLanding(document, 0);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(document.activeElement).toBe(h1);
+    expect(h1.hasAttribute('data-nav-landed')).toBe(true);
   });
 });
