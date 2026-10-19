@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useDiracPanelStore } from '../stores/diracPanelStore';
 import { useNavigationStore } from '../stores/navigationStore';
-import { planRoom, shouldFoldDiracForSidebar } from './breakpoints';
+import { bandsForWidth, planRoom, shouldFoldDiracForSidebar } from './breakpoints';
 
 interface RoomRetreatOptions {
   sidebarWidth: number;
@@ -43,7 +43,11 @@ export function useRoomRetreat({ sidebarWidth, vizWanted, canCollapseSidebar, si
       foldedForSidebar.current = false;
       return;
     }
-    const plan = planRoom({ viewport, sidebarWidth, diracWidth: diracOpen ? diracWidth : null, vizWanted });
+    // Dirac folds itself when the window enters the narrow band. Plan the room for the folded Dirac, so the
+    // sidebar is not closed (and its content unmounted) only to be restored a moment later.
+    const dirac = useDiracPanelStore.getState();
+    const foldingNow = bandsForWidth(viewport).diracNarrow && dirac.lastNarrow === false;
+    const plan = planRoom({ viewport, sidebarWidth, diracWidth: diracOpen && !foldingNow ? diracWidth : null, vizWanted });
     const nav = useNavigationStore.getState();
     if (plan.closeSidebar) {
       if (canCollapseSidebar && nav.activeView !== null) nav.retreatSidebarForRoom();

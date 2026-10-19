@@ -51,3 +51,14 @@ describe('useRoomRetreat (sidebar opened by hand while Dirac is open)', () => {
     expect(useDiracPanelStore.getState().isOpen).toBe(true);
   });
 });
+
+describe('useRoomRetreat (window shrinks while Dirac is about to auto-fold)', () => {
+  it('plans the room for the folded Dirac, so the open sidebar is not unmounted and remounted on the way', () => {
+    setViewport(1100);
+    // The resize handler has not yet folded Dirac: its last seen band was wide.
+    useDiracPanelStore.setState({ isOpen: true, width: 340, autoCollapsed: false, lastNarrow: false });
+    useNavigationStore.setState({ activeView: 'settings', autoCollapsedView: null });
+    renderHook(() => useRoomRetreat({ sidebarWidth: 300, vizWanted: false, canCollapseSidebar: true, sidebarOpen: true }));
+    expect(useNavigationStore.getState().activeView).toBe('settings');
+  });
+});
