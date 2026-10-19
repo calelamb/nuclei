@@ -10,14 +10,14 @@ function result(overrides: Partial<TestCaseResult> = {}): TestCaseResult {
 }
 
 describe('sharedCodeFailure (learn-r10-03)', () => {
-  it('names the error type and line once for four identical failures', () => {
+  it('names the line once and leaves the error type to the detail for four identical failures', () => {
     const failure = sharedCodeFailure([1, 2, 3, 4].map((n) => result({ testCaseId: `t${n}`, errorLine: 5 })));
-    expect(failure).toEqual({ title: "Your code didn't run: SyntaxError on line 5", detail: "SyntaxError: unmatched ')'", line: 5 });
+    expect(failure).toEqual({ title: "Your code didn't run (line 5)", detail: "SyntaxError: unmatched ')'", line: 5 });
   });
 
   it('omits the line when none is known', () => {
     expect(sharedCodeFailure([result({ verdict: 'runtime_error', message: "NameError: name 'x' is not defined" })])?.title)
-      .toBe("Your code didn't run: NameError");
+      .toBe("Your code didn't run");
   });
 
   it('is null when any case ran, when messages differ, or for non-code failures', () => {

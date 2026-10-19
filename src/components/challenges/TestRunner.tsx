@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState } from 'react';
-import { Check, Loader, Play, SearchCode, X } from 'lucide-react';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { ArrowRight, Check, Loader, Play, SearchCode, X } from 'lucide-react';
 import { useChallengeModeStore } from '../../stores/challengeModeStore';
 import {
   inspectChallengeCase,
@@ -68,6 +68,8 @@ export function TestRunner({ challenge }: TestRunnerProps) {
   const platform = usePlatform();
   const activeFramework = useChallengeModeStore((s) => s.activeFramework);
   const progress = useChallengeModeStore((s) => s.progress);
+  const allChallenges = useChallengeModeStore((s) => s.challenges);
+  const setActiveProblem = useChallengeModeStore((s) => s.setActiveProblem);
   const isRunning = useChallengeModeStore((s) => s.isRunning);
   const currentTestResults = useChallengeModeStore((s) => s.currentTestResults);
   const runningTestIndex = useChallengeModeStore((s) => s.runningTestIndex);
@@ -131,6 +133,9 @@ export function TestRunner({ challenge }: TestRunnerProps) {
     if (denominator <= 0) return 0;
     return Math.round((earned / denominator) * 100);
   }, [challenge.testCases, currentTestResults, hiddenTests, totalWeight, visibleWeight]);
+
+  const runButtonRef = useRef<HTMLButtonElement>(null);
+  const [inspecting, setInspecting] = useState(false);
 
   const handleRun = useCallback(async (submit: boolean) => {
     if (isRunning) return;
@@ -257,6 +262,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
     if (!selectedTestCase) return;
 
     setRunning(true);
+    setInspecting(true);
     setRunningTestIndex(-1);
 
     const inspectionResult = await inspectChallengeCase(
@@ -279,6 +285,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
     });
     setInspectionView(inspectionResult.failure || isValueContract ? 'output' : 'circuit');
     setActiveBottomTab('inspection');
+    setInspecting(false);
     setRunning(false);
   }, [
     activeFramework,
@@ -328,16 +335,22 @@ export function TestRunner({ challenge }: TestRunnerProps) {
   const bootNote = kernelStatus === 'connecting' && !engineDown
     ? `${bootStepLabel(kernelProgress, { isWeb }).long}${isWeb ? " · tests run when it's ready" : ''}`
     : null;
+  const runningTests = isRunning && !lastRunWasSubmit && !inspecting;
+  const submitting = isRunning && lastRunWasSubmit && !inspecting;
+  const nextChallenge = useMemo(() => {
+    const at = allChallenges.findIndex((c) => c.id === challenge.id);
+    return at >= 0 ? allChallenges[at + 1] ?? null : null;
+  }, [allChallenges, challenge.id]);
   const passedCount = currentTestResults.filter((result) => result.passed).length;
 
   return (
     <div className="trun">
       <div className="trun__bar">
-        <Button size="lg" loading={isRunning && !lastRunWasSubmit} disabled={isRunning} icon={<Play size={12} aria-hidden="true" />} onClick={() => handleRun(false)}>
-          {isRunning && !lastRunWasSubmit ? 'Running…' : 'Run visible tests'}
+        <Button ref={runButtonRef} size="lg" keepFocus loading={runningTests} disabled={isRunning && !runningTests} icon={<Play size={12} aria-hidden="true" />} onClick={() => handleRun(false)}>
+          {runningTests ? 'Running…' : 'Run visible tests'}
         </Button>
-        <Button size="lg" variant="primary" loading={isRunning && lastRunWasSubmit} disabled={isRunning} icon={<Check size={12} aria-hidden="true" />} onClick={() => handleRun(true)}>
-          {isRunning && lastRunWasSubmit ? 'Submitting…' : 'Submit'}
+        <Button size="lg" variant="primary" keepFocus loading={submitting} disabled={isRunning && !submitting} icon={<Check size={12} aria-hidden="true" />} onClick={() => handleRun(true)}>
+          {submitting ? 'Submitting…' : 'Submit'}
         </Button>
         {bootNote && (
           <span className="trun__bootnote" role="status">
@@ -357,7 +370,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
               <option key={testCase.id} value={testCase.id}>{testCase.label}</option>
             ))}
           </Select>
-          <Button size="lg" icon={<SearchCode size={12} aria-hidden="true" />} disabled={isRunning || !inspectionCaseId} onClick={handleInspect}>
+          <Button size="lg" keepFocus loading={inspecting} icon={<SearchCode size={12} aria-hidden="true" />} disabled={(isRunning && !inspecting) || !inspectionCaseId} onClick={handleInspect}>
             {isValueContract ? 'Inspect return value' : 'Inspect quantum output'}
           </Button>
         </div>
@@ -373,6 +386,11 @@ export function TestRunner({ challenge }: TestRunnerProps) {
                 {codeFailure
                   ? <span className="trun__score">0 of {currentTestResults.length} cases ran</span>
                   : totalScore !== null && <span className="trun__score">Score: {totalScore}%</span>}
+                {overallVerdict === 'accepted' && nextChallenge && (
+                  <Button size="sm" variant="ghost" icon={<ArrowRight size={12} aria-hidden="true" />} onClick={() => setActiveProblem(nextChallenge)}>
+                    Next challenge
+                  </Button>
+                )}
               </>
             ) : (
               <span className="trun__score">
@@ -403,7 +421,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
             {engineDown && !isRunning && (
               <LessonEngineFailed
                 detail={kernelStatus === 'failed' ? kernelError : engineError}
-                onRetry={() => { setEngineError(null); retryKernel(); }}
+                onRetry={() => { runButtonRef.current?.focus({ preventScroll: true }); setEngineError(null); retryKernel(); }}
               />
             )}
 

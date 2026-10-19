@@ -61,7 +61,7 @@ function ProblemRow({ challenge, progress, onClick }: {
   const bestScore = progress?.bestScore ?? 0;
 
   return (
-    <button type="button" className="prow prow-grid" onClick={onClick} aria-label={`${challenge.title}, ${STATUS_LABELS[status].toLowerCase()}`}>
+    <button type="button" className="prow prow-grid" data-problem-id={challenge.id} onClick={onClick} aria-label={`${challenge.title}, ${STATUS_LABELS[status].toLowerCase()}`}>
       <StatusCell status={status} optimal={progress?.solvedOptimally} />
 
       <div className="prow__main">

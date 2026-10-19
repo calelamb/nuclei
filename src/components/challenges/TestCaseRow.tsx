@@ -73,16 +73,23 @@ function StatusIcon({ result, isRunning }: { result?: TestCaseResult; isRunning:
   );
 }
 
+/** A graded-by-fidelity case reports { fidelity: n }, which the score line already says. */
+function isFidelityOnly(output: unknown): boolean {
+  if (typeof output !== 'object' || output === null || Array.isArray(output)) return false;
+  const keys = Object.keys(output);
+  return keys.length === 1 && keys[0] === 'fidelity';
+}
+
 export function TestCaseRow({ testCase, result, isRunning, index, notRun = false }: TestCaseRowProps) {
   const colors = useThemeStore((s) => s.colors);
   const [expanded, setExpanded] = useState(false);
 
   const isHidden = testCase.hidden;
   const hasDetails = result && !isHidden;
-  const canExpand = hasDetails || (isHidden && !result);
+  const canExpand = Boolean(hasDetails);
 
   const label = isHidden
-    ? `Hidden test ${index + 1}`
+    ? `Hidden test ${index + 1}${result ? '' : ' · revealed after you submit'}`
     : testCase.label || `Test case ${index + 1}`;
   const verdictLabel = result ? result.verdict.replace(/_/g, ' ') : null;
 
@@ -173,16 +180,7 @@ export function TestCaseRow({ testCase, result, isRunning, index, notRun = false
         <div style={{
           padding: '0 16px 10px 56px',
         }}>
-          {isHidden && !result ? (
-            <span style={{
-              color: colors.textDim,
-              fontSize: 12,
-              fontStyle: 'italic',
-              fontFamily: TYPOGRAPHY.fontSans,
-            }}>
-              Hidden -- revealed after submission
-            </span>
-          ) : result ? (
+          {result ? (
             <div style={{
               display: 'flex',
               flexDirection: 'column',
@@ -216,7 +214,7 @@ export function TestCaseRow({ testCase, result, isRunning, index, notRun = false
               </div>
 
               {/* Expected vs actual */}
-              {result.actualOutput && (
+              {result.actualOutput && !isFidelityOnly(result.actualOutput) && (
                 <div style={{
                   display: 'flex',
                   gap: 12,

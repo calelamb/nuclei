@@ -32,7 +32,7 @@ export function ChallengeInspector() {
         fontSize: 12,
         fontFamily: TYPOGRAPHY.fontSans,
       }}>
-        Pick a case, then press Inspect to see its output here.
+        Press Inspect to see the selected case's output here.
       </div>
     );
   }
