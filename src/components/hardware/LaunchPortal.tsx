@@ -6,33 +6,16 @@ import { useEditorStore } from '../../stores/editorStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { ProviderLogo } from './ProviderLogo';
+import { PortalProviderCard } from './PortalProviderCard';
+import { PROVIDERS, type ProviderMeta } from './launchProviders';
+import { useFrameworksStore } from '../../stores/frameworksStore';
 import { getExecute, getHardware } from '../../App';
 import { usePlatform } from '../../platform/PlatformProvider';
-import { providerAllowsQsharp, QSHARP_GATE_TOOLTIP } from './launchGating';
+import { providerAllowsQsharp, providerStatus, sortProvidersForDisplay, QSHARP_GATE_TOOLTIP, type ProviderStatus } from './launchGating';
 import type { HardwareProviderType } from '../../types/hardware';
 
 import './launchPortal.css';
 import { TYPOGRAPHY } from '../../styles/tokens';
-interface ProviderPortalMeta {
-  name: HardwareProviderType;
-  label: string;
-  tagline: string;
-  disabled?: boolean;
-}
-
-const PORTAL_PROVIDERS: ProviderPortalMeta[] = [
-  { name: 'simulator', label: 'Local Simulator', tagline: 'Instant · no account' },
-  { name: 'ibm', label: 'IBM Quantum', tagline: 'Superconducting · free tier' },
-  { name: 'ionq', label: 'IonQ', tagline: 'Trapped ion · all-to-all' },
-  { name: 'quantinuum', label: 'Quantinuum', tagline: 'Highest fidelity · H1/H2' },
-  { name: 'braket', label: 'AWS Braket', tagline: 'IonQ · Rigetti · QuEra · IQM · OQC · Pasqal' },
-  { name: 'azure', label: 'Azure Quantum', tagline: 'Quantinuum · IonQ · Rigetti · Pasqal · IQM' },
-  { name: 'nvidia', label: 'NVIDIA CUDA-Q', tagline: 'GPU simulator · up to 34 qubits' },
-  { name: 'google', label: 'Google Quantum AI', tagline: 'Research access only', disabled: true },
-  { name: 'xanadu', label: 'Xanadu', tagline: 'Photonic · different model', disabled: true },
-  { name: 'dwave', label: 'D-Wave', tagline: 'Annealer · different model', disabled: true },
-];
-
 function fmtElapsed(startIso: string): string {
   const ms = Date.now() - new Date(startIso).getTime();
   if (ms < 1000) return 'just now';
@@ -48,6 +31,10 @@ export function LaunchPortal() {
   const colors = useThemeStore((s) => s.colors);
   const isWeb = usePlatform().getPlatform() === 'web';
   const jobs = useHardwareStore((s) => s.jobs);
+  const providerList = useHardwareStore((s) => s.providers);
+  const cudaqInstalled = useFrameworksStore((s) => s.status?.installed.includes('cuda-q') ?? false);
+  const kernelStatus = useEditorStore((s) => s.kernelStatus);
+  const connected = new Set(providerList.filter((p) => p.connected).map((p) => p.name));
   const results = useHardwareStore((s) => s.results);
   const openLaunch = useHardwareStore((s) => s.openLaunch);
   const selectProvider = useHardwareStore((s) => s.selectProvider);
@@ -114,16 +101,21 @@ export function LaunchPortal() {
   const qsharpBlocks = (provider: HardwareProviderType) =>
     framework === 'qsharp' && !providerAllowsQsharp(provider);
 
-  const handlePickProvider = (p: ProviderPortalMeta) => {
-    if (p.disabled || qsharpBlocks(p.name)) return;
+  const handlePickProvider = (name: HardwareProviderType, status: ProviderStatus) => {
+    if (status.kind === 'coming-soon' || qsharpBlocks(name)) return;
     // The browser build has no hardware path: the simulator card runs the circuit right here.
-    if (isWeb && p.name === 'simulator') {
+    if (isWeb && name === 'simulator') {
       getExecute()?.();
       return;
     }
-    selectProvider(p.name);
+    // Desktop-only providers open the launcher at its provider step, where the Download note lives (one Esc closes it).
+    selectProvider(isWeb ? null : name);
     openLaunch();
   };
+
+  const statusFor = (p: ProviderMeta) =>
+    providerStatus({ provider: p.name, connected: connected.has(p.name), isWeb, cudaqInstalled, kernelStatus });
+  const orderedProviders = sortProvidersForDisplay(PROVIDERS, (p) => statusFor(p).kind);
 
   const openLaunchBlank = () => {
     selectProvider(null);
@@ -225,63 +217,22 @@ export function LaunchPortal() {
           Choose a destination
         </div>
         <div className="launch-grid">
-          {PORTAL_PROVIDERS.map((p) => {
+          {orderedProviders.map((p) => {
+            const status = statusFor(p);
             const qsharpBlocked = qsharpBlocks(p.name);
-            const isDisabled = p.disabled || qsharpBlocked;
-            const reason = p.disabled ? 'Coming soon' : qsharpBlocked ? QSHARP_GATE_TOOLTIP : null;
-            const card = (
-            <button className={isDisabled ? undefined : 'nuclei-hover-lift'}
-              key={p.name}
-              onClick={() => handlePickProvider(p)}
-              aria-disabled={isDisabled || undefined}
-              style={{
-                textAlign: 'left',
-                background: colors.bgElevated,
-                border: `1px solid ${colors.border}`,
-                borderRadius: 'var(--radius-round)',
-                padding: 10,
-                cursor: isDisabled ? 'not-allowed' : 'pointer',
-                color: colors.text,
-                fontFamily: TYPOGRAPHY.fontSans,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 6,
-                opacity: isDisabled ? 0.5 : 1,
-                transition: 'border-color var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard), transform var(--duration-fast) var(--ease-standard)',
-              }}
-            >
-              <div
-                style={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: 6,
-                  background: `${colors.accent}14`,
-                  color: colors.accentLight,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <ProviderLogo provider={p.name} size={20} />
-              </div>
-              <div className="launch-grid__name" style={{ fontSize: 12, fontWeight: 600, color: colors.text }}>{p.label}</div>
-              <div
-                style={{
-                  fontSize: 11,
-                  color: colors.textMuted,
-                  lineHeight: 1.4,
-                  overflow: 'hidden',
-                  display: '-webkit-box',
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: 'vertical' as const,
-                }}
-              >
-                {p.tagline}
-              </div>
-            </button>
+            const comingSoon = status.kind === 'coming-soon';
+            const desktopOnly = status.kind === 'desktop-only';
+            const reason = comingSoon ? status.label : qsharpBlocked ? QSHARP_GATE_TOOLTIP : null;
+            return (
+              <PortalProviderCard
+                key={p.name}
+                provider={p}
+                status={status}
+                reason={reason}
+                inert={comingSoon || desktopOnly || qsharpBlocked}
+                onPick={() => handlePickProvider(p.name, status)}
+              />
             );
-            // A blocked card stays focusable so its reason is reachable by keyboard as well as by pointer.
-            return reason ? <Tooltip key={p.name} label={reason} placement="above">{card}</Tooltip> : card;
           })}
         </div>
 
