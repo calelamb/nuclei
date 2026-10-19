@@ -14,6 +14,7 @@ import { ArrowLeft, ChevronLeft, ChevronRight, CheckCircle } from 'lucide-react'
 import { Badge, Button, IconButton } from '../ui';
 import { LESSON_LEVEL_TONE } from './levelTone';
 import { scrollLessonBlock } from './scrollLessonBlock';
+import { recallLessonBlock, rememberLessonBlock } from './lessonPosition';
 import './lessonView.css';
 
 function ContentBlockRenderer({ block }: { block: ContentBlock }) {
@@ -86,10 +87,17 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
       });
       return () => cancelAnimationFrame(frame);
     }
+    // No glossary hop to return to: resume where this lesson was last read (rail/mode round trip, reload).
+    const remembered = recallLessonBlock(lesson.id, lesson.contentBlocks.length);
+    if (remembered !== null) {
+      setCurrentBlockIndex(remembered);
+      const frame = requestAnimationFrame(() => scrollLessonBlock(remembered, 'auto'));
+      return () => cancelAnimationFrame(frame);
+    }
     scrollRef.current?.scrollTo(0, 0);
     setCurrentBlockIndex(0);
     return undefined;
-  }, [lesson.id, setCurrentBlockIndex]);
+  }, [lesson.id, lesson.contentBlocks.length, setCurrentBlockIndex]);
 
   const setSection = useLearnSectionStore((s) => s.setSection);
   const leaveToTracks = () => {
@@ -117,7 +125,11 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
         }
         // At the very top the first block is current, whatever the band happens to catch.
         if (root.scrollTop < EDGE_PX) return;
-        if (visible.size > 0) setCurrentBlockIndex(Math.min(...visible));
+        if (visible.size > 0) {
+          const block = Math.min(...visible);
+          setCurrentBlockIndex(block);
+          rememberLessonBlock(lesson.id, block);
+        }
       },
       { root, rootMargin: '-30% 0px -60% 0px', threshold: 0 },
     );
@@ -134,7 +146,10 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
       const { next, block } = readPosition(root.scrollTop, root.scrollHeight, root.clientHeight, blockCount);
       setReadProgress(next);
       // The initial pass only reads progress; a remembered position owns the current block.
-      if (e && block !== null) setCurrentBlockIndex(block);
+      if (e && block !== null) {
+        setCurrentBlockIndex(block);
+        rememberLessonBlock(lesson.id, block);
+      }
     };
     sync();
     root.addEventListener('scroll', sync, { passive: true });
