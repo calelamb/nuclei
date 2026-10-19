@@ -51,7 +51,10 @@ RUNTIME_DIR_ENV = "NUCLEI_RUNTIME_DIR"
 RUNTIME_FILE_NAME = "kernel.json"
 MIN_TOKEN_LENGTH = 32
 MAX_TOKEN_LENGTH = 1_024
-AUTH_TIMEOUT_SECONDS = 10.0
+# A legitimate client sends `authenticate` as its first frame, immediately after
+# the upgrade. Keep the window short so a local process cannot park the
+# MAX_PRE_AUTH_CONNECTIONS slots for long.
+AUTH_TIMEOUT_SECONDS = 3.0
 # Until a connection authenticates it may only send the small authenticate
 # frame; the normal message limit applies afterwards. The cap on unauthenticated
 # connections stops a local process from parking thousands of idle sockets.
@@ -319,26 +322,33 @@ def secure_handler(
     """
     pending = 0
 
-    async def authenticate(websocket: Any) -> bool:
+    async def await_first_frame(websocket: Any) -> tuple[object | None, bool]:
+        """Hold a pre-auth slot only while waiting for the first frame."""
         nonlocal pending
+        pending += 1
+        try:
+            return await asyncio.wait_for(websocket.recv(), auth_timeout), True
+        except Exception:  # noqa: BLE001 - timeout, close or protocol error
+            return None, False
+        finally:
+            pending -= 1
+
+    async def authenticate(websocket: Any) -> bool:
         if pending >= max_pre_auth_connections:
             await _reject(websocket, CLOSE_BUSY, "too many unauthenticated connections")
             return False
-        pending += 1
-        try:
-            try:
-                first = await asyncio.wait_for(websocket.recv(), auth_timeout)
-            except Exception:  # noqa: BLE001 - timeout, close or protocol error
-                await _reject(websocket, CLOSE_UNAUTHENTICATED, "authentication required")
-                return False
-            authentication = check_authentication(config, first)
-            if authentication is None:
-                await _reject(websocket, CLOSE_UNAUTHENTICATED, "authentication failed")
-                return False
-            await websocket.send(authenticated_ack(config, authentication))
-            return True
-        finally:
-            pending -= 1
+        first, received = await await_first_frame(websocket)
+        # The slot is already free: closing a peer that never answers the close
+        # handshake can take seconds and must not keep the slot occupied.
+        if not received:
+            await _reject(websocket, CLOSE_UNAUTHENTICATED, "authentication required")
+            return False
+        authentication = check_authentication(config, first)
+        if authentication is None:
+            await _reject(websocket, CLOSE_UNAUTHENTICATED, "authentication failed")
+            return False
+        await websocket.send(authenticated_ack(config, authentication))
+        return True
 
     async def handler(websocket: Any) -> None:
         # Second line of defence: process_request already rejects these with

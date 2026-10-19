@@ -142,3 +142,70 @@ def test_real_server_starts_with_the_small_pre_auth_limit():
         finally:
             ws_server.close()
     assert _run(scenario()) == 1009
+
+
+def test_auth_timeout_is_short_enough_to_limit_slot_squatting():
+    assert auth.AUTH_TIMEOUT_SECONDS <= 3.0
+
+
+def test_legitimate_client_gets_in_after_a_flood_of_silent_connections():
+    """Silent sockets fill every slot; they are dropped after the auth timeout,
+    so a legitimate client that retries on 4429 is admitted within seconds."""
+    async def scenario():
+        cap, timeout = 4, 0.5
+        ws_server, port = await _serve_with_timeout(cap, timeout)
+        flood = []
+        try:
+            for _ in range(cap):
+                flood.append(await ws_connect(f"ws://127.0.0.1:{port}"))
+            await asyncio.sleep(0.1)
+            first = await ws_connect(f"ws://127.0.0.1:{port}")
+            try:
+                await asyncio.wait_for(first.recv(), 2)
+            except websockets.ConnectionClosed:
+                pass
+            busy = first.protocol.close_code
+            await asyncio.sleep(timeout + 0.3)  # flood slots time out
+            async with ws_connect(f"ws://127.0.0.1:{port}") as ok:
+                await ok.send(AUTH)
+                ack = json.loads(await ok.recv())
+            closed = [w.protocol.close_code for w in flood]
+            return busy, ack["type"], closed
+        finally:
+            for ws in flood:
+                await ws.close()
+            ws_server.close()
+    busy, ack, closed = _run(scenario())
+    assert busy == auth.CLOSE_BUSY and ack == "authenticated"
+    assert all(code == auth.CLOSE_UNAUTHENTICATED for code in closed)
+
+
+def test_slots_free_after_the_timeout_even_if_flooders_ignore_the_close_handshake():
+    """A silent peer that never answers the close frame must not keep its
+    pre-auth slot past the auth timeout."""
+    request = (
+        "GET / HTTP/1.1\r\nHost: localhost:{port}\r\nUpgrade: websocket\r\n"
+        "Connection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+        "Sec-WebSocket-Version: 13\r\n\r\n"
+    )
+
+    async def scenario():
+        cap, timeout = 3, 0.4
+        ws_server, port = await _serve_with_timeout(cap, timeout)
+        raw = []
+        try:
+            for _ in range(cap):
+                reader, writer = await asyncio.open_connection("127.0.0.1", port)
+                writer.write(request.format(port=port).encode())
+                await writer.drain()
+                await reader.readuntil(b"\r\n\r\n")
+                raw.append(writer)  # never read again, never answer a close
+            await asyncio.sleep(timeout + 0.4)
+            async with ws_connect(f"ws://127.0.0.1:{port}") as ok:
+                await ok.send(AUTH)
+                return json.loads(await asyncio.wait_for(ok.recv(), 2))["type"]
+        finally:
+            for writer in raw:
+                writer.close()
+            ws_server.close()
+    assert _run(scenario()) == "authenticated"
