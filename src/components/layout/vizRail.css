@@ -17,6 +17,8 @@
 [data-viz-landing]:focus, [data-viz-landing]:focus-visible { outline: none; }
 /* The sidebar heading a keyboard navigation lands on. */
 .nuclei-pane-header__title[data-nav-landing]:focus, .nuclei-pane-header__title[data-nav-landing]:focus-visible { outline: none; }
+/* Pane titles with no sidebar (web QEC Workbench, Transpiler) are the landing too; a mouse click shows no ring. */
+.nuclei-pane-header :is(h1, h2):focus:not(:focus-visible) { outline: none; }
 .viz-rail__label { color: var(--color-text-secondary); font: var(--font-weight-semibold) var(--font-size-caption) var(--font-sans); letter-spacing: 1px; }
 
 /* Right-rail empty states: balanced line breaks so a lone word never wraps onto its own line (centred copy of a few lines). */

@@ -406,7 +406,7 @@ export function PanelLayout() {
 
         {isChallengeMode ? (
           /* Challenge Mode — full content area */
-          <div data-takeover="" style={{
+          <div data-takeover="challenges" style={{
             flex: 1, minWidth: 0, overflow: 'hidden',
             animation: 'nuclei-fade-in 200ms ease',
           }}>
@@ -416,7 +416,7 @@ export function PanelLayout() {
           </div>
         ) : isLearnMode ? (
           /* Learn Mode — full content area + Dirac */
-          <div data-takeover="" style={{
+          <div data-takeover="learning" style={{
             flex: 1, minWidth: 0, overflow: 'hidden',
             animation: 'nuclei-fade-in 200ms ease',
           }}>
