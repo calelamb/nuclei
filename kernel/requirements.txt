@@ -7,13 +7,21 @@ numpy>=1.26,<3.0
 # rather than erroring when it's absent.
 ruff>=0.6,<1.0
 
+# scipy is deliberately NOT listed: qiskit and cirq pull it in transitively, but
+# the kernel treats it as an optional accelerator (lazy import, numpy fallback)
+# and never requires it, so a venv without scipy must keep working.
+
 # Provider credential storage via OS keyring
 # (macOS Keychain, Windows Credential Manager, Linux Secret Service).
 # Falls back to in-memory if no backend is available.
 keyring>=24
 
 # Quantum frameworks (install at least one)
-qiskit>=1.2,<2.0
+# One Qiskit range everywhere (the in-app catalog in src-tauri/src/commands/
+# frameworks.rs carries the same specifier): 1.x and 2.x are both supported and
+# CI tests both. Qiskit 2 removed `qiskit.primitives.Sampler/Estimator` (V1),
+# `QuantumCircuit.c_if()` and `bind_parameters`; see src/services/errorRewriteQiskit2.ts.
+qiskit>=1.2,<3
 qiskit-aer>=0.15,<1.0
 cirq-core>=1.4,<2.0
 
@@ -39,6 +47,11 @@ cirq-core>=1.4,<2.0
 # sinter>=1.14,<2
 # pymatching>=2.1,<3
 # fusion-blossom>=0.2.10,<0.3
+
+# Optional: machine-learning extras for the Quantumness Lab — installed via the
+# in-app catalog (Research group). Lazy imports; a numpy path always exists.
+# torch>=2.4,<3     (CPU PyTorch: transformer/conv decoders)
+# onnx>=1.16,<2     (ONNX export convenience)
 
 # Optional: QEC Data Engine — streaming Arrow ingestion, local DuckDB
 # analytics, and canonical JSON Schema validation. Installed as one

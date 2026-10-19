@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { rewriteExecutionError } from './errorRewrite';
 import * as claudeClient from './claudeClient';
+import { useWorkspaceStore } from '../stores/workspaceStore';
 
 describe('rewriteExecutionError', () => {
   beforeEach(() => {
@@ -63,5 +64,47 @@ describe('rewriteExecutionError', () => {
 
     const systemPrompt = spy.mock.calls[0][0].system;
     expect(systemPrompt).toContain('Q#');
+  });
+});
+
+describe('Qiskit 2 migration hints (Research mode)', () => {
+  const REMOVED_API = {
+    code: 'from qiskit.primitives import Sampler',
+    framework: 'qiskit',
+    traceback: "ImportError: cannot import name 'Sampler' from 'qiskit.primitives'",
+  };
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    useWorkspaceStore.setState({ mode: 'learn' });
+  });
+
+  it('answers a removed 1.x API without a model when the Dirac call fails', async () => {
+    useWorkspaceStore.setState({ mode: 'research' });
+    vi.spyOn(claudeClient, 'callClaude').mockResolvedValue({ text: null, error: 'no_api_key' });
+    const out = await rewriteExecutionError(REMOVED_API);
+    expect(out?.explanation).toContain('Qiskit 2');
+    expect(out?.fix).toContain('StatevectorSampler');
+  });
+
+  it('hands the known migration to the model so its diagnosis uses it', async () => {
+    useWorkspaceStore.setState({ mode: 'research' });
+    const spy = vi.spyOn(claudeClient, 'callClaude').mockResolvedValue({
+      text: '{"explanation":"V1 Sampler is gone.","fix":null}',
+      error: null,
+    });
+    const out = await rewriteExecutionError(REMOVED_API);
+    expect(out?.explanation).toBe('V1 Sampler is gone.');
+    expect(spy.mock.calls[0][0].user).toContain('StatevectorSampler');
+  });
+
+  it('leaves Learn mode exactly as before', async () => {
+    useWorkspaceStore.setState({ mode: 'learn' });
+    const spy = vi.spyOn(claudeClient, 'callClaude').mockResolvedValue({ text: null, error: 'no_api_key' });
+    expect(await rewriteExecutionError(REMOVED_API)).toBeNull();
+    expect(spy.mock.calls[0][0].user).not.toContain('StatevectorSampler');
   });
 });
