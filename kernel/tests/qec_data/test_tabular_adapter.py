@@ -7,6 +7,9 @@ from typing import BinaryIO
 
 import pytest
 
+pytest.importorskip("duckdb")
+pytest.importorskip("pyarrow")
+
 import kernel.qec_data.adapters.tabular_sources as tabular_sources
 
 from kernel.qec_data.adapters.base import (

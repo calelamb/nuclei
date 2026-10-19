@@ -2,6 +2,10 @@ import json
 from pathlib import Path
 
 import pytest
+
+pytest.importorskip("jsonschema")
+pytest.importorskip("referencing")
+
 from jsonschema import Draft202012Validator, ValidationError
 from referencing import Registry, Resource
 

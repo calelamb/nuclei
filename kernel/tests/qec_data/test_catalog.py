@@ -5,8 +5,12 @@ import shutil
 from dataclasses import replace
 from pathlib import Path
 
-import duckdb
 import pytest
+
+pytest.importorskip("duckdb")
+pytest.importorskip("pyarrow")
+
+import duckdb
 
 from kernel.qec_data.catalog import CatalogIntegrityError, CatalogNotFound, QecCatalog
 from kernel.qec_data.models import (

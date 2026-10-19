@@ -36,10 +36,15 @@ are deterministic and order-independent. ``handle_message`` reads the
 ``hardware_manager`` global at call time, so monkeypatching the module
 attribute is sufficient.
 
-Dependency policy: fixtures whose request code targets a Python framework
-(qiskit/cirq/cudaq) are skipped when that framework isn't installed (CI
-installs none of them). Q# fixtures are NOT skip-guarded — qdk is a hard
-requirement of this suite locally and in CI (kernel-tests.yml installs it).
+Dependency policy: a fixture is skipped (never failed) when the optional
+packages its documented response needs are absent, so the whole suite runs on
+the minimal venv built from kernel/requirements.txt alone (the
+``pytest-minimal-venv`` CI job). Requirements come from three places: the
+adapter detection regexes (qiskit/cirq/cudaq/stim code), the request
+``language`` hint (qsharp / stim raw text), and ``MESSAGE_REQUIRES`` below for
+messages whose response embeds the installed toolchain (``environment``,
+``discovery_evaluators``) or that need stim / sinter / pymatching / qdk to run
+at all. The full CI job installs everything, so nothing is skipped there.
 """
 
 from __future__ import annotations
@@ -64,7 +69,7 @@ with mock.patch.dict(os.environ, {
 from kernel import auth
 from ._auth_harness import HandshakeSocket, serve_authenticated
 import kernel.hardware.credential_store as credential_store
-from kernel.executor import ADAPTER_SPECS
+from kernel.executor import ADAPTER_SPECS, STIM_SOURCE_SPEC
 from kernel.hardware.job_store import JobStore
 from kernel.hardware.manager import HardwareManager
 
@@ -233,22 +238,44 @@ def replay(requests: list[dict]) -> FakeWebSocket:
     return websocket
 
 
-def _skip_unless_framework_deps(requests: list[dict]) -> None:
-    """Skip when a fixture targets a Python framework that isn't installed.
+#: Optional import names a protocol message needs for its *documented* response.
+#: Messages that only need a Python framework are covered by the detection
+#: regexes below; these are the ones keyed on the message type instead.
+MESSAGE_REQUIRES: dict[str, tuple[str, ...]] = {
+    # The documented `packages` map lists every toolchain the kernel reports.
+    "environment": ("qiskit", "qiskit_aer", "cirq", "qdk", "stim", "sinter", "pymatching"),
+    # The documented `qec_memory` evaluator is `available: true`.
+    "discovery_evaluators": ("stim", "pymatching"),
+    "qec_generate": ("stim",),
+    "qec_snapshot": ("stim",),
+    "qec_decode_sample": ("stim", "pymatching"),
+    "qec_campaign_start": ("stim", "sinter", "pymatching"),
+    "qec_estimate": ("qdk",),
+}
 
-    Requirements are derived from the same detection regexes the executor
-    uses, so the skip logic can never drift from routing. Q# (source-mode)
-    is deliberately not skip-guarded: qdk is a hard requirement of this
-    suite (kernel-tests.yml installs it in CI).
+
+def _dependencies_of(request: dict) -> tuple[str, ...]:
+    """Optional import names ``request`` needs, derived from routing, not a hand list."""
+    needed: list[str] = list(MESSAGE_REQUIRES.get(request.get("type", ""), ()))
+    language = request.get("language")
+    code = request.get("code", "")
+    for spec in (*ADAPTER_SPECS, STIM_SOURCE_SPEC):
+        by_language = spec.source_mode and language == spec.framework
+        if by_language or spec.detect_pattern.search(code):
+            needed.extend(spec.dependencies)
+    return tuple(dict.fromkeys(needed))
+
+
+def _skip_unless_framework_deps(requests: list[dict]) -> None:
+    """Skip when a fixture needs an optional package that isn't installed.
+
+    Requirements are derived from the same detection regexes and language
+    routing the executor uses (plus ``MESSAGE_REQUIRES``), so the skip logic
+    can never drift from routing.
     """
     for request in requests:
-        code = request.get("code", "")
-        for spec in ADAPTER_SPECS:
-            if spec.source_mode:
-                continue
-            if spec.detect_pattern.search(code):
-                for dependency in spec.dependencies:
-                    pytest.importorskip(dependency)
+        for dependency in _dependencies_of(request):
+            pytest.importorskip(dependency)
 
 
 # ───────────────────────── matcher self-tests ─────────────────────────

@@ -1,9 +1,11 @@
+import { test } from '@playwright/test';
 import { randomBytes } from 'node:crypto';
 import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createInterface } from 'node:readline';
+import { resolveEnginePython } from './pythonInterpreter';
 
 const ENGINE_URL = 'ws://127.0.0.1:9743';
 const READY_LINE = 'NUCLEI_QEC_DATA_READY 127.0.0.1:9743';
@@ -68,13 +70,18 @@ function awaitReadiness(child: ChildProcess, diagnostics: () => string): Promise
 }
 
 export async function launchRealQecDataEngine(): Promise<RealQecDataEngine> {
+  const repositoryRoot = resolve('.');
+  const interpreter = resolveEnginePython({ repositoryRoot, env: process.env });
+  if ('skipReason' in interpreter) {
+    // Called from inside a test body: marks the test skipped (throws) with the explicit reason.
+    test.skip(true, interpreter.skipReason);
+    throw new Error(interpreter.skipReason);
+  }
+  const python = interpreter.python;
   const fixtureRoot = resolve('tests/e2e/fixtures/qec-project');
   const projectRoot = mkdtempSync(join(tmpdir(), 'nuclei-qec-e2e-'));
   cpSync(fixtureRoot, projectRoot, { recursive: true });
   const token = randomBytes(32).toString('hex');
-  const python = process.env.NUCLEI_E2E_PYTHON
-    ?? (process.platform === 'win32' ? 'python' : 'python3');
-  const repositoryRoot = resolve('.');
   const child = spawn(python, ['tests/e2e/support/qec_data_engine.py'], {
     cwd: repositoryRoot,
     env: {

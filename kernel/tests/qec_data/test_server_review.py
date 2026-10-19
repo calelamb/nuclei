@@ -12,6 +12,10 @@ if os.name != "nt":
     import fcntl
 
 import pytest
+
+pytest.importorskip("duckdb")
+pytest.importorskip("pyarrow")
+
 from websockets.exceptions import ConnectionClosedError
 from websockets.legacy.client import connect
 

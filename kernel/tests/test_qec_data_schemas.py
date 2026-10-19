@@ -4,6 +4,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+
+pytest.importorskip("jsonschema")
+
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
 from kernel.qec_data.model_codecs import batch_from_mapping
