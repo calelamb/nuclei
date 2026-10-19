@@ -15,6 +15,8 @@ import { formatCircuitMeta } from './outcomeDistribution';
 import { focusBlockEditor } from './focusBlockEditor';
 import './demo.css';
 
+const PYTHON_FAILED_MESSAGE = 'The program did not finish. Check the code and run it again.';
+
 type ResultView = 'output' | 'probabilities';
 interface InteractiveDemoProps {
   code: string;
@@ -56,7 +58,9 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
       case 'python_result':
         setResult(null);
         setIsRunning(false);
-        setError(null);
+        // A failed run keeps the error that arrived just before this message, exactly as
+        // ExerciseBlock does; only a success clears it.
+        setError((prev) => (msg.success ? null : prev ?? PYTHON_FAILED_MESSAGE));
         break;
       case 'output':
         // Output from the live preview re-running half-typed code is not a run.

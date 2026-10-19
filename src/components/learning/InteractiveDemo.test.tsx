@@ -164,3 +164,40 @@ describe('InteractiveDemo stale results (r7-learn-01)', () => {
     expect(document.activeElement?.closest('.demo')).toBeTruthy();
   });
 });
+
+describe('InteractiveDemo Python-only runs (learn-r9-01)', () => {
+  const PLAIN = 'print("hi")';
+
+  async function runPlain() {
+    render(<InteractiveDemo code={PLAIN} framework="qiskit" description="demo" />);
+    await act(async () => { await Promise.resolve(); boot.resolveInit(); await Promise.resolve(); await Promise.resolve(); });
+    fireEvent.click(screen.getByRole('button', { name: /^Run$/ }));
+  }
+
+  it('keeps the error visible when python_result reports failure', async () => {
+    await runPlain();
+    await act(async () => {
+      boot.onMessage({ type: 'error', message: "NameError: name 'pritn' is not defined" });
+      boot.onMessage({ type: 'python_result', success: false });
+    });
+    expect(screen.getByRole('alert').textContent).toContain("NameError: name 'pritn' is not defined");
+    expect(screen.getByRole('button', { name: /^Run$/ })).toBeTruthy();
+  });
+
+  it('clears a previous error when the next run succeeds', async () => {
+    await runPlain();
+    await act(async () => {
+      boot.onMessage({ type: 'error', message: 'SyntaxError: bad' });
+      boot.onMessage({ type: 'python_result', success: false });
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^Run$/ }));
+    await act(async () => { boot.onMessage({ type: 'python_result', success: true }); });
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('shows a generic error when a run fails without any message', async () => {
+    await runPlain();
+    await act(async () => { boot.onMessage({ type: 'python_result', success: false }); });
+    expect(screen.getByRole('alert').textContent).toMatch(/did not finish/i);
+  });
+});
