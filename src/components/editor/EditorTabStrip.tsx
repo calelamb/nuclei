@@ -30,6 +30,16 @@ export function EditorTabStrip({ stripRef, onMeasure, onOverflowing }: EditorTab
   const [overflow, setOverflow] = useState<StripOverflow>('none');
   const usingLegacy = tabs.length === 0;
 
+  // scroll-padding on the strip clears the edge fades.
+  const revealActiveTab = useCallback(() => {
+    const strip = stripRef.current;
+    if (!strip || !activeTabPath) return;
+    const active = Array.from(strip.querySelectorAll<HTMLElement>('[role="tab"]')).find(
+      (el) => el.dataset.tabPath === activeTabPath,
+    );
+    active?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  }, [stripRef, activeTabPath]);
+
   const measure = useCallback(() => {
     const strip = stripRef.current;
     if (strip) {
@@ -46,25 +56,20 @@ export function EditorTabStrip({ stripRef, onMeasure, onOverflowing }: EditorTab
     measure();
     const strip = stripRef.current;
     if (typeof ResizeObserver === 'undefined' || !strip) return undefined;
-    const observer = new ResizeObserver(measure);
+    // A narrowing strip (window resize, Dirac opening, leaving a takeover) must not strand the active tab off-screen.
+    // Only resizes reveal it: scroll events call measure() too and must not fight the person's own scrolling.
+    const observer = new ResizeObserver(() => { revealActiveTab(); measure(); });
     observer.observe(strip);
     if (strip.parentElement) observer.observe(strip.parentElement);
     return () => observer.disconnect();
-  }, [measure, stripRef, tabs.length]);
+  }, [measure, revealActiveTab, stripRef, tabs.length]);
 
   // Toolbar content changes the strip's width without resizing the bar.
   // eslint-disable-next-line react-hooks/set-state-in-effect -- measures the live DOM; setState bails out when nothing changed
   useLayoutEffect(() => { measure(); });
 
-  // Keep the active tab fully visible (scroll-padding on the strip clears the edge fades).
-  useEffect(() => {
-    const strip = stripRef.current;
-    if (!strip || !activeTabPath) return;
-    const active = Array.from(strip.querySelectorAll<HTMLElement>('[role="tab"]')).find(
-      (el) => el.dataset.tabPath === activeTabPath,
-    );
-    active?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
-  }, [activeTabPath, tabs.length, stripRef]);
+  // Keep the active tab fully visible when the selection or tab count changes.
+  useEffect(() => { revealActiveTab(); }, [activeTabPath, tabs.length, revealActiveTab]);
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (!NAV_KEYS.has(e.key)) return;
