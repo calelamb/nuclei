@@ -76,3 +76,14 @@ test.describe('a restored lesson (shell-r12-03)', () => {
     expect(Math.abs(after - before)).toBeLessThan(900);
   });
 });
+
+test.describe('global Run (interaction-r-02)', () => {
+  test('Cmd+Enter runs from the Run button, not only from Monaco', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(RESEARCH_URL);
+    await expect(page.getByText('No results yet')).toBeVisible();
+    await page.locator('[data-run-button]').focus();
+    await page.keyboard.press('ControlOrMeta+Enter');
+    await expect(page.getByText(/^Done · /).first()).toBeVisible();
+  });
+});
