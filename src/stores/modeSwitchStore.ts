@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import { useWorkspaceStore, type WorkspaceMode } from './workspaceStore';
 import { useExperimentRunStore } from './experimentRunStore';
+import { useLabActivityStore } from './labActivityStore';
+import { isConjectureTestActive, useConjectureStore } from './conjectureStore';
+import { isTrainabilityJobActive, useTrainabilityStore } from './trainabilityStore';
 
 /**
  * PRD 11 Phase B — workspace mode switching with an in-flight-work guard.
@@ -15,8 +18,39 @@ import { useExperimentRunStore } from './experimentRunStore';
 
 interface PendingSwitch {
   target: WorkspaceMode;
-  /** Name of the running experiment/campaign, for the confirm copy. */
+  /** Name of the running experiment/campaign/job, for the confirm copy. */
   runningName: string;
+  /** The panel that would be hidden; the dialog defaults to the Experiments panel. */
+  panelName?: string;
+}
+
+/**
+ * The in-flight work a mode switch would hide. A sweep keeps its historic
+ * behavior; a running discovery search, an active trainability job or a
+ * running conjecture test is covered too (PRD 14 §3.3). A paused discovery run is not running work.
+ */
+function findInFlightWork(target: WorkspaceMode): PendingSwitch | null {
+  const sweep = useExperimentRunStore.getState().active;
+  if (sweep) return { target, runningName: sweep.experimentName };
+  // The Lab views exist only in Research mode, so only leaving it hides them.
+  if (target !== 'learn') return null;
+  const discovery = useLabActivityStore.getState().discovery;
+  if (discovery && discovery.status === 'running') {
+    return { target, runningName: `Discovery run ${discovery.name}`, panelName: 'Discovery Engine' };
+  }
+  const trainability = useTrainabilityStore.getState();
+  if (isTrainabilityJobActive(trainability)) {
+    const job = trainability.activeJobId ? trainability.jobs[trainability.activeJobId] : undefined;
+    return {
+      target,
+      runningName: `Trainability analysis of ${job?.target.fileName ?? 'the current file'}`,
+      panelName: 'Trainability Lab',
+    };
+  }
+  if (isConjectureTestActive(useConjectureStore.getState())) {
+    return { target, runningName: 'Conjecture test', panelName: 'Discovery Engine' };
+  }
+  return null;
 }
 
 interface ModeSwitchState {
@@ -57,9 +91,9 @@ export const useModeSwitchStore = create<ModeSwitchState>((set, get) => ({
     }
     // A running sweep/campaign is only *shown* in Research mode's Experiments
     // panel, so switching while one runs would hide it — confirm and name it.
-    const activeRun = useExperimentRunStore.getState().active;
-    if (activeRun) {
-      set({ pending: { target, runningName: activeRun.experimentName } });
+    const work = findInFlightWork(target);
+    if (work) {
+      set({ pending: work });
       return;
     }
     applySwitch(target, set);

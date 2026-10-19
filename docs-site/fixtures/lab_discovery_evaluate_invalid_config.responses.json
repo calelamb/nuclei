@@ -1,0 +1,10 @@
+[
+  {
+    "type": "error",
+    "phase": "discovery",
+    "code": "invalid_config",
+    "message": "<any>",
+    "run_id": "docs-run",
+    "candidate_id": "c-0001"
+  }
+]

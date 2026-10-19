@@ -1,0 +1,401 @@
+---
+title: "Discovery Engine"
+description: "The Discovery Engine: LLM-guided evolutionary search over quantum programs, scored by trusted evaluators the candidate cannot touch. The loop, each evaluator and its guardrails, the cascade, MAP-Elites and islands, the model ensemble, the YAML schema, the on-disk layout, the Frontier evaluator, Red Queen mode, the Conjecture Engine, and the sandbox's honest limits."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The **Discovery Engine** searches for better quantum programs the way
+AlphaEvolve searches for algorithms. You give it a working seed program and an
+evaluator that scores programs. Claude (and a cheap AST mutator) propose
+edits, the evaluator scores every child, and an evolutionary archive keeps the
+best and most *different* ones. Everything is a file in your project, so a run
+can be paused, resumed, diffed and committed.
+
+Open it from **Discovery Engine** in the Research rail (desktop kernel
+required). **New discovery** offers templates, each a complete seed program
+plus YAML that passes its own evaluator's guardrails: a repetition-code memory
+schedule, a W-state synthesis, a TFIM ansatz, and the Trainability Frontier.
+
+<Aside type="caution" title="What the engine is, and is not">
+It finds programs that score well *under the evaluator you chose*. Evaluators
+are built to resist cheating, and Red Queen mode exists to attack them, but
+neither makes a score a proof. Every Monte-Carlo number carries a 95%
+interval, the champion is re-run on fresh seeds before it is reported, and the
+Guardrails tab shows every check, including every rejection.
+</Aside>
+
+## The loop
+
+1. **Seed.** Your program is evaluated first as candidate `c-0000`. Only code
+   between `# EVOLVE-BLOCK-START` and `# EVOLVE-BLOCK-END` may change (if the
+   markers are missing the whole file is the region, with a warning).
+2. **Select.** For each child, a parent is picked: with probability
+   `exploration` a uniformly random elite on the island, otherwise a size-3
+   tournament on fitness. One to three *inspirations* (top elites from other
+   cells) are shown to the model.
+3. **Mutate.** The mutator proposes an edit. The LLM replies through a forced
+   tool with a rationale, an expected effect and one to eight SEARCH/REPLACE
+   edits; each `search` must match exactly once and lie inside the region.
+   The AST mutator applies random structural edits (swap a gate, change an
+   index, duplicate or reorder a statement).
+4. **Evaluate.** The kernel runs the candidate in a sandbox, hands its
+   *artifact* (Stim text or circuit IR) to a separate trusted scorer, and
+   returns an evaluation record. Duplicates (same program hash) are skipped.
+5. **Archive.** Scored candidates compete for a cell in their island's
+   MAP-Elites grid. Every `migration_interval` generations each island's best
+   is copied to the next island in a ring.
+6. **Stop.** On a budget (evaluations, LLM calls, wall time), on the
+   generation limit, or after `early_stop_patience` generations without a new
+   best.
+7. **Confirm.** The champion is re-evaluated on `confirm.seeds` fresh seeds and
+   reported as mean ± CI. A fitness that only held on the search seed shows up
+   here as a drop (the winner's curse).
+
+With no API key, the hybrid mutator falls back to AST with a visible notice,
+and an LLM-only run refuses to start with a clear message.
+
+## Evaluators
+
+An evaluator is a trusted function the candidate cannot see. The candidate may
+only emit an artifact; the evaluator re-parses it and computes every number.
+The first guardrail to fail rejects the candidate, and later guardrails are
+listed as *skipped*. Each evaluation records the evaluator's kind, version and
+a SHA-256 fingerprint of its source plus canonical config.
+
+| Kind | Entry | Fitness (summary) |
+|------|-------|-------------------|
+| `qec_memory` | `build(distance, rounds) -> stim.Circuit` | Mean over distances of −log₁₀ of the *upper* 95% bound on logical error per round, decoded with PyMatching under noise **the evaluator** inserts (uniform, SI1000 or biased-Z) |
+| `state_synthesis` | `build(n_qubits)` returning a Qiskit or Cirq circuit | 10·min(F/F_threshold, 1) minus a weighted gate-count or depth cost, for a GHZ, W, Dicke or Haar target. Free parameters are optimized by the evaluator, not the candidate |
+| `vqe_ground_state` | `build(n_qubits)` returning a parameterized circuit | −log₁₀ of the relative energy error against the exact ground state (dense diagonalization, n ≤ 12), minus a per-parameter cost |
+| `trainability_frontier` | `build(n_qubits, n_layers)` | See [Frontier](#frontier-evaluator) |
+
+### Guardrails
+
+- **`qec_memory`**, in order: `parse`, `noiseless` (any noise instruction is a
+  rejection; the evaluator applies the noise), `gate_set`, `qubit_budget`,
+  `has_observable`, `deterministic` (the noiseless detectors and observable
+  never fire), `duration` (enough measurement rounds), `decodable`,
+  `nontrivial_observable` (some error mechanism flips the observable), and
+  `fault_distance`. The distance check searches for a logical error lighter
+  than the claimed distance, which is cheating caught; for d ≤ 5 it is an
+  exact bounded search, for larger d it falls back to a shortest-error bound
+  and a pruned search, and passing only under those bounds is a **warning**
+  that says so. It is skipped in the `screen` stage.
+- **`state_synthesis`**: `ir_conversion` (elementary gates only: opaque
+  `initialize`, state-preparation, unitary and isometry gates fail),
+  `gate_set`, `qubit_count`, `no_measurement`, `parameter_budget` (at most 128).
+  Costs are charged after the canonical decomposition, so composite gates pay
+  what they compile to.
+- **`vqe_ground_state`**: `ir_conversion`, `qubit_count`, `parameter_budget`,
+  `has_parameters`, `trainability_prefilter` (rejects a barren plateau at
+  initialization, using the [Trainability Lab](/docs/research/trainability-lab/)'s
+  gradient statistics), and `variational_bound`. If a reported energy is below
+  the exact ground state the evaluation is marked *failed* as an evaluator bug,
+  and never scored.
+- **`trainability_frontier`**: see below.
+
+Candidate programs run with a CPU limit and an import blocker. Where the OS
+allows it they also run inside a sandbox; see
+[Sandbox isolation](#sandbox-isolation-honest-limits).
+
+## The cascade
+
+With `evaluation.cascade: true` every child is first evaluated at
+`stage: "screen"`: fewer shots or restarts and no expensive checks (for example
+no fault-distance search). It is promoted to `full` only when its *optimistic*
+screen bound beats the `promote_if` threshold (`island_median` by default,
+`island_best`, or `always`). Only `full` and `confirm` evaluations can enter
+the archive. Screen-only candidates stay in the lineage, labelled *screened
+out*. The `confirm` stage is the champion's fresh-seed re-evaluation.
+
+## MAP-Elites and islands
+
+Each island keeps a two-dimensional grid whose axes are two of the evaluator's
+**descriptors** (for example `two_qubit_gates` and `depth`). A cell holds the
+highest-fitness candidate that landed in it; ties go to lower cost, then to the
+earlier candidate. The point is *diversity*: a short cheap program and a long
+accurate one both survive, so the search is not funneled into one local optimum.
+The Archive tab shows coverage, and a global Pareto front over the evaluator's
+objectives is available for display. More islands explore more independently;
+migration shares what they find.
+
+## The ensemble mutator
+
+LLM proposals follow an AlphaEvolve-style ensemble: many cheap broad edits plus
+a few deep ones. `mutator.models.breadth` handles most proposals and
+`mutator.models.depth` handles `depth_share` of them, with extended thinking
+when `depth_thinking` is on. Each proposal's model is chosen
+deterministically from the run's seeded RNG. The tiers map to:
+
+| Tier | Model |
+|------|-------|
+| `haiku` | `claude-haiku-5-5` |
+| `sonnet` | `claude-sonnet-5-5` |
+| `opus` | `claude-opus-5-5` |
+
+The defaults are `breadth: haiku`, `depth: opus`, `depth_share: 0.2`. The
+system prompt tells the model the evaluator's objectives, descriptors and the
+guardrails list, so it knows what is checked, and forbids touching noise or
+evaluator internals. The user prompt carries the parent, its scores, the
+inspirations and the top recent rejection reasons, always with "N of M"
+disclosure when something was cut. For parameterized evaluators it also
+carries a **gradient map**: which lines of the parent have vanishing gradients,
+computed by the trusted evaluator, so the model sees the physics of its
+parent's failure and not just a scalar. With `batch_mode: true` a generation's
+prompts go through the Message Batches API for unattended runs; batch ids are
+saved so a resumed run reattaches.
+
+## The `*.discovery.yaml` schema
+
+Schema 1. Out-of-range values are rejected with the allowed range in the
+message; they are never silently clamped, because the file must say what ran.
+
+```yaml
+schema: 1
+type: discovery
+name: w-state-synthesis
+description: Find a W-state preparation with fewer CNOTs.
+program: discovery/w_state.py        # project-relative seed program
+entry: build                         # default build
+evaluator:
+  kind: state_synthesis              # qec_memory | state_synthesis | vqe_ground_state | trainability_frontier
+  config: { target: { kind: w, n_qubits: 5 }, fidelity_threshold: 0.999 }
+search:
+  islands: 3                         # 1-8
+  generations: 25                    # 1-500
+  candidates_per_generation: 6       # 1-32
+  archive: { descriptors: [two_qubit_gates, depth], bins: [8, 8] }   # bins 2-64, two different descriptors
+  migration_interval: 5              # 0-500; 0 disables
+  exploration: 0.15                  # 0-1
+  early_stop_patience: 10            # 0-500; 0 disables
+evaluation:
+  cascade: true
+  promote_if: island_median          # island_median | island_best | always
+mutator:
+  kind: hybrid                       # llm | ast | hybrid | red_queen
+  llm_share: 0.75                    # hybrid only
+  models: { breadth: haiku, depth: opus, depth_share: 0.2, depth_thinking: true }
+  batch_mode: false
+  inspirations: 2                    # 0-3
+red_queen:                           # read only when mutator.kind is red_queen
+  audit_every: improvement           # improvement | all | top_k
+  top_k: 5                           # 1-100
+  max_audits: 50                     # 1-5000
+budget:
+  max_evaluations: 200               # 1-5000
+  max_llm_calls: 160                 # 0-5000
+  max_wall_minutes: 90               # 1-1440
+  max_concurrent_evaluations: 3      # 1-8
+confirm: { seeds: 3 }                # 0-10
+seed: 7
+notes: free text
+```
+
+The evaluator's `config` is checked against the kernel's JSON Schema for that
+kind (the **New discovery** form and the `discovery_evaluators` message show
+it).
+
+## On-disk layout
+
+```
+experiments/
+├── w-state-synthesis.discovery.yaml
+└── w-state-synthesis/discovery/<runId>/
+    ├── run.json                    # config snapshot, evaluator fingerprint, status,
+    │                               #   budget usage, champion, archive, RNG state
+    ├── candidates/c-0000.json …    # program, parent, island, generation, mutator,
+    │                               #   LLM rationale/usage/prompt hash, full evaluation
+    ├── exploits/<id>.json          # Red Queen exploits (when any)
+    ├── conjectures.json / .md      # the Conjecture Engine ledger (when any)
+    └── champion.py                 # written on completion or on Promote
+```
+
+`runId` is a UTC timestamp plus four hex digits; candidate ids are `c-0000`
+(the seed), `c-0001` and so on. **Resume** reloads `run.json` and every
+candidate file and continues deterministically: the RNG state is saved, and any
+candidate without an evaluation is re-queued. A run keeps going while the panel
+is closed, and the status bar shows it.
+
+## Frontier evaluator
+
+<Aside type="note" title="Is every trainable ansatz classically simulable?">
+Cerezo et al. conjecture that every provably barren-plateau-free ansatz is also
+classically simulable. This evaluator searches for counterexamples, scored
+exactly by Pauli propagation at 8 to 64 qubits. It was revised after an
+adversarial physics review: the guards cannot be bypassed by an n-dependent
+program or a no-op dressing, and "hardness" is now the measured cost of exact
+Pauli propagation, not the looseness of a bound.
+</Aside>
+
+**Kind:** `trainability_frontier`. **Entry:** `build(n_qubits, n_layers)`
+returning a parameterized Qiskit or Cirq circuit. The Discovery Engine evolves
+ansatzes, and the exact [Pauli Propagation Engine](/docs/research/trainability-lab/#gradient-variance-three-kinds-of-interval)
+scores each one at several sizes.
+
+**Config:** `qubits` (default `[8, 16, 32, 64]`, each 4 to 128, at most 6
+values), `n_layers` (4), `observable` (`preset:local_z`, rescaled so its
+largest coefficient is 1), `estimation: {max_frontier: 200000, time_budget_s:
+20, target_width: 0.02}` (`target_width` is a diagnostic only),
+`dla_probe_qubits` (`[4, 5, 6]`), `max_parameters_per_qubit` (24) and
+`weights: {trainability: 1.0, pp_cost: 0.5}`. The `screen` stage uses only the
+first two sizes with a 10× smaller frontier.
+
+**Guardrails, in order:**
+
+1. `ir_conversion`: the circuit converts for every n.
+2. `ppe_class`: every rotation is a single-Pauli rotation with its own
+   independent parameter and every fixed gate is Clifford, so the engine applies.
+3. `qubit_count`: exactly n qubits for each n.
+4. `parameter_budget`: at most `max_parameters_per_qubit · n` parameters.
+5. `nontrivial_variance`: the variance at the smallest n is **exact** (the
+   engine finished and the interval is within 10% of the value) and at least
+   1e-6. A stopped or uninformative run is never read as a variance.
+6. `nontrivial_algebra`: after removing gates that do nothing to `|0…0⟩`
+   (phases and basis permutations on known basis states, such as a leading CZ
+   chain), the interaction graph is connected at **every** scored and probe
+   size; the stripped circuits are structurally consistent across sizes
+   (same entangler pattern class, entangler, rotation axes, similar per-qubit
+   gate densities); and the Lie algebra's dimension exceeds **4n²** at every
+   probe size. Product and free-fermion ansatzes are rejected: they are
+   trivially trainable and efficiently simulable.
+7. `exactness`: every variance point is exact, otherwise a warning, and the
+   point is down-weighted.
+
+**Scoring.** The exact gradient variance of the rescaled observable is fitted
+two ways, 2^(−βn) and n^(−α). The preferred law becomes one penalty: bits of
+variance lost per doubling of n at the largest size (`α_upper95`, or
+`β_upper95 · n_max / 2`, the larger when the verdict is inconclusive), capped at
+6. With fewer than four informative sizes a secant over the interval extremes
+is used, labelled `secant` and shown with no confidence interval.
+
+The cost probe then runs, at the largest n and three seeded random parameter
+points, an **untruncated** Pauli-propagation evaluation of ⟨O⟩ within the
+budget. If it finishes, `pp_exact_cost = log10(strings needed)`: "Pauli
+propagation needed N strings to compute ⟨O⟩ exactly". If not, the value is a
+censored lower bound. The lowest of the three points counts. Because a state
+vector on the observable's backward light cone of width w costs 2^w amplitudes,
+the fitness uses `min(pp_exact_cost, w · log10 2)`: a candidate whose light cone
+is 12 qubits or narrower is brute-force simulable and capped at 3.6.
+`fitness = trainability_term + pp_cost · capped_cost − exactness penalty`.
+Objectives: `beta` and `pp_exact_cost` ("Pauli-propagation exact cost (log10
+strings)"). Descriptors: `dla_fill_fraction`, `light_cone_qubits`,
+`two_qubit_gates_per_layer` and `log2_dla_dimension`.
+
+The honesty text the interface shows next to every Frontier result, verbatim:
+
+> Cost is the number of Pauli strings *Pauli propagation* needed to compute ⟨O⟩ exactly (log10, censored at the budget). A high cost means this estimator is expensive, not that the circuit is classically hard: tensor networks, light-cone simulation and other methods may still be cheap. It is not a proof of classical hardness. A high score is a lead to investigate, not a counterexample.
+
+## Red Queen mode
+
+The evaluator is the engine's attack surface. Red Queen mode (`mutator.kind:
+red_queen`) *evolves* the attacker. The model is told the evaluator's
+guardrails and is rewarded for a program the evaluator **scores well** but an
+**independent audit** rejects. It is security testing of Nuclei's own scoring
+logic, not of your machine: the adversary is forbidden from touching the
+network, the filesystem or the sandbox.
+
+- **The audit** is a separate, stricter re-scoring of the same artifact. It
+  re-parses the artifact from scratch, checks that the candidate is
+  deterministic across fresh sandbox runs, re-computes the score with
+  independent oracles (a naive reference simulator, a dense Hamiltonian, an
+  exact fault-distance search) under a different seed, and compares it with
+  the evaluator's score. Every check is shown, passed or not.
+- **A verdict** is `consistent`, `exploit` or `inconclusive`. A candidate is an
+  **exploit** when the evaluator scored it and at least one audit check fails;
+  the *gap* is the evaluator's fitness minus the audit's.
+- **When audits run** is `red_queen.audit_every`: on each `improvement`, on
+  `all` scored candidates, or on the `top_k`, capped by `max_audits`. You can
+  also audit any candidate by hand (**Run audit** in the candidate drawer).
+- **The exploit corpus.** Every exploit is saved to the run's `exploits/`
+  folder and can be exported as a regression fixture to
+  `kernel/tests/fixtures/exploits/`. The suite replays every fixture and
+  requires that it is *still* rejected by the evaluator or flagged by the
+  audit. The corpus already holds 17 fixtures: distance cheaters,
+  entropy-dependent circuits, hard-coded state vectors, measurement stripping,
+  numpy monkey-patching, dead-parameter laundering and more. An exploit nobody
+  has fixed yet is marked `known_hole` and runs as a strict expected failure, so
+  fixing it forces the marker to be removed.
+- **What "no exploit found" means.** The run searched within its budget with
+  this model and this audit, and found nothing. That is evidence of
+  robustness, not proof. It says nothing about attacks that need more budget, a
+  cleverer model, or a check the audit does not make.
+
+## Conjecture Engine
+
+After a run, the archive holds scored ansatzes with structural features. The
+Conjecture Engine turns that into **falsifiable claims the kernel tries to
+break**. Open a Frontier run's **Conjectures** tab.
+
+1. **Propose.** Claude (`claude-opus-5-5`) reads a capped digest of the archive
+   (features per elite, β with its interval, hardness, DLA size; the digest
+   states every cap) and proposes up to five conjectures through a forced tool.
+   Each has a statement, a structured feature predicate (no code), a numeric
+   prediction such as `beta_upper95 < 0.1`, a generator for *new* circuits, an
+   `n_range`, a circuit count and a point count. The kernel's schema
+   (`discovery_conjecture_schema`) defines what may be said, and anything
+   outside it is dropped and listed. You review each proposal: accept, reject or
+   edit.
+2. **Test, on held-out circuits.** The kernel generates 5 to 32 *fresh* circuits
+   from the test family that the search never saw, so they are held out by
+   construction, and runs a scaling study on each, with the exact engine up to
+   128 qubits. Each circuit's prediction is judged on the whole of its interval.
+3. **Verdict.**
+
+   | Verdict | Meaning |
+   |---------|---------|
+   | **Supported** | Every tested circuit met the prediction with its entire interval |
+   | **Refuted** | At least one circuit violates it under the most favorable reading of its interval; the counterexample is kept and can be opened as a file |
+   | **Inconclusive** | Neither: intervals straddled the threshold, a fit was undefined, or a point was only bounded |
+
+   *Supported* never means proven. The interface says "supported on N held-out
+   circuits up to n = 128", and a conjecture that was only partly tested says so.
+4. **Ledger.** Each finished test is written to `conjectures.json` and
+   `conjectures.md` in the run's folder with the evidence, the counterexamples,
+   the evaluator fingerprint, the tester's fingerprint, the seed and a hash of
+   the prompt. Refuted conjectures are kept, because a negative result is a
+   result. Dirac can cite the ledger.
+
+## Sandbox isolation: honest limits
+
+Candidate code is untrusted, and runs in a subprocess with resource
+limits, a cooperative import blocker (network, `subprocess`, `ctypes` and
+friends) and, where the platform provides it, an OS sandbox. The interface
+states the guarantee plainly:
+
+> Where an OS sandbox runs, it blocks network access and file writes outside a private scratch directory, and denies file reads except an allow-list. Plain process isolation blocks nothing at the OS level. Each evaluation reports which applied.
+
+What that means, and does not:
+
+- **macOS** uses `sandbox-exec`: network and writes are denied (except a
+  private scratch directory that is deleted after the run), and **file reads
+  are denied except for an allow-list**: the Python interpreter and virtual
+  environment, the kernel code, system libraries and the scratch directory.
+  File *metadata* (names, sizes) is still readable.
+- **Linux** is wired to use `bwrap` (no network, only the needed paths bound
+  read-only, private `/tmp`). **That path has not been tested on Linux yet.**
+  The kernel runs a real probe through the wrapper before trusting it and
+  demotes to plain process isolation if it fails, and each evaluation records
+  the isolation it *actually* ran with (`sandbox-exec`, `bwrap` or `process`)
+  together with `isolation_detail.reads` (`restricted` or `unrestricted`). The
+  interface shows that value per evaluation and never claims restricted reads
+  when it reports `unrestricted` or reports nothing.
+- **Plain process isolation** has rlimits and the import blocker only; nothing is blocked at the OS level, so reads are unrestricted. The
+  blocker is defense in depth and is cooperative; a determined program can get
+  around it. The process boundary is the real wall.
+- **Windows** has no OS sandbox.
+- Set `NUCLEI_DISCOVERY_ISOLATION=process` to force the baseline.
+
+Evaluators never run in the candidate's process, and candidates never see the
+scorer. The sandbox is for containing mistakes and casual abuse; do not run
+programs from sources you would not run yourself on a machine holding secrets
+you cannot afford to expose to reads.
+
+## Reading the results
+
+The run page shows trajectory, lineage tree, archive, candidates, guardrails
+and conjectures. Each candidate has a program diff against its parent, the
+LLM's rationale, its objectives with intervals, the full guardrail log and the
+timings. **Promote** writes `champion.py`; **Confirm on fresh seeds** re-runs
+the champion. Protocol details are in the
+[Quantum AI Lab messages](/docs/kernel-api/messages-lab/).

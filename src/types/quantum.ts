@@ -1,3 +1,6 @@
+import type { TrainabilityRequest, TrainabilityResponse } from './trainability';
+import type { DiscoveryRequest, DiscoveryResponse } from './discovery';
+import type { ConjectureRequest, ConjectureResponse } from './conjecture';
 import type {
   QecCampaignProgress,
   QecCampaignResult,
@@ -37,6 +40,10 @@ export interface Gate {
   controls: number[];    // control qubit indices
   params: number[];      // rotation angles, etc.
   layer: number;         // depth position (column in circuit diagram)
+  /** PRD 14 — symbolic parameter names parallel to `params` (null = numeric).
+   * Present only when the circuit has unbound parameters; `params` then
+   * carries 0.0 placeholders for the symbolic slots. */
+  symbols?: Array<string | null>;
 }
 
 export interface CircuitSnapshot {
@@ -158,7 +165,12 @@ export type KernelMessage =
   | { type: 'debug_trace'; code: string; language?: KernelLanguage }
   // Dev tools Phase 4 — editor diagnostics + formatting via ruff. Python only.
   | { type: 'lint'; code: string; language?: KernelLanguage }
-  | { type: 'format'; code: string; language?: KernelLanguage };
+  | { type: 'format'; code: string; language?: KernelLanguage }
+  // Protocol v1.3 (PRD 14) — Quantum AI Lab: Trainability Lab + Discovery
+  // Engine. Additive; Research mode. Wire shapes live in their own modules.
+  | TrainabilityRequest
+  | DiscoveryRequest
+  | ConjectureRequest;
 
 interface HardwareJobDTO {
   id: string;
@@ -180,7 +192,13 @@ export type KernelResponse =
       message: string;
       traceback?: string;
       code?: string;
-      phase?: 'parse' | 'execute' | 'python' | 'transpile' | 'debug' | 'lint' | 'format' | 'qec_estimate' | 'qec_generate' | 'qec_snapshot' | 'qec_materialize' | 'qec_campaign' | 'qec_decode_sample';
+      phase?: 'parse' | 'execute' | 'python' | 'transpile' | 'debug' | 'lint' | 'format' | 'qec_estimate' | 'qec_generate' | 'qec_snapshot' | 'qec_materialize' | 'qec_campaign' | 'qec_decode_sample' | 'trainability' | 'discovery';
+      /** Protocol v1.3 (PRD 14) correlation ids on Lab errors. */
+      job_id?: string;
+      run_id?: string;
+      candidate_id?: string;
+      /** Echo of the `request_id` of a Lab sync request (discovery_*); absent from older kernels. */
+      request_id?: string;
       framework?: Framework;
       dependency?: string;
     }
@@ -217,7 +235,11 @@ export type KernelResponse =
   | { type: 'debug_trace_result'; data: DebugTrace | null }
   // Dev tools Phase 4 — ruff diagnostics + formatting.
   | { type: 'lint_result'; diagnostics: RuffDiagnostic[] }
-  | { type: 'format_result'; formatted: string | null };
+  | { type: 'format_result'; formatted: string | null }
+  // Protocol v1.3 (PRD 14) — Quantum AI Lab.
+  | TrainabilityResponse
+  | DiscoveryResponse
+  | ConjectureResponse;
 
 /** One ruff diagnostic — 1-based positions, matching the kernel's `lint`
  * payload. `severity` is `'error'` only for syntax errors (E9xx). */

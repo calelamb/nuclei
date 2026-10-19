@@ -1,7 +1,12 @@
 import re
 from kernel.adapters.base import FrameworkAdapter
 from kernel.adapters._math import assign_layer, partial_trace_qubit, step_state_payload
-from kernel.models.snapshot import CircuitSnapshot, SimulationResult, Gate
+from kernel.models.snapshot import (
+    UNBOUND_PARAMETERS_MESSAGE,
+    CircuitSnapshot,
+    Gate,
+    SimulationResult,
+)
 
 
 # Map Qiskit gate class names to canonical names
@@ -26,6 +31,27 @@ GATE_NAME_MAP = {
     "CCXGate": "Toffoli",
     "Measure": "Measure",
 }
+
+
+def _params_and_symbols(op) -> tuple[list[float], list[str | None]]:
+    """Numeric params plus parallel symbol names.
+
+    A parameter that still has free symbols is emitted as ``0.0`` with its
+    symbol name (a bare ``Parameter``) or expression text; bound or numeric
+    values are emitted as floats with a ``None`` symbol.
+    """
+    from qiskit.circuit import Parameter
+
+    params: list[float] = []
+    symbols: list[str | None] = []
+    for p in op.params or []:
+        if getattr(p, "parameters", None):
+            params.append(0.0)
+            symbols.append(p.name if isinstance(p, Parameter) else str(p))
+        else:
+            params.append(float(p))
+            symbols.append(None)
+    return params, symbols
 
 
 class QiskitAdapter(FrameworkAdapter):
@@ -56,7 +82,7 @@ class QiskitAdapter(FrameworkAdapter):
                             "z": "Z", "s": "S", "t": "T", "rx": "RX", "ry": "RY",
                             "rz": "RZ", "swap": "SWAP", "ccx": "Toffoli", "measure": "Measure"}
                 gate_name = name_map.get(name_lower, op.name.upper())
-            params = [float(p) for p in op.params] if op.params else []
+            params, symbols = _params_and_symbols(op)
 
             if gate_name in ("CNOT", "CZ"):
                 controls = qubits[:1]
@@ -81,6 +107,7 @@ class QiskitAdapter(FrameworkAdapter):
                 controls=controls,
                 params=params,
                 layer=layer,
+                symbols=symbols if any(x is not None for x in symbols) else None,
             ))
 
         depth = max(qubit_layers.values()) if qubit_layers else 0
@@ -96,6 +123,9 @@ class QiskitAdapter(FrameworkAdapter):
     def simulate(self, circuit_obj, shots: int, seed: int | None = None) -> SimulationResult:
         import time
         from qiskit_aer import AerSimulator
+
+        if circuit_obj.num_parameters:
+            raise ValueError(UNBOUND_PARAMETERS_MESSAGE)
 
         start = time.time()
 

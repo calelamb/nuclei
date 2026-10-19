@@ -12,6 +12,7 @@ import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 import { useExerciseStore } from '../../stores/exerciseStore';
 import { useLayoutStore, type LayoutPreset } from '../../stores/layoutStore';
 import { ModeChip } from './ModeChip';
+import { LabStatusChips } from '../discovery/LabStatusChips';
 
 /**
  * PRD 11 Phase A — the status bar, extracted VERBATIM from `PanelLayout.tsx`.
@@ -168,6 +169,9 @@ export function StatusBar() {
           <span style={{ flexShrink: 0 }}>: resumable</span>
         </span>
       )}
+
+      {/* PRD 14 — Quantum AI Lab work in flight (discovery run, trainability job). */}
+      <LabStatusChips />
 
       <div style={{ flex: 1 }} />
 

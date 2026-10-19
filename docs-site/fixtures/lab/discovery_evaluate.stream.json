@@ -1,0 +1,126 @@
+{
+  "request": {
+    "type": "discovery_evaluate",
+    "run_id": "docs-run",
+    "candidate_id": "c-0001",
+    "evaluator": {
+      "kind": "state_synthesis",
+      "config": {
+        "target": {
+          "kind": "ghz",
+          "n_qubits": 3
+        }
+      }
+    },
+    "program": "from qiskit import QuantumCircuit\n\n\ndef build(n_qubits):\n    qc = QuantumCircuit(n_qubits)\n    qc.h(0)\n    for q in range(1, n_qubits):\n        qc.cx(q - 1, q)\n    return qc\n",
+    "entry": "build",
+    "seed": 1,
+    "stage": "full"
+  },
+  "until": "discovery_evaluation",
+  "ignore_types": [],
+  "responses": [
+    {
+      "type": "discovery_evaluate_accepted",
+      "run_id": "docs-run",
+      "candidate_id": "c-0001",
+      "queue_position": 0
+    },
+    {
+      "type": "discovery_evaluation",
+      "run_id": "docs-run",
+      "candidate_id": "c-0001",
+      "evaluation": {
+        "candidate_id": "c-0001",
+        "run_id": "docs-run",
+        "status": "scored",
+        "fitness": "<approx:9.800000000000001:0.00098>",
+        "objectives": {
+          "infidelity": {
+            "value": "<approx:0:0.000000001>",
+            "direction": "minimize",
+            "label": "Infidelity"
+          },
+          "cost": {
+            "value": 2,
+            "direction": "minimize",
+            "label": "Cost (two_qubit_gates)"
+          }
+        },
+        "descriptors": {
+          "two_qubit_gates": 2,
+          "depth": 3
+        },
+        "metrics": {
+          "fidelity": "<approx:1:0.0001>",
+          "fidelity_threshold": "<approx:0.999:0.0000999>",
+          "meets_threshold": true,
+          "restart_fidelities": [
+            "<approx:1:0.0001>"
+          ],
+          "optimized": false,
+          "n_parameters": 0,
+          "parameter_names": [],
+          "best_theta": [],
+          "n_fixed_nonclifford_angles": 0,
+          "cost_kind": "two_qubit_gates",
+          "costs": {
+            "two_qubit_gates": 2,
+            "depth": 3,
+            "t_count": 0
+          },
+          "continuous_rotations": 0
+        },
+        "guardrails": [
+          {
+            "id": "ir_conversion",
+            "label": "Circuit converts to elementary gates",
+            "status": "pass",
+            "detail": null
+          },
+          {
+            "id": "gate_set",
+            "label": "Only allowed gates",
+            "status": "pass",
+            "detail": null
+          },
+          {
+            "id": "qubit_count",
+            "label": "Exactly 3 qubits",
+            "status": "pass",
+            "detail": null
+          },
+          {
+            "id": "no_measurement",
+            "label": "No measurements",
+            "status": "pass",
+            "detail": null
+          },
+          {
+            "id": "parameter_budget",
+            "label": "At most 128 free parameters",
+            "status": "pass",
+            "detail": null
+          }
+        ],
+        "rejection": null,
+        "failure": null,
+        "stdout": "<any>",
+        "stderr": "<any>",
+        "timings_ms": "<any>",
+        "evaluator": {
+          "kind": "state_synthesis",
+          "version": "<any>",
+          "fingerprint": "<any>"
+        },
+        "seed": 1,
+        "stage": "full",
+        "program_key": "<any>",
+        "cache_hit": false,
+        "isolation": "<any>",
+        "isolation_detail": "<any>",
+        "compute": "<any>"
+      }
+    }
+  ]
+}

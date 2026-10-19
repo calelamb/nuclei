@@ -2,6 +2,10 @@ import circuitSource from '../../tests/e2e/fixtures/qec-project/circuits/repetit
 import detectorSamples from '../../tests/e2e/fixtures/qec-project/captures/minimal.dets?raw';
 import dataImportStudySource from '../../tests/e2e/fixtures/qec-project/studies/data-import.qec-study.yaml?raw';
 import studySource from '../../tests/e2e/fixtures/qec-project/studies/surface-memory.qec-study.yaml?raw';
+import labHeaSource from '../../tests/e2e/fixtures/lab-project/ansatz/hardware_efficient.py?raw';
+import labHvaSource from '../../tests/e2e/fixtures/lab-project/ansatz/tfim_hva.py?raw';
+import labWStateSource from '../../tests/e2e/fixtures/lab-project/discovery/w_state.py?raw';
+import labDiscoverySource from '../../tests/e2e/fixtures/lab-project/experiments/w-state-synthesis.discovery.yaml?raw';
 import { useResearchTourStore } from '../stores/researchTourStore';
 import type { DirEntry, PlatformBridge } from './bridge';
 
@@ -18,6 +22,15 @@ const FIXTURE_PROJECTS: Readonly<Record<string, FixtureProject>> = Object.freeze
       'circuits/repetition.stim': circuitSource,
       'captures/minimal.dets': detectorSamples,
       'studies/surface-memory.qec-study.yaml': studySource,
+    }),
+  }),
+  // PRD 14 — Quantum AI Lab (Trainability Lab + Discovery Engine).
+  'lab-project': Object.freeze({
+    files: Object.freeze({
+      'ansatz/hardware_efficient.py': labHeaSource,
+      'ansatz/tfim_hva.py': labHvaSource,
+      'discovery/w_state.py': labWStateSource,
+      'experiments/w-state-synthesis.discovery.yaml': labDiscoverySource,
     }),
   }),
 });

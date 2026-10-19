@@ -1,0 +1,54 @@
+/* Conjecture Engine surfaces. App tokens and Lab roles only; no hard-coded colors. */
+
+.cj-stack { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+.cj-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.cj-chip {
+  display: inline-flex; align-items: center; height: 22px; padding: 0 8px;
+  border-radius: var(--radius-pill); border: 1px solid var(--lab-hairline);
+  background: var(--lab-surface-3); font-family: var(--font-mono); font-size: 11px;
+  font-variant-numeric: tabular-nums; color: var(--color-text-primary);
+}
+.cj-chip--prediction { background: var(--lab-quantum-soft); border-color: transparent; }
+.cj-statement { margin: 0; font-size: 14px; line-height: 1.45; color: var(--color-text-primary); }
+.cj-meta { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px; margin: 0; font-size: 12px; }
+.cj-meta dt { color: var(--color-text-secondary); }
+.cj-meta dd { margin: 0; font-family: var(--font-mono); font-variant-numeric: tabular-nums; min-width: 0; overflow-wrap: anywhere; }
+.cj-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+
+.cj-evidence { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; border: 1px solid var(--lab-hairline); border-radius: var(--radius-round); overflow: hidden; }
+.cj-evidence__row {
+  display: grid; grid-template-columns: 56px minmax(0, 1.4fr) minmax(0, 1fr) 96px 92px;
+  gap: var(--space-3); align-items: center; padding: 6px 10px; font-size: 12px;
+  border-bottom: 1px solid var(--lab-hairline); background: var(--lab-surface-2);
+}
+.cj-evidence__row:last-child { border-bottom: 0; }
+.cj-evidence__row[data-outcome='violates'] { background: var(--lab-danger-soft); }
+.cj-evidence__num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.cj-evidence__features { color: var(--color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 900px) {
+  .cj-evidence__row { grid-template-columns: 48px minmax(0, 1fr) 84px; }
+  .cj-evidence__features, .cj-evidence__spark { display: none; }
+}
+
+.cj-spark { display: block; }
+.cj-spark path { fill: none; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+.cj-spark .cj-spark__band { stroke: none; fill: var(--lab-band); }
+
+.cj-verdict { border-left: 3px solid var(--lab-hairline); padding-left: var(--space-3); display: flex; flex-direction: column; gap: var(--space-2); }
+.cj-verdict[data-verdict='supported'] { border-left-color: var(--color-success); }
+.cj-verdict[data-verdict='refuted'] { border-left-color: var(--color-danger); }
+.cj-verdict[data-verdict='inconclusive'] { border-left-color: var(--color-warning); }
+.cj-verdict__summary { margin: 0; font-size: 13px; line-height: 1.45; }
+.cj-caption { font-size: 11px; color: var(--color-text-secondary); margin: 0; }
+
+.cj-counterexample { border: 1px solid var(--lab-hairline); border-radius: var(--radius-round); background: var(--lab-danger-soft); padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-2); }
+
+.cj-edit { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.cj-edit__wide { grid-column: 1 / -1; }
+.cj-edit textarea { width: 100%; box-sizing: border-box; min-height: 64px; resize: vertical; font: inherit; }
+.cj-issues { margin: 0; padding-left: 18px; font-size: 12px; color: var(--color-danger); }
+.cj-issues code { font-family: var(--font-mono); }
+@media (max-width: 720px) { .cj-edit { grid-template-columns: minmax(0, 1fr); } }
+
+.cj-ledger { width: 100%; }
+.cj-ledger td { white-space: normal; vertical-align: top; }

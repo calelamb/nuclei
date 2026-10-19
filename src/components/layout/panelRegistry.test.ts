@@ -34,6 +34,8 @@ describe('activityViewsForMode (registry-driven, Phase C)', () => {
     expect(activityViewsForMode('research', { experimentalFeatures: false })).toEqual([
       'files',
       'experiments',
+      'discovery',
+      'trainability',
       'qec',
       'hardware',
       'estimator',
@@ -48,6 +50,8 @@ describe('activityViewsForMode (registry-driven, Phase C)', () => {
     expect(activityViewsForMode('research', { experimentalFeatures: true })).toEqual([
       'files',
       'experiments',
+      'discovery',
+      'trainability',
       'qec',
       'hardware',
       'estimator',

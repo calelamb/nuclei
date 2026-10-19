@@ -1,0 +1,127 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`certificate Markdown > matches the snapshot 1`] = `
+"# Trainability certificate — hardware_efficient.py
+
+Generated 2026-10-18T12:00:00.000Z by the Nuclei Trainability Lab (job \`trn-fixture-1\`, status: complete).
+
+- Framework: qiskit
+- Qubits: 4; parameters: 6
+- Observable: \`1*Z0*Z1*Z2*Z3\`
+
+## Verdicts
+
+**Barren-plateau risk: HIGH**
+
+- [high] (scaling) Var[∂C] ∝ 2^(−0.93 n) (95% CI 0.81–1.05); exponential preferred over power law (ΔAIC 8.3).
+- [high] (lie) dim 𝔤 = 120 = dim so(2ⁿ) for n = 4: exponentially large; gradient concentration is expected at scale.
+- [medium] (lint) TRN001 Global cost function: The observable acts on all 4 qubits. Global costs exhibit barren plateaus even for shallow circuits.
+- [medium] (lint) TRN002 Exponentially large Lie algebra: dim 𝔤 = 120 matches so(2ⁿ) for n = 4: exponential gradient concentration is expected.
+- [info] (gradients) Mean gradient variance 1.15e-2 over 200 samples.
+
+**Simulability: exponential DLA.** dim 𝔤 = 120 = dim so(2ⁿ) for n = 4: exponentially large; gradient concentration is expected at scale.
+
+- dim 𝔤 = 120 (so(16), complete).
+- Pauli propagation produced 2 variance estimates up to 48 qubits; worst truncation interval is 1.0% of the estimate.
+- Hardness is resistance to this Pauli-propagation estimator under this budget. It is not a proof of classical hardness. A high score is a lead to investigate, not a counterexample.
+
+## Results
+
+### Gradients
+
+Method: sampling (numpy). Samples: 200. Initialization: uniform.
+Mean variance 0.0115, 95% bootstrap CI [0.0099, 0.0133].
+Mean gradient norm 0.34.
+Empirical cost variance Var[C] 0.0107, 95% CI [0.0091, 0.0126].
+
+| Parameter | Var[∂C/∂θ] | 95% bootstrap CI | E\\|∂C/∂θ\\| |
+| --- | --- | --- | --- |
+| θ[0] | 0.031 | [0.0267, 0.0366] | 0.141 |
+| θ[1] | 0.0078 | [0.00671, 0.0092] | 0.0707 |
+| θ[2] | 0.026 | [0.0224, 0.0307] | 0.129 |
+| θ[3] | 0.0041 | [0.00353, 0.00484] | 0.0512 |
+| θ[4] | 2.3×10⁻⁵ | [1.98×10⁻⁵, 2.71×10⁻⁵] | 0.00384 |
+| θ[5] | 0 | [0, 0] | 0 |
+
+### Scaling
+
+| n | layers | params | Var[∂C] | Interval | Interval kind | Method |
+| --- | --- | --- | --- | --- | --- | --- |
+| 2 | 4 | 8 | 0.138 | [0.113, 0.165] | 95% bootstrap CI | sampling (numpy) |
+| 3 | 4 | 12 | 0.0723 | [0.0593, 0.0868] | 95% bootstrap CI | sampling (numpy) |
+| 4 | 4 | 16 | 0.0379 | [0.0311, 0.0455] | 95% bootstrap CI | sampling (numpy) |
+| 5 | 4 | 20 | 0.0199 | [0.0163, 0.0239] | 95% bootstrap CI | sampling (numpy) |
+| 6 | 4 | 24 | 0.0105 | [0.00857, 0.0125] | 95% bootstrap CI | sampling (numpy) |
+| 7 | 4 | 28 | 0.00549 | [0.0045, 0.00658] | 95% bootstrap CI | sampling (numpy) |
+| 8 | 4 | 32 | 0.00288 | [0.00236, 0.00346] | 95% bootstrap CI | sampling (numpy) |
+| 24 | 4 | 96 | 9.55×10⁻⁸ | [9.5×10⁻⁸, 9.6×10⁻⁸] | truncation interval (rigorous) | Pauli propagation (numpy) |
+| 48 | 4 | 192 | 1.82×10⁻¹⁴ | [1.81×10⁻¹⁴, 1.83×10⁻¹⁴] | truncation interval (rigorous) | Pauli propagation (numpy) |
+
+**4 layers — verdict: barren plateau.** Var[∂C] ∝ 2^(−0.93 n) (95% CI 0.81–1.05); exponential preferred over power law (ΔAIC 8.3).
+- Exponential: β = 0.93 (95% CI [0.81, 1.05]), R² = 0.995, AIC = −12.3.
+- Power law: α = 2.7 (95% CI [2.1, 3.3]), R² = 0.94, AIC = −4.
+- Preferred: exponential; ΔAIC = 8.3.
+
+### Lie algebra
+
+Status: complete.
+dim 𝔤 = 120 of at most 255 (n = 4).
+Classification: so(16) (exact_dimension_match). Dimension match only (2³·(2⁴−1) = 120 = dim so(2⁴)); this is not an isomorphism proof.
+g-purity: initial state 0.25, observable 1; observable in 𝔤: true, state in 𝔤: false.
+Predicted cost variance Var[C] (Ragone et al.): 0.0089. Empirical cost variance Var[C]: 0.0107. Empirical / predicted = 1.2.
+Simulability: dim 𝔤 = 120 = dim so(2ⁿ) for n = 4: exponentially large; gradient concentration is expected at scale.
+
+Assumptions:
+- Deep-circuit (approximate 2-design over e^𝔤) regime.
+- 𝔤 is simple (no centre, a single ideal); otherwise the prediction is not applicable.
+
+### Expressibility
+
+KL divergence to Haar: 0.012 (95% CI [0.009, 0.016]) over 2000 state pairs, 20 bins, dimension 16.
+Reference: KL of a circuit that always outputs the same state (upper reference) at this bin count. (4.97).
+
+### Entangling capability
+
+Meyer–Wallach mean 0.46 ± 0.09 (95% CI [0.45, 0.47]); Haar mean 0.824.
+
+### Landscape
+
+11×11 slice, span ±3.14 rad along two random orthonormal directions. Cost range [−0.5, 0.5], value at center 0.5.
+
+## Lint diagnostics
+
+- **TRN001** (warning) Global cost function — line 9: The observable acts on all 4 qubits. Global costs exhibit barren plateaus even for shallow circuits. [Cerezo et al., Nat. Commun. 12, 1791 (2021)](https://doi.org/10.1038/s41467-021-21728-w)
+- **TRN004** (info) Dead parameter — line 8: θ[5] cannot affect the cost: its generator commutes with the observable.
+- **TRN002** (warning) Exponentially large Lie algebra: dim 𝔤 = 120 matches so(2ⁿ) for n = 4: exponential gradient concentration is expected. [Ragone et al., Nat. Commun. 15, 7172 (2024)](https://doi.org/10.1038/s41467-024-49909-3)
+
+## Citations
+
+- [McClean et al., Nat. Commun. 9, 4812 (2018)](https://doi.org/10.1038/s41467-018-07090-4) — Barren plateaus in parameterized quantum circuits; gradient-variance scaling.
+- [Cerezo et al., Nat. Commun. 12, 1791 (2021)](https://doi.org/10.1038/s41467-021-21728-w) — Cost-function-dependent barren plateaus (global vs local costs).
+- [Ragone et al., Nat. Commun. 15, 7172 (2024)](https://doi.org/10.1038/s41467-024-49909-3) — Lie-algebraic variance formula and g-purities.
+- [Larocca et al., Nat. Comput. Sci. 3, 542 (2023)](https://doi.org/10.1038/s43588-023-00467-6) — Overparameterization and the dimension of the dynamical Lie algebra.
+- [Goh et al., arXiv:2308.01432 (2023)](https://arxiv.org/abs/2308.01432) — Lie-algebraic classical simulation (𝔤-sim).
+- [Sim, Johnson & Aspuru-Guzik, Adv. Quantum Technol. 2, 1900070 (2019)](https://doi.org/10.1002/qute.201900070) — Expressibility (KL to Haar) and entangling capability of circuits.
+- [Meyer & Wallach, J. Math. Phys. 43, 4273 (2002)](https://doi.org/10.1063/1.1497700) — Meyer–Wallach global entanglement measure.
+
+## Reproduce
+
+- Code SHA-256: \`aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\`
+- Seed: 0
+- Backend: numpy
+- Analyses fingerprint: \`bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\`
+- Kernel: protocol 1.3, Python 3.12.4, NumPy 2.1.0
+
+\`\`\`json
+{
+  "samples": 200,
+  "seed": 0,
+  "init": "uniform",
+  "method": "auto",
+  "backend": "auto"
+}
+\`\`\`
+
+Re-running with the same code, settings and seed on the same backend reproduces every number bit-for-bit.
+"
+`;
