@@ -87,7 +87,12 @@ test('@web an open challenge and a lesson position survive rail round trips and 
   await expect(page.locator('.pwork')).toBeVisible();
 
   await page.getByRole('button', { name: 'Learning' }).click();
-  await page.getByRole('button', { name: /Quantum Computing Fundamentals|Python Essentials/ }).first().click().catch(() => undefined);
+  await page.keyboard.press('ControlOrMeta+Shift+m');
+  await page.keyboard.press('ControlOrMeta+Shift+m');
+  await page.reload();
+  await page.keyboard.press('ControlOrMeta+3');
+  await expect(page.locator('.pwork')).toBeVisible();
+  await page.getByRole('button', { name: 'Learning' }).click();
   await openFirstLesson(page);
   const scroller = page.locator('.lesson__scroll, .lesson').first();
   await page.evaluate(() => {

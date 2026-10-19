@@ -152,6 +152,12 @@ function getStatusForChallenge(progress: Record<string, ProblemProgress>, challe
 
 const persisted = loadPersisted();
 
+/** The challenge on screen: the resumable problem only counts while the Challenges takeover is open. */
+export function getVisibleChallenge(): QuantumChallenge | null {
+  const { isChallengeMode, activeProblem } = useChallengeModeStore.getState();
+  return isChallengeMode ? activeProblem : null;
+}
+
 export const useChallengeModeStore = create<ChallengeModeState>((set, get) => ({
   isChallengeMode: false,
   challenges: [],

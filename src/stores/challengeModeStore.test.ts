@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { filterChallenges, useChallengeModeStore } from './challengeModeStore';
+import { filterChallenges, getVisibleChallenge, useChallengeModeStore } from './challengeModeStore';
 import type { CircuitMetrics, EfficiencyReport, ProblemProgress, QuantumChallenge, Submission } from '../types/challenge';
 
 const challenges: QuantumChallenge[] = [
@@ -170,5 +170,16 @@ describe('challengeModeStore returning to place', () => {
     useChallengeModeStore.getState().enterChallengeMode();
     expect(useChallengeModeStore.getState().activeProblem).toBeNull();
     expect(useChallengeModeStore.getState().activeProblemId).toBeNull();
+  });
+});
+
+describe('getVisibleChallenge', () => {
+  it('hides the resumable problem once the takeover is closed', () => {
+    useChallengeModeStore.getState().setActiveProblem(challenges[0]);
+    useChallengeModeStore.getState().enterChallengeMode();
+    expect(getVisibleChallenge()?.id).toBe('easy-bell');
+    useChallengeModeStore.getState().exitChallengeMode();
+    expect(useChallengeModeStore.getState().activeProblem?.id).toBe('easy-bell');
+    expect(getVisibleChallenge()).toBeNull();
   });
 });

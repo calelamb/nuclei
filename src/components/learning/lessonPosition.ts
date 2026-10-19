@@ -19,7 +19,9 @@ function readAll(): Record<string, number> {
 
 /** Remember the block the learner is reading; block 0 forgets the place (the top is the default). */
 export function rememberLessonBlock(lessonId: string, blockIndex: number): void {
-  const rest = Object.fromEntries(Object.entries(readAll()).filter(([id]) => id !== lessonId));
+  const all = readAll();
+  if ((all[lessonId] ?? 0) === blockIndex) return; // scroll fires constantly; write only on change
+  const rest = Object.fromEntries(Object.entries(all).filter(([id]) => id !== lessonId));
   const next = blockIndex > 0 ? { ...rest, [lessonId]: blockIndex } : rest;
   try {
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(next));

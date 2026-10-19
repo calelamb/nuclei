@@ -12,7 +12,7 @@ import { getLesson, getTrack } from '../data/lessons/tracks';
 import { useStudentStore, studentModelToPrompt } from '../stores/studentStore';
 import { useHardwareStore } from '../stores/hardwareStore';
 import { useCapstoneStore } from '../stores/capstoneStore';
-import { useChallengeModeStore } from '../stores/challengeModeStore';
+import { getVisibleChallenge } from '../stores/challengeModeStore';
 import { DIRAC_API_URL } from '../config/dirac';
 import { classifyIntent } from '../services/classify';
 import { compose } from '../services/compose';
@@ -277,7 +277,7 @@ function buildContextBlock(plan: ContextPlan): string {
     }
   }
 
-  const activeProblem = useChallengeModeStore.getState().activeProblem;
+  const activeProblem = getVisibleChallenge();
   if (plan.challenge && activeProblem) {
     parts.push(`## Active Challenge\n- Title: ${activeProblem.title}\n- Difficulty: ${activeProblem.difficulty}\n- Description: ${activeProblem.description}`);
   }
@@ -425,7 +425,7 @@ function executeToolById(toolId: string, accepted: boolean) {
     }
   } else if (toolCall.name === 'challenge_hint') {
     const { hint_level } = toolCall.input as { hint_level: string };
-    const challenge = useChallengeModeStore.getState().activeProblem;
+    const challenge = getVisibleChallenge();
     if (!challenge) {
       updateToolCallStatus(toolId, 'executed', 'No active challenge. Open Challenge Mode and start a problem first.');
     } else {

@@ -387,7 +387,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
                   ? <span className="trun__score">0 of {currentTestResults.length} cases ran</span>
                   : totalScore !== null && <span className="trun__score">Score: {totalScore}%</span>}
                 {overallVerdict === 'accepted' && nextChallenge && (
-                  <Button size="sm" variant="ghost" icon={<ArrowRight size={12} aria-hidden="true" />} onClick={() => setActiveProblem(nextChallenge)}>
+                  <Button size="sm" variant="secondary" icon={<ArrowRight size={12} aria-hidden="true" />} onClick={() => setActiveProblem(nextChallenge)}>
                     Next challenge
                   </Button>
                 )}

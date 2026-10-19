@@ -4,7 +4,13 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { errorLineFromTraceback } from './errorLine';
 
-const PYTHON = '/Users/calelamb/Desktop/personal projects/nuclei/.venv-nuclei/bin/python';
+const CANDIDATES = [
+  process.env.NUCLEI_PYTHON,
+  path.resolve(__dirname, '../../.venv-nuclei/bin/python'),
+  path.resolve(__dirname, '../../../../.venv-nuclei/bin/python'),
+  path.resolve(__dirname, '../../.venv/bin/python'),
+].filter((p): p is string => Boolean(p));
+const PYTHON = CANDIDATES.find((p) => existsSync(p)) ?? CANDIDATES[0];
 const RUNTIME_DIR = path.resolve(__dirname, '../platform/pyodide');
 
 /** Runs the real kernel_runtime producer and returns the error text it would send. */
