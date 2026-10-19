@@ -267,3 +267,29 @@ describe('palette Go-to follows the rail the person sees (shell-r6-03)', () => {
     expect(tour?.category).toBe('Help');
   });
 });
+
+describe('buildCommands while a lesson or challenge owns the main area', () => {
+  const ids = (mainTakeover: CommandContext['mainTakeover'], mode: WorkspaceMode = 'learn') =>
+    buildCommands(makeActions(), makeContext({ mode, mainTakeover, layoutPresets: true })).map((c) => c.id);
+  const EDITOR_ONLY = ['run', 'new', 'step-through', 'reset-step', 'layout-clean', 'toggle-panel-terminal', 'toggle-panel-circuit'];
+
+  it.each(['lesson', 'challenge'] as const)('omits every editor-only command in a %s', (kind) => {
+    const present = ids(kind);
+    for (const id of EDITOR_ONLY) expect(present).not.toContain(id);
+    expect(present.some((id) => id.startsWith('toggle-panel-'))).toBe(false);
+  });
+
+  it('keeps navigation, theme, Dirac and help available', () => {
+    const present = ids('lesson');
+    for (const id of ['workspace-mode', 'theme', 'dirac', 'shortcuts', 'goto-learning']) expect(present).toContain(id);
+  });
+
+  it('offers the editor commands again when nothing owns the area', () => {
+    const present = ids(null);
+    for (const id of ['run', 'new', 'step-through', 'toggle-panel-terminal']) expect(present).toContain(id);
+  });
+
+  it('leaves a Research takeover like the QEC Workbench alone', () => {
+    expect(ids('qec', 'research')).toContain('run');
+  });
+});

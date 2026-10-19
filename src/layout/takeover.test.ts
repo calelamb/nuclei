@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isMainAreaTakeover, isSidebarShown, type SidebarFacts, type TakeoverFacts } from './takeover';
+import { isMainAreaTakeover, mainTakeoverKind, isSidebarShown, type SidebarFacts, type TakeoverFacts } from './takeover';
 
 const base: TakeoverFacts = { isLearnMode: false, isChallengeMode: false, workspaceMode: 'research', activeView: 'files', experimentSelected: false };
 
@@ -37,5 +37,16 @@ describe('isSidebarShown', () => {
     expect(isSidebarShown({ ...side, activeView: 'files', explorerSidebar: false })).toBe(false);
     expect(isSidebarShown({ ...side, fullViewOwnsArea: true })).toBe(false);
     expect(isSidebarShown({ ...side, activeView: null })).toBe(false);
+  });
+});
+
+describe('mainTakeoverKind', () => {
+  it('names the view that owns the main area', () => {
+    expect(mainTakeoverKind(base)).toBeNull();
+    expect(mainTakeoverKind({ ...base, workspaceMode: 'learn', isLearnMode: true })).toBe('lesson');
+    expect(mainTakeoverKind({ ...base, workspaceMode: 'learn', isChallengeMode: true })).toBe('challenge');
+    expect(mainTakeoverKind({ ...base, activeView: 'qec' })).toBe('qec');
+    expect(mainTakeoverKind({ ...base, activeView: 'transpiler' })).toBe('transpiler');
+    expect(mainTakeoverKind({ ...base, activeView: 'experiments', experimentSelected: true })).toBe('experiment');
   });
 });

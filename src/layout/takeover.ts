@@ -23,6 +23,18 @@ export function isMainAreaTakeover(f: TakeoverFacts): boolean {
   return f.activeView === 'qec' || f.activeView === 'transpiler' || (f.activeView === 'experiments' && f.experimentSelected);
 }
 
+export type MainTakeover = 'lesson' | 'challenge' | 'qec' | 'transpiler' | 'experiment';
+
+/** Which full-width view owns the main area, or null for the plain editor. Same rules as isMainAreaTakeover. */
+export function mainTakeoverKind(f: TakeoverFacts): MainTakeover | null {
+  if (f.isChallengeMode) return 'challenge';
+  if (f.isLearnMode) return 'lesson';
+  if (!isMainAreaTakeover(f)) return null;
+  if (f.activeView === 'qec') return 'qec';
+  if (f.activeView === 'transpiler') return 'transpiler';
+  return 'experiment';
+}
+
 export interface SidebarFacts {
   /** A lesson or challenge owns the whole area (Settings may still open beside it). */
   fullViewOwnsArea: boolean;
@@ -43,6 +55,15 @@ export function isSidebarShown(f: SidebarFacts): boolean {
   // The web build has no project folder (QEC) and no transpiler engine: their sidebars would hold one sentence.
   if ((f.activeView === 'qec' || f.activeView === 'transpiler') && f.isWeb) return false;
   return true;
+}
+
+export function useMainTakeoverKind(): MainTakeover | null {
+  const isLearnMode = useLearnStore((s) => s.isLearnMode);
+  const isChallengeMode = useChallengeModeStore((s) => s.isChallengeMode);
+  const workspaceMode = useWorkspaceStore((s) => s.mode);
+  const activeView = useNavigationStore((s) => s.activeView);
+  const experimentSelected = useExperimentUiStore((s) => s.selectedExperimentFileName !== null);
+  return mainTakeoverKind({ isLearnMode, isChallengeMode, workspaceMode, activeView, experimentSelected });
 }
 
 export function useMainAreaTakeover(): boolean {

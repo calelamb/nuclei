@@ -46,6 +46,7 @@ import { openRunFolder } from './lib/openRunFolder';
 import { restorePersistedPlugins } from './plugins/pluginLoader';
 import { topRailViewsFor } from './layout/panelRegistry';
 import { featuresFor } from './layout/uiModeFeatures';
+import { useMainTakeoverKind } from './layout/takeover';
 import { useUiFeatures } from './hooks/useUiFeatures';
 import type { PlatformBridge } from './platform/bridge';
 import type { Framework, KernelLanguage } from './types/quantum';
@@ -339,6 +340,7 @@ function AppInner() {
   }, [platform]);
 
   const uiFeatures = useUiFeatures();
+  const mainTakeover = useMainTakeoverKind();
   const commands = buildCommands({
     run: () => { const fn = getExecute(); if (fn) fn(); },
     openFile: () => fileOps.openFile(),
@@ -378,6 +380,7 @@ function AppInner() {
     experiments: experiments.map((e) => ({ fileName: e.fileName, name: e.spec.name })),
     hasSelectedRun: selectedRunDir !== null,
     framework,
+    mainTakeover,
   });
 
   // Global keyboard shortcuts. Dispatch is by id from the single keybinding
