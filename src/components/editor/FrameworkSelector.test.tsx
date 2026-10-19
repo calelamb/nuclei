@@ -142,6 +142,32 @@ describe('FrameworkSelector — project tabs', () => {
   });
 });
 
+describe('FrameworkSelector — dirty project tab (research-r-07)', () => {
+  afterEach(() => { cleanup(); useProjectStore.setState({ tabs: [], activeTabPath: null }); });
+
+  it('New Cirq file opens a new tab with no false "edits will be lost" confirm', async () => {
+    useProjectStore.setState({ tabs: [], activeTabPath: null });
+    useProjectStore.getState().openTab({ path: '/p/bell.py', content: 'my work' });
+    useEditorStore.setState({ code: 'my work\n# keep me', isDirty: true, filePath: '/p/bell.py', framework: 'qiskit' });
+    renderSelector();
+    fireEvent.click(screen.getByLabelText('Framework'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New Cirq file' }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    const { tabs, activeTabPath } = useProjectStore.getState();
+    expect(activeTabPath).toBe('memory://untitled-1.py');
+    expect(tabs.find((t) => t.path === '/p/bell.py')?.content).toBe('my work');
+  });
+
+  it('without a project the section says it starts over (interaction-r-12)', () => {
+    useProjectStore.setState({ tabs: [], activeTabPath: null });
+    renderSelector();
+    fireEvent.click(screen.getByLabelText('Framework'));
+    expect(screen.getByText('Start over from template')).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: 'New Cirq file' })).toBeNull();
+    expect(screen.getByRole('menuitem', { name: 'Cirq starter' })).toBeTruthy();
+  });
+});
+
 describe('FrameworkSelector — compact label', () => {
   const webBridge: PlatformBridge = { ...desktopBridge, getPlatform() { return 'web'; } };
   afterEach(cleanup);
@@ -185,7 +211,7 @@ describe('FrameworkSelector — New X file (research-r-01)', () => {
 
   it('never writes into a tab that has a filePath: the starter lands in an untitled buffer', () => {
     renderSelector();
-    pickTemplate('New Cirq file');
+    pickTemplate('Cirq starter');
     const s = useEditorStore.getState();
     expect(s.filePath).toBeNull();
     expect(s.code).toBe(STARTER_TEMPLATES.cirq);
@@ -196,7 +222,7 @@ describe('FrameworkSelector — New X file (research-r-01)', () => {
   it('confirms before discarding unsaved edits, and leaves them alone when kept', async () => {
     useEditorStore.setState({ code: `${BELL}# edit`, isDirty: true });
     renderSelector();
-    pickTemplate('New Cirq file');
+    pickTemplate('Cirq starter');
     fireEvent.click(await screen.findByRole('button', { name: 'Keep editing' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(useEditorStore.getState().filePath).toBe('/p/bell.py');

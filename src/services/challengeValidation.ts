@@ -250,6 +250,11 @@ function validateNumericMatch(
 
 export const DEFAULT_MIN_FIDELITY = 0.99;
 
+/** 0.25 -> "25%", 0.9895 -> "98.9%": one decimal at most, never rounded up to the threshold; the epsilon keeps 0.2499999999999999 from reading 24.9%. */
+function percent(fraction: number): string {
+  return `${Number((Math.floor(fraction * 1000 + 1e-6) / 10).toFixed(1))}%`;
+}
+
 /**
  * State-fidelity grading. The harness records `metrics.fidelity =
  * |⟨reference|student⟩|²` (statevector sim → exact, so a correct solution is
@@ -280,7 +285,7 @@ function validateStateFidelity(
   return {
     passed: false,
     score: clamped,
-    message: `State fidelity ${clamped.toFixed(4)} < ${minFidelity}. The measurement histogram may look right, but the actual quantum state (phase / entanglement) differs from the target.`,
+    message: `Your circuit prepares a different state: ${percent(clamped)} overlap with the target, ${percent(minFidelity)} needed (fidelity ${clamped.toFixed(4)} < ${minFidelity}). Matching measurement counts is not enough, because relative phase and entanglement count too.`,
   };
 }
 

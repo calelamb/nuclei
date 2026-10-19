@@ -12,8 +12,8 @@
   font: var(--font-size-body) var(--font-sans);
   transition: background-color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
 }
-.quiz__option:hover:not(:disabled) { border-color: var(--color-accent-quantum); background: color-mix(in srgb, var(--color-accent-quantum) 6%, transparent); }
-.quiz__option:disabled { cursor: default; }
+.quiz__option:hover:not([aria-disabled='true']) { border-color: var(--color-accent-quantum); background: color-mix(in srgb, var(--color-accent-quantum) 6%, transparent); }
+.quiz__option[aria-disabled='true'] { cursor: default; }
 .quiz__option[data-state='wrong'] { border-color: var(--color-danger); background: color-mix(in srgb, var(--color-danger) 8%, transparent); color: var(--color-danger); }
 .quiz__option[data-state='right'] { border-color: var(--color-success); background: color-mix(in srgb, var(--color-success) 8%, transparent); color: var(--color-success-text, color-mix(in srgb, var(--color-success) 55%, var(--color-text-primary))); }
 .quiz__letter { display: grid; place-items: center; width: 24px; height: 24px; flex-shrink: 0; border: 2px solid var(--color-text-tertiary); border-radius: 50%; font-size: var(--font-size-chrome-label); font-weight: var(--font-weight-semibold); color: var(--color-text-tertiary); }

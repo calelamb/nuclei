@@ -5,38 +5,21 @@ import { usePlatform } from '../../platform/PlatformProvider';
 import { kernelLanguageFor } from '../../types/quantum';
 import type { Framework } from '../../types/quantum';
 import { useProjectStore } from '../../stores/projectStore';
-import { MEMORY_PREFIX } from '../../hooks/useFileOps';
+import { isUntouchedStarter, loadIntoEditor, placeInEditor } from './loadIntoEditor';
 import { STARTER_TEMPLATES, displayFrameworkName } from '../../data/starterTemplates';
 
 const FRAMEWORKS: Framework[] = ['qiskit', 'cirq', 'cuda-q', 'qsharp'];
 
 const displayName = displayFrameworkName;
 
-/**
- * True when the buffer still looks like the untouched starter for any
- * framework. In that case, switching framework can safely swap the
- * template without asking — the student hasn't done any real work yet.
- */
-function isUntouchedStarter(code: string): boolean {
-  const normalized = code.trimEnd();
-  return (
-    normalized === STARTER_TEMPLATES.qiskit.trimEnd() ||
-    normalized === STARTER_TEMPLATES.cirq.trimEnd() ||
-    normalized === STARTER_TEMPLATES['cuda-q'].trimEnd() ||
-    normalized === STARTER_TEMPLATES.qsharp.trimEnd() ||
-    normalized === ''
-  );
-}
-
 export function FrameworkSelector({ compact = false }: { compact?: boolean } = {}) {
   const framework = useEditorStore((s) => s.framework);
   const setFramework = useEditorStore((s) => s.setFramework);
   const setCode = useEditorStore((s) => s.setCode);
-  const setFilePath = useEditorStore((s) => s.setFilePath);
   const code = useEditorStore((s) => s.code);
   const isDirty = useEditorStore((s) => s.isDirty);
   const filePath = useEditorStore((s) => s.filePath);
-  const requestEditorFocus = useEditorStore((s) => s.requestEditorFocus);
+  const inProject = useProjectStore((s) => s.tabs.length > 0);
   const { confirm, confirmDialog } = useConfirm();
   const platform = usePlatform();
   const isWeb = platform.getPlatform() === 'web';
@@ -49,38 +32,11 @@ export function FrameworkSelector({ compact = false }: { compact?: boolean } = {
   const labelFor = (f: Framework) => (compact ? displayName(f) : fullLabelFor(f));
 
   /**
-   * Puts a framework's starter in an untitled buffer: detached from any open file, so saving asks
-   * for a name and can never overwrite the file that was open. The learner then types straight away.
+   * A starter always lands in an untitled buffer, detached from any open file: in a project it gets
+   * its own in-memory tab, so nothing the learner has open is lost and no confirm is needed.
    */
-  const loadStarterAsUntitled = (f: Framework) => {
-    const { tabs, openTab } = useProjectStore.getState();
-    if (tabs.length > 0) {
-      // Project mode: the active tab owns the buffer, so a starter must live in its own
-      // in-memory tab (saving asks for a name) rather than be written into the open file's tab.
-      const ext = f === 'qsharp' ? 'qs' : 'py';
-      let n = 1;
-      while (tabs.some((t) => t.path === `${MEMORY_PREFIX}untitled-${n}.${ext}`)) n += 1;
-      openTab({ path: `${MEMORY_PREFIX}untitled-${n}.${ext}`, content: STARTER_TEMPLATES[f] });
-    } else {
-      setFilePath(null);
-    }
-    setCode(STARTER_TEMPLATES[f]);
-    setFramework(f);
-    requestEditorFocus();
-  };
-
   const applyTemplate = async (f: Framework) => {
-    if (isDirty) {
-      const ok = await confirm({
-        title: `Replace your code with the ${displayName(f)} starter?`,
-        description: 'Your unsaved edits will be lost.',
-        confirmLabel: 'Replace',
-        cancelLabel: 'Keep editing',
-        tone: 'danger',
-      });
-      if (!ok) return;
-    }
-    loadStarterAsUntitled(f);
+    await loadIntoEditor(STARTER_TEMPLATES[f], { label: `${displayName(f)} starter`, confirm, framework: f });
   };
 
   /**
@@ -109,15 +65,18 @@ export function FrameworkSelector({ compact = false }: { compact?: boolean } = {
       return;
     }
     if (kernelLanguageFor(f) !== kernelLanguageFor(framework)) {
-      const ok = await confirm({
-        title: `Replace your code with the ${displayName(f)} starter?`,
-        description: 'Switching languages replaces the editor buffer. Your unsaved edits will be lost.',
-        confirmLabel: 'Replace',
-        cancelLabel: 'Keep editing',
-        tone: 'danger',
-      });
-      if (!ok) return;
-      loadStarterAsUntitled(f);
+      // In a project the starter opens in its own tab, so there is nothing to lose and nothing to ask.
+      if (!inProject) {
+        const ok = await confirm({
+          title: `Replace your code with the ${displayName(f)} starter?`,
+          description: 'Switching languages replaces the editor buffer. Your unsaved edits will be lost.',
+          confirmLabel: 'Replace',
+          cancelLabel: 'Keep editing',
+          tone: 'danger',
+        });
+        if (!ok) return;
+      }
+      placeInEditor(STARTER_TEMPLATES[f], f);
       return;
     }
     setFramework(f);
@@ -136,10 +95,11 @@ export function FrameworkSelector({ compact = false }: { compact?: boolean } = {
       onSelect: () => { void handleFrameworkPick(f); },
     })),
     { id: 'sep', separator: true },
-    { id: 'h-template', heading: 'New from template' },
+    // Only a project has tabs to add to; without one the starter replaces the buffer, so say so.
+    { id: 'h-template', heading: inProject ? 'New from template' : 'Start over from template' },
     ...FRAMEWORKS.map((f): MenuEntry => ({
       id: `tpl-${f}`,
-      label: `New ${displayName(f)} file`,
+      label: inProject ? `New ${displayName(f)} file` : `${displayName(f)} starter`,
       disabled: isDisabled(f),
       title: isDisabled(f) ? DESKTOP_ONLY : undefined,
       hint: isDisabled(f) ? 'Desktop' : undefined,

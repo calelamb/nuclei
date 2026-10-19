@@ -2,8 +2,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { LessonRunButton } from './LessonRunButton';
+import { useEditorStore } from '../../stores/editorStore';
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); useEditorStore.setState({ kernelInstalling: null }); });
 
 describe('LessonRunButton', () => {
   it('keeps keyboard focus when a press starts the run (the button is busy, not disabled)', () => {
@@ -35,5 +36,11 @@ describe('LessonRunButton', () => {
     render(<LessonRunButton isRunning pythonLoading stage="Loading NumPy" onRun={() => { runs += 1; }} />);
     screen.getByRole('button', { name: /Loading Python/ }).click();
     expect(runs).toBe(0);
+  });
+
+  it('names the package while it installs instead of saying Running (learn-r9-07)', () => {
+    useEditorStore.setState({ kernelInstalling: 'Cirq' });
+    render(<LessonRunButton isRunning pythonLoading={false} progress={null} onRun={() => {}} />);
+    expect(screen.getByRole('button', { name: 'Installing Cirq…' })).toBeTruthy();
   });
 });

@@ -1,10 +1,10 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { LessonCodeEditor } from './LessonCodeEditor';
 import { useLearnStore } from '../../stores/learnStore';
-import { useEditorStore } from '../../stores/editorStore';
 import type { Framework, CircuitSnapshot, SimulationResult, KernelResponse } from '../../types/quantum';
 import { RotateCcw, ExternalLink, Terminal, BarChart3 } from 'lucide-react';
-import { Button, SegmentedControl, type SegmentedOption } from '../ui';
+import { Button, SegmentedControl, useConfirm, type SegmentedOption } from '../ui';
+import { loadIntoEditor } from '../editor/loadIntoEditor';
 import { isQuantumCode } from './exerciseValidation';
 import { UnsupportedNotice } from './UnsupportedNotice';
 import { OutcomeResults } from './OutcomeResults';
@@ -14,6 +14,8 @@ import { StaleResultNotice } from '../layout/StaleResultNotice';
 import { formatCircuitMeta } from './outcomeDistribution';
 import { focusBlockEditor } from './focusBlockEditor';
 import './demo.css';
+
+const PYTHON_FAILED_MESSAGE = 'The program did not finish. Check the code and run it again.';
 
 type ResultView = 'output' | 'probabilities';
 interface InteractiveDemoProps {
@@ -25,8 +27,7 @@ interface InteractiveDemoProps {
 
 export function InteractiveDemo({ code: initialCode, framework, description, explorationPrompt }: InteractiveDemoProps) {
   const exitLearnMode = useLearnStore((s) => s.exitLearnMode);
-  const setEditorCode = useEditorStore((s) => s.setCode);
-  const setEditorFramework = useEditorStore((s) => s.setFramework);
+  const { confirm, confirmDialog } = useConfirm();
 
   const [localCode, setLocalCode] = useState(initialCode);
   const [snapshot, setSnapshot] = useState<CircuitSnapshot | null>(null);
@@ -56,7 +57,9 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
       case 'python_result':
         setResult(null);
         setIsRunning(false);
-        setError(null);
+        // A failed run keeps the error that arrived just before this message, exactly as
+        // ExerciseBlock does; only a success clears it.
+        setError((prev) => (msg.success ? null : prev ?? PYTHON_FAILED_MESSAGE));
         break;
       case 'output':
         // Output from the live preview re-running half-typed code is not a run.
@@ -143,12 +146,13 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
     sendParse(initialCode);
   };
 
-  const handleOpenInEditor = () => {
-    setEditorCode(localCode);
-    if (isQuantumCode(localCode)) {
-      setEditorFramework(framework);
-    }
-    exitLearnMode();
+  const handleOpenInEditor = async () => {
+    const outcome = await loadIntoEditor(localCode, {
+      label: 'demo code',
+      confirm,
+      framework: isQuantumCode(localCode) ? framework : undefined,
+    });
+    if (outcome !== 'cancelled') exitLearnMode();
   };
 
   const handleCodeChange = (value: string | undefined) => {
@@ -210,7 +214,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
         )}
 
         <span className="demo__spacer" />
-        <Button onClick={handleOpenInEditor} icon={<ExternalLink size={12} aria-hidden="true" />}>Open in editor</Button>
+        <Button onClick={() => { void handleOpenInEditor(); }} icon={<ExternalLink size={12} aria-hidden="true" />}>Open in editor</Button>
       </div>
 
       {snapshot && hasCircuit && (
@@ -245,6 +249,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
       )}
 
       {explorationPrompt && <p className="demo__prompt">{explorationPrompt}</p>}
+      {confirmDialog}
     </div>
   );
 }
