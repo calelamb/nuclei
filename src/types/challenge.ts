@@ -35,7 +35,11 @@ export type ValidationMode =
   // hardcoded product state — it sees phase and entanglement. Requires the
   // challenge to provide `referenceCode` (qiskit). `min_fidelity` defaults to
   // 0.99 (statevector sim is exact; 0.99 only absorbs float noise).
-  | { type: 'state_fidelity'; min_fidelity?: number };
+  //
+  // `expected_probabilities` (optional) is the target's measurement distribution. It lets a
+  // failed case say honestly whether the student's COUNTS already match (so only phase or
+  // entanglement is off) instead of claiming that for every failure.
+  | { type: 'state_fidelity'; min_fidelity?: number; expected_probabilities?: Record<string, number> };
 
 export interface TestCase {
   id: string;
@@ -203,6 +207,13 @@ export interface TestCaseResult {
    * never counts as a failed submission.
    */
   unsupported?: boolean;
+  /**
+   * The Python engine never started, so the program never ran. Not the student's mistake and
+   * not an attempt: nothing is scored or recorded for it.
+   */
+  engineUnavailable?: boolean;
+  /** 1-based line in the student's own code where the error happened, when the traceback named one. */
+  errorLine?: number | null;
 }
 
 export interface Submission {

@@ -6,11 +6,14 @@ import type { TestCase, TestCaseResult } from '../../types/challenge';
 import './challenges.css';
 import { TYPOGRAPHY } from '../../styles/tokens';
 import { SUCCESS_TEXT } from '../../lib/semanticText';
+import { scoreLabel } from './scoreLabel';
 interface TestCaseRowProps {
   testCase: TestCase;
   result?: TestCaseResult;
   isRunning: boolean;
   index: number;
+  /** The program never ran (a shared compile/runtime error, or Python never started): neutral, no score. */
+  notRun?: boolean;
 }
 
 function StatusIcon({ result, isRunning }: { result?: TestCaseResult; isRunning: boolean }) {
@@ -70,7 +73,7 @@ function StatusIcon({ result, isRunning }: { result?: TestCaseResult; isRunning:
   );
 }
 
-export function TestCaseRow({ testCase, result, isRunning, index }: TestCaseRowProps) {
+export function TestCaseRow({ testCase, result, isRunning, index, notRun = false }: TestCaseRowProps) {
   const colors = useThemeStore((s) => s.colors);
   const [expanded, setExpanded] = useState(false);
 
@@ -140,8 +143,12 @@ export function TestCaseRow({ testCase, result, isRunning, index }: TestCaseRowP
               fontFamily: TYPOGRAPHY.fontMono,
             }}
           >
-            {(result.score * 100).toFixed(0)}% match
+            {scoreLabel(testCase, result.score)}
           </span>
+        )}
+
+        {notRun && !result && (
+          <span className="trow__notrun">Not run</span>
         )}
 
         {/* Execution time */}

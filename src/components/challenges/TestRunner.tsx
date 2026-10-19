@@ -15,6 +15,11 @@ import { TestCaseRow } from './TestCaseRow';
 import { ChallengeInspector } from './ChallengeInspector';
 import { PerformancePanel } from './PerformancePanel';
 import { UnsupportedNotice } from '../learning/UnsupportedNotice';
+import { LessonEngineFailed } from '../learning/LessonEngineFailed';
+import { useEditorStore } from '../../stores/editorStore';
+import { bootStepLabel } from '../layout/kernelStatusModel';
+import { retryKernel } from '../../lib/kernelControl';
+import { sharedCodeFailure } from './codeFailure';
 import type {
   CircuitMetrics,
   EfficiencyReport,
@@ -84,6 +89,12 @@ export function TestRunner({ challenge }: TestRunnerProps) {
   // Set when the browser build can't run the student's program (outside the
   // Qiskit browser subset): shown calmly, and the attempt is not recorded.
   const [unsupportedMessage, setUnsupportedMessage] = useState<string | null>(null);
+  // Python never started (or the connection failed) when the last run began: nothing ran.
+  const [engineError, setEngineError] = useState<string | null>(null);
+  const kernelStatus = useEditorStore((st) => st.kernelStatus);
+  const kernelError = useEditorStore((st) => st.kernelError);
+  const kernelProgress = useEditorStore((st) => st.kernelProgress);
+  const isWeb = platform.getPlatform() === 'web';
   const [inspectionCaseId, setInspectionCaseId] = useState<string | null>(
     challenge.visible_tests?.[0]?.id ?? challenge.testCases.find((testCase) => !testCase.hidden)?.id ?? null,
   );
@@ -123,6 +134,12 @@ export function TestRunner({ challenge }: TestRunnerProps) {
 
   const handleRun = useCallback(async (submit: boolean) => {
     if (isRunning) return;
+    // A start that failed stays failed until Retry; pressing Run is that Retry, not a doomed attempt.
+    if (useEditorStore.getState().kernelStatus === 'failed') {
+      retryKernel();
+      return;
+    }
+    setEngineError(null);
 
     clearTestResults();
     setInspection(null);
@@ -163,6 +180,14 @@ export function TestRunner({ challenge }: TestRunnerProps) {
 
     setRunning(false);
     setRunningTestIndex(-1);
+
+    // Python never started: nothing ran, so there is nothing to show, score or record.
+    const unavailable = results.find((result) => result.engineUnavailable);
+    if (unavailable) {
+      clearTestResults();
+      setEngineError(unavailable.message);
+      return;
+    }
 
     if (!submit) return;
 
@@ -272,6 +297,8 @@ export function TestRunner({ challenge }: TestRunnerProps) {
 
   // A platform limit is not a verdict: no red badge, score or failed rows for it.
   const desktopOnly = unsupportedMessage !== null;
+  const engineDown = kernelStatus === 'failed' || engineError !== null;
+  const codeFailure = desktopOnly || engineDown ? null : sharedCodeFailure(currentTestResults);
 
   const verdictColor = overallVerdict === 'accepted'
     ? 'var(--color-success)'
@@ -280,12 +307,14 @@ export function TestRunner({ challenge }: TestRunnerProps) {
       : 'var(--color-danger)';
 
   const renderRow = (testCase: TestCase, index: number) => {
-    const result = desktopOnly ? undefined : currentTestResults.find((entry) => entry.testCaseId === testCase.id);
+    const hideResults = desktopOnly || engineDown || codeFailure !== null;
+    const result = hideResults ? undefined : currentTestResults.find((entry) => entry.testCaseId === testCase.id);
     return (
       <TestCaseRow
         key={testCase.id}
         testCase={testCase}
         result={result}
+        notRun={codeFailure !== null && currentTestResults.some((entry) => entry.testCaseId === testCase.id)}
         isRunning={isRunning && runningTestIndex === index}
         index={index}
       />
@@ -296,17 +325,26 @@ export function TestRunner({ challenge }: TestRunnerProps) {
     { value: 'tests', label: 'Test cases' },
     { value: 'inspection', label: isValueContract ? 'Return output' : 'Quantum output' },
   ];
+  const bootNote = kernelStatus === 'connecting' && !engineDown
+    ? `${bootStepLabel(kernelProgress, { isWeb }).long}${isWeb ? " · tests run when it's ready" : ''}`
+    : null;
   const passedCount = currentTestResults.filter((result) => result.passed).length;
 
   return (
     <div className="trun">
       <div className="trun__bar">
-        <Button size="lg" icon={<Play size={12} aria-hidden="true" />} disabled={isRunning} onClick={() => handleRun(false)}>
-          Run visible tests
+        <Button size="lg" loading={isRunning && !lastRunWasSubmit} disabled={isRunning} icon={<Play size={12} aria-hidden="true" />} onClick={() => handleRun(false)}>
+          {isRunning && !lastRunWasSubmit ? 'Running…' : 'Run visible tests'}
         </Button>
-        <Button size="lg" variant="primary" icon={<Check size={12} aria-hidden="true" />} disabled={isRunning} onClick={() => handleRun(true)}>
-          Submit
+        <Button size="lg" variant="primary" loading={isRunning && lastRunWasSubmit} disabled={isRunning} icon={<Check size={12} aria-hidden="true" />} onClick={() => handleRun(true)}>
+          {isRunning && lastRunWasSubmit ? 'Submitting…' : 'Submit'}
         </Button>
+        {bootNote && (
+          <span className="trun__bootnote" role="status">
+            <Loader className="nuclei-spin" size={12} aria-hidden="true" />
+            {bootNote}
+          </span>
+        )}
 
         <div className="trun__inspect">
           <Select
@@ -324,7 +362,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
           </Button>
         </div>
 
-        {overallVerdict && !isRunning && !desktopOnly && (
+        {overallVerdict && !isRunning && !desktopOnly && !engineDown && (
           <div className="trun__verdict" role="status">
             {lastRunWasSubmit ? (
               <>
@@ -332,10 +370,16 @@ export function TestRunner({ challenge }: TestRunnerProps) {
                   {overallVerdict === 'accepted' ? <Check size={12} aria-hidden="true" /> : <X size={12} aria-hidden="true" />}
                   {formatVerdict(overallVerdict)}
                 </span>
-                {totalScore !== null && <span className="trun__score">Score: {totalScore}%</span>}
+                {codeFailure
+                  ? <span className="trun__score">0 of {currentTestResults.length} cases ran</span>
+                  : totalScore !== null && <span className="trun__score">Score: {totalScore}%</span>}
               </>
             ) : (
-              <span className="trun__score">{passedCount} of {currentTestResults.length} visible cases passed</span>
+              <span className="trun__score">
+                {codeFailure
+                  ? `0 of ${currentTestResults.length} cases ran`
+                  : `${passedCount} of ${currentTestResults.length} visible cases passed`}
+              </span>
             )}
           </div>
         )}
@@ -356,6 +400,22 @@ export function TestRunner({ challenge }: TestRunnerProps) {
           <ChallengeInspector />
         ) : (
           <div className="trun__results">
+            {engineDown && !isRunning && (
+              <LessonEngineFailed
+                detail={kernelStatus === 'failed' ? kernelError : engineError}
+                onRetry={() => { setEngineError(null); retryKernel(); }}
+              />
+            )}
+
+            {codeFailure && !isRunning && (
+              <div className="trun__failure" role="alert">
+                <div className="trun__failure-text">
+                  <span className="trun__failure-title">{codeFailure.title}</span>
+                  <span className="trun__failure-detail">{codeFailure.detail}</span>
+                </div>
+              </div>
+            )}
+
             {unsupportedMessage && !isRunning && (
               <div className="trun__notice">
                 <UnsupportedNotice message={unsupportedMessage.replace(/^Not supported in the browser: /, '')} />
@@ -370,7 +430,9 @@ export function TestRunner({ challenge }: TestRunnerProps) {
             {isRunning && currentTestResults.length === 0 && (
               <div className="trun__note">
                 <Loader className="nuclei-spin" size={14} aria-hidden="true" />
-                Preparing the kernel and running tests. The first run downloads the in-browser Python kernel and can take a few seconds.
+                {isWeb && kernelStatus !== 'ready'
+                  ? 'Python is loading. The first run downloads it and can take a few seconds.'
+                  : 'Running tests…'}
               </div>
             )}
 
