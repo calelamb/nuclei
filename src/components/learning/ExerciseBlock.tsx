@@ -297,7 +297,7 @@ export function ExerciseBlock({
         >
           {resetArmed ? 'Discard edits?' : 'Reset'}
         </Button>
-        <span className="demo__sr" aria-live="polite">{resetArmed ? 'Press again to discard your edits' : ''}</span>
+        <span className="nuclei-sr-only" aria-live="polite">{resetArmed ? 'Press again to discard your edits' : ''}</span>
         {hasRun && hasExpectations && !isRunning && (
           <Button onClick={checkSolution} icon={<CheckCircle size={12} aria-hidden="true" />}>Check solution</Button>
         )}

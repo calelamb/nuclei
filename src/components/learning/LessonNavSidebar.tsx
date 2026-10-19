@@ -7,6 +7,7 @@ import type { ContentBlock } from '../../data/lessons/types';
 import { IconButton } from '../ui';
 import { blockMeta, blockOutlineLabel } from './lessonOutline';
 import { LEARN_SECTION_LABELS, useLearnSectionStore, type LearnSection } from './learnSectionStore';
+import { scrollLessonBlock } from './scrollLessonBlock';
 import './lessonNav.css';
 
 const SECTION_LINKS: ReadonlyArray<{ section: LearnSection; icon: typeof Network }> = [
@@ -15,10 +16,6 @@ const SECTION_LINKS: ReadonlyArray<{ section: LearnSection; icon: typeof Network
   { section: 'glossary', icon: Library },
   { section: 'videos', icon: PlayCircle },
 ];
-
-function scrollToBlock(index: number) {
-  document.getElementById(`block-${index}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
 
 /**
  * The in-lesson navigation column (PRD-less polish): answers "where am I?"
@@ -119,7 +116,7 @@ export function LessonNavSidebar({
                         className="lnav__outline-item"
                         aria-current={bi === currentBlockIndex ? 'true' : undefined}
                         title={label}
-                        onClick={() => scrollToBlock(bi)}
+                        onClick={() => scrollLessonBlock(bi, 'smooth')}
                       >
                         <Icon size={12} className="lnav__icon" />
                         <span className="lnav__label">{label}</span>

@@ -27,3 +27,21 @@ test('a half-written exercise survives Glossary and back, then Reset restores th
   await expect(page.locator('.exercise').first().locator('.view-lines')).not.toContainText('my half-written work');
   await expect(page.locator('.exercise').getByRole('button', { name: /^Reset/ }).first()).toBeDisabled();
 });
+
+test('outline jump and Glossary -> Back never scroll the document (html.scrollTop stays 0)', async ({ page }) => {
+  await page.goto(BASE);
+  await page.getByText('Learn quantum computing').first().click();
+  await page.getByText('I know some quantum').first().click();
+  await page.getByText('Quantum Computing Fundamentals').first().click();
+  await page.getByRole('button', { name: /Your First Quantum Gate/ }).first().click();
+  const rootScroll = () => page.evaluate(() => document.scrollingElement?.scrollTop ?? 0);
+
+  await page.locator('.lnav__outline-item').last().click();
+  await page.waitForTimeout(700);
+  expect(await rootScroll()).toBe(0);
+
+  await page.getByRole('button', { name: /Glossary/ }).first().click();
+  await page.getByRole('button', { name: /Back to lesson/ }).first().click();
+  await page.waitForTimeout(300);
+  expect(await rootScroll()).toBe(0);
+});

@@ -35,8 +35,8 @@ beforeEach(() => {
   observed.length = 0;
   localStorage.clear();
   vi.stubGlobal('IntersectionObserver', NoopObserver);
-  Element.prototype.scrollIntoView = vi.fn();
   Element.prototype.scrollTo = vi.fn();
+  Element.prototype.scrollIntoView = vi.fn();
   useLearnSectionStore.setState({ returnTo: null, restore: null });
   useLearnStore.setState({ completedLessons: [], lessonProgress: {} });
 });
@@ -72,7 +72,8 @@ describe('LessonView', () => {
     useLearnSectionStore.setState({ restore: { trackId: track.id, lessonId: lesson.id, blockIndex: 1 } });
     render(<LessonView lesson={lesson} trackId={track.id} />);
     return new Promise<void>((resolve) => requestAnimationFrame(() => {
-      expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+      expect(Element.prototype.scrollTo).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'auto' }));
+      expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
       expect(useLearnSectionStore.getState().restore).toBeNull();
       resolve();
     }));
@@ -80,7 +81,7 @@ describe('LessonView', () => {
 
   it('still restores the reading position under StrictMode remounts', async () => {
     useLearnSectionStore.setState({ restore: { trackId: track.id, lessonId: lesson.id, blockIndex: 1 } });
-    const scrollSpy = Element.prototype.scrollIntoView as ReturnType<typeof vi.fn>;
+    const scrollSpy = Element.prototype.scrollTo as ReturnType<typeof vi.fn>;
     scrollSpy.mockClear?.();
     render(<StrictMode><LessonView lesson={lesson} trackId={track.id} /></StrictMode>);
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));

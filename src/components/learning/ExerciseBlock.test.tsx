@@ -192,3 +192,12 @@ describe('ExerciseBlock run feedback', () => {
     expect(screen.queryByRole('status')).toBeNull();
   });
 });
+
+describe('ExerciseBlock live region (r8-01)', () => {
+  it('uses the shared, origin-anchored sr-only utility so it cannot stretch the document', () => {
+    const { container } = render(<ExerciseBlock {...props} />);
+    const live = container.querySelector('[aria-live="polite"]') as HTMLElement;
+    expect(live.classList.contains('nuclei-sr-only')).toBe(true);
+    expect(container.querySelector('.demo__sr')).toBeNull();
+  });
+});
