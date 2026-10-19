@@ -24,10 +24,19 @@
 .histogram-chip__icon--danger.nuclei-icon-btn:hover:not(:disabled) { color: var(--color-danger); }
 
 .histogram-chip__info {
-  display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; flex: 0 0 auto;
   border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--color-text-secondary); cursor: help;
 }
 .histogram-chip__info:hover { color: var(--color-text-primary); }
 .histogram-chip__caption { display: flex; min-width: 0; flex: 0 1 auto; white-space: nowrap; }
-.histogram-chip__caption-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.histogram-chip__caption-shots { flex-shrink: 0; }
+.histogram-chip__caption-name { flex-shrink: 0; }
+/* pre keeps the separator's leading space: flex items otherwise collapse it ("Nuclei sample· 1,024 shots"). */
+.histogram-chip__caption-shots { flex-shrink: 0; white-space: pre; }
+
+/* The expanded histogram after a code change or Stop: same dimming as the viz column (vizRail.css). */
+.histogram-stale .recharts-bar-rectangle { opacity: var(--stale-graphic-opacity); transition: opacity var(--duration-fast) var(--ease-standard); }
+.histogram-caption {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-1) var(--space-3); margin-bottom: var(--space-2); flex-shrink: 0;
+  font: var(--font-size-caption) var(--font-sans); color: var(--color-text-secondary);
+}
+.histogram-caption__next { color: var(--color-text-tertiary); }

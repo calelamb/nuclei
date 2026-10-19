@@ -13,6 +13,9 @@ import { TYPOGRAPHY } from '../../styles/tokens';
 import { useThemeStore } from '../../stores/themeStore';
 import { ResultsEmptyState } from '../bloch/ResultsEmptyState';
 import { ShotsField } from './ShotsField';
+import { useResultStale } from '../../hooks/useResultStale';
+import { StaleResultNotice } from '../layout/StaleResultNotice';
+import { SAMPLE_LABEL } from '../../hooks/runSummary';
 import { Button, SegmentedControl, type SegmentedOption } from '../ui';
 import './histogram.css';
 const VIEW_OPTIONS: ReadonlyArray<SegmentedOption<HistogramViewMode>> = [
@@ -168,8 +171,36 @@ function OutcomeCap({ shown, hiddenCount, hiddenProbability, evenlySpread, showA
   );
 }
 
+function shotsPhrase(n: number): string {
+  return `${n.toLocaleString('en-US')} ${n === 1 ? 'shot' : 'shots'}`;
+}
+
+interface SampleCaptionProps {
+  mode: HistogramViewMode;
+  sampleShots: number;
+  nextShots: number;
+  executionMs: number;
+  stale: boolean;
+}
+
+/** What the bars are: this run's own sample (not the Shots setting), whether the setting has moved on, and how long it took. */
+function SampleCaption({ mode, sampleShots, nextShots, executionMs, stale }: SampleCaptionProps) {
+  const what = mode === 'ideal' ? 'Ideal probabilities · no sampling' : `${SAMPLE_LABEL} · ${shotsPhrase(sampleShots)}`;
+  const ran = `Ran in ${executionMs.toFixed(0)} ms${stale ? ' · from last run' : ''}`;
+  const nextDiffers = mode === 'sampled' && nextShots !== sampleShots;
+  return (
+    <div className="histogram-caption" data-testid="histogram-caption">
+      <span>{what}</span>
+      {nextDiffers && <span className="histogram-caption__next">Next run: {shotsPhrase(nextShots)}</span>}
+      <span className="histogram-caption__next">{ran}</span>
+    </div>
+  );
+}
+
 export function ProbabilityHistogram() {
   const colors = useThemeStore((s) => s.colors);
+  const stale = useResultStale();
+  const nextShots = useSimulationStore((s) => s.shots);
   const result = useSimulationStore((s) => s.result);
   const [viewMode, setViewMode] = useState<HistogramViewMode>('sampled');
   const [showAll, setShowAll] = useState(false);
@@ -247,15 +278,13 @@ export function ProbabilityHistogram() {
         <Button size="sm" onClick={handleExportCSV}>
           Export CSV
         </Button>
-
-        {/* Execution time */}
-        <span style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontMono }}>
-          Ran in {result.execution_time_ms.toFixed(0)} ms
-        </span>
       </div>
 
+      {stale && <StaleResultNotice />}
+      <SampleCaption mode={viewMode} sampleShots={result.shot_count} nextShots={nextShots} executionMs={result.execution_time_ms} stale={stale} />
+
       {/* Chart */}
-      <div ref={chartRef} style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      <div ref={chartRef} className={stale ? 'histogram-stale' : undefined} style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         <HistogramChart data={data} srDescription={srDescription} scroll={showAll && allRows.length > MAX_VISIBLE_OUTCOMES} />
       </div>
     </div>
