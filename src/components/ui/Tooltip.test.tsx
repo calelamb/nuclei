@@ -288,4 +288,13 @@ describe('Tooltip trigger that becomes disabled', () => {
     await act(async () => { await Promise.resolve(); });
     expect(screen.queryByRole('tooltip')).toBeNull();
   });
+  it('closes on a scroll that carries the trigger, ignores a scroll elsewhere', () => {
+    render(<div><div data-testid="other" /><div data-testid="holder"><Tooltip label="Hi"><button>t</button></Tooltip></div></div>);
+    fireEvent.focus(screen.getByText('t'));
+    act(() => { vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS + 10); });
+    fireEvent.scroll(screen.getByTestId('other'));
+    expect(screen.getByRole('tooltip')).toBeTruthy();
+    fireEvent.scroll(screen.getByTestId('holder'));
+    expect(screen.queryByRole('tooltip')).toBeNull();
+  });
 });

@@ -57,6 +57,17 @@ export function isSidebarShown(f: SidebarFacts): boolean {
   return true;
 }
 
+/** Non-hook read of the same facts, for event handlers that must not close over render state. */
+export function readMainTakeoverKind(): MainTakeover | null {
+  return mainTakeoverKind({
+    isLearnMode: useLearnStore.getState().isLearnMode,
+    isChallengeMode: useChallengeModeStore.getState().isChallengeMode,
+    workspaceMode: useWorkspaceStore.getState().mode,
+    activeView: useNavigationStore.getState().activeView,
+    experimentSelected: useExperimentUiStore.getState().selectedExperimentFileName !== null,
+  });
+}
+
 export function useMainTakeoverKind(): MainTakeover | null {
   const isLearnMode = useLearnStore((s) => s.isLearnMode);
   const isChallengeMode = useChallengeModeStore((s) => s.isChallengeMode);

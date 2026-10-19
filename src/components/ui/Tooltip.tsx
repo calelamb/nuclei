@@ -111,10 +111,16 @@ export function Tooltip({ label, shortcut, placement = 'above', children }: Tool
   useEffect(() => {
     if (!open) return undefined;
     window.addEventListener('resize', closeNow);
-    window.addEventListener('scroll', closeNow, true);
+    // Only a scroll that carries the trigger moves it: streaming terminal output elsewhere must not dismiss the tip.
+    const onScroll = (e: Event) => {
+      const trigger = wrapRef.current?.firstElementChild;
+      const scrolled = e.target;
+      if (!trigger || !(scrolled instanceof Node) || scrolled.contains(trigger)) closeNow();
+    };
+    window.addEventListener('scroll', onScroll, true);
     return () => {
       window.removeEventListener('resize', closeNow);
-      window.removeEventListener('scroll', closeNow, true);
+      window.removeEventListener('scroll', onScroll, true);
     };
   }, [open, closeNow]);
 

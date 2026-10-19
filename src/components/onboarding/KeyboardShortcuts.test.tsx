@@ -98,3 +98,17 @@ describe('shortcuts sheet is the shared Dialog', () => {
     expect(closed).toBe(1);
   });
 });
+
+describe('shortcutGroups folds tiny groups', () => {
+  it('never shows a group of fewer than three rows (web Research View has one)', () => {
+    for (const mode of ['learn', 'research'] as const) {
+      for (const web of [true, false]) {
+        const groups = shortcutGroups(true, web, mode);
+        expect(groups.every((g) => g.shortcuts.length >= 3 || groups.length === 1)).toBe(true);
+      }
+    }
+    const web = shortcutGroups(false, true, 'research');
+    expect(web.some((g) => g.shortcuts.some((r) => r.description === 'Toggle terminal panel'))).toBe(true);
+    expect(web.find((g) => g.title === 'View')).toBeUndefined();
+  });
+});

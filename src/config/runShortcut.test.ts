@@ -23,3 +23,13 @@ describe('runShortcutOwnedElsewhere', () => {
     expect(runShortcutOwnedElsewhere(inside('<div data-dirac-panel=""><textarea id="x"></textarea></div>', '#x'))).toBe(true);
   });
 });
+
+describe('runShortcutHiddenEditor', () => {
+  it('blocks the chord while a lesson or challenge hides the editor', async () => {
+    const { runShortcutHiddenEditor } = await import('./runShortcut');
+    expect(runShortcutHiddenEditor('lesson')).toBe(true);
+    expect(runShortcutHiddenEditor('challenge')).toBe(true);
+    expect(runShortcutHiddenEditor(null)).toBe(false);
+    expect(runShortcutHiddenEditor('qec')).toBe(false);
+  });
+});
