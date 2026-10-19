@@ -10,12 +10,19 @@
  * The Lab needs the native Python kernel (numpy statevector analyses, Stim,
  * sandbox subprocesses), so the web build reports it as unavailable. The
  * DEV-only `?labKernel=ws://host:port` override points a plain browser at a
- * real kernel for e2e runs and screenshots.
+ * real kernel for e2e runs and screenshots; `&labKernelToken=<token>` (DEV only)
+ * supplies the kernel's session token for it, read from
+ * `~/.nuclei/runtime/kernel.json`.
+ *
+ * Every Lab socket authenticates exactly like the editor's: it goes through
+ * `openKernelConnection`, so the per-launch token is the first frame the
+ * kernel sees and the session is only usable after the kernel's ack.
  */
 
 import { KERNEL_WS_URL } from '../../config/kernel';
 import type { KernelMessage, KernelResponse } from '../../types/quantum';
 import type { RunnerKernelSession } from '../experimentRunner';
+import { openKernelConnection, type KernelTokenProvider } from '../kernelSocket';
 
 export type LabPlatform = 'desktop' | 'web';
 
@@ -28,7 +35,7 @@ export interface LabSession extends RunnerKernelSession {
 }
 
 export type LabAvailability =
-  | { available: true; url: string }
+  | { available: true; url: string; /** DEV override only: the kernel token from `?labKernelToken=`. */ devToken?: string }
   | { available: false; reason: 'web_build' };
 
 export class LabUnavailableError extends Error {
@@ -38,11 +45,16 @@ export class LabUnavailableError extends Error {
   }
 }
 
-function devKernelOverride(): string | null {
+const DEV_TOKEN_PATTERN = /^[\w.~-]{1,1024}$/;
+
+function devKernelOverride(): { url: string; token?: string } | null {
   if (!import.meta.env.DEV || typeof window === 'undefined') return null;
   try {
-    const value = new URLSearchParams(window.location.search).get('labKernel');
-    if (value && /^wss?:\/\/[\w.-]+(:\d+)?\/?$/.test(value)) return value;
+    const params = new URLSearchParams(window.location.search);
+    const value = params.get('labKernel');
+    if (!value || !/^wss?:\/\/[\w.-]+(:\d+)?\/?$/.test(value)) return null;
+    const token = params.get('labKernelToken');
+    return token && DEV_TOKEN_PATTERN.test(token) ? { url: value, token } : { url: value };
   } catch {
     // Non-browser environment (tests); fall through.
   }
@@ -51,17 +63,23 @@ function devKernelOverride(): string | null {
 
 export function labAvailability(platform: LabPlatform): LabAvailability {
   const override = devKernelOverride();
-  if (override) return { available: true, url: override };
+  if (override) {
+    return override.token
+      ? { available: true, url: override.url, devToken: override.token }
+      : { available: true, url: override.url };
+  }
   if (platform === 'desktop') return { available: true, url: KERNEL_WS_URL };
   return { available: false, reason: 'web_build' };
 }
 
-/** Injected for tests; production uses the browser WebSocket. */
-export type WebSocketFactory = (url: string) => WebSocket;
+export interface OpenLabSessionOptions {
+  /** Supplies the per-launch kernel token (the desktop shell's command). */
+  getToken?: KernelTokenProvider;
+}
 
 export async function openLabSession(
   platform: LabPlatform,
-  createSocket: WebSocketFactory = (url) => new WebSocket(url),
+  options: OpenLabSessionOptions = {},
 ): Promise<LabSession> {
   const availability = labAvailability(platform);
   if (!availability.available) throw new LabUnavailableError();
@@ -70,19 +88,36 @@ export async function openLabSession(
   const closeHandlers = new Set<() => void>();
   let closed = false;
 
-  const socket = createSocket(availability.url);
+  const getToken: KernelTokenProvider | undefined = availability.devToken
+    ? async () => availability.devToken ?? null
+    : options.getToken;
+  const { ws: socket, authenticated } = await openKernelConnection(availability.url, getToken);
 
+  // Usable only once the kernel has accepted the session token: a refused
+  // handshake (4401) or an unreachable kernel rejects here instead of
+  // handing back a dead session.
   await new Promise<void>((resolve, reject) => {
-    const onOpen = () => {
-      socket.removeEventListener('error', onError);
-      resolve();
-    };
     const onError = () => {
-      socket.removeEventListener('open', onOpen);
       reject(new Error(`Could not connect to the kernel at ${availability.url}`));
     };
-    socket.addEventListener('open', onOpen, { once: true });
     socket.addEventListener('error', onError, { once: true });
+    authenticated.then(
+      () => {
+        socket.removeEventListener('error', onError);
+        resolve();
+      },
+      (error: unknown) => {
+        socket.removeEventListener('error', onError);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      },
+    );
+  }).catch((error: unknown) => {
+    try {
+      socket.close();
+    } catch {
+      // Already closed.
+    }
+    throw error;
   });
 
   socket.addEventListener('message', (event: MessageEvent) => {

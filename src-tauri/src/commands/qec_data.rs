@@ -17,6 +17,10 @@ pub use super::qec_data_project::{authorize_project_access, AuthorizedProjectRoo
 pub const QEC_DATA_PORT: u16 = 9743;
 const QEC_DATA_HOST: &str = "127.0.0.1";
 const TOKEN_ENV: &str = "NUCLEI_QEC_DATA_TOKEN";
+// Carries no secret: the engine reads the token from stdin. Kept out of the
+// environment because a process's initial environment block stays readable by
+// same-user processes (sysctl KERN_PROCARGS2, /proc/<pid>/environ).
+const TOKEN_STDIN_ENV: &str = "NUCLEI_QEC_DATA_TOKEN_STDIN";
 const PROJECT_ENV: &str = "NUCLEI_QEC_DATA_PROJECT_ROOT";
 const DEFAULT_MODULE: &str = "kernel.qec_data.server";
 const READINESS_PREFIX: &str = "NUCLEI_QEC_DATA_READY ";
@@ -422,18 +426,35 @@ fn spawn_child(
     command
         .args(["-m", &config.module, "--port", &config.port.to_string()])
         .current_dir(module_root)
-        .env(TOKEN_ENV, token)
+        .env_remove(TOKEN_ENV)
+        .env(TOKEN_STDIN_ENV, "1")
         .env(PROJECT_ENV, project.path())
-        .stdin(Stdio::null())
+        .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|_| {
-            QecDataError::new(
-                "spawn_failed",
-                "Could not start the QEC Data Engine child process.",
-            )
-        })
+        .stderr(Stdio::piped());
+    let mut child = command.spawn().map_err(|_| {
+        QecDataError::new(
+            "spawn_failed",
+            "Could not start the QEC Data Engine child process.",
+        )
+    })?;
+    // The token goes over stdin (then closed), never into the environment.
+    let delivered = child.stdin.take().is_some_and(|mut stdin| {
+        use std::io::Write;
+        stdin
+            .write_all(token.as_bytes())
+            .and_then(|()| stdin.write_all(b"\n"))
+            .and_then(|()| stdin.flush())
+            .is_ok()
+    });
+    if !delivered {
+        terminate_child(&mut child);
+        return Err(QecDataError::new(
+            "spawn_failed",
+            "Could not pass the session token to the QEC Data Engine.",
+        ));
+    }
+    Ok(child)
 }
 
 enum StartupLine {
@@ -566,7 +587,7 @@ fn read_bounded_line<R: BufRead>(reader: &mut R, limit: usize) -> io::Result<Opt
     }
 }
 
-fn redact(line: &str, token: &str) -> String {
+pub(super) fn redact(line: &str, token: &str) -> String {
     if token.is_empty() {
         line.to_string()
     } else {
@@ -652,7 +673,7 @@ fn production_config(
     ))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn qec_data_start(
     state: State<'_, QecDataManager>,
     app_handle: tauri::AppHandle,
@@ -665,7 +686,7 @@ pub fn qec_data_start(
     state.start(config)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn qec_data_stop(state: State<'_, QecDataManager>) -> Result<(), QecDataError> {
     state.stop()
 }

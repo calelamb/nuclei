@@ -29,6 +29,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::kernel::start_kernel,
             commands::kernel::stop_kernel,
+            commands::kernel::kernel_auth_token,
             commands::qec_data::qec_data_start,
             commands::qec_data::qec_data_stop,
             commands::qec_data::qec_data_status,
@@ -68,6 +69,38 @@ pub fn run() {
                 // Kernel cleanup happens via KernelState Drop
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            if is_shutdown_event(&event) {
+                stop_child_processes(app_handle);
+            }
+        });
+}
+
+/// Tauri never drops managed state on exit, so `KernelState`'s `Drop` does
+/// not run on Quit: without this the kernel (and its token file) outlived
+/// the app until the next launch reaped it.
+fn is_shutdown_event(event: &tauri::RunEvent) -> bool {
+    matches!(event, tauri::RunEvent::Exit)
+}
+
+fn stop_child_processes(app_handle: &tauri::AppHandle) {
+    use tauri::Manager;
+    app_handle.state::<KernelState>().stop();
+    if let Err(e) = app_handle.state::<QecDataManager>().stop() {
+        log::warn!("Could not stop the QEC data engine on exit: {e:?}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_shutdown_event;
+
+    #[test]
+    fn only_exit_triggers_child_shutdown() {
+        assert!(is_shutdown_event(&tauri::RunEvent::Exit));
+        assert!(!is_shutdown_event(&tauri::RunEvent::Ready));
+        assert!(!is_shutdown_event(&tauri::RunEvent::Resumed));
+    }
 }

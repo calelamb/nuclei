@@ -32,6 +32,8 @@ interface EditorState {
   kernelReady: boolean;
   kernelStatus: KernelStatus;
   kernelError: string | null;
+  /** Bumped by the Retry button; useKernel restarts the kernel when it changes. */
+  kernelRetryNonce: number;
   errors: EditorError[];
   setCode: (code: string) => void;
   setFramework: (framework: Framework) => void;
@@ -40,6 +42,7 @@ interface EditorState {
   setKernelConnected: (connected: boolean) => void;
   setKernelReady: (ready: boolean) => void;
   setKernelStatus: (status: KernelStatus, error?: string | null) => void;
+  requestKernelRetry: () => void;
   setErrors: (errors: EditorError[]) => void;
   clearErrors: () => void;
 }
@@ -54,6 +57,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   kernelReady: false,
   kernelStatus: 'idle',
   kernelError: null,
+  kernelRetryNonce: 0,
   errors: [],
   setCode: (code) => {
     // Don't re-mark as dirty if the user hasn't actually changed anything
@@ -75,6 +79,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setKernelConnected: (kernelConnected) => set({ kernelConnected }),
   setKernelReady: (kernelReady) => set({ kernelReady }),
   setKernelStatus: (kernelStatus, kernelError = null) => set({ kernelStatus, kernelError }),
+  requestKernelRetry: () => set((state) => ({ kernelRetryNonce: state.kernelRetryNonce + 1 })),
   setErrors: (errors) => set({ errors }),
   clearErrors: () => set({ errors: [] }),
 }));

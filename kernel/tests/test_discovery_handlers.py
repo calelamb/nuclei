@@ -14,6 +14,7 @@ pytest.importorskip("stim")
 pytest.importorskip("pymatching")
 
 from kernel import server  # noqa: E402
+from kernel.tests._auth_harness import StreamingWS as _BaseStreamingWS, serve_authenticated  # noqa: E402
 from kernel.discovery import manager as manager_module  # noqa: E402
 from kernel.discovery.manager import DiscoveryManager  # noqa: E402
 from kernel.lab_context import owner_for_connection, release_owner  # noqa: E402
@@ -26,50 +27,11 @@ CANCELLED_REPLY = {
 }
 
 
-class StreamingWS:
-    """Drives server.handle_message like a live connection."""
+class StreamingWS(_BaseStreamingWS):
+    """Drives the kernel handler like a live, authenticated connection."""
 
     def __init__(self) -> None:
-        self._incoming: asyncio.Queue = asyncio.Queue()
-        self.sent: list[dict] = []
-        self._activity = asyncio.Event()
-
-    def push(self, message: dict) -> None:
-        self._incoming.put_nowait(json.dumps(message))
-
-    def close(self) -> None:
-        self._incoming.put_nowait(None)
-
-    def __aiter__(self):
-        return self
-
-    async def __anext__(self):
-        item = await self._incoming.get()
-        if item is None:
-            raise StopAsyncIteration
-        return item
-
-    async def send(self, raw: str) -> None:
-        self.sent.append(json.loads(raw))
-        self._activity.set()
-
-    def count(self, kind: str) -> int:
-        return len([m for m in self.sent if m.get("type") == kind])
-
-    async def wait_for(self, predicate, timeout: float = 90.0):
-        deadline = time.monotonic() + timeout
-        while True:
-            match = [m for m in self.sent if predicate(m)]
-            if match:
-                return match
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise TimeoutError(f"no match in {timeout}s; got {[m.get('type') for m in self.sent]}")
-            self._activity.clear()
-            try:
-                await asyncio.wait_for(self._activity.wait(), timeout=min(remaining, 0.5))
-            except asyncio.TimeoutError:
-                pass
+        super().__init__(default_timeout=90.0)
 
 
 def blocking_sandbox(seen: list | None = None):
@@ -115,7 +77,7 @@ def evaluate_msg(program: str, candidate_id="c-1", run_id="r-1", config=None, **
 
 async def session(messages, wait, timeout=90.0):
     ws = StreamingWS()
-    connection = asyncio.create_task(server.handle_message(ws))
+    connection = asyncio.create_task(serve_authenticated(ws))
     try:
         for message in messages:
             ws.push(message)
@@ -235,7 +197,7 @@ async def test_error_envelopes():
     no_seed = {k: v for k, v in base.items() if k != "seed"}
     bad_stage = {**base, "stage": "weird"}
     ws = StreamingWS()
-    connection = asyncio.create_task(server.handle_message(ws))
+    connection = asyncio.create_task(serve_authenticated(ws))
     for message in (bad_config, unknown, no_seed, bad_stage):
         ws.push(message)
     await ws.wait_for(lambda m: ws.count("error") == 4)
@@ -251,7 +213,7 @@ async def test_error_envelopes():
 @pytest.mark.asyncio
 async def test_cancel_running_evaluation_emits_failed_cancelled():
     ws = StreamingWS()
-    connection = asyncio.create_task(server.handle_message(ws))
+    connection = asyncio.create_task(serve_authenticated(ws))
     try:
         ws.push(evaluate_msg("import time\ntime.sleep(120)\n", candidate_id="slow"))
         await ws.wait_for(is_type("discovery_evaluate_accepted"))
@@ -274,7 +236,7 @@ async def test_cancel_running_evaluation_emits_failed_cancelled():
 async def test_cancel_whole_run_counts_all_candidates_of_that_run_only():
     manager_module.set_manager(DiscoveryManager(max_workers=1, sandbox_runner=blocking_sandbox()))
     ws = StreamingWS()
-    connection = asyncio.create_task(server.handle_message(ws))
+    connection = asyncio.create_task(serve_authenticated(ws))
     try:
         for i in range(3):
             ws.push(evaluate_msg("x = 1\n", candidate_id=f"c{i}"))
@@ -298,7 +260,7 @@ async def test_owner_release_cancels_everything_it_holds():
     manager = DiscoveryManager(max_workers=2, sandbox_runner=blocking_sandbox(seen))
     manager_module.set_manager(manager)
     ws = StreamingWS()
-    connection = asyncio.create_task(server.handle_message(ws))
+    connection = asyncio.create_task(serve_authenticated(ws))
     for i in range(3):
         ws.push(evaluate_msg("x = 1\n", candidate_id=f"c{i}"))
     await ws.wait_for(lambda m: ws.count("discovery_evaluate_accepted") == 3)
@@ -317,7 +279,7 @@ async def test_owner_release_cancels_everything_it_holds():
 async def test_queue_cap_returns_discovery_busy():
     manager_module.set_manager(DiscoveryManager(max_workers=1, sandbox_runner=blocking_sandbox()))
     ws = StreamingWS()
-    connection = asyncio.create_task(server.handle_message(ws))
+    connection = asyncio.create_task(serve_authenticated(ws))
     try:
         for i in range(65):
             ws.push(evaluate_msg("x = 1\n", candidate_id=f"c{i}"))
@@ -346,7 +308,7 @@ async def test_mutate_handler(seed_program):
 
 async def _mutate_session(seed_program: str) -> StreamingWS:
     ws = StreamingWS()
-    connection = asyncio.create_task(server.handle_message(ws))
+    connection = asyncio.create_task(serve_authenticated(ws))
     ws.push({"type": "discovery_mutate", "program": seed_program, "seed": 4, "count": 5})
     ws.push({"type": "discovery_mutate", "program": "x = 1\n# EVOLVE-BLOCK-START\n", "seed": 4, "count": 2})
     ws.push({"type": "discovery_mutate", "program": seed_program, "seed": 4, "count": 0})
@@ -413,7 +375,7 @@ def ws_count_errors(message):
 async def test_confirmation_style_ids_stay_valid():
     manager_module.set_manager(DiscoveryManager(max_workers=1, sandbox_runner=blocking_sandbox()))
     ws = StreamingWS()
-    connection = asyncio.create_task(server.handle_message(ws))
+    connection = asyncio.create_task(serve_authenticated(ws))
     try:
         ws.push(evaluate_msg("x = 1\n", candidate_id="c-0007~confirm0", run_id="run_1.2~x"))
         await ws.wait_for(is_type("discovery_evaluate_accepted", candidate_id="c-0007~confirm0"))
@@ -429,7 +391,7 @@ async def test_global_queue_cap_spans_connections():
         DiscoveryManager(max_workers=1, max_queued_global=5, sandbox_runner=blocking_sandbox())
     )
     sockets = [StreamingWS() for _ in range(3)]
-    tasks = [asyncio.create_task(server.handle_message(ws)) for ws in sockets]
+    tasks = [asyncio.create_task(serve_authenticated(ws)) for ws in sockets]
     try:
         for n, ws in enumerate(sockets):
             for i in range(3):  # 9 requests over 3 connections, each well under the per-owner cap

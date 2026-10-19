@@ -25,6 +25,7 @@ pytest.importorskip("pymatching")
 import stim  # noqa: E402
 
 from kernel import server  # noqa: E402
+from kernel.tests._auth_harness import StreamingWS as _BaseStreamingWS, serve_authenticated  # noqa: E402
 from kernel.qec.campaign import (  # noqa: E402
     CampaignManager,
     build_tasks,
@@ -48,55 +49,15 @@ def task_entry(i: int, circuit_text: str = REP_CIRCUIT) -> dict:
 # ───────── websocket harness: streamed sends + pushable requests ─────────
 
 
-class StreamingWS:
-    """Drives server.handle_message like a live connection: the test pushes
-    requests in over time and awaits streamed responses."""
+class StreamingWS(_BaseStreamingWS):
+    """Drives the kernel handler like a live, authenticated connection."""
 
     def __init__(self) -> None:
-        self._incoming: asyncio.Queue = asyncio.Queue()
-        self.sent: list[dict] = []
-        self._activity = asyncio.Event()
-
-    def push(self, message: dict) -> None:
-        self._incoming.put_nowait(json.dumps(message))
-
-    def close(self) -> None:
-        self._incoming.put_nowait(None)
-
-    def __aiter__(self):
-        return self
-
-    async def __anext__(self):
-        item = await self._incoming.get()
-        if item is None:
-            raise StopAsyncIteration
-        return item
-
-    async def send(self, raw: str) -> None:
-        self.sent.append(json.loads(raw))
-        self._activity.set()
-
-    async def wait_for(self, predicate, timeout: float = 60.0):
-        deadline = time.monotonic() + timeout
-        while True:
-            match = [m for m in self.sent if predicate(m)]
-            if match:
-                return match
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise TimeoutError(
-                    f"no message matched within {timeout}s; got types: "
-                    f"{[m.get('type') for m in self.sent]}"
-                )
-            self._activity.clear()
-            try:
-                await asyncio.wait_for(self._activity.wait(), timeout=min(remaining, 0.5))
-            except asyncio.TimeoutError:
-                pass
+        super().__init__(default_timeout=60.0)
 
 
 async def run_connection(ws: StreamingWS):
-    return await server.handle_message(ws)
+    return await serve_authenticated(ws)
 
 
 # ───────── validation (fast, no sinter workers) ─────────

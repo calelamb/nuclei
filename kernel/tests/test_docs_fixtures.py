@@ -61,6 +61,8 @@ with mock.patch.dict(os.environ, {
 }):
     import kernel.server as server
 
+from kernel import auth
+from ._auth_harness import HandshakeSocket, serve_authenticated
 import kernel.hardware.credential_store as credential_store
 from kernel.executor import ADAPTER_SPECS
 from kernel.hardware.job_store import JobStore
@@ -167,7 +169,7 @@ def assert_matches(expected, actual, *, captured_job_id=None, path="$"):
 # ───────────────────────── fake websocket ─────────────────────────
 
 
-class FakeWebSocket:
+class FakeWebSocket(HandshakeSocket):
     """In-process stand-in for a websockets server connection.
 
     ``handle_message`` consumes its socket with ``async for raw in websocket``
@@ -197,7 +199,12 @@ class FakeWebSocket:
         self.steps.append([])
         return json.dumps(request)
 
+    def close(self, code: int, reason: str = ""):
+        return self._reject(code, reason)
+
     async def send(self, text: str) -> None:
+        if self._swallow_ack(text):
+            return
         message = json.loads(text)
         if message.get("type") == "hardware_job_submitted":
             job_id = message.get("job", {}).get("id")
@@ -222,7 +229,7 @@ class FakeWebSocket:
 
 def replay(requests: list[dict]) -> FakeWebSocket:
     websocket = FakeWebSocket(requests)
-    asyncio.run(server.handle_message(websocket))
+    asyncio.run(serve_authenticated(websocket))
     return websocket
 
 
@@ -349,6 +356,13 @@ def test_session_fixture(session_path: Path):
             )
 
 
+CLIENT_TOKEN = "docs-fixture-token-" + "x" * 24
+
+
+def _client_auth_config():
+    return auth.build_config(token=CLIENT_TOKEN, insecure=False, dev=False)
+
+
 # ───────────────────────── runnable client example ─────────────────────────
 
 
@@ -361,14 +375,15 @@ def test_python_example_client_against_live_server():
     """
     pytest.importorskip("qiskit")
     pytest.importorskip("qiskit_aer")
-    import websockets
+    from websockets.asyncio.server import serve as ws_serve
 
     client_path = FIXTURES_DIR / "clients" / "example_client.py"
     assert client_path.is_file(), f"missing client example: {client_path}"
 
     async def run() -> tuple[int, str, str]:
-        async with websockets.serve(
-            server.handle_message, "127.0.0.1", 0,
+        async with ws_serve(
+            auth.secure_handler(server.handle_message, _client_auth_config()),
+            "127.0.0.1", 0,
             max_size=server.MAX_MESSAGE_SIZE,
         ) as ws_server:
             port = ws_server.sockets[0].getsockname()[1]
@@ -376,6 +391,7 @@ def test_python_example_client_against_live_server():
                 sys.executable, str(client_path), f"ws://127.0.0.1:{port}",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env={**os.environ, "NUCLEI_KERNEL_TOKEN": CLIENT_TOKEN},
             )
             stdout, stderr = await asyncio.wait_for(
                 process.communicate(), timeout=120
@@ -396,14 +412,15 @@ def test_sweep_driver_against_live_server():
     point. Same live-server harness as the example-client test above."""
     pytest.importorskip("qiskit")
     pytest.importorskip("qiskit_aer")
-    import websockets
+    from websockets.asyncio.server import serve as ws_serve
 
     driver_path = FIXTURES_DIR / "clients" / "sweep_driver.py"
     assert driver_path.is_file(), f"missing sweep driver: {driver_path}"
 
     async def run() -> tuple[int, str, str]:
-        async with websockets.serve(
-            server.handle_message, "127.0.0.1", 0,
+        async with ws_serve(
+            auth.secure_handler(server.handle_message, _client_auth_config()),
+            "127.0.0.1", 0,
             max_size=server.MAX_MESSAGE_SIZE,
         ) as ws_server:
             port = ws_server.sockets[0].getsockname()[1]
@@ -412,6 +429,7 @@ def test_sweep_driver_against_live_server():
                 f"ws://127.0.0.1:{port}", "64", "3",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env={**os.environ, "NUCLEI_KERNEL_TOKEN": CLIENT_TOKEN},
             )
             stdout, stderr = await asyncio.wait_for(
                 process.communicate(), timeout=120
@@ -422,3 +440,37 @@ def test_sweep_driver_against_live_server():
     assert returncode == 0, f"sweep driver failed:\nstdout:\n{stdout}\nstderr:\n{stderr}"
     rows = re.findall(r"^theta=[0-9.]+ +P\(1\)=[0-9.]+", stdout, re.MULTILINE)
     assert len(rows) == 3, f"expected 3 sweep rows, got {len(rows)}:\n{stdout}"
+
+
+def test_example_client_finds_token_in_runtime_file(tmp_path, monkeypatch):
+    """Local scripts with no env var pick the token up from the user-only
+    runtime file the kernel writes at startup."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "docs_example_client", FIXTURES_DIR / "clients" / "example_client.py"
+    )
+    client = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(client)
+
+    config = auth.build_config(token=CLIENT_TOKEN, insecure=False, dev=False)
+    auth.write_runtime_file(config, 9742, runtime_dir=tmp_path)
+    monkeypatch.delenv("NUCLEI_KERNEL_TOKEN", raising=False)
+    monkeypatch.setenv("NUCLEI_RUNTIME_DIR", str(tmp_path))
+    assert client.load_token() == CLIENT_TOKEN
+    assert client.default_url() == "ws://localhost:9742"
+
+
+def test_example_client_default_url_follows_runtime_file(tmp_path, monkeypatch):
+    """The default URL must match the kernel whose token is in the file."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "docs_example_client2", FIXTURES_DIR / "clients" / "example_client.py"
+    )
+    client = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(client)
+    config = auth.build_config(token=CLIENT_TOKEN, insecure=False, dev=False)
+    auth.write_runtime_file(config, 9743, runtime_dir=tmp_path)
+    monkeypatch.setenv("NUCLEI_RUNTIME_DIR", str(tmp_path))
+    assert client.default_url() == "ws://localhost:9743"

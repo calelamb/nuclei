@@ -279,6 +279,35 @@ must not be named `Main`** — qdk's compiler itself rejects a parameterized
 Reproducibility guarantees and honest limits (hardware noise, unseedable
 backends, the `dirty` git flag): `docs-site/src/content/docs/research/reproducibility.mdx`.
 
+## Kernel Protocol v2 (Authentication, breaking)
+
+Every kernel connection authenticates; there is no anonymous mode outside
+`NUCLEI_KERNEL_INSECURE_DEV=1` (throwaway local use).
+
+- **Handshake:** the first frame must be `{"type":"authenticate","token":...}`;
+  the kernel replies `{"type":"authenticated"}`. Token source: `NUCLEI_KERNEL_TOKEN`
+  or the 0600 runtime file `~/.nuclei/runtime/kernel.json`
+  (`NUCLEI_RUNTIME_DIR` overrides the directory). The desktop shell generates a
+  token per launch and hands it to the webview through the `kernel_auth_token` command.
+- **Refusals:** a foreign `Origin` or non-loopback `Host` gets HTTP 403 on the
+  upgrade (`process_request`); a missing or wrong token gets close code 4401.
+- **Server:** `kernel/auth.py` (`secure_handler`, `make_process_request`,
+  runtime file) wraps `server._handle_connection`. Serve with
+  `websockets.asyncio.server.serve` (13.x floor, `kernel/requirements.txt`):
+  bare `websockets.serve` is the legacy API before 14 and its `process_request`
+  hook has a different signature.
+- **Clients:** every frontend socket goes through `src/services/kernelSocket.ts`
+  (`openKernelConnection`): editor (`useKernel`), `createKernelSession`, and the
+  Lab (`src/services/lab/labSession.ts`). Never call `new WebSocket(` against the
+  kernel directly. DEV-only: `?labKernel=ws://host:port&labKernelToken=<token>`.
+- **Subprocesses never get the token:** `lab_proc.minimal_env` strips it and the
+  kernel pops it from its own environment at startup; candidate sandboxes cannot
+  read the runtime file (`kernel/tests/test_lab_token_isolation.py`).
+- **Tests:** in-process fakes use `kernel/tests/_auth_harness.py`
+  (`StreamingWS`, `serve_authenticated`), which runs the production auth gate.
+  `kernel/tests/test_kernel_auth.py` holds the cross-site regression (403 / 4401 /
+  `run_python` unreachable). CI re-runs the auth suites on `websockets==13.1`.
+
 ## Kernel Protocol v1.1
 
 Additive-only extensions to the `execute` message and one new message type,
@@ -469,7 +498,7 @@ npm run tauri dev          # Start dev server with hot reload
 npm run tauri build        # Build .dmg for distribution
 
 # Kernel (standalone testing)
-cd kernel && python server.py   # Start kernel WebSocket server
+cd kernel && NUCLEI_KERNEL_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')" python server.py   # Start kernel (token required; or NUCLEI_KERNEL_INSECURE_DEV=1 for throwaway local use)
 
 # Test
 npm test                   # Frontend tests

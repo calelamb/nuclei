@@ -25,6 +25,6 @@ export function createConjectureEnv(platform: PlatformBridge): ConjectureEnv {
     hash: sha256Hex,
     now: () => new Date(),
     proposer: createConjectureProposer({ getApiKey: () => useDiracStore.getState().apiKey, hash: sha256Hex }),
-    openSession: () => openLabSession(platform.getPlatform()),
+    openSession: () => openLabSession(platform.getPlatform(), { getToken: platform.getKernelAuthToken?.bind(platform) }),
   };
 }

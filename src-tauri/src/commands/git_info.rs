@@ -54,7 +54,7 @@ pub fn project_info(path: &Path) -> Option<GitProjectInfo> {
 
 /// Tauri command wrapper. Returns `Ok(None)` for every failure mode so the
 /// frontend contract is "a repo → info, otherwise null" with no error path.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn git_project_info(path: String) -> Result<Option<GitProjectInfo>, String> {
     Ok(project_info(Path::new(&path)))
 }

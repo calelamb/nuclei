@@ -34,6 +34,7 @@ import {
 } from '../services/trainability/settings';
 import { kernelLanguageFor, type Framework } from '../types/quantum';
 import type { PlatformBridge } from '../platform/bridge';
+import type { KernelTokenProvider } from '../services/kernelSocket';
 import {
   ACTIVE_JOB_STATUSES,
   type InspectState,
@@ -65,8 +66,12 @@ const IDLE_LINT: LintState = { status: 'idle', diagnostics: [], summary: null, e
 /** Seam for tests: how a client is created. Production opens a Lab session. */
 export type ClientFactory = (platform: LabPlatform) => Promise<TrainabilityClient>;
 
+// The desktop shell's token command, handed over by `setPlatform`. The Lab's
+// dedicated socket authenticates with it exactly like the editor's socket.
+let kernelTokenProvider: KernelTokenProvider | undefined;
+
 const defaultClientFactory: ClientFactory = async (platform) =>
-  createTrainabilityClient(await openLabSession(platform));
+  createTrainabilityClient(await openLabSession(platform, { getToken: kernelTokenProvider }));
 
 interface TrainabilityState {
   platform: LabPlatform;
@@ -95,7 +100,7 @@ interface TrainabilityState {
   /** Line the verdict rail asked the editor to reveal. */
   revealRequest: { line: number; nonce: number } | null;
 
-  setPlatform(platform: LabPlatform): void;
+  setPlatform(platform: LabPlatform, getKernelToken?: KernelTokenProvider): void;
   /** The user's edit or preset pick: always overrides the file's declared observable. */
   setObservable(observable: string): void;
   /** Go back to the observable the file declares (no-op when it declares none). */
@@ -255,7 +260,8 @@ export const useTrainabilityStore = create<TrainabilityState>((set, get) => {
     savedCertificates: [],
     revealRequest: null,
 
-    setPlatform(platform) {
+    setPlatform(platform, getKernelToken) {
+      kernelTokenProvider = getKernelToken;
       const availability = labAvailability(platform);
       set({
         platform,

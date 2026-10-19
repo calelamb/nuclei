@@ -5,6 +5,7 @@ import { useLearnStore } from '../../stores/learnStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { usePlatform } from '../../platform/PlatformProvider';
 import { KERNEL_WS_URL } from '../../config/kernel';
+import { openAuthenticatedKernelSocket } from '../../services/kernelSocket';
 import type { Framework, CircuitSnapshot, SimulationResult, KernelResponse } from '../../types/quantum';
 import { Play, RotateCcw, ExternalLink, Terminal, BarChart3 } from 'lucide-react';
 import { isQuantumCode } from './exerciseValidation';
@@ -122,11 +123,25 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
     }
 
     let ws: WebSocket | null = null;
+    let cancelled = false;
     let retries = 0;
     const maxRetries = 3;
 
     function connect() {
-      ws = new WebSocket(KERNEL_WS_URL);
+      void openAuthenticatedKernelSocket(
+        KERNEL_WS_URL,
+        platform.getKernelAuthToken?.bind(platform),
+      ).then((socket) => {
+        if (cancelled) { socket.close(); return; }
+        ws = socket;
+        attach(socket);
+      }).catch(() => {
+        // No session token (kernel not started or not ours): stay offline
+        // rather than talking to an unauthenticated listener.
+        wsRef.current = null;
+      });
+    }
+    function attach(ws: WebSocket) {
       ws.onopen = () => { wsRef.current = ws; retries = 0; };
       ws.onmessage = (ev) => {
         try { handleMessage(JSON.parse(ev.data)); } catch { /* noop */ }
@@ -142,8 +157,8 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
     }
 
     connect();
-    return () => { ws?.close(); };
-  }, [handleMessage, isWeb]);
+    return () => { cancelled = true; ws?.close(); };
+  }, [handleMessage, isWeb, platform]);
 
   const sendParse = useCallback((c: string) => {
     if (!isQuantumCode(c)) {

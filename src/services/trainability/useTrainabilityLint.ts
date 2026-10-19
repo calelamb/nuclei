@@ -49,10 +49,11 @@ export function useTrainabilityLint({
   const observable = useTrainabilityStore((s) => s.observable);
   const unavailable = useTrainabilityStore((s) => s.unavailable);
   const lint = useTrainabilityStore((s) => s.lint);
-  const platformKind = usePlatform().getPlatform();
+  const bridge = usePlatform();
+  const platformKind = bridge.getPlatform();
   useEffect(() => {
-    useTrainabilityStore.getState().setPlatform(platformKind);
-  }, [platformKind]);
+    useTrainabilityStore.getState().setPlatform(platformKind, bridge.getKernelAuthToken?.bind(bridge));
+  }, [platformKind, bridge]);
 
   const active = mode === 'research' && language === 'python' && framework !== 'qsharp' && framework !== 'stim' && !unavailable;
   const ready = monacoApi !== null && editor !== null;

@@ -70,6 +70,7 @@ export function StatusBar() {
   const connected = useEditorStore((s) => s.kernelConnected);
   const kernelStatus = useEditorStore((s) => s.kernelStatus);
   const kernelError = useEditorStore((s) => s.kernelError);
+  const requestKernelRetry = useEditorStore((s) => s.requestKernelRetry);
   const colors = useThemeStore((s) => s.colors);
   const uiMode = useUIModeStore((s) => s.mode);
   const cycleMode = useUIModeStore((s) => s.cycleMode);
@@ -196,6 +197,19 @@ export function StatusBar() {
         />
         Kernel{kernelStatus === 'failed' ? ' — failed' : kernelStatus === 'connecting' && !connected ? '...' : ''}
       </span>
+      {kernelStatus === 'failed' && (
+        <button
+          onClick={requestKernelRetry}
+          title={kernelError ?? 'Restart the kernel'}
+          style={{
+            padding: '0 6px', height: 16, background: 'transparent', border: `1px solid ${colors.error}`,
+            borderRadius: 3, color: colors.error, cursor: 'pointer', fontSize: 10,
+            fontFamily: "'Geist Sans', sans-serif",
+          }}
+        >
+          Retry
+        </button>
+      )}
       <span style={{ color: isRunning ? colors.accent : colors.textDim, fontSize: 10,
         ...(isRunning ? { animation: 'nuclei-heartbeat 1.5s ease infinite' } : {}) }}>
         {statusText}

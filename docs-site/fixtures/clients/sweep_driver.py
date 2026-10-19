@@ -7,14 +7,19 @@ theta -> P(1) table.
 
 Usage: python sweep_driver.py [ws://localhost:9742] [shots] [points]
 Requires: pip install websockets
+Auth: reads the token from $NUCLEI_KERNEL_TOKEN or ~/.nuclei/runtime/kernel.json
 
 This file is replay-tested: kernel/tests/test_docs_fixtures.py runs it as a
 subprocess against a live kernel server (3 points, 64 shots) and asserts
 the table output.
 """
 import asyncio
+import hashlib
+import hmac
 import json
+import os
 import math
+import secrets
 import sys
 
 import websockets
@@ -28,6 +33,33 @@ qc = QuantumCircuit(1, 1)
 qc.ry({theta}, 0)
 qc.measure(0, 0)
 """
+
+
+def load_token() -> str:
+    """Token for this kernel launch: $NUCLEI_KERNEL_TOKEN, else the user-only
+    runtime file the kernel writes at startup (like a Jupyter runtime file)."""
+    token = os.environ.get("NUCLEI_KERNEL_TOKEN")
+    if token:
+        return token
+    runtime_dir = os.environ.get("NUCLEI_RUNTIME_DIR") or os.path.join(
+        os.path.expanduser("~"), ".nuclei", "runtime"
+    )
+    with open(os.path.join(runtime_dir, "kernel.json")) as handle:
+        return json.load(handle)["token"]
+
+
+async def authenticate(ws) -> None:
+    """First frame on every connection: present the token and a random nonce,
+    then check the kernel's proof (HMAC-SHA256(token, nonce)) in the ack."""
+    token = load_token()
+    nonce = secrets.token_hex(32)
+    await ws.send(json.dumps({"type": "authenticate", "token": token, "nonce": nonce}))
+    reply = json.loads(await ws.recv())
+    if reply.get("type") != "authenticated":
+        raise RuntimeError("kernel rejected the authentication token")
+    expected = hmac.new(token.encode(), nonce.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(str(reply.get("proof", "")), expected):
+        raise RuntimeError("peer did not prove it is the Nuclei kernel; refusing to continue")
 
 
 async def request(ws, payload: dict, reply_type: str) -> dict:
@@ -76,6 +108,7 @@ async def run_point(ws, theta: float, shots: int) -> dict:
 async def main(url: str, shots: int, points: int) -> int:
     step = math.pi / (points - 1) if points > 1 else 0.0
     async with websockets.connect(url) as ws:
+        await authenticate(ws)
         print(f"sweep: RY(theta) on {PROVIDER}/{BACKEND}, {shots} shots/point")
         for i in range(points):
             theta = i * step

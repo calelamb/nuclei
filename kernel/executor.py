@@ -10,6 +10,7 @@ import sys
 import traceback
 from dataclasses import dataclass
 
+from kernel import auth
 from kernel.models import CircuitSnapshot, KernelError, SimulationResult
 
 EXECUTION_TIMEOUT_SECONDS = 30
@@ -40,7 +41,8 @@ def ruff_base_cmd() -> list[str] | None:
     _RUFF_CMD_RESOLVED = True
     try:
         probe = subprocess.run(
-            [sys.executable, "-m", "ruff", "--version"], capture_output=True, timeout=5
+            [sys.executable, "-m", "ruff", "--version"], capture_output=True, timeout=5,
+            env=auth.scrubbed_environment(),
         )
         if probe.returncode == 0:
             _RUFF_CMD = [sys.executable, "-m", "ruff"]
@@ -604,6 +606,7 @@ class Executor:
             proc = subprocess.run(
                 [*base, "check", "--output-format", "json", "--stdin-filename", "buffer.py", "-"],
                 input=code, capture_output=True, text=True, timeout=RUFF_TIMEOUT_SECONDS,
+                env=auth.scrubbed_environment(),
             )
         except (FileNotFoundError, OSError, subprocess.SubprocessError):
             return [], None
@@ -658,6 +661,7 @@ class Executor:
             proc = subprocess.run(
                 [*base, "format", "--stdin-filename", "buffer.py", "-"],
                 input=code, capture_output=True, text=True, timeout=RUFF_TIMEOUT_SECONDS,
+                env=auth.scrubbed_environment(),
             )
         except (FileNotFoundError, OSError, subprocess.SubprocessError) as exc:
             return None, KernelError(code="format_failed", message=f"Could not run the formatter: {exc}")

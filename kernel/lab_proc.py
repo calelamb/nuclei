@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
+from kernel import auth
 from kernel.lab_context import LabContext
 
 logger = logging.getLogger(__name__)
@@ -49,6 +50,9 @@ PINNED_ENV = {
 JOB_PASSTHROUGH_ENV = ("PATH", "HOME", "TMPDIR", "LANG", "LC_ALL", "SYSTEMROOT")
 STRICT_PASSTHROUGH_ENV = ("PATH", "LANG")
 STRICT_ENV_DEFAULTS = {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"}
+
+#: Kernel authentication variables that must never reach a subprocess (see ``kernel.auth``).
+KERNEL_SECRET_ENV = (auth.TOKEN_ENV, auth.INSECURE_ENV)
 
 READ_POLL_SECONDS = 0.1
 PIPE_DRAIN_GRACE_SECONDS = 2.0
@@ -77,6 +81,10 @@ def minimal_env(
         env.setdefault(key, value)
     env.update(PINNED_ENV)
     env.update(extra or {})
+    # Defence in depth: whatever the caller passes through, the kernel's session
+    # token (and the dev-only auth override) never reach a worker or a candidate.
+    for secret_name in KERNEL_SECRET_ENV:
+        env.pop(secret_name, None)
     return env
 
 

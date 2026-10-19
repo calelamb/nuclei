@@ -150,6 +150,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
           capturedMetrics.push(computeCircuitMetrics(snapshot, undefined, oracleQueries));
         }
       },
+      platform.getKernelAuthToken?.bind(platform),
     );
 
     setRunning(false);
@@ -229,6 +230,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
       activeFramework,
       platform.getPlatform(),
       1024,
+      platform.getKernelAuthToken?.bind(platform),
     );
 
     setInspection({

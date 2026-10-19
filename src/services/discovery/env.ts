@@ -28,6 +28,6 @@ export function createDiscoveryEnv(platform: PlatformBridge): DiscoveryEnv {
     hash: sha256Hex,
     clock: { now: () => new Date(), sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) },
     llm: createLlmMutator({ getApiKey: () => useDiracStore.getState().apiKey, hash: sha256Hex }),
-    openSession: () => openLabSession(platform.getPlatform()),
+    openSession: () => openLabSession(platform.getPlatform(), { getToken: platform.getKernelAuthToken?.bind(platform) }),
   };
 }

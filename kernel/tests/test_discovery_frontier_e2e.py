@@ -19,6 +19,7 @@ from kernel.discovery.evaluators import EVALUATORS, effective_config, normalize_
 from kernel.discovery.manager import DiscoveryManager  # noqa: E402
 from kernel.tests.test_discovery_frontier import artifact  # noqa: E402
 from kernel.tests.test_discovery_handlers import StreamingWS  # noqa: E402
+from kernel.tests._auth_harness import serve_authenticated  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SEED_PATH = os.path.join(ROOT, "kernel", "discovery", "seeds", "trainability_frontier.py")
@@ -45,7 +46,7 @@ def _manager(tmp_path, monkeypatch):
 
 async def evaluate(program: str, config: dict | None = None, stage: str = "full", seed: int = 7) -> dict:
     ws = StreamingWS()
-    connection = asyncio.create_task(server.handle_message(ws))
+    connection = asyncio.create_task(serve_authenticated(ws))
     try:
         ws.push({
             "type": "discovery_evaluate", "run_id": "r-1", "candidate_id": "c-1",

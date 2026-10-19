@@ -1,4 +1,5 @@
 import { KERNEL_WS_URL } from '../config/kernel';
+import { openKernelConnection, type KernelTokenProvider } from './kernelSocket';
 import type { KernelMessage, KernelResponse } from '../types/quantum';
 
 export type PlatformKind = 'desktop' | 'web';
@@ -11,6 +12,7 @@ export interface KernelSession {
 export async function createKernelSession(
   platform: PlatformKind,
   onMessage: (message: KernelResponse) => void,
+  getToken?: KernelTokenProvider,
 ): Promise<KernelSession> {
   if (platform === 'web') {
     const { PyodideKernel } = await import('../platform/pyodideKernel');
@@ -27,9 +29,11 @@ export async function createKernelSession(
     };
   }
 
-  return new Promise((resolve, reject) => {
-    const ws = new WebSocket(KERNEL_WS_URL);
+  // Every desktop socket goes through the shared authenticated path so the
+  // per-launch token is the first frame the kernel sees.
+  const { ws, authenticated } = await openKernelConnection(KERNEL_WS_URL, getToken);
 
+  return new Promise((resolve, reject) => {
     ws.addEventListener('open', () => {
       ws.addEventListener('message', (event) => {
         try {
@@ -44,7 +48,12 @@ export async function createKernelSession(
         }
       });
 
-      resolve({
+    }, { once: true });
+
+    // The session is only usable once the kernel has accepted the token; a
+    // 4401 close surfaces as KernelAuthRejectedError instead of a dead session.
+    authenticated.then(
+      () => resolve({
         send(message) {
           if (ws.readyState !== WebSocket.OPEN) {
             throw new Error(`Kernel not connected at ${KERNEL_WS_URL}`);
@@ -54,8 +63,12 @@ export async function createKernelSession(
         close() {
           ws.close();
         },
-      });
-    }, { once: true });
+      }),
+      (error: unknown) => {
+        ws.close();
+        reject(error);
+      },
+    );
 
     ws.addEventListener('error', () => {
       reject(new Error(`Failed to connect to kernel at ${KERNEL_WS_URL}`));

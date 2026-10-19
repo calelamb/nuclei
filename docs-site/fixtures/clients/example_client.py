@@ -3,12 +3,17 @@
 
 Usage: python example_client.py [ws://localhost:9742]
 Requires: pip install websockets
+Auth: reads the token from $NUCLEI_KERNEL_TOKEN or ~/.nuclei/runtime/kernel.json
 
 This file is replay-tested: kernel/tests/test_docs_fixtures.py runs it as a
 subprocess against a live kernel server and asserts the histogram output.
 """
 import asyncio
+import hashlib
+import hmac
 import json
+import os
+import secrets
 import sys
 
 import websockets
@@ -20,6 +25,53 @@ qc.h(0)
 qc.cx(0, 1)
 qc.measure([0, 1], [0, 1])
 """
+
+
+def _runtime_info() -> dict:
+    """Live runtime-file contents ({} if absent, unreadable or stale)."""
+    runtime_dir = os.environ.get("NUCLEI_RUNTIME_DIR") or os.path.join(
+        os.path.expanduser("~"), ".nuclei", "runtime"
+    )
+    try:
+        with open(os.path.join(runtime_dir, "kernel.json")) as handle:
+            info = json.load(handle)
+        os.kill(int(info["pid"]), 0)  # raises if that kernel is gone
+        return info
+    except (OSError, ValueError, KeyError, TypeError):
+        return {}
+
+
+def default_url() -> str:
+    """The kernel the runtime file describes (its token matches that port)."""
+    return _runtime_info().get("url") or "ws://localhost:9742"
+
+
+def load_token() -> str:
+    """Token for this kernel launch: $NUCLEI_KERNEL_TOKEN, else the user-only
+    runtime file the kernel writes at startup (like a Jupyter runtime file)."""
+    token = os.environ.get("NUCLEI_KERNEL_TOKEN")
+    if token:
+        return token
+    info = _runtime_info()
+    if "token" not in info:
+        raise RuntimeError(
+            "no token: set NUCLEI_KERNEL_TOKEN or start a kernel (runtime file missing or stale)"
+        )
+    return info["token"]
+
+
+async def authenticate(ws) -> None:
+    """First frame on every connection: present the token and a random nonce,
+    then check the kernel's proof (HMAC-SHA256(token, nonce)) in the ack."""
+    token = load_token()
+    nonce = secrets.token_hex(32)
+    await ws.send(json.dumps({"type": "authenticate", "token": token, "nonce": nonce}))
+    reply = json.loads(await ws.recv())
+    if reply.get("type") != "authenticated":
+        raise RuntimeError("kernel rejected the authentication token")
+    expected = hmac.new(token.encode(), nonce.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(str(reply.get("proof", "")), expected):
+        raise RuntimeError("peer did not prove it is the Nuclei kernel; refusing to continue")
 
 
 async def drain_until(ws, terminal_type: str) -> dict:
@@ -42,6 +94,7 @@ async def drain_until(ws, terminal_type: str) -> dict:
 
 async def main(url: str) -> int:
     async with websockets.connect(url) as ws:
+        await authenticate(ws)
         await ws.send(json.dumps({"type": "parse", "code": BELL, "language": "python"}))
         snapshot = await drain_until(ws, "snapshot")
         if snapshot["data"] is None:
@@ -61,5 +114,5 @@ async def main(url: str) -> int:
 
 
 if __name__ == "__main__":
-    url = sys.argv[1] if len(sys.argv) > 1 else "ws://localhost:9742"
+    url = sys.argv[1] if len(sys.argv) > 1 else default_url()
     sys.exit(asyncio.run(main(url)))

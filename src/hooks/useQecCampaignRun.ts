@@ -27,12 +27,13 @@ import type { KernelResponse } from '../types/quantum';
  */
 async function openRunnerSession(
   platformKind: Parameters<typeof createKernelSession>[0],
+  getToken?: Parameters<typeof createKernelSession>[2],
 ): Promise<{ session: RunnerKernelSession; close(): void }> {
   const handlers = new Set<(message: KernelResponse) => void>();
   const dispatch = (message: KernelResponse) => {
     for (const handler of [...handlers]) handler(message);
   };
-  const kernelSession = await createKernelSession(platformKind, dispatch);
+  const kernelSession = await createKernelSession(platformKind, dispatch, getToken);
   return {
     session: {
       send: (message) => kernelSession.send(message),
@@ -59,7 +60,10 @@ export function useQecCampaignRun() {
       let session: RunnerKernelSession;
       let close: () => void;
       try {
-        const opened = await openRunnerSession(platform.getPlatform());
+        const opened = await openRunnerSession(
+          platform.getPlatform(),
+          platform.getKernelAuthToken?.bind(platform),
+        );
         session = opened.session;
         close = opened.close;
       } catch {

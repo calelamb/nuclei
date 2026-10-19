@@ -34,7 +34,7 @@ jobs:
         # circuits, so its tests need the real frameworks, not mocks.
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pytest-asyncio websockets
+          pip install pytest pytest-asyncio "websockets>=13,<17"
           # keyring is used by the credential store; it's a small, fast dep.
           pip install keyring
           # Microsoft QDK (Q#) — the qsharp adapter tests run against the
@@ -54,6 +54,17 @@ jobs:
 
       - name: Run kernel tests
         run: pytest kernel/tests/ -v
+
+      - name: Kernel auth on the websockets floor (13.1)
+        # Installed apps keep whatever websockets their managed venv already
+        # has, down to the pinned floor. The handshake must work there too;
+        # 13.x's bare `websockets.serve` is the legacy server with a different
+        # process_request signature, which once broke every connection.
+        run: |
+          pip install "websockets==13.1"
+          pytest kernel/tests/test_kernel_auth.py kernel/tests/test_kernel_xsite_regression.py \
+            kernel/tests/test_lab_token_isolation.py kernel/tests/test_docs_fixtures.py \
+            kernel/tests/test_docs_lab_fixtures.py -v
 
   # The packaged app's managed venv is built from kernel/requirements.txt ONLY. Stim, PyMatching,
   # Sinter, PyArrow, DuckDB and jsonschema are optional Research-catalog installs, so PRD 14

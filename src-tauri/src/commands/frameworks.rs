@@ -366,7 +366,12 @@ fn installed_frameworks(venv_py: &Path) -> Vec<String> {
 /// staring at a "loading kernel..." spinner forever (see v0.4.14 field
 /// report). `ensure_venv` only bootstraps pip; these are the deps the
 /// kernel itself imports at module load.
-const KERNEL_CORE_DEPS: &[&str] = &["websockets>=12.0,<14.0", "numpy>=1.26,<3.0", "keyring>=24"];
+/// websockets >= 13.0 because the kernel serves with `websockets.asyncio.server`.
+const KERNEL_CORE_DEPS: &[&str] = &["websockets>=13.0,<17.0", "numpy>=1.26,<3.0", "keyring>=24"];
+
+/// Imports that must succeed for the kernel to boot. `websockets.asyncio.server`
+/// (not bare `websockets`) so a venv stuck on websockets 12 gets upgraded.
+const KERNEL_CORE_IMPORT_PROBE: &str = "import websockets.asyncio.server, numpy, keyring";
 
 /// Fast-check whether the venv already has the kernel's core runtime
 /// deps. A `-c import ...` takes ~50ms when Python can find everything,
@@ -374,7 +379,7 @@ const KERNEL_CORE_DEPS: &[&str] = &["websockets>=12.0,<14.0", "numpy>=1.26,<3.0"
 /// ImportError so the caller knows to pip-install.
 fn kernel_core_deps_present(python: &Path) -> bool {
     Command::new(python)
-        .args(["-c", "import websockets, numpy, keyring"])
+        .args(["-c", KERNEL_CORE_IMPORT_PROBE])
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
@@ -533,7 +538,7 @@ fn rebuild_venv_with_supported_python(app: &AppHandle, venv: &Path) -> Result<()
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn framework_status(app: AppHandle) -> Result<FrameworkStatus, String> {
     let venv = venv_path(&app)?;
     let venv_py = venv_python(&venv);
@@ -615,7 +620,7 @@ fn ensure_venv(app: &AppHandle, venv: &Path) -> Result<(), String> {
 /// frontend shows a spinner while we're in here. Emits `framework-install`
 /// events for progress. Failures on one framework don't abort the rest —
 /// the caller gets a summary so partial installs are recoverable.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn framework_install(app: AppHandle, frameworks: Vec<String>) -> Result<Vec<String>, String> {
     let venv = venv_path(&app)?;
     ensure_venv(&app, &venv)?;
@@ -702,7 +707,7 @@ fn resolve_framework(name: &str) -> Option<&'static FrameworkInfo> {
 
 /// Map a missing-dependency name to its catalog entry (or `None` if it isn't
 /// something Nuclei knows how to install).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn framework_resolve(name: String) -> Option<FrameworkInfo> {
     resolve_framework(&name).cloned()
 }
@@ -804,7 +809,7 @@ pub struct PythonSetup {
 /// "no Python / too-old Python" onboarding. You can't `pip install python`,
 /// so when it's missing this tells the UI which package manager (if any) can
 /// install it and the exact command, plus the python.org fallback.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn python_setup() -> PythonSetup {
     let (found, version, path, minor) = match find_system_python() {
         Some((p, v)) => {
@@ -833,7 +838,7 @@ pub fn python_setup() -> PythonSetup {
 /// winget on Windows). Linux managers need root, which a GUI subprocess can't
 /// answer, so those return the exact command to run instead. Emits
 /// `framework-install` progress events; returns the resulting version.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn python_install(app: AppHandle) -> Result<String, String> {
     // Already have a supported interpreter — nothing to do.
     if let Some((_, v)) = find_best_python() {
@@ -912,7 +917,7 @@ pub struct EnvironmentReport {
 /// One-call environment doctor: system Python, the managed venv, kernel core
 /// deps, and installed frameworks, with an overall health verdict. Backs a
 /// diagnostics view and support ("paste your environment report").
-#[tauri::command]
+#[tauri::command(async)]
 pub fn environment_report(app: AppHandle) -> Result<EnvironmentReport, String> {
     let venv = venv_path(&app)?;
     let venv_py = venv_python(&venv);
@@ -970,7 +975,7 @@ fn base_pkg_names(pip_name: &str) -> Vec<String> {
 /// Remove frameworks from the managed venv (the symmetric counterpart of
 /// `framework_install`) so users can reclaim space. Failures on one don't
 /// abort the rest; the caller gets a summary.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn framework_uninstall(app: AppHandle, frameworks: Vec<String>) -> Result<Vec<String>, String> {
     let venv = venv_path(&app)?;
     let pip = venv_pip(&venv);
@@ -1008,7 +1013,7 @@ pub fn framework_uninstall(app: AppHandle, frameworks: Vec<String>) -> Result<Ve
 /// the escape hatch for a wedged environment (corrupt venv, half-finished
 /// install, or a venv built from a since-removed Python). Returns the new
 /// interpreter version.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn venv_repair(app: AppHandle) -> Result<String, String> {
     let venv = venv_path(&app)?;
     rebuild_venv_with_supported_python(&app, &venv)?;
@@ -1021,6 +1026,16 @@ pub fn venv_repair(app: AppHandle) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn core_deps_require_the_websockets_asyncio_server() {
+        // The kernel serves with `websockets.asyncio.server` (websockets 13.0+).
+        // A venv with websockets 12 imports fine as `websockets` but cannot
+        // run the kernel, so the probe must import the module itself and the
+        // install pin must not admit 12.x.
+        assert!(KERNEL_CORE_IMPORT_PROBE.contains("websockets.asyncio.server"));
+        assert!(KERNEL_CORE_DEPS.contains(&"websockets>=13.0,<17.0"));
+    }
 
     #[test]
     fn resolves_by_id_import_and_top_level_module() {

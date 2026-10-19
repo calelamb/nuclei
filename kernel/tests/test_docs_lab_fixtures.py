@@ -37,6 +37,7 @@ with mock.patch.dict(os.environ, {
 }):
     import kernel.server as server
 
+from ._auth_harness import HandshakeSocket, serve_authenticated
 from .test_docs_fixtures import assert_matches
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -45,7 +46,7 @@ STREAM_FIXTURES = sorted(LAB_FIXTURES_DIR.glob("*.stream.json"))
 DEADLINE_S = 600  # candidate sandboxes are slow on a loaded machine
 
 
-class StreamingSocket:
+class StreamingSocket(HandshakeSocket):
     """Sends one request, then stays open until the terminal response arrives."""
 
     def __init__(self, request: dict, until: str):
@@ -65,7 +66,12 @@ class StreamingSocket:
         await asyncio.wait_for(self._done.wait(), DEADLINE_S)
         raise StopAsyncIteration
 
+    def close(self, code: int, reason: str = ""):
+        return self._reject(code, reason)
+
     async def send(self, text: str) -> None:
+        if self._swallow_ack(text):
+            return
         message = json.loads(text)
         self.received.append(message)
         if message.get("type") == self._until or message.get("type") == "error":
@@ -83,7 +89,7 @@ def test_lab_stream_fixture(path: Path):
     fixture = json.loads(path.read_text())
     ignore = set(fixture.get("ignore_types", []))
     socket = StreamingSocket(fixture["request"], fixture["until"])
-    asyncio.run(server.handle_message(socket))
+    asyncio.run(serve_authenticated(socket))
 
     actual = [m for m in socket.received if m.get("type") not in ignore]
     expected = fixture["responses"]
