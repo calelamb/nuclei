@@ -32,3 +32,34 @@ export function focusVizLanding(doc: Document = document): () => void {
 export function focusNavLanding(doc: Document = document): () => void {
   return focusWhenMounted(NAV_LANDING_ATTR, 2, doc);
 }
+
+/** Marks the wrapper of a full-width takeover (Learn home, Challenges) so focus can find its heading. */
+export const TAKEOVER_ATTR = 'data-takeover';
+// A lazily loaded takeover can take well over the 12 frames a sidebar needs; ~2 s of frames.
+const TAKEOVER_MAX_FRAMES = 120;
+
+/**
+ * After a keyboard route opens a Learn/Challenge takeover, focus its first heading (made programmatically
+ * focusable) instead of leaving focus in the editor behind it. Returns a cancel function.
+ */
+export function focusTakeoverHeading(doc: Document = document): () => void {
+  let frame = 0;
+  let handle = 0;
+  const attempt = () => {
+    frame += 1;
+    const heading = doc.querySelector<HTMLElement>(`[${TAKEOVER_ATTR}] :is(h1, h2)`);
+    if (heading) {
+      if (!heading.hasAttribute('tabindex')) heading.setAttribute('tabindex', '-1');
+      heading.focus({ preventScroll: true });
+      return;
+    }
+    if (frame < TAKEOVER_MAX_FRAMES) handle = requestAnimationFrame(attempt);
+  };
+  handle = requestAnimationFrame(attempt);
+  return () => cancelAnimationFrame(handle);
+}
+
+/** Where a keyboard route to `view` hands focus: the takeover's heading, or the sidebar's. */
+export function focusAfterViewSelect(view: string, doc: Document = document): () => void {
+  return view === 'learning' || view === 'challenges' ? focusTakeoverHeading(doc) : focusNavLanding(doc);
+}

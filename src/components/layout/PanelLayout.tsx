@@ -94,7 +94,7 @@ export function PanelLayout() {
   const activeView = useNavigationStore((s) => s.activeView);
   const setActiveView = useNavigationStore((s) => s.setActiveView);
   const setViewKeepingViewport = useNavigationStore((s) => s.setViewKeepingViewport);
-  const toggleView = useNavigationStore((s) => s.toggleView);
+  const selectView = useNavigationStore((s) => s.selectView);
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [bottomHeight, setBottomHeight] = useState(DEFAULT_BOTTOM_HEIGHT);
   const [editorPaneWidth, setEditorPaneWidth] = useState(DEFAULT_EDITOR_PANE_WIDTH);
@@ -114,10 +114,8 @@ export function PanelLayout() {
   const { snapshot } = useDisplaySnapshot();
   const platform = usePlatform();
   const isLearnMode = useLearnStore((s) => s.isLearnMode);
-  const enterLearnMode = useLearnStore((s) => s.enterLearnMode);
   const exitLearnMode = useLearnStore((s) => s.exitLearnMode);
   const isChallengeMode = useChallengeModeStore((s) => s.isChallengeMode);
-  const enterChallengeMode = useChallengeModeStore((s) => s.enterChallengeMode);
   const exitChallengeMode = useChallengeModeStore((s) => s.exitChallengeMode);
   const selectedExperimentFileName = useExperimentUiStore((s) => s.selectedExperimentFileName);
   const selectedRunDir = useExperimentUiStore((s) => s.selectedRunDir);
@@ -374,31 +372,7 @@ export function PanelLayout() {
 
   const handleMouseUp = () => { setIsDraggingH(false); setIsDraggingV(false); };
 
-  const handleActivitySelect = (view: ActivityView) => {
-    if (view === 'learning') {
-      if (isLearnMode) {
-        exitLearnMode();
-      } else {
-        enterLearnMode();
-        if (isChallengeMode) exitChallengeMode();
-        setActiveView(null);
-      }
-      return;
-    }
-    if (view === 'challenges') {
-      if (isChallengeMode) {
-        exitChallengeMode();
-      } else {
-        enterChallengeMode();
-        if (isLearnMode) exitLearnMode();
-        setActiveView(null);
-      }
-      return;
-    }
-    // Any other view: toggleView both selects (collapsing on re-click) and
-    // leaves Learn/Challenge full-view surfaces (handled in the store).
-    toggleView(view);
-  };
+  const handleActivitySelect = (view: ActivityView) => selectView(view, { toggle: true });
 
   const effectiveBottomHeight = bottomCollapsed ? 28 : bottomHeight;
 
@@ -432,7 +406,7 @@ export function PanelLayout() {
 
         {isChallengeMode ? (
           /* Challenge Mode — full content area */
-          <div style={{
+          <div data-takeover="" style={{
             flex: 1, minWidth: 0, overflow: 'hidden',
             animation: 'nuclei-fade-in 200ms ease',
           }}>
@@ -442,7 +416,7 @@ export function PanelLayout() {
           </div>
         ) : isLearnMode ? (
           /* Learn Mode — full content area + Dirac */
-          <div style={{
+          <div data-takeover="" style={{
             flex: 1, minWidth: 0, overflow: 'hidden',
             animation: 'nuclei-fade-in 200ms ease',
           }}>

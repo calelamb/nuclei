@@ -4,7 +4,7 @@ import { PlatformProvider, usePlatform, loadBridge } from './platform/PlatformPr
 import { Onboarding } from './components/onboarding/Onboarding';
 import { KeyboardShortcuts } from './components/onboarding/KeyboardShortcuts';
 import { requestSettingsFocus } from './components/settings/settingsFocus';
-import { focusNavLanding } from './components/layout/focusViz';
+import { focusAfterViewSelect } from './components/layout/focusViz';
 import { CommandPalette, buildCommands } from './components/commandPalette/CommandPalette';
 import { UpdateBanner } from './components/UpdateBanner';
 import { MissingDependencyBanner } from './components/onboarding/MissingDependencyBanner';
@@ -141,9 +141,9 @@ function AppInner() {
   // Keyboard routes (palette "Go to", Cmd+1..9) also move focus into the sidebar they open, never leaving it in the editor.
   const navigateFromKeyboard = useCallback((view: Parameters<typeof setActiveView>[0]) => {
     if (view === 'settings' || view === null) { navigate(view); return; }
-    setActiveView(view);
-    focusNavLanding();
-  }, [navigate, setActiveView]);
+    useNavigationStore.getState().selectView(view, { toggle: false });
+    focusAfterViewSelect(view);
+  }, [navigate]);
   const workspaceMode = useWorkspaceStore((s) => s.mode);
   const experimentalFeatures = useSettingsStore((s) => s.general.experimentalFeatures);
   const experiments = useExperimentStore((s) => s.experiments);
@@ -427,8 +427,8 @@ function AppInner() {
           const topViews = topRailViewsFor(mode, { developerViews: dev, explorerSidebar });
           const view = topViews[Number(e.key) - 1];
           if (view) {
-            useNavigationStore.getState().setActiveView(view);
-            focusNavLanding();
+            useNavigationStore.getState().selectView(view, { toggle: false });
+            focusAfterViewSelect(view);
           }
           break;
         }

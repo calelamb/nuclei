@@ -41,6 +41,12 @@ interface NavigationState {
   activeView: NavView | null;
   /** Set (or clear, with null) the open rail view. */
   setActiveView: (view: NavView | null) => void;
+  /**
+   * THE rule for opening a rail view, shared by the rail click, Cmd+1..9 and the palette "Go to" commands.
+   * Learning/Challenges own the whole area (no sidebar); anything else opens its sidebar view. `toggle` is the
+   * rail's click-again-to-close behaviour; keys and the palette only ever select.
+   */
+  selectView: (view: NavView, opts: { toggle: boolean }) => void;
   /** Click-through toggle: selecting the already-open view collapses it. */
   toggleView: (view: NavView) => void;
   /** The view the sidebar was showing before it auto-collapsed for a narrow window. */
@@ -80,6 +86,26 @@ export const useNavigationStore = create<NavigationState>((set, get) => ({
       if (next !== null) leaveFullViewSurfaces();
       return { activeView: next, autoCollapsedView: null };
     }),
+  selectView: (view, { toggle }) => {
+    const learn = useLearnStore.getState();
+    const challenge = useChallengeModeStore.getState();
+    if (view === 'learning') {
+      if (learn.isLearnMode && toggle) { learn.exitLearnMode(); return; }
+      if (challenge.isChallengeMode) challenge.exitChallengeMode();
+      learn.enterLearnMode();
+      set({ activeView: null, autoCollapsedView: null });
+      return;
+    }
+    if (view === 'challenges') {
+      if (challenge.isChallengeMode && toggle) { challenge.exitChallengeMode(); return; }
+      if (learn.isLearnMode) learn.exitLearnMode();
+      challenge.enterChallengeMode();
+      set({ activeView: null, autoCollapsedView: null });
+      return;
+    }
+    if (toggle) get().toggleView(view);
+    else get().setActiveView(view);
+  },
   setViewKeepingViewport: (view, canCollapse) => {
     if (get().lastNarrow === true && canCollapse) {
       set({ activeView: null, autoCollapsedView: view });
