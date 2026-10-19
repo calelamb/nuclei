@@ -158,6 +158,8 @@ export function StatusBar() {
   const kernelStatus = useEditorStore((s) => s.kernelStatus);
   const kernelError = useEditorStore((s) => s.kernelError);
   const kernelProgress = useEditorStore((s) => s.kernelProgress);
+  const kernelInstalling = useEditorStore((s) => s.kernelInstalling);
+  const lastInstallMs = useEditorStore((s) => s.lastInstallMs);
   const colors = useThemeStore((s) => s.colors);
   const features = useUiFeatures();
   const editorFocused = useEditorFocusStore((s) => s.focused);
@@ -180,6 +182,8 @@ export function StatusBar() {
     kernelReady,
     kernelError,
     kernelProgress,
+    kernelInstalling,
+    installMs: lastInstallMs,
     isRunning,
     lastRunFailed,
     lastRunNoCircuit,

@@ -30,6 +30,8 @@ export type WorkerResponse =
   | { type: 'progress'; progress: BootProgress }
   /** A line for the terminal: a lazy-install notice (not tied to one call). */
   | { type: 'notice'; text: string }
+  /** A lazy package install (Cirq) began or finished: a kernel phase the whole UI reports. */
+  | { type: 'installing'; package: string; active: boolean }
   /** One line of a call's live program output; only that call's caller sees it. */
   | { id: number; type: 'stdout'; text: string }
   /** The worker has begun running this call's Python (after any lazy installs). */

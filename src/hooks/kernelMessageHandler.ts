@@ -134,7 +134,7 @@ export function handleKernelMessage(msg: KernelResponse, connectTimers: ConnectT
       useSimulationStore.getState().setResult(msg.data);
       useEditorStore.getState().clearErrors();
       if (msg.data) {
-        useSimulationStore.getState().addOutput(runSummary(msg.data), 'summary');
+        useSimulationStore.getState().addOutput(runSummary(msg.data, useEditorStore.getState().lastInstallMs), 'summary');
         useDiracStore.getState().clearRewrittenError();
         requestResultNarration(useEditorStore.getState().code, useCircuitStore.getState().snapshot, msg.data);
       }

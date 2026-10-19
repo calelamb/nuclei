@@ -71,6 +71,7 @@ type ProgressListener = (progress: BootProgress | null) => void;
 export type RuntimeState = 'idle' | 'booting' | 'ready';
 type StateListener = (state: RuntimeState) => void;
 type NoticeListener = (text: string) => void;
+type InstallListener = (pkg: string | null) => void;
 
 export class PyodideRuntimeClient {
   private readonly factory: WorkerFactory;
@@ -83,6 +84,8 @@ export class PyodideRuntimeClient {
   private readonly pending = new Map<number, Pending>();
   private readonly progressListeners = new Set<ProgressListener>();
   private readonly noticeListeners = new Set<NoticeListener>();
+  private readonly installListeners = new Set<InstallListener>();
+  private installing: string | null = null;
   private lastProgress: BootProgress | null = null;
   /** True after a worker was killed: the next boot is a restart, not a first download. */
   private restarted = false;
@@ -124,6 +127,22 @@ export class PyodideRuntimeClient {
   onProgress(listener: ProgressListener): () => void {
     this.progressListeners.add(listener);
     return () => { this.progressListeners.delete(listener); };
+  }
+
+  /** The package a lazy install is fetching right now ("Cirq"), or null. */
+  currentInstall(): string | null {
+    return this.installing;
+  }
+
+  onInstall(listener: InstallListener): () => void {
+    this.installListeners.add(listener);
+    return () => { this.installListeners.delete(listener); };
+  }
+
+  private setInstalling(pkg: string | null) {
+    if (this.installing === pkg) return;
+    this.installing = pkg;
+    this.installListeners.forEach((listener) => listener(pkg));
   }
 
   onNotice(listener: NoticeListener): () => void {
@@ -201,6 +220,10 @@ export class PyodideRuntimeClient {
       this.setProgress(message.progress);
       return;
     }
+    if (message.type === 'installing') {
+      this.setInstalling(message.active ? message.package : null);
+      return;
+    }
     if (message.type === 'notice') {
       this.noticeListeners.forEach((listener) => listener(message.text));
       return;
@@ -269,6 +292,7 @@ export class PyodideRuntimeClient {
     const survivors = previewTimedOut ? detached.filter((entry) => entry !== previewTimedOut) : [];
     const orphaned = previewTimedOut ? [previewTimedOut] : detached;
     this.setProgress(null);
+    this.setInstalling(null); // the install died with the worker
     this.setState('idle');
     if (wasReady) this.restarted = true;
     if (hadWorker || orphaned.length > 0) {

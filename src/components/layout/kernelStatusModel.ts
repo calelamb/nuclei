@@ -27,7 +27,7 @@ export function bootStepLabel(progress: KernelProgress | null, options: { isWeb:
   if (counted && progress) {
     return {
       short: `Starting ${progress.step}/${progress.total}`,
-      long: `Starting ${engine} (${progress.step} of ${progress.total})`,
+      long: `Starting ${engine} ${progress.step}/${progress.total}`,
       status: `Starting ${engine} ${progress.step}/${progress.total}`,
       stage,
       counted: true,
@@ -35,6 +35,15 @@ export function bootStepLabel(progress: KernelProgress | null, options: { isWeb:
   }
   return { short: 'Starting…', long: `Starting ${engine}…`, status: `Starting ${engine}…`, stage, counted: false };
 }
+
+/** A lazy package install (the 60 MB Cirq download) is a kernel phase with one wording everywhere. */
+export function installStepLabel(pkg: string): { short: string; long: string; status: string } {
+  const text = `Installing ${pkg}…`;
+  return { short: text, long: text, status: text };
+}
+
+/** Installs shorter than this are not worth a caveat on the run time. */
+const INSTALL_NOTE_MIN_MS = 1000;
 
 export type KernelTone = 'idle' | 'busy' | 'running' | 'ok' | 'warn' | 'error';
 
@@ -59,6 +68,10 @@ interface KernelStatusInput {
   /** The most recent run was stopped by the user before it finished. */
   lastRunStopped?: boolean;
   isWeb: boolean;
+  /** The package a lazy install is fetching right now, if any. */
+  kernelInstalling?: string | null;
+  /** How long the last run waited behind a lazy install (the kernel's own time excludes it). */
+  installMs?: number | null;
 }
 
 /**
@@ -85,6 +98,13 @@ export function getKernelStatusModel(input: KernelStatusInput): KernelStatusMode
     return { label: `${engine} idle`, tone: 'idle', detail: `${engine} has not started.` };
   }
 
+  if (input.kernelInstalling) {
+    return {
+      label: installStepLabel(input.kernelInstalling).status,
+      tone: 'busy',
+      detail: `${input.kernelInstalling} is a one-time download of about 60 MB. Your run starts when it finishes.`,
+    };
+  }
   if (input.isRunning) {
     return { label: 'Running…', tone: 'running', detail: 'A simulation is running.' };
   }
@@ -107,10 +127,18 @@ export function getKernelStatusModel(input: KernelStatusInput): KernelStatusMode
   }
   if (input.executionTimeMs !== null) {
     return {
-      label: `Done · ${Math.round(input.executionTimeMs)} ms`,
+      label: `Done · ${Math.round(input.executionTimeMs)} ms${installNote(input.installMs)}`,
       tone: 'ok',
-      detail: 'The last run finished.',
+      detail: input.installMs && input.installMs >= INSTALL_NOTE_MIN_MS
+        ? 'The last run finished. The time shown excludes the one-time package install it waited for.'
+        : 'The last run finished.',
     };
   }
   return { label: `${engine} ready`, tone: 'ok', detail: `${engine} is ready to run.` };
+}
+
+/** " (+10 s install)" when a run waited behind a lazy install long enough to matter, else "". */
+export function installNote(installMs: number | null | undefined): string {
+  if (!installMs || installMs < INSTALL_NOTE_MIN_MS) return '';
+  return ` (+${Math.round(installMs / 1000)} s install)`;
 }

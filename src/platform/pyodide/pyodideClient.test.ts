@@ -207,6 +207,37 @@ describe('PyodideRuntimeClient', () => {
     expect(notices).toEqual(['Installing Cirq']);
   });
 
+  it('reports the lazy install as a phase and clears it when the worker is torn down', async () => {
+    const { client } = makeClient((req, reply) => {
+      if (req.type === 'init') reply({ id: req.id, type: 'result', value: 'ready' });
+      else {
+        reply({ type: 'installing', package: 'Cirq', active: true });
+        reply({ type: 'installing', package: 'Cirq', active: false });
+        reply({ id: req.id, type: 'result', value: '{}' });
+      }
+    });
+    const phases: Array<string | null> = [];
+    client.onInstall((pkg) => phases.push(pkg));
+    await client.call('nuclei_execute', ['import cirq', 10]);
+    expect(phases).toEqual(['Cirq', null]);
+    expect(client.currentInstall()).toBeNull();
+  });
+
+  it('clears an unfinished install when the worker is stopped', async () => {
+    const { client } = makeClient((req, reply) => {
+      if (req.type === 'init') reply({ id: req.id, type: 'result', value: 'ready' });
+      else reply({ type: 'installing', package: 'Cirq', active: true });
+    });
+    const phases: Array<string | null> = [];
+    client.onInstall((pkg) => phases.push(pkg));
+    await client.ensureStarted();
+    const run = client.call('nuclei_execute', ['import cirq', 10]).catch(() => undefined);
+    await Promise.resolve();
+    client.stop();
+    await run;
+    expect(phases).toEqual(['Cirq', null]);
+  });
+
   it('routes live stdout only to the call that printed it, never to notice listeners', async () => {
     const { client } = makeClient((req, reply) => {
       if (req.type === 'init') reply({ id: req.id, type: 'result', value: 'ready' });
