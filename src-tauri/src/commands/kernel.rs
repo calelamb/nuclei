@@ -1,4 +1,5 @@
 use std::io::{BufRead, BufReader, Write};
+use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Mutex};
@@ -39,15 +40,48 @@ pub struct KernelState {
     /// True from a successful start until an intentional stop: the health
     /// supervisor only restarts a kernel the user still wants running.
     supervised: AtomicBool,
+    /// Where the owner record lives. `None` means the real runtime directory
+    /// (`ownership::runtime_dir()`); unit tests inject a directory they own so
+    /// that `stop()` can never delete the owner's live `kernel-owner.json`.
+    runtime_dir: Option<PathBuf>,
 }
 
 impl KernelState {
+    #[cfg(not(test))]
     pub fn new() -> Self {
+        Self::build(None)
+    }
+
+    /// Test builds never resolve to `~/.nuclei/runtime`: every state gets a
+    /// private (never created) directory, so a test that forgets to inject one
+    /// still cannot touch a running app's owner record.
+    #[cfg(test)]
+    pub fn new() -> Self {
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let dir = std::env::temp_dir().join(format!(
+            "nuclei-kernel-state-test-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::SeqCst)
+        ));
+        Self::build(Some(dir))
+    }
+
+    #[cfg(test)]
+    fn with_runtime_dir(dir: PathBuf) -> Self {
+        Self::build(Some(dir))
+    }
+
+    fn build(runtime_dir: Option<PathBuf>) -> Self {
         Self {
             process: Mutex::new(None),
             token: Mutex::new(None),
             supervised: AtomicBool::new(false),
+            runtime_dir,
         }
+    }
+
+    fn runtime_dir(&self) -> Option<PathBuf> {
+        self.runtime_dir.clone().or_else(ownership::runtime_dir)
     }
 
     fn is_supervised(&self) -> bool {
@@ -62,6 +96,11 @@ impl KernelState {
         // First, so the supervisor never restarts what we are deliberately stopping.
         self.set_supervised(false);
         if let Ok(mut guard) = self.process.lock() {
+            // Again, now that the lock is ours: a start that was in flight when we
+            // were called sets `supervised` under this same lock as it finishes,
+            // which would otherwise outlive the child we are about to kill and have
+            // the supervisor resurrect a kernel the user stopped.
+            self.set_supervised(false);
             if let Some(ref mut child) = *guard {
                 stop_child_gracefully(child, KERNEL_STOP_GRACE);
             }
@@ -70,7 +109,7 @@ impl KernelState {
         if let Ok(mut token) = self.token.lock() {
             *token = None;
         }
-        if let Some(dir) = ownership::runtime_dir() {
+        if let Some(dir) = self.runtime_dir() {
             ownership::remove_owner_record(&dir);
         }
     }
@@ -266,7 +305,7 @@ fn start_kernel_inner(
 
     // Reap a kernel that a previous Nuclei run recorded and left behind
     // (verified by pid + command line). Never kill an arbitrary listener.
-    let runtime_dir = ownership::runtime_dir();
+    let runtime_dir = state.runtime_dir();
     ownership::reap_recorded_kernel(runtime_dir.as_deref(), KERNEL_PORT);
     // Kernels from Nuclei <= 0.14.0 outlive the app and left no owner record;
     // reap such an orphan (same user + Nuclei kernel command line) so an
@@ -684,6 +723,68 @@ mod tests {
             StartDecision::Proceed
         );
         assert!(!state.is_supervised());
+    }
+
+    #[test]
+    fn stop_never_touches_a_runtime_dir_it_was_not_given() {
+        // The owner's live app keeps `kernel-owner.json` under ~/.nuclei/runtime;
+        // a state built for tests must not resolve there (or anywhere shared).
+        let state = KernelState::new();
+        let dir = state.runtime_dir().expect("test states have a runtime dir");
+        let home_runtime = std::env::var_os("HOME")
+            .map(|home| PathBuf::from(home).join(".nuclei").join("runtime"));
+        assert_ne!(Some(dir.clone()), home_runtime);
+        assert!(dir.starts_with(std::env::temp_dir()));
+    }
+
+    #[test]
+    fn stop_removes_only_the_owner_record_in_its_own_runtime_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let record_path = dir.path().join("kernel-owner.json");
+        let sentinel = dir.path().join("sentinel.txt");
+        std::fs::write(&sentinel, "keep me").unwrap();
+        let record = ownership::OwnerRecord {
+            pid: 4242,
+            port: KERNEL_PORT,
+        };
+        ownership::write_owner_record(dir.path(), &record).unwrap();
+        assert!(record_path.exists());
+
+        let state = KernelState::with_runtime_dir(dir.path().to_path_buf());
+        state.stop();
+
+        assert!(!record_path.exists(), "stop() must clear its own record");
+        assert!(sentinel.exists(), "stop() must not touch other files");
+        drop(state); // Drop calls stop() again.
+        assert!(sentinel.exists());
+    }
+
+    #[test]
+    fn stop_during_an_in_flight_start_leaves_supervision_off() {
+        // A start holds the process lock while the kernel boots and sets
+        // `supervised` as it finishes; a stop that arrives meanwhile must still win.
+        let state = KernelState::new();
+        state.set_supervised(true);
+        let held = state.process.lock().unwrap(); // the "start" in flight
+        std::thread::scope(|scope| {
+            let stopper = scope.spawn(|| state.stop());
+            // stop() clears the flag first, then blocks on the lock we hold.
+            for _ in 0..500 {
+                if !state.is_supervised() {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            assert!(!state.is_supervised(), "stop() never started");
+            // The start finishes: it records supervision under the lock.
+            state.set_supervised(true);
+            drop(held);
+            stopper.join().unwrap();
+        });
+        assert!(
+            !state.is_supervised(),
+            "the kernel the user stopped would be restarted"
+        );
     }
 
     #[test]
