@@ -92,7 +92,9 @@ class CudaqAdapter(FrameworkAdapter):
             return circuit_obj.kernel
         return circuit_obj
 
-    def extract_snapshot(self, circuit_obj) -> CircuitSnapshot:
+    def extract_snapshot(
+        self, circuit_obj, *, expand_blocks: bool = False
+    ) -> CircuitSnapshot:
         if not CUDAQ_AVAILABLE:
             return CircuitSnapshot(
                 framework="cuda-q",

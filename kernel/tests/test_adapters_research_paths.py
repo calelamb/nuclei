@@ -174,6 +174,38 @@ def test_mid_circuit_reset_is_not_reported_as_exact():
     assert _qiskit().simulate(qc, SHOTS).probabilities_exact is False
 
 
+def test_initialize_after_entangling_is_not_reported_as_exact():
+    # Aer's initialize resets its qubits: resetting half a Bell pair collapses the other
+    # half, so the state vector is one trajectory and differs by seed.
+    from qiskit import QuantumCircuit
+
+    qc = QuantumCircuit(2)
+    qc.h(0)
+    qc.cx(0, 1)
+    qc.initialize([1, 0], [0])
+    assert _qiskit().simulate(qc, SHOTS, seed=0).probabilities_exact is False
+
+
+def test_leading_initialize_stays_exact():
+    from qiskit import QuantumCircuit
+
+    qc = QuantumCircuit(2)
+    qc.initialize([0, 1], [0])
+    qc.cx(0, 1)
+    result = _qiskit().simulate(qc, SHOTS)
+    assert result.probabilities_exact is True
+    _assert_probabilities_close(result.probabilities, {"11": 1.0})
+
+
+def test_initialize_on_an_untouched_qubit_beside_a_used_one_stays_exact():
+    from qiskit import QuantumCircuit
+
+    qc = QuantumCircuit(2)
+    qc.h(0)
+    qc.initialize([0, 1], [1])
+    assert _qiskit().simulate(qc, SHOTS).probabilities_exact is True
+
+
 def test_cirq_noise_channel_is_not_reported_as_exact():
     import cirq
 
@@ -327,6 +359,38 @@ def test_unsupported_instruction_names_the_gate():
     assert caught.value.instruction == "mystery_gate"
     assert caught.value.code == "unsupported_instruction"
     assert "mystery_gate" in str(caught.value)
+
+
+def test_transpile_failure_that_names_no_instruction_is_not_blamed_on_one(monkeypatch):
+    # A `name='...'` repr can be a register or parameter; only a real instruction
+    # name may be reported as unsupported_instruction.
+    import qiskit
+    from qiskit import QuantumCircuit
+
+    def failing_transpile(*_args, **_kwargs):
+        raise ValueError("bad layout for QuantumRegister(1, name='q')")
+
+    monkeypatch.setattr(qiskit, "transpile", failing_transpile)
+    qc = QuantumCircuit(1)
+    qc.h(0)
+    with pytest.raises(ValueError, match="bad layout") as caught:
+        _qiskit().simulate(qc, SHOTS)
+    assert not isinstance(caught.value, UnsupportedInstructionError)
+
+
+def test_transpile_failure_naming_a_circuit_instruction_is_unsupported(monkeypatch):
+    import qiskit
+    from qiskit import QuantumCircuit
+
+    def failing_transpile(*_args, **_kwargs):
+        raise ValueError("cannot synthesize Instruction(name='h', num_qubits=1)")
+
+    monkeypatch.setattr(qiskit, "transpile", failing_transpile)
+    qc = QuantumCircuit(1)
+    qc.h(0)
+    with pytest.raises(UnsupportedInstructionError) as caught:
+        _qiskit().simulate(qc, SHOTS)
+    assert caught.value.instruction == "h"
 
 
 def test_executor_reports_unsupported_instruction_distinctly_from_an_aer_error():
@@ -690,3 +754,41 @@ def test_cirq_snapshot_is_total_for_gates_without_exponents():
     snapshot, reason = _cirq().try_extract_snapshot(circuit)
     assert reason is None and snapshot is not None and len(snapshot.gates) == 2
     json.dumps(snapshot.to_dict())
+
+
+@pytest.mark.parametrize("adapter_module,adapter_class", [
+    ("kernel.adapters.base", "FrameworkAdapter"),
+    ("kernel.adapters.qiskit_adapter", "QiskitAdapter"),
+    ("kernel.adapters.cirq_adapter", "CirqAdapter"),
+    ("kernel.adapters.stim_adapter", "StimAdapter"),
+    ("kernel.adapters.cudaq_adapter", "CudaqAdapter"),
+    ("kernel.adapters.qsharp_adapter", "QsharpAdapter"),
+])
+def test_every_adapter_accepts_expand_blocks(adapter_module, adapter_class):
+    import importlib
+    import inspect
+
+    cls = getattr(importlib.import_module(adapter_module), adapter_class)
+    parameter = inspect.signature(cls.extract_snapshot).parameters["expand_blocks"]
+    assert parameter.kind is inspect.Parameter.KEYWORD_ONLY and parameter.default is False
+
+
+def test_try_extract_snapshot_takes_expand_blocks_uniformly_on_cirq():
+    import cirq
+
+    q = cirq.LineQubit.range(2)
+    circuit = cirq.Circuit(cirq.H(q[0]), cirq.CNOT(q[0], q[1]))
+    snapshot, reason = _cirq().try_extract_snapshot(circuit, expand_blocks=True)
+    assert reason is None and snapshot is not None and len(snapshot.gates) == 2
+
+
+def test_try_extract_snapshot_logs_the_traceback(caplog):
+    adapter = _qiskit()
+
+    def broken(_circuit):
+        raise RuntimeError("kaput")
+
+    adapter.extract_snapshot = broken  # type: ignore[method-assign]
+    with caplog.at_level("WARNING", logger="kernel.adapters.base"):
+        adapter.try_extract_snapshot(object())
+    assert any(record.exc_info for record in caplog.records)

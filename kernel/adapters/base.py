@@ -1,6 +1,9 @@
+import logging
 from abc import ABC, abstractmethod
 from kernel.models.errors import KernelError
 from kernel.models.snapshot import CircuitSnapshot, SimulationResult
+
+logger = logging.getLogger(__name__)
 
 
 class FrameworkAdapter(ABC):
@@ -15,22 +18,34 @@ class FrameworkAdapter(ABC):
         pass
 
     @abstractmethod
-    def extract_snapshot(self, circuit_obj) -> CircuitSnapshot:
-        """Extract gate sequence without simulation."""
+    def extract_snapshot(
+        self, circuit_obj, *, expand_blocks: bool = False
+    ) -> CircuitSnapshot:
+        """Extract gate sequence without simulation.
+
+        ``expand_blocks`` asks for composite blocks to be drawn as their own
+        definitions. Adapters with no such blocks accept and ignore it, so a
+        caller can pass it uniformly.
+        """
         pass
 
     def try_extract_snapshot(
-        self, circuit_obj, **options
+        self, circuit_obj, *, expand_blocks: bool = False
     ) -> tuple[CircuitSnapshot | None, str | None]:
         """``(snapshot, None)``, or ``(None, "snapshot unavailable: <why>")``.
 
         Snapshot extraction must never block a run (PRD 15 R-13): a caller that
         wants to keep going shows the reason in place of the diagram and still
-        simulates. `options` pass through to `extract_snapshot`.
+        simulates. The traceback is logged so a programming error stays visible.
         """
         try:
-            return self.extract_snapshot(circuit_obj, **options), None
+            if expand_blocks:
+                return self.extract_snapshot(circuit_obj, expand_blocks=True), None
+            return self.extract_snapshot(circuit_obj), None
         except Exception as exc:
+            logger.warning(
+                "snapshot extraction failed for %s", type(self).__name__, exc_info=True
+            )
             return None, f"snapshot unavailable: {exc}"
 
     @abstractmethod

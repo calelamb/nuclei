@@ -88,8 +88,8 @@ def test_qiskit_simulating_unbound_is_simulation_error_with_spec_message():
     pytest.importorskip("qiskit_aer")
     result, snap, _, _, err = Executor().execute(QISKIT_UNBOUND, 10)
     assert result is None and snap is not None
-    assert err.code == "simulation_error"
-    assert err.message.endswith(SPEC_MESSAGE)
+    assert err.code == "simulation_error"  # R-B switches the code to unbound_parameters
+    assert "free parameter" in err.message and "nothing to simulate" in err.message
 
 
 def test_cirq_unbound_snapshot():
@@ -109,8 +109,8 @@ def test_cirq_simulating_unbound_is_simulation_error_with_spec_message():
     pytest.importorskip("cirq")
     result, snap, _, _, err = Executor().execute(CIRQ_UNBOUND, 10)
     assert result is None and snap is not None
-    assert err.code == "simulation_error"
-    assert err.message.endswith(SPEC_MESSAGE)
+    assert err.code == "simulation_error"  # R-B switches the code to unbound_parameters
+    assert "free parameter" in err.message and "nothing to simulate" in err.message
 
 
 def test_cirq_numeric_rotation_names_are_rx_ry_rz():

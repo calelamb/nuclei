@@ -64,7 +64,9 @@ class CirqAdapter(FrameworkAdapter):
         circuits = [v for v in namespace.values() if isinstance(v, cirq.Circuit)]
         return circuits[-1] if circuits else None
 
-    def extract_snapshot(self, circuit_obj) -> CircuitSnapshot:
+    def extract_snapshot(
+        self, circuit_obj, *, expand_blocks: bool = False
+    ) -> CircuitSnapshot:
         if not CIRQ_AVAILABLE:
             raise ImportError("cirq")
         all_qubits = sorted(circuit_obj.all_qubits())

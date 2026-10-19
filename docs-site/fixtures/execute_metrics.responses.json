@@ -20,6 +20,8 @@
       "measurements": "<any>",
       "bloch_coords": "<any>",
       "execution_time_ms": "<any>",
+      "measurements_source": "sampled",
+      "probabilities_exact": true,
       "shot_count": 512,
       "metrics": { "energy": -1.1372, "iterations": 40 }
     }
