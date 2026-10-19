@@ -95,6 +95,19 @@ describe('FileExplorer rename (r7-research-02/03)', () => {
     expect((await screen.findByRole('alert')).textContent).toMatch(/Couldn't rename bell\.py/);
   });
 
+  it('abandons an invalid rename on blur instead of leaving an orphaned field', async () => {
+    renameFile.mockClear();
+    const row = await setup();
+    row.focus();
+    fireEvent.keyDown(row, { key: 'F2' });
+    const input = await screen.findByLabelText('Rename bell.py');
+    fireEvent.change(input, { target: { value: 'a/b.py' } });
+    fireEvent.blur(input);
+    await waitFor(() => expect(screen.queryByLabelText('Rename bell.py')).toBeNull());
+    expect(renameFile).not.toHaveBeenCalled();
+    expect(screen.getByText('bell.py')).toBeTruthy();
+  });
+
   it('returns focus to the row after Escape', async () => {
     const row = await setup();
     row.focus();

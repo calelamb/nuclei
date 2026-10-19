@@ -321,7 +321,8 @@ export function FileExplorer() {
     const name = renameDraft.trim();
     if (!name || name === basename(oldPath)) { endRename(viaKeyboard ? oldPath : null); return; }
     const invalid = validateNewName({ name, existingNames: siblingNames(oldPath) });
-    if (invalid) { setRenameError(invalid); return; }
+    // Clicking away from a bad name abandons it; only Enter keeps the field open to show why.
+    if (invalid) { if (viaKeyboard) setRenameError(invalid); else endRename(null); return; }
     renameBusy.current = true;
     try {
       const res = await platform.renameFile(oldPath, name);

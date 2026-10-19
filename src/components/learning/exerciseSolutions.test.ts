@@ -53,3 +53,20 @@ describe('exercise grading accepts honest solutions and rejects near misses', ()
     expect(grade('8.1-ex1', eve, ['Error rate: 22.2%']).success).toBe(true);
   });
 });
+
+describe('exercise expectations use the kernel\'s measurement keys', () => {
+  it('every expectedMeasurements key is a bitstring of one width per exercise', () => {
+    const bad: string[] = [];
+    for (const track of TRACKS) {
+      for (const lesson of track.lessons) {
+        for (const block of lesson.contentBlocks) {
+          if (block.type !== 'exercise' || !block.expectedMeasurements) continue;
+          const keys = Object.keys(block.expectedMeasurements);
+          const widths = new Set(keys.map((k) => k.length));
+          if (keys.some((k) => !/^[01]+$/.test(k)) || widths.size > 1) bad.push(`${block.id}: ${keys.join(',')}`);
+        }
+      }
+    }
+    expect(bad).toEqual([]);
+  });
+});

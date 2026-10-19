@@ -138,6 +138,7 @@ export function describeDesktopCommandError(error: unknown): string {
 }
 
 /** One sentence for "this feature has no engine in the browser", so a stray call never claims Python is down. */
+/** `feature` is a plural noun phrase ("Resource estimates", "Transpiler passes"). */
 export function desktopOnlyMessage(feature: string): string {
   return `${feature} run in the desktop app.`;
 }

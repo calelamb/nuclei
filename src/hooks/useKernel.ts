@@ -609,7 +609,7 @@ export function useKernel() {
         optimization_level: target.optimizationLevel,
       });
       if (!ok) {
-        useTranspileStore.getState().setError(unavailableOrDesktopOnly('Transpiler runs'));
+        useTranspileStore.getState().setError(unavailableOrDesktopOnly('Transpiler passes'));
       }
     },
     [sendHardware],

@@ -25,7 +25,8 @@ export function ProbabilityBars({ probabilities, floor = DEFAULT_FLOOR, pinned =
         <div key={state} className="prob-bars__row" role="listitem">
           <span className="prob-bars__state">|{state}{'⟩'}</span>
           <div className="prob-bars__track">
-            <div className="prob-bars__fill" style={{ width: `${prob * 100}%` }} />
+            {/* An outcome pinned at 0% draws no sliver, so it never looks like a few shots landed there. */}
+            <div className="prob-bars__fill" style={{ width: `${prob * 100}%`, minWidth: prob === 0 ? 0 : undefined }} />
           </div>
           <span className="prob-bars__pct">{(prob * 100).toFixed(1)}%</span>
         </div>
