@@ -105,6 +105,7 @@ export function NoiseModelLibrary({ projectRoot, onClose }: { projectRoot: strin
     </div>
   ) : undefined;
 
+  const diffHasZero = diff.some((d) => d.a === 0 || d.b === 0);
   const entryOnlyCompare = compare !== null && (selected.generator_args === null || compare.generator_args === null);
 
   return (
@@ -199,9 +200,10 @@ export function NoiseModelLibrary({ projectRoot, onClose }: { projectRoot: strin
                 </div>
               ) : (
                 <div style={{ marginTop: 8 }}>
-                  {entryOnlyCompare && (
+                  {(entryOnlyCompare || diffHasZero) && (
                     <p style={{ fontSize: 11, color: colors.textMuted, margin: '0 0 8px' }}>
-                      — means an entry-only model: no per-gate rates to compare. 0 means the channel is off.
+                      {entryOnlyCompare && '— means an entry-only model: no per-gate rates to compare. '}
+                      {diffHasZero && '0 means the channel is off.'}
                     </p>
                   )}
                   <Table label="Generator argument differences" dense className="nuclei-noise-diff">

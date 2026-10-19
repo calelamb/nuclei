@@ -16,7 +16,6 @@ test.describe('Noise comparison fits the dialog (qec-r-90, qec-r-91)', () => {
   for (const theme of ['dark', 'light'] as const) {
     test(`${theme}: both model columns fit at ${DIALOG_BODY_WIDTH}px with every value visible`, async ({ page }) => {
       await page.emulateMedia({ colorScheme: theme });
-      await page.addInitScript((t) => { try { localStorage.setItem('nuclei:theme', JSON.stringify(t)); } catch { /* storage blocked */ } }, theme);
       await openNoiseCompare(page, 'measurement_heavy');
       const region = page.getByRole('region', { name: 'Generator argument differences' });
       await expect(region).toBeVisible();

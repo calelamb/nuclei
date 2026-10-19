@@ -79,10 +79,12 @@ describe('NoiseModelLibrary as a dialog (research-r-09)', () => {
     expect(Array.from(row?.querySelectorAll('td') ?? []).map((td) => td.textContent)).toEqual(['before_round_data_depolarization', '1', '0']);
     expect(diff.textContent).not.toContain('—');
     expect(screen.queryByText(/entry-only model/)).toBeNull();
+    expect(screen.getByText(/0 means the channel is off/)).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText('Compare with'), { target: { value: 'biased_z' } });
     expect(screen.getByRole('table', { name: 'Generator argument differences' }).textContent).toContain('—');
     expect(screen.getByText(/entry-only model/)).toBeTruthy();
+    expect(screen.queryByText(/0 means the channel is off/)).toBeNull();
   });
 
   it('marks the selected row aria-current and tags the compare row (research-r-18)', async () => {

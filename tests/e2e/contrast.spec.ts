@@ -224,7 +224,6 @@ test.describe('Compare chart tooltip stays AA (design-r12-01)', () => {
   for (const theme of THEMES) {
     test(`${theme}: tooltip rows use neutral text on the tooltip surface, at least ${MIN_TEXT_CONTRAST}:1, with a colour swatch`, async ({ page }) => {
       await page.emulateMedia({ colorScheme: theme });
-      await page.addInitScript((t) => { try { localStorage.setItem('nuclei:theme', JSON.stringify(t)); } catch { /* storage blocked */ } }, theme);
       await page.goto(FIXTURE_URL);
       await expect(page.locator('.monaco-editor')).toBeVisible();
       await seedCompareRuns(page);

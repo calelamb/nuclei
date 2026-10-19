@@ -30,8 +30,8 @@ export function MultiSeriesTooltip({ active, label, payload, colors, order }: Pr
     <div
       className="nuclei-chart-tooltip"
       style={{
-        background: colors.bgElevated, border: `1px solid ${colors.borderStrong}`, borderRadius: 6,
-        padding: '8px 10px', fontSize: 12, fontFamily: TYPOGRAPHY.fontMono, color: colors.text,
+        background: colors.bgElevated, border: `1px solid ${colors.borderStrong}`, 
+        fontFamily: TYPOGRAPHY.fontMono, color: colors.text,
       }}
     >
       <div style={{ color: colors.text, marginBottom: 4 }}>{String(label ?? '')}</div>
