@@ -97,8 +97,8 @@ describe('kernelUnavailableMessage (research-r-03)', () => {
   });
 
   it('failed: names the failed start like the banner and status bar do', () => {
-    expect(kernelUnavailableMessage('failed', { isWeb: false })).toBe("Kernel didn't start. Use Retry to start it again.");
-    expect(kernelUnavailableMessage('failed', { isWeb: true })).toBe("Python didn't start. Use Retry to start it again.");
+    expect(kernelUnavailableMessage('failed', { isWeb: false })).toBe("Kernel didn't start. Use Retry in the status bar to start it again.");
+    expect(kernelUnavailableMessage('failed', { isWeb: true })).toBe("Python didn't start. Use Retry in the status bar to start it again.");
   });
 
   it('ready or idle: the connection is gone', () => {

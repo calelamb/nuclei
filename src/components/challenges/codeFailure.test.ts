@@ -12,7 +12,7 @@ function result(overrides: Partial<TestCaseResult> = {}): TestCaseResult {
 describe('sharedCodeFailure (learn-r10-03)', () => {
   it('names the error type and line once for four identical failures', () => {
     const failure = sharedCodeFailure([1, 2, 3, 4].map((n) => result({ testCaseId: `t${n}`, errorLine: 5 })));
-    expect(failure).toEqual({ title: "Your code didn't run: SyntaxError on line 5", detail: "SyntaxError: unmatched ')'" });
+    expect(failure).toEqual({ title: "Your code didn't run: SyntaxError on line 5", detail: "SyntaxError: unmatched ')'", line: 5 });
   });
 
   it('omits the line when none is known', () => {
