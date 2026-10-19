@@ -450,7 +450,7 @@ export function DiracSidePanel() {
               size="sm"
               variant="ghost"
               icon={<Plus size={12} />}
-              onClick={() => clearHistory()}
+              onClick={() => { clearHistory(); inputRef.current?.focus(); }}
               disabled={messages.length === 0}
             >
               New

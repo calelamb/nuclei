@@ -366,5 +366,15 @@ describe('DiracSidePanel', () => {
       render(<DiracSidePanel />);
       expect((screen.getByRole('button', { name: /New/ }) as HTMLButtonElement).disabled).toBe(false);
     });
+
+    it('moves focus to the message box after clearing, never to the body (IR10-03)', () => {
+      resetStores('sk-ant-test');
+      useDiracStore.setState({ messages: [{ id: 'a', role: 'user', content: 'hi', timestamp: new Date().toISOString() }] });
+      render(<DiracSidePanel />);
+      const button = screen.getByRole('button', { name: /New/ });
+      button.focus();
+      fireEvent.click(button);
+      expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Message Dirac' }));
+    });
   });
 });
