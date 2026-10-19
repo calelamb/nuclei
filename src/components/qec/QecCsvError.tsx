@@ -1,4 +1,6 @@
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, X } from 'lucide-react';
+import { IconButton } from '../ui';
+import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { ICON_SIZE, ICON_STROKE, TYPOGRAPHY } from '../../styles/tokens';
 
@@ -27,6 +29,7 @@ interface QecCsvErrorProps {
 /** An inline danger notice for a rejected CSV: icon, one lead sentence, the specifics beneath. Keeps role=alert. */
 export function QecCsvError({ message, id, stillShowing, compact = false }: QecCsvErrorProps) {
   const colors = useThemeStore((s) => s.colors);
+  const clearCsvError = useQecCampaignStore((s) => s.clearCsvError);
   const { lead, detail } = splitCsvError(message);
   return (
     <div
@@ -46,6 +49,11 @@ export function QecCsvError({ message, id, stillShowing, compact = false }: QecC
         <div style={{ fontWeight: 500 }}>{lead}{stillShowing ? ` Still showing ${stillShowing}.` : ''}</div>
         {detail && <div style={{ color: colors.textMuted, fontSize: 11 }}>{detail}</div>}
       </div>
+      {compact && (
+        <IconButton size="sm" aria-label="Dismiss" onClick={clearCsvError} style={{ marginLeft: 'auto', marginTop: -2 }}>
+          <X size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} aria-hidden="true" />
+        </IconButton>
+      )}
     </div>
   );
 }

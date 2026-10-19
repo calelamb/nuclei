@@ -150,6 +150,7 @@ export const useQecCampaignStore = create<QecCampaignState>((set, get) => ({
       state.csvImport
         ? {
             csvImport: { ...state.csvImport, mapping },
+            csvError: null,
             rowsByStrongId: indexMapped(state.csvImport.rows, mapping),
           }
         : {},
@@ -157,7 +158,7 @@ export const useQecCampaignStore = create<QecCampaignState>((set, get) => ({
 
   clearCsvError: () => set({ csvError: null }),
 
-  setRequestedUnits: (requestedUnits) => set({ requestedUnits }),
+  setRequestedUnits: (requestedUnits) => set({ requestedUnits, csvError: null }),
 
   setCsvLoading: (csvLoading) => set({ csvLoading }),
 
