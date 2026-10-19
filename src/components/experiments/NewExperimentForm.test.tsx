@@ -199,10 +199,10 @@ describe('NewExperimentForm', () => {
     expect(onClose).toHaveBeenCalledTimes(1); // clean form closes silently
     fireEvent.change(getByLabelText('Shots'), { target: { value: '5' } });
     fireEvent.click(getByText('Close'));
-    const dialog = await findByRole('dialog', { name: 'Discard your unsaved changes?' });
+    const dialog = await findByRole('alertdialog', { name: 'Discard your unsaved changes?' });
     expect(dialog).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
-    await waitFor(() => expect(queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(queryByRole('alertdialog')).toBeNull());
     expect(onClose).toHaveBeenCalledTimes(1); // user declined
     fireEvent.click(getByText('Close'));
     fireEvent.click(await screen.findByRole('button', { name: 'Discard' }));

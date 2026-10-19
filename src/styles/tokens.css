@@ -54,6 +54,8 @@
     --color-warning: #F59E0B;
     --color-warning-text: #F59E0B;
     --color-danger: #EF4444;
+    --color-danger-strong: #DC2626;
+    --color-on-danger: #FFFFFF;
     --color-danger-text: #F87171;
     --color-info: #3B82F6;
     --color-scrim: rgba(0, 0, 0, 0.5);
@@ -117,6 +119,8 @@
     --color-warning: #A8580A;
     --color-warning-text: #8A4708;
     --color-danger: #DC2626;
+    --color-danger-strong: #B91C1C;
+    --color-on-danger: #FFFFFF;
     --color-danger-text: #B91C1C;
     --color-info: #2563EB;
     --color-scrim: rgba(15, 23, 42, 0.28);

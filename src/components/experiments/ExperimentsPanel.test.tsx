@@ -118,9 +118,9 @@ describe('ExperimentsPanel', () => {
     fireEvent.click(getByLabelText('Edit theta-sweep'));
     fireEvent.change(container.querySelector('#exp-shots') as HTMLInputElement, { target: { value: '555' } });
     fireEvent.click(getByLabelText('Edit depth-grid'));
-    expect(await screen.findByRole('dialog', { name: 'Discard your unsaved changes?' })).toBeTruthy();
+    expect(await screen.findByRole('alertdialog', { name: 'Discard your unsaved changes?' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
     expect((container.querySelector('#exp-name') as HTMLInputElement).value).toBe('theta-sweep');
     fireEvent.click(getByLabelText('Edit depth-grid'));
     fireEvent.click(await screen.findByRole('button', { name: 'Discard' }));

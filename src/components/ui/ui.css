@@ -40,7 +40,7 @@
 .nuclei-btn.nuclei-btn--ghost:hover:not(:disabled) { background: var(--color-surface-overlay); color: var(--color-text-primary); }
 
 .nuclei-btn.nuclei-btn--danger { background: transparent; border-color: var(--color-danger); color: var(--color-danger); }
-.nuclei-btn.nuclei-btn--danger:hover:not(:disabled) { background: var(--color-danger); color: #fff; }
+.nuclei-btn.nuclei-btn--danger:hover:not(:disabled) { background: var(--color-danger-strong); border-color: var(--color-danger-strong); color: var(--color-on-danger); }
 
 .nuclei-btn:active:not(:disabled):not([aria-busy='true']) { transform: translateY(0.5px); }
 .nuclei-btn:disabled, .nuclei-icon-btn:disabled { cursor: not-allowed; opacity: 0.5; }

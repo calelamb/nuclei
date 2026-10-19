@@ -29,7 +29,7 @@ async function open() {
 describe('useConfirm', () => {
   it('shows a labelled dialog with the safe action focused', async () => {
     await open();
-    expect(screen.getByRole('dialog', { name: 'Discard changes?' })).toBeTruthy();
+    expect(screen.getByRole('alertdialog', { name: 'Discard changes?' })).toBeTruthy();
     expect(screen.getByText('Your edits will be lost.')).toBeTruthy();
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Cancel' }));
   });
@@ -38,7 +38,7 @@ describe('useConfirm', () => {
     const { results, opener } = await open();
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Discard' })); });
     expect(results).toEqual([true]);
-    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByRole('alertdialog')).toBeNull();
     expect(document.activeElement).toBe(opener);
   });
 

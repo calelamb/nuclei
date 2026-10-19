@@ -63,6 +63,17 @@ describe('DecoderWorkbench polish', () => {
   });
 });
 
+describe('DecoderWorkbench collision chip (qec-r-54)', () => {
+  it('numbers colliding tasks as chips without a native title or a raw strong_id', () => {
+    load([row('s3-0.0100-aaaa', 3), row('s3-0.0100-bbbb', 3), row('s5', 5)]);
+    const { container } = render(<DecoderWorkbench />);
+    const chips = [...container.querySelectorAll('.qec-collision-chip')];
+    expect(chips.map((c) => c.textContent)).toEqual(['task 1', 'task 2']);
+    expect(chips.every((c) => !c.hasAttribute('title'))).toBe(true);
+    expect(container.querySelector('tbody')!.textContent).not.toContain('s3-0.0');
+  });
+});
+
 describe('DecoderWorkbench web empty state', () => {
   it('does not tell web users to run a campaign', async () => {
     vi.resetModules();

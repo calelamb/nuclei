@@ -2,3 +2,6 @@
 .launch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: var(--space-2); }
 /* Provider names such as CUDA-Q never break at the hyphen. */
 .launch-grid__name { word-break: keep-all; overflow-wrap: normal; }
+
+/* Hardware panel rows: a fixed 24px trailing slot keeps every status badge on one right edge. */
+.hw-provider-action { flex: 0 0 24px; width: 24px; height: 24px; display: inline-grid; place-items: center; }

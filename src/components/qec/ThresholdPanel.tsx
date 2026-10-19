@@ -1,7 +1,7 @@
 import { useDeferredValue, useMemo, type ReactNode } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useQecCampaignStore } from '../../stores/qecCampaignStore';
-import { PanelHeader } from '../layout/PanelHeader';
+import { QecPanelHeader } from './QecPanelHeader';
 import { QecEmptyState } from './QecEmptyState';
 import { QecCsvDropZone } from './QecCsvDropZone';
 import { isWebBuild } from '../../platform/buildTarget';
@@ -109,7 +109,7 @@ export function ThresholdPanel({ part = 'all', tabs, bare = false }: { part?: Th
 
   const compact = area.width > 0 && area.width < COMPACT_HEADER_WIDTH;
   const header = (
-    <PanelHeader
+    <QecPanelHeader
       title={part === 'lambda' ? 'Error suppression Λ' : 'Logical error vs p'}
       helpHref={DOCS}
       actions={
@@ -144,6 +144,7 @@ export function ThresholdPanel({ part = 'all', tabs, bare = false }: { part?: Th
             ? 'Every point has p = 0 or a zero rate, which cannot be placed on log-log axes.'
             : emptyBody}
           docsHref={QEC_PLOT_CSV_DOCS}
+          align={bare ? 'top' : 'center'}
         >
           {!csvImport && <QecCsvDropZone />}
         </QecEmptyState>

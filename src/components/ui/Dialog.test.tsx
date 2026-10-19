@@ -152,3 +152,12 @@ describe('top-anchored dialog maths (ui.css)', () => {
     expect(panel).toMatch(/max-height:\s*calc\(100vh - min\(15vh,\s*96px\) - 24px\)/);
   });
 });
+
+describe('Dialog role', () => {
+  it('defaults to dialog and accepts alertdialog', () => {
+    const { rerender } = render(<Dialog title="A" onClose={() => {}} />);
+    expect(screen.getByRole('dialog', { name: 'A' })).toBeTruthy();
+    rerender(<Dialog title="A" role="alertdialog" onClose={() => {}} />);
+    expect(screen.getByRole('alertdialog', { name: 'A' })).toBeTruthy();
+  });
+});

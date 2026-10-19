@@ -186,6 +186,26 @@ describe('DiracSidePanel', () => {
     expect(useDiracPanelStore.getState().isOpen).toBe(true);
   });
 
+  it('opening from the rail lands focus in the message box when a key is saved (interaction-r-17)', async () => {
+    resetStores('sk-ant-test');
+    useDiracPanelStore.setState({ isOpen: false });
+    render(<DiracSidePanel />);
+    const rail = screen.getByRole('button', { name: 'Open Dirac panel' });
+    rail.focus();
+    fireEvent.click(rail);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('textbox', { name: /message/i })));
+  });
+
+  it('opening from the rail lands focus in the API key field when none is saved (interaction-r-17)', async () => {
+    resetStores(null);
+    useDiracPanelStore.setState({ isOpen: false });
+    render(<DiracSidePanel />);
+    const rail = screen.getByRole('button', { name: 'Open Dirac panel' });
+    rail.focus();
+    fireEvent.click(rail);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Anthropic API key')));
+  });
+
   it('renders a rejected key as a friendly card with an Update key action (learn-14)', () => {
     resetStores('sk-ant-test');
     useDiracStore.setState({

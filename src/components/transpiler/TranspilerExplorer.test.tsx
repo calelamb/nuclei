@@ -30,6 +30,13 @@ describe('Transpiler Explorer platform honesty', () => {
     expect(document.body.textContent).not.toMatch(/kernel/i);
   });
 
+  it('titles the page with the shared pane header and an h1 (design-r8-02)', () => {
+    platform.web = true;
+    const { container } = render(<TranspilerExplorer />);
+    expect(screen.getByRole('heading', { level: 1, name: 'Transpiler Explorer' })).toBeTruthy();
+    expect(container.querySelector('.nuclei-pane-header')).toBeTruthy();
+  });
+
   it('on desktop, Transpile is gated with a waiting label while the kernel starts (research-r-02)', () => {
     platform.web = false;
     useEditorStore.setState({ kernelStatus: 'connecting' });

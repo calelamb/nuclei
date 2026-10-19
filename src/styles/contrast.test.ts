@@ -63,3 +63,9 @@ describe.each([['dark', DARK_COLORS], ['light', LIGHT_COLORS]] as const)('%s pal
     expect(new Set([c.basisX, c.basisZ, c.accentDiracText]).size).toBe(3);
   });
 });
+
+describe.each([['dark', DARK_COLORS], ['light', LIGHT_COLORS]] as const)('%s danger button hover', (_n, c) => {
+  it('onDanger on dangerStrong meets WCAG AA 4.5:1', () => {
+    expect(ratio(c.onDanger, c.dangerStrong)).toBeGreaterThanOrEqual(4.5);
+  });
+});

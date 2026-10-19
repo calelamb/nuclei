@@ -217,10 +217,10 @@ describe('SettingsPanel destructive and platform chrome (r7-chrome)', () => {
     const nativeSpy = vi.spyOn(window, 'confirm');
     render(<SettingsPanel />);
     fireEvent.click(screen.getByRole('button', { name: /Reset to defaults/ }));
-    const dialog = await screen.findByRole('dialog');
+    const dialog = await screen.findByRole('alertdialog');
     expect(dialog.textContent).toContain('Reset all settings?');
     fireEvent.click(screen.getByRole('button', { name: 'Keep settings' }));
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
     expect(nativeSpy).not.toHaveBeenCalled();
     nativeSpy.mockRestore();
   });

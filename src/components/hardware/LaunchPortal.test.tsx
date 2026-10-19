@@ -1,8 +1,15 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { render, cleanup } from '@testing-library/react';
+import { render, cleanup, fireEvent } from '@testing-library/react';
+import { PlatformProvider } from '../../platform/PlatformProvider';
+import type { PlatformBridge } from '../../platform/bridge';
+import { useHardwareStore } from '../../stores/hardwareStore';
+import { PROVIDERS } from './launchProviders';
 import { LaunchPortal } from './LaunchPortal';
 import { useEditorStore } from '../../stores/editorStore';
+
+const desktopBridge = { getPlatform: () => 'desktop' } as unknown as PlatformBridge;
+const renderDesktop = () => render(<PlatformProvider bridge={desktopBridge}><LaunchPortal /></PlatformProvider>);
 
 function providerButton(container: HTMLElement, label: string): HTMLButtonElement {
   const button = Array.from(container.querySelectorAll('button')).find((b) =>
@@ -24,7 +31,7 @@ describe('LaunchPortal — Q# provider gating', () => {
     });
 
     it('marks non-Azure providers unavailable, with the Q# reason on a shared tooltip', () => {
-      const { container } = render(<LaunchPortal />);
+      const { container } = renderDesktop();
       for (const label of ['IBM Quantum', 'IonQ', 'Quantinuum', 'AWS Braket', 'NVIDIA CUDA-Q']) {
         const button = providerButton(container, label);
         expect(button.getAttribute('aria-disabled')).toBe('true');
@@ -33,7 +40,7 @@ describe('LaunchPortal — Q# provider gating', () => {
     });
 
     it('keeps Azure Quantum and the Local Simulator enabled', () => {
-      const { container } = render(<LaunchPortal />);
+      const { container } = renderDesktop();
       for (const label of ['Azure Quantum', 'Local Simulator']) {
         const button = providerButton(container, label);
         expect(button.getAttribute('aria-disabled')).toBeNull();
@@ -43,7 +50,7 @@ describe('LaunchPortal — Q# provider gating', () => {
 
   it('leaves Python-framework gating untouched', () => {
     useEditorStore.setState({ framework: 'qiskit' });
-    const { container } = render(<LaunchPortal />);
+    const { container } = renderDesktop();
     const ibm = providerButton(container, 'IBM Quantum');
     expect(ibm.getAttribute('aria-disabled')).toBeNull();
     // 'Coming soon' style providers stay disabled for their own reason.
@@ -52,15 +59,62 @@ describe('LaunchPortal — Q# provider gating', () => {
   });
 
   it('leads with the Local Simulator and drops native titles that repeat the card text (rq-r3-08, rq-r3-14)', () => {
-    const { container } = render(<LaunchPortal />);
+    const { container } = renderDesktop();
     const cards = Array.from(container.querySelectorAll('.launch-grid > button'));
     expect(cards[0].textContent).toContain('Local Simulator');
     expect(container.querySelectorAll('.launch-grid > button[title]').length).toBe(0);
   });
 
   it('sets provider names a step above their 11px description', () => {
-    const { container } = render(<LaunchPortal />);
+    const { container } = renderDesktop();
     const name = container.querySelector('.launch-grid__name') as HTMLElement;
     expect(name.style.fontSize).toBe('12px');
+  });
+});
+
+const webBridge = { getPlatform: () => 'web' } as unknown as PlatformBridge;
+const renderWeb = () => render(<PlatformProvider bridge={webBridge}><LaunchPortal /></PlatformProvider>);
+
+describe('LaunchPortal on the web build (interaction-r-04)', () => {
+  afterEach(() => {
+    cleanup();
+    useHardwareStore.setState({ launchOpen: false, selectedProvider: null });
+  });
+
+  it('badges real providers "Desktop app" and keeps them focusable but aria-disabled', () => {
+    const { container } = renderWeb();
+    for (const label of ['IBM Quantum', 'IonQ', 'Quantinuum', 'AWS Braket', 'Azure Quantum', 'NVIDIA CUDA-Q']) {
+      const card = providerButton(container, label);
+      expect(card.getAttribute('aria-disabled')).toBe('true');
+      expect(card.disabled).toBe(false);
+      expect(card.textContent).toContain('Desktop app');
+    }
+    const sim = providerButton(container, 'Local Simulator');
+    expect(sim.getAttribute('aria-disabled')).toBeNull();
+    expect(sim.textContent).not.toContain('Desktop app');
+  });
+
+  it('the Desktop app badge is a compact chip at full opacity, not a stretched, dimmed bar', () => {
+    const { container } = renderWeb();
+    const card = providerButton(container, 'IBM Quantum');
+    expect(card.style.opacity).toBe('');
+    const cell = card.querySelector('[data-testid="portal-badge-cell"]') as HTMLElement;
+    expect(cell.style.alignSelf).toBe('flex-start');
+    expect(cell.textContent).toContain('Desktop app');
+  });
+
+  it('clicking a desktop-only provider opens the launcher at the provider step, not a dead-end provider page', () => {
+    const { container } = renderWeb();
+    fireEvent.click(providerButton(container, 'IBM Quantum'));
+    const state = useHardwareStore.getState();
+    expect(state.launchOpen).toBe(true);
+    expect(state.selectedProvider).toBeNull();
+  });
+
+  it('uses the catalog description for each provider, the one string shared with the launcher', () => {
+    const { container } = renderDesktop();
+    for (const meta of PROVIDERS) {
+      expect(providerButton(container, meta.label).textContent).toContain(meta.tagline);
+    }
   });
 });

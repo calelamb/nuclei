@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight, RotateCcw, Rocket, Settings2, Trash2 } from 
 import { useThemeStore } from '../../stores/themeStore';
 import { useHardwareStore } from '../../stores/hardwareStore';
 import { hasActiveJobForBackend } from '../../lib/hardwareJobs';
+import './launchPortal.css';
 import { useFrameworksStore } from '../../stores/frameworksStore';
 import { usePlatform } from '../../platform/PlatformProvider';
 import { ProviderStatusBadge } from './ProviderStatusBadge';
@@ -85,7 +86,7 @@ const PROVIDER_LABELS: Record<HardwareProviderType, string> = {
 
 const PANEL_SHORT_LABELS: Readonly<Record<string, string>> = {
   'Connect to enable': 'Connect',
-  "Kernel didn't start": 'Not running',
+  "Kernel didn't start": "Didn't start",
 };
 
 /** The narrow panel needs shorter status words than the Launch dialog so a row fits on one line. */
@@ -116,6 +117,11 @@ export function HardwarePanel() {
   const statusFor = (p: { name: HardwareProviderType; connected: boolean }) =>
     providerStatus({ provider: p.name, connected: p.connected, isWeb, cudaqInstalled, kernelStatus });
 
+  const hasAction = (p: { name: HardwareProviderType; connected: boolean }) => {
+    const kind = statusFor(p).kind;
+    return kind === 'unavailable' || (kind === 'needs-setup' && providerNeedsToken(p.name));
+  };
+  const anyRowHasAction = providers.some(hasAction);
   const anyConnected = providers.some((p) => p.connected);
 
   const availableBackends = backends;
@@ -151,22 +157,25 @@ export function HardwarePanel() {
             const configurable = status.kind === 'needs-setup' && providerNeedsToken(p.name);
             return (
             <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0', height: 32 }}>
-              <span style={{ flex: '0 0 auto', fontSize: 12, fontWeight: 600, color: colors.text, whiteSpace: 'nowrap', ...font }}>
+              <span style={{ flex: '0 1 auto', minWidth: 0, fontSize: 12, fontWeight: 600, color: colors.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', ...font }}>
                 {label}
               </span>
-              <span style={{ flex: '1 1 0', minWidth: 0, display: 'flex', justifyContent: 'flex-end', overflow: 'hidden' }}>
+              <span data-testid="provider-badge-cell" style={{ flex: '0 0 auto', marginLeft: 'auto', display: 'flex', justifyContent: 'flex-end' }}>
                 <ProviderStatusBadge status={panelStatus(status, isWeb && p.name === 'simulator')} />
               </span>
-              {status.kind === 'unavailable' && (
-                <IconButton size="sm" aria-label="Retry" tooltip={{ label: 'Retry starting the kernel', placement: 'above' }} onClick={retryKernel}>
-                  <RotateCcw aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />
-                </IconButton>
-              )}
-              {configurable && (
-                <IconButton size="sm" aria-label={`Configure ${label}`} tooltip={{ label: `Configure ${label}`, placement: 'above' }} onClick={() => setShowCredentialSetup(p.name)}>
-                  <Settings2 aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />
-                </IconButton>
-              )}
+              {/* When any row has an action every row reserves the 24px slot so status badges share one right edge. */}
+              {anyRowHasAction && <span className="hw-provider-action" data-testid="provider-action-slot">
+                {status.kind === 'unavailable' && (
+                  <IconButton size="sm" aria-label="Retry" tooltip={{ label: 'Retry starting the kernel', placement: 'above' }} onClick={retryKernel}>
+                    <RotateCcw aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />
+                  </IconButton>
+                )}
+                {configurable && (
+                  <IconButton size="sm" aria-label={`Configure ${label}`} tooltip={{ label: `Configure ${label}`, placement: 'above' }} onClick={() => setShowCredentialSetup(p.name)}>
+                    <Settings2 aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />
+                  </IconButton>
+                )}
+              </span>}
             </div>
             );
           })}

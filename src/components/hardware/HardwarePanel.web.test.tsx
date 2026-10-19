@@ -61,7 +61,7 @@ describe('HardwarePanel on desktop (research-r-04)', () => {
     useEditorStore.setState({ kernelStatus: 'failed' });
     render(<PlatformProvider bridge={desktop}><HardwarePanel /></PlatformProvider>);
     const row = screen.getByText('Local Simulator').parentElement as HTMLElement;
-    expect(within(row).getByText('Not running')).toBeTruthy();
+    expect(within(row).getByText("Didn't start")).toBeTruthy();
     expect(within(row).queryByText('Ready')).toBeNull();
     expect(within(row).getByRole('button', { name: 'Retry' })).toBeTruthy();
   });
@@ -72,9 +72,23 @@ describe('HardwarePanel on desktop (research-r-04)', () => {
     expect(row.style.flexWrap).toBe('');
     expect(row.style.height).toBe('32px');
     const name = screen.getByText('IBM Quantum');
-    expect(name.style.flexShrink).toBe('0');
-    expect(name.style.overflow).toBe('');
+    // The name only shrinks (with an ellipsis) as a last resort; badges are never clipped.
+    expect(name.style.flexShrink).toBe('1');
+    expect(name.style.textOverflow).toBe('ellipsis');
     expect(within(row).getByText('Connect')).toBeTruthy();
     expect(within(row).getByRole('button', { name: 'Configure IBM Quantum' })).toBeTruthy();
+  });
+
+  it('web rows render no empty action slot, so badges are never clipped (R8-03)', () => {
+    render(<PlatformProvider bridge={web}><HardwarePanel /></PlatformProvider>);
+    expect(screen.queryAllByTestId('provider-action-slot').length).toBe(0);
+    const badge = screen.getByText('In your browser');
+    expect(badge.closest('[data-testid="provider-badge-cell"]')!.getAttribute('style')).toContain('flex: 0 0 auto');
+  });
+
+  it('reserves the action slot on every row only when some row has an action (R8-03)', () => {
+    render(<PlatformProvider bridge={desktop}><HardwarePanel /></PlatformProvider>);
+    const slots = screen.getAllByTestId('provider-action-slot');
+    expect(slots.length).toBe(10);
   });
 });

@@ -96,10 +96,10 @@ describe('FrameworkSelector — Q#', () => {
     renderSelector();
     pickQsharp();
 
-    const dialog = await screen.findByRole('dialog');
+    const dialog = await screen.findByRole('alertdialog');
     expect(dialog.textContent).toContain('Replace your code with the Q# (QDK) starter?');
     fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
     expect(nativeSpy).not.toHaveBeenCalled();
     const state = useEditorStore.getState();
     expect(state.framework).toBe('qiskit');
