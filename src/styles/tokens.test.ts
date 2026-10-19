@@ -39,6 +39,7 @@ const colorKeyMap: Record<keyof typeof DARK_COLORS, string> = {
   accentQuantumSoft: '--color-accent-quantum-soft',
   accentQuantumText: '--color-accent-quantum-text',
   onAccent: '--color-on-accent',
+  onAccentStrong: '--color-on-accent-strong',
   accentDirac: '--color-accent-dirac',
   accentDiracText: '--color-accent-dirac-text',
   modeResearch: '--color-mode-research',

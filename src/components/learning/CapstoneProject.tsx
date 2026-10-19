@@ -112,7 +112,7 @@ export function CapstoneProjectView() {
   return (
     <div className="capv">
       <header className="capv__head">
-        <Button size="sm" variant="ghost" icon={<ArrowLeft size={12} aria-hidden="true" />} onClick={exitProject}>
+        <Button size="sm" variant="ghost" className="capv__back" icon={<ArrowLeft size={12} aria-hidden="true" />} onClick={exitProject}>
           Back to projects
         </Button>
         <h2 ref={titleRef} tabIndex={-1} className="capv__title">{activeProject.title}</h2>

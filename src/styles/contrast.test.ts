@@ -56,6 +56,10 @@ describe.each([['dark', DARK_COLORS], ['light', LIGHT_COLORS]] as const)('%s pal
   it('onAccent text on the accent fill meets AA 4.5:1 for small button text', () => {
     expect(ratio(c.onAccent, c.accentQuantum)).toBeGreaterThanOrEqual(4.5);
   });
+  it('onAccentStrong meets AA on the solid accent-text and success-text fills (capstone step numbers)', () => {
+    expect(ratio(c.onAccentStrong, c.accentQuantumText)).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(c.onAccentStrong, c.successText)).toBeGreaterThanOrEqual(4.5);
+  });
   it('white text on the Dirac fill meets AA', () => {
     expect(ratio('#FFFFFF', c.accentDirac)).toBeGreaterThanOrEqual(4.5);
   });

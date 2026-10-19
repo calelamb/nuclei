@@ -52,7 +52,7 @@
 .exercise__feedback { display: flex; align-items: flex-start; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border-strong); font-size: var(--font-size-body); line-height: 1.5; }
 .exercise__feedback svg { flex-shrink: 0; margin-top: 1px; }
 .exercise__feedback--ok { background: color-mix(in srgb, var(--color-success) 8%, transparent); color: var(--color-success-text, color-mix(in srgb, var(--color-success) 55%, var(--color-text-primary))); }
-.exercise__feedback--fail { background: color-mix(in srgb, var(--color-danger) 8%, transparent); color: var(--color-danger); }
+.exercise__feedback--fail { background: color-mix(in srgb, var(--color-danger) 8%, transparent); color: var(--color-danger-text); }
 .exercise__help { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-4); font-size: var(--font-size-code); color: var(--color-text-secondary); }
 .exercise__help svg { color: var(--color-accent-dirac-text); }
 
