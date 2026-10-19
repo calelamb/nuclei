@@ -91,6 +91,8 @@ export class PyodideRuntimeClient {
   private restarted = false;
   /** The current teardown/boot cycle was a preview recycle, not something the user should see. */
   private quietRestart = false;
+  /** A Stop interrupted a package install: the preview must not start it again until the next Run. */
+  private stoppedDuringInstall = false;
 
   constructor(factory: WorkerFactory) {
     this.factory = factory;
@@ -127,6 +129,15 @@ export class PyodideRuntimeClient {
   onProgress(listener: ProgressListener): () => void {
     this.progressListeners.add(listener);
     return () => { this.progressListeners.delete(listener); };
+  }
+
+  /**
+   * True after a Stop that cut a package install short, until the next Run. The background preview
+   * would otherwise reboot Python and start the same install again, so the status bar, header and
+   * results would disagree about whether anything is still installing.
+   */
+  previewPausedByStop(): boolean {
+    return this.stoppedDuringInstall;
   }
 
   /** The package a lazy install is fetching right now ("Cirq"), or null. */
@@ -187,6 +198,7 @@ export class PyodideRuntimeClient {
 
   /** The user asked to stop the running program: kill the worker, fail the call as stopped. */
   stop(): void {
+    if (this.installing !== null) this.stoppedDuringInstall = true;
     this.teardown('stopped');
   }
 
@@ -196,6 +208,8 @@ export class PyodideRuntimeClient {
     onOutput?: (line: string) => void,
     quietRestart?: boolean,
   ): Promise<string> {
+    // Only a real run (not the quiet preview parse) lifts the pause.
+    if (body.type === 'call' && !quietRestart) this.stoppedDuringInstall = false;
     const worker = this.ensureWorker();
     const id = this.nextId++;
     return new Promise<string>((resolve, reject) => {

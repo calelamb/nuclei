@@ -238,6 +238,33 @@ describe('PyodideRuntimeClient', () => {
     expect(phases).toEqual(['Cirq', null]);
   });
 
+  it('pauses the preview after a Stop that cut an install short, until the next real run', async () => {
+    const { client } = makeClient((req, reply) => {
+      if (req.type === 'init') reply({ id: req.id, type: 'result', value: 'ready' });
+      else if (req.fn === 'nuclei_execute' && req.args[0] === 'import cirq') reply({ type: 'installing', package: 'Cirq', active: true });
+      else reply({ id: req.id, type: 'result', value: '{}' });
+    });
+    await client.ensureStarted();
+    const run = client.call('nuclei_execute', ['import cirq', 10]).catch(() => undefined);
+    await Promise.resolve();
+    client.stop();
+    await run;
+    expect(client.currentInstall()).toBeNull();
+    expect(client.previewPausedByStop()).toBe(true);
+    await client.ensureStarted();
+    await client.call('nuclei_parse', ['import cirq', 'a.py'], { quietRestart: true });
+    expect(client.previewPausedByStop()).toBe(true);
+    await client.call('nuclei_execute', ['print(1)', 10]);
+    expect(client.previewPausedByStop()).toBe(false);
+  });
+
+  it('a Stop with no install under way leaves the preview running', async () => {
+    const { client } = makeClient(okResponder);
+    await client.ensureStarted();
+    client.stop();
+    expect(client.previewPausedByStop()).toBe(false);
+  });
+
   it('routes live stdout only to the call that printed it, never to notice listeners', async () => {
     const { client } = makeClient((req, reply) => {
       if (req.type === 'init') reply({ id: req.id, type: 'result', value: 'ready' });
