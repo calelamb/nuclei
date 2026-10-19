@@ -77,6 +77,7 @@ export function RunControls({ density }: { density: TabBarDensity }) {
       )}
       <Tooltip label={runState.title} shortcut={canRun ? shortcutLabel('run') : undefined}>
         <Button
+          data-run-button=""
           variant={canRun ? 'primary' : 'secondary'}
           onClick={handleRun}
           disabled={runState.disabled}

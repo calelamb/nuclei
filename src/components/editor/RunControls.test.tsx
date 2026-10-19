@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { RunControls, RUN_SLOT_MIN_WIDTH } from './RunControls';
+import { RUN_BUTTON_SELECTOR } from './runButtonState';
 import { useEditorStore } from '../../stores/editorStore';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useRunQueueStore } from '../../stores/runQueueStore';
@@ -71,5 +72,12 @@ describe('Run slot width (shell-r6-05)', () => {
     useEditorStore.setState({ kernelReady: true, kernelStatus: 'ready', kernelProgress: null });
     rerender(<PlatformProvider bridge={bridge}><RunControls density="full" /></PlatformProvider>);
     expect((screen.getByRole('button', { name: /Run/ }) as HTMLButtonElement).style.minWidth).toBe(`${RUN_SLOT_MIN_WIDTH}px`);
+  });
+});
+
+describe('Run slot focus target', () => {
+  it('is the element the kernel banner Retry hands focus to', () => {
+    mount();
+    expect(document.querySelector(RUN_BUTTON_SELECTOR)?.textContent).toContain('Starting');
   });
 });
