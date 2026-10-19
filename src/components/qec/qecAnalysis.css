@@ -71,3 +71,6 @@
 }
 .qec-lambda-group td { font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); letter-spacing: 0.02em; padding-top: var(--space-2); }
 .qec-lambda-table .qec-lambda-warn { display: flex; width: 20px; height: 20px; margin-block: -4px; } /* keeps flagged rows the height of their neighbours */
+/* Every Λ row is the same height, flagged or not: the warn button never decides the row. */
+.qec-lambda-table td:not(.nuclei-table__text) { height: 24px; padding-block: 0; }
+.qec-lambda-table td .qec-lambda-warn { vertical-align: middle; margin-block: 0; }

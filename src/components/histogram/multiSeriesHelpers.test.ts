@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hasMeasurements, tooltipOrder } from './MultiSeriesHistogram';
+import { hasMeasurements, tooltipOrder } from './multiSeriesHelpers';
 
 describe('MultiSeriesHistogram helpers', () => {
   it('treats a run with no measurements as unplottable', () => {

@@ -145,9 +145,11 @@ export function HistogramChip({
       {/* Stacked: the expand/dismiss controls ride on a header row above the outcomes (no spare row below). */}
       {rows && (
         <div style={{ display: 'flex', alignItems: 'center', minWidth: 0, gap: 4, color: colors.textDim, fontSize: 11 }}>
-          <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Top outcomes</span>
-          {sampleCaption && (
-            <span data-testid="histogram-chip-sample" className="histogram-chip__caption">· {sampleCaption}</span>
+          {sampleCaption ? (
+            // The sample caption names the data; "Top outcomes" is implied by the bars below it.
+            <span data-testid="histogram-chip-sample" className="histogram-chip__caption">{sampleCaption}</span>
+          ) : (
+            <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Top outcomes</span>
           )}
           {controls}
         </div>

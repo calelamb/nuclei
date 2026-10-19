@@ -1,20 +1,11 @@
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useThemeStore } from '../../stores/themeStore';
 import { formatProbabilityTick, getMultiSeriesHistogramData, PROBABILITY_TICKS, type HistogramSeriesInput } from './histogramData';
+import { hasMeasurements, tooltipOrder } from './multiSeriesHelpers';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
 export interface MultiSeriesHistogramSeries extends HistogramSeriesInput {
   color: string;
-}
-
-export function hasMeasurements(s: HistogramSeriesInput): boolean {
-  return Object.values(s.measurements).some((count) => count > 0);
-}
-
-/** Tooltip rows follow legend (series) order, not Recharts' reversed bar order. */
-export function tooltipOrder(series: readonly HistogramSeriesInput[], dataKey: unknown): number {
-  const index = series.findIndex((s) => s.label === dataKey);
-  return index === -1 ? series.length : index;
 }
 
 /**

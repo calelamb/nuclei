@@ -1,4 +1,4 @@
-import { useEffect, useState, type KeyboardEvent } from 'react';
+import { useState, type KeyboardEvent } from 'react';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useThemeStore } from '../../stores/themeStore';
@@ -15,13 +15,11 @@ export function ShotsField() {
   const colors = useThemeStore((s) => s.colors);
   const shots = useSimulationStore((s) => s.shots);
   const setShots = useSimulationStore((s) => s.setShots);
-  const [draft, setDraft] = useState<string | null>(null);
+  // The draft belongs to the shot count it was started from, so a change made elsewhere (Settings) replaces it.
+  const [draftState, setDraftState] = useState<{ base: number; text: string } | null>(null);
+  const draft = draftState !== null && draftState.base === shots ? draftState.text : null;
+  const setDraft = (text: string | null) => setDraftState(text === null ? null : { base: shots, text });
   const [hint, setHint] = useState<string | null>(null);
-
-  // A change made elsewhere (Settings) replaces the displayed value.
-  useEffect(() => {
-    setDraft(null);
-  }, [shots]);
 
   const commit = () => {
     if (draft === null) return;
