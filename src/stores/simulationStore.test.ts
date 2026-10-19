@@ -111,4 +111,10 @@ describe('simulationStore result provenance', () => {
     expect(hasMeaningfulOutput([line('separator'), line('separator')])).toBe(false);
     expect(hasMeaningfulOutput([line('separator'), line('stdout')])).toBe(true);
   });
+
+  it('does not count a lone background info notice (research-r-16)', () => {
+    const info = { text: 'Installing Cirq…', type: 'info' as const, timestamp: 0 };
+    expect(hasMeaningfulOutput([info])).toBe(false);
+    expect(hasMeaningfulOutput([info, { text: 'boom', type: 'stderr' as const, timestamp: 0 }])).toBe(true);
+  });
 });

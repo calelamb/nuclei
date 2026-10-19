@@ -10,5 +10,7 @@
   transition: background var(--duration-fast, 120ms) ease;
 }
 .activity-btn:hover:not([data-active='true'])::before { background: var(--color-surface-overlay); }
+/* Light: the overlay surface is one shade off the rail (1.04:1); the slate-200 border step reads as a hover. */
+:root[data-theme='light'] .activity-btn:hover:not([data-active='true'])::before { background: var(--color-border-subtle); }
 @media (prefers-reduced-motion: reduce) { .activity-btn::before { transition: none; } }
 .activity-btn:focus-visible { outline-offset: -4px; border-radius: var(--radius-soft); }

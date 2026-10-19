@@ -76,9 +76,9 @@ export function isResultStale(resultCode: string | null, currentCode: string, ha
   return hasResult && resultCode !== null && resultCode !== currentCode;
 }
 
-/** Whether the Terminal holds anything the user would want to read (run separators and per-run summaries alone do not count). */
+/** Whether the Terminal holds anything the user would want to read (run separators, per-run summaries and background notices such as "Installing Cirq" alone do not count: they must not force the Terminal open). */
 export function hasMeaningfulOutput(lines: readonly TerminalLine[]): boolean {
-  return lines.some((l) => l.type !== 'separator' && l.type !== 'summary');
+  return lines.some((l) => l.type !== 'separator' && l.type !== 'summary' && l.type !== 'info');
 }
 
 export const useSimulationStore = create<SimulationState>((set) => ({
