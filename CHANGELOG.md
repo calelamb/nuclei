@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-10-18
+
+Quantum AI Lab release (PRD 14): two Research-mode instruments for the two
+halves of "quantum AI", built on honest-by-default reporting. This release also
+ships the Unified QEC Workbench and canonical QEC data import below.
+
+### Added — Trainability Lab ("the Microscope")
+
+- A `Trainability Lab` rail view that analyzes the active file's parameterized
+  circuit: per-parameter gradient statistics painted onto the circuit as a
+  heatmap, barren-plateau **scaling verdicts** (barren plateau / polynomial /
+  inconclusive, with ΔAIC and exponent CIs), dynamical Lie algebra dimension and
+  classification with the Ragone et al. cost-variance prediction (summed over
+  simple ideals), expressibility, entangling capability, and loss landscapes.
+- An exact **Pauli Propagation Engine**: gradient variances with no sampling
+  noise and rigorous truncation intervals, to 128 qubits. Unresolved results are
+  reported as intervals, never as point estimates.
+- A batched Lab Compiler (rotation merging, diagonal-run fusion, batched adjoint
+  gradients): 256 gradient samples at 12 qubits in under a second.
+- Trainability lint markers in the editor (TRN001–TRN007, with citations) and an
+  exportable, bit-reproducible **Trainability Certificate**. `⌘⇧↵` runs the
+  analyses.
+
+### Added — Discovery Engine
+
+- LLM-guided evolutionary search over quantum programs (`*.discovery.yaml`):
+  MAP-Elites islands, a screen→full→confirm evaluation cascade, a breadth/depth
+  model ensemble with an AST-mutation baseline, lineage, Pareto front, and
+  champion re-confirmation on fresh seeds.
+- Trusted evaluators the candidate never touches: `qec_memory` (Stim +
+  PyMatching, ten guardrails including exact fault-distance verification),
+  `state_synthesis`, `vqe_ground_state`, and the **Frontier** evaluator, which
+  hunts for ansatzes that stay trainable at scale while staying expensive for
+  Pauli propagation.
+- **Red Queen mode**: an adversary evolves programs to reward-hack the
+  evaluators; an independent audit flags exploits, and every exploit becomes a
+  replayed regression fixture.
+- **Conjecture Engine**: proposes falsifiable trainability conjectures from a
+  run's archive and tests them on held-out circuits (supported / refuted with a
+  counterexample / inconclusive), recorded in a ledger.
+- Candidates run in a sandbox: macOS `sandbox-exec` blocks network access,
+  writes outside a private scratch directory, and reads outside an allow-list.
+
+### Added — Kernel protocol v1.3 (additive)
+
+- `trainability_*`, `discovery_*`, `discovery_audit*` and
+  `discovery_conjecture*` message families, with optional `request_id`
+  correlation on synchronous requests. See the
+  [protocol changelog](https://getnuclei.dev/docs/reference/protocol-changelog/).
+
 ### Added — Unified QEC Workbench foundation
 
 - A light, four-zone Research workspace organized around versioned,
