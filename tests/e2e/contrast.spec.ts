@@ -175,6 +175,9 @@ test.describe('Danger text on the engine-failed band and demo error stays AA (de
   for (const theme of THEMES) {
     test(`${theme}: the Python-didn't-start title and the demo error are at least ${MIN_TEXT_CONTRAST}:1`, async ({ page }) => {
       await page.goto('/?e2eProject=qec-project');
+      await page.getByRole('button', { name: /learn/i }).first().click();
+      await page.getByText('Quantum Computing Fundamentals').first().click(); // loads the lesson stylesheets
+      await expect(page.locator('.quiz__option').first()).toBeVisible();
       await page.evaluate((t) => {
         document.documentElement.dataset.theme = t;
         const host = document.createElement('div');
@@ -183,6 +186,12 @@ test.describe('Danger text on the engine-failed band and demo error stays AA (de
         document.body.appendChild(host);
       }, theme);
       for (const selector of ['.lesson-engine-failed__title', '.demo__error']) {
+        // The stylesheet must really be applied, or the default black-on-white would pass vacuously.
+        const washed = await page.evaluate((sel) => {
+          const wash = document.querySelector(sel)?.closest('.lesson-engine-failed, .demo__error') ?? null;
+          return wash !== null && getComputedStyle(wash).backgroundColor !== 'rgba(0, 0, 0, 0)';
+        }, selector);
+        expect(washed, `${theme} ${selector} has its stylesheet`).toBe(true);
         const ratio = await page.evaluate(PAINTED_CONTRAST_SCRIPT, selector);
         expect(ratio, `${theme} ${selector}`).not.toBeNull();
         expect(ratio as number, `${theme} ${selector}`).toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST);
