@@ -373,7 +373,7 @@ pub async fn kernel_auth_token(app: tauri::AppHandle) -> Result<String, String> 
 /// The token exists only once `start_kernel` saw the child print its ready
 /// line, and is withheld again if that child has since died (e.g. a strict-port
 /// bind failure), so it can never be sent to a listener Nuclei did not start.
-fn read_auth_token(state: &KernelState) -> Result<String, String> {
+pub(crate) fn read_auth_token(state: &KernelState) -> Result<String, String> {
     let alive = match state.process.lock().map_err(|e| e.to_string())?.as_mut() {
         Some(child) => matches!(child.try_wait(), Ok(None)),
         None => false,

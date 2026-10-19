@@ -18,11 +18,17 @@
 //! can NEVER hang the run thread and NEVER panics. The pure protocol mapping
 //! lives in [`parse`] and is unit-tested with no live socket.
 
+mod auth;
 mod parse;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_auth;
+#[cfg(test)]
+mod tests_e2e;
 
 use std::net::{TcpStream, ToSocketAddrs};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
@@ -43,11 +49,28 @@ const DEFAULT_URL: &str = "ws://localhost:9742";
 /// for a simulator round-trip, small enough that a dead kernel fails fast.
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// Supplies the per-launch kernel session token (from in-process kernel state).
+pub type TokenProvider = Arc<dyn Fn() -> Result<String, String> + Send + Sync>;
+
 /// Live [`SubmitPort`] backed by the local kernel WebSocket.
-#[derive(Debug, Clone)]
+///
+/// Every connection authenticates with the session token and verifies the
+/// kernel's proof before any request is sent. Without a token provider no
+/// connection is ever opened.
+#[derive(Clone)]
 pub struct KernelSubmitPort {
     url: String,
     timeout: Duration,
+    token_provider: Option<TokenProvider>,
+}
+
+impl std::fmt::Debug for KernelSubmitPort {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("KernelSubmitPort")
+            .field("url", &self.url)
+            .field("timeout", &self.timeout)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Default for KernelSubmitPort {
@@ -55,6 +78,7 @@ impl Default for KernelSubmitPort {
         Self {
             url: DEFAULT_URL.to_string(),
             timeout: DEFAULT_TIMEOUT,
+            token_provider: None,
         }
     }
 }
@@ -66,7 +90,15 @@ impl KernelSubmitPort {
         Self {
             url: url.into(),
             timeout,
+            token_provider: None,
         }
+    }
+
+    /// Attach the source of the kernel session token.
+    #[must_use]
+    pub fn with_token_provider(mut self, provider: TokenProvider) -> Self {
+        self.token_provider = Some(provider);
+        self
     }
 
     /// List the backends the kernel currently knows about (simulator provider).
@@ -88,6 +120,11 @@ impl KernelSubmitPort {
     /// cannot block indefinitely. Plain `ws://` (no TLS) — the kernel is
     /// localhost.
     fn open(&self) -> Result<WebSocket<TcpStream>, String> {
+        let provider = self
+            .token_provider
+            .as_ref()
+            .ok_or_else(|| "kernel session token is not available".to_string())?;
+        let token = provider().map_err(|e| format!("kernel session token unavailable: {e}"))?;
         let (host, port) = parse::parse_authority(&self.url)
             .ok_or_else(|| format!("invalid kernel ws url: {}", self.url))?;
         let addr = (host.as_str(), port)
@@ -103,8 +140,9 @@ impl KernelSubmitPort {
         stream
             .set_write_timeout(Some(self.timeout))
             .map_err(|e| format!("set write timeout failed: {e}"))?;
-        let (ws, _resp) = tungstenite::client(self.url.as_str(), stream)
+        let (mut ws, _resp) = tungstenite::client(self.url.as_str(), stream)
             .map_err(|e| format!("kernel handshake failed: {e}"))?;
+        auth::authenticate(&mut ws, &token)?;
         Ok(ws)
     }
 

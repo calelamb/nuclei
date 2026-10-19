@@ -42,6 +42,8 @@ keyring = { version = "3", features = ["apple-native", "windows-native", "sync-s
 # FNV-1a hash is not required (the Rust side is desktop-authoritative), so a
 # real digest is used instead of a hand-rolled one.
 sha2 = "0.10"
+# Kernel session proof (HMAC-SHA256) for the Dirac kernel transport.
+hmac = "0.12"
 hex = "0.4"
 # Per-process 256-bit QEC Data Engine authentication tokens from the OS RNG.
 getrandom = "0.2"
