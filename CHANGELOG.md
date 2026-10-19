@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-10-18
+
+### Security
+
+- Kernel connections are now authenticated and origin-checked. Every
+  connection, including the Trainability Lab, the Discovery Engine, audits and
+  conjectures, must present a per-launch session token and come from an
+  allowed origin; the desktop app handles this automatically. This is a
+  **breaking change to the kernel protocol (v2) for external clients**: send
+  `{"type":"authenticate","token":...}` first (see the
+  [protocol changelog](https://getnuclei.dev/docs/reference/protocol-changelog/)).
+- The session token is kept out of every subprocess the kernel starts, and
+  sandboxed candidates cannot read the kernel's runtime file.
+- Nuclei no longer force-kills whatever process is listening on the kernel
+  port; it only stops a kernel it started and reports a conflict otherwise.
+
+### Fixed
+
+- The kernel is served with the `websockets` asyncio API, so authentication
+  works on `websockets` 13.x (the new floor, `>=13.0`).
+- The kernel is stopped cleanly when Nuclei quits (SIGTERM with a grace period).
+- Blocking desktop commands no longer run on the main thread, and the Tauri
+  npm packages are aligned with the locked crates.
+
 ## [0.14.0] - 2026-10-18
 
 Quantum AI Lab release (PRD 14): two Research-mode instruments for the two

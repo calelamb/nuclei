@@ -62,7 +62,9 @@ jobs:
         # process_request signature, which once broke every connection.
         run: |
           pip install "websockets==13.1"
-          pytest kernel/tests/test_kernel_auth.py -v
+          pytest kernel/tests/test_kernel_auth.py kernel/tests/test_kernel_xsite_regression.py \
+            kernel/tests/test_lab_token_isolation.py kernel/tests/test_docs_fixtures.py \
+            kernel/tests/test_docs_lab_fixtures.py -v
 
   # Multiprocess sinter under Windows spawn semantics (PRD 10 risk 5 —
   # exercised now, not deferred to the release phase). Scoped to the QEC
