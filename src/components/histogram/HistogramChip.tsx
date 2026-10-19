@@ -147,7 +147,7 @@ export function HistogramChip({
           <span style={{ color: colors.textDim, fontSize: 11, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             Top outcomes
             {sampleCaption && (
-              <Tooltip label={`${sampleCaption}. ${SAMPLE_EXPLAINER}`} placement="below">
+              <Tooltip label={`${sampleCaption}. ${SAMPLE_EXPLAINER}`} placement="above">
                 <span data-testid="histogram-chip-sample" tabIndex={0} role="note" aria-label="About the Nuclei sample" className="histogram-chip__caption"> · {sampleCaption}</span>
               </Tooltip>
             )}
