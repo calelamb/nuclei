@@ -427,7 +427,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
             {visibleTests.map((testCase, index) => renderRow(testCase, index))}
             {hiddenTests.map((testCase, index) => renderRow(testCase, visibleTests.length + index))}
 
-            {isRunning && currentTestResults.length === 0 && (
+            {isRunning && currentTestResults.length === 0 && !bootNote && (
               <div className="trun__note">
                 <Loader className="nuclei-spin" size={14} aria-hidden="true" />
                 {isWeb && kernelStatus !== 'ready'

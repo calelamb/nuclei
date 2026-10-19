@@ -135,6 +135,9 @@ try:
 except Exception:
     __nuclei_fidelity = 0.0
 
+# Drop the reference circuit: the kernel simulates the LAST circuit in the namespace.
+__nuclei_ref_circuit = None
+
 record_metric("fidelity", __nuclei_fidelity)
 `;
 }
@@ -216,6 +219,9 @@ try:
     ))
 except Exception:
     __nuclei_fidelity = 0.0
+
+# Drop the reference circuit: the kernel simulates the LAST circuit in the namespace.
+__nuclei_ref_circuit = None
 
 record_metric("fidelity", __nuclei_fidelity)
 

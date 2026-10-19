@@ -86,6 +86,16 @@ describe('challengeExecution', () => {
     expect(code).not.toContain("solve(__nuclei_oracle, hidden_string");
   });
 
+  it('does not leave the reference circuit in the namespace after fidelity (the kernel snapshots the last circuit)', () => {
+    const code = buildTestCode(
+      'def solve(bell_index):\n    from qiskit import QuantumCircuit\n    return QuantumCircuit(2, 2)\n',
+      { ...baseChallenge, referenceCode: 'from qiskit import QuantumCircuit\n\ndef reference(bell_index):\n    return QuantumCircuit(2, 2)\n' },
+      { bell_index: 0 },
+      'qiskit',
+    );
+    expect(code.lastIndexOf('__nuclei_ref_circuit = None')).toBeGreaterThan(code.lastIndexOf('= reference('));
+  });
+
   it('omits the fidelity block when no referenceCode is present', () => {
     const code = buildTestCode(
       'def solve(bell_index):\n    pass\n',

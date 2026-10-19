@@ -2,7 +2,7 @@
 .lesson { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--color-surface-base); font-family: var(--font-sans); }
 .lesson__bar { flex-shrink: 0; display: flex; align-items: center; gap: var(--space-3); height: 44px; padding: 0 var(--space-4); border-bottom: 1px solid var(--color-border-strong); background: var(--color-surface-raised); }
 .lesson__crumbs { container-type: inline-size; display: flex; align-items: center; flex: 1; min-width: 0; gap: var(--space-2); }
-.lesson__crumb-track { flex: 0 1 auto; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-chrome-label); color: var(--color-text-secondary); }
+.lesson__crumb-track { flex: 0 1000 auto; min-width: 0; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-chrome-label); color: var(--color-text-secondary); }
 .lesson__crumb-sep { flex-shrink: 0; color: var(--color-text-tertiary); }
 /* Narrow header: the nav column already names the track, so the lesson title gets the room. */
 @container (max-width: 380px) { .lesson__crumb-track, .lesson__crumb-sep { display: none; } }
