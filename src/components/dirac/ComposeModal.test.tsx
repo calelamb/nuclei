@@ -40,6 +40,8 @@ describe('ComposeModal', () => {
     expect(await screen.findByText('Your Anthropic key was rejected')).toBeTruthy();
     expect(screen.queryByText('invalid x-api-key')).toBeNull();
     expect(document.activeElement).toBe(field);
+    // A rejected key is not a problem with the prompt text, so the field is not marked invalid (interaction-r-10).
+    expect(field.getAttribute('aria-invalid')).not.toBe('true');
     fireEvent.click(screen.getByRole('button', { name: /Update key/ }));
     expect(onClose).toHaveBeenCalled();
     expect(useDiracPanelStore.getState().keyEntryOpen).toBe(true);

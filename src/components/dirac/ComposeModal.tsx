@@ -82,7 +82,7 @@ function ComposeDialog({ onClose }: { onClose: () => void }) {
             }}
             placeholder="Describe what you want — e.g. 'a 3-qubit GHZ state'"
             aria-label="Describe what Dirac should compose"
-            invalid={Boolean(error || errorInfo)}
+            invalid={Boolean(error)}
           />
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, fontSize: 11, color: colors.textDim }}>
             {loading && (<><Loader2 className="nuclei-spin" size={12} /> Thinking…</>)}
