@@ -2,12 +2,21 @@ import { useEffect, useRef } from 'react';
 import type { PlatformBridge } from '../platform/bridge';
 import type { WorkspaceMode } from '../stores/workspaceStore';
 import { useNavigationStore } from '../stores/navigationStore';
+import { useLearnStore } from '../stores/learnStore';
+import { useChallengeModeStore } from '../stores/challengeModeStore';
 import { useDiracPanelStore } from '../stores/diracPanelStore';
 import { useBottomPanelStore } from '../stores/bottomPanelStore';
+import { focusAfterViewSelect } from '../components/layout/focusViz';
 import { bandsForWidth } from '../layout/breakpoints';
 import { parseShell, sameShell, shellStorageKey, type PersistedShell } from '../layout/shellPersistence';
 
 const PERSIST_DEBOUNCE_MS = 500;
+
+function currentTakeover(): PersistedShell['takeover'] {
+  if (useChallengeModeStore.getState().isChallengeMode) return 'challenges';
+  if (useLearnStore.getState().isLearnMode) return 'learning';
+  return null;
+}
 
 /** The user's intent, not the transient auto-collapsed state. */
 function currentShell(): PersistedShell {
@@ -16,6 +25,7 @@ function currentShell(): PersistedShell {
   const bottom = useBottomPanelStore.getState();
   return {
     activeView: nav.autoCollapsedView ?? nav.activeView,
+    takeover: currentTakeover(),
     diracOpen: dirac.isOpen || dirac.autoCollapsed,
     diracWidth: dirac.width,
     bottomCollapsed: bottom.collapsed,
@@ -66,6 +76,11 @@ export function useShellLayout({ platform, mode, validViews, canCollapseSidebar 
         if (cancelled) return;
         const saved = parseShell(raw, validViewsRef.current);
         if ('activeView' in saved) useNavigationStore.setState({ activeView: saved.activeView ?? null, autoCollapsedView: null, lastNarrow: null });
+        // A lesson or challenge owns the area (activeView is null under it): reopen it, not a bare sidebar.
+        if (saved.takeover) {
+          useNavigationStore.getState().selectView(saved.takeover, { toggle: false });
+          focusAfterViewSelect(saved.takeover);
+        }
         useDiracPanelStore.getState().hydrate({ isOpen: saved.diracOpen, width: saved.diracWidth ?? undefined });
         if (saved.bottomCollapsed !== undefined) useBottomPanelStore.getState().setCollapsed(saved.bottomCollapsed);
         if (saved.bottomTab) useBottomPanelStore.getState().setActiveTab(saved.bottomTab);
@@ -87,26 +102,34 @@ export function useShellLayout({ platform, mode, validViews, canCollapseSidebar 
   // Persist (debounced) whenever the chrome changes, once hydrated.
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
+    const key = shellStorageKey(mode);
+    const save = () => {
+      timer = null;
+      const next = currentShell();
+      if (lastSavedRef.current && sameShell(lastSavedRef.current, next)) return;
+      lastSavedRef.current = next;
+      platform.setStoredValue(key, next).catch(() => {
+        /* non-critical layout persistence */
+      });
+    };
     const schedule = () => {
-      const key = shellStorageKey(mode);
       if (loadedKeyRef.current !== key) return;
       if (timer) clearTimeout(timer);
-      timer = setTimeout(() => {
-        const next = currentShell();
-        if (lastSavedRef.current && sameShell(lastSavedRef.current, next)) return;
-        lastSavedRef.current = next;
-        platform.setStoredValue(key, next).catch(() => {
-          /* non-critical layout persistence */
-        });
-      }, PERSIST_DEBOUNCE_MS);
+      timer = setTimeout(save, PERSIST_DEBOUNCE_MS);
     };
     const unsubs = [
       useNavigationStore.subscribe(schedule),
       useDiracPanelStore.subscribe(schedule),
       useBottomPanelStore.subscribe(schedule),
+      useLearnStore.subscribe(schedule),
+      useChallengeModeStore.subscribe(schedule),
     ];
     return () => {
-      if (timer) clearTimeout(timer);
+      // A mode switch must not drop the last change made in the mode being left.
+      if (timer) {
+        clearTimeout(timer);
+        if (loadedKeyRef.current === key) save();
+      }
       unsubs.forEach((u) => u());
     };
   }, [platform, mode]);

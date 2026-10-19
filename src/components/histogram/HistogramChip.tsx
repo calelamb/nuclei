@@ -1,5 +1,7 @@
-import { X, Maximize2 } from 'lucide-react';
-import { IconButton } from '../ui';
+import { X, Maximize2, Info } from 'lucide-react';
+import { IconButton, Tooltip } from '../ui';
+import { useSimulationStore } from '../../stores/simulationStore';
+import { SAMPLE_EXPLAINER, SAMPLE_LABEL } from '../../hooks/runSummary';
 import { EDITOR_FOCUS_TARGET, focusAfterUnmount } from '../../hooks/focusAfterUnmount';
 import './histogram.css';
 import { useThemeStore } from '../../stores/themeStore';
@@ -47,6 +49,7 @@ export function HistogramChip({
 }: HistogramChipProps) {
   const colors = useThemeStore((s) => s.colors);
   const [measureRef, size] = useElementSize<HTMLDivElement>();
+  const shotCount = useSimulationStore((s) => s.result?.shot_count ?? 0);
 
   if (!probabilities) return null;
 
@@ -82,8 +85,17 @@ export function HistogramChip({
     onDismiss?.();
   };
 
+  const sampleCaption = !hasHw && shotCount > 0 ? `${SAMPLE_LABEL} · ${shotCount.toLocaleString('en-US')} ${shotCount === 1 ? 'shot' : 'shots'}` : null;
+  // The explainer lives on its own focusable trigger so Expand and Dismiss keep their own tooltips.
+  const sampleInfo = sampleCaption && !rows && (
+    <Tooltip label={`${sampleCaption}. ${SAMPLE_EXPLAINER}`} placement="above">
+      <button type="button" aria-label="About the Nuclei sample" className="histogram-chip__info"><Info size={12} /></button>
+    </Tooltip>
+  );
+
   const controls = (
     <div style={{ display: 'flex', gap: 4, flexShrink: 0, alignItems: 'center', marginLeft: rows ? 'auto' : undefined }}>
+      {sampleInfo}
       {hiddenCount > 0 && (onExpand ? (
         <button
           type="button"
@@ -111,7 +123,7 @@ export function HistogramChip({
     </div>
   );
 
-  return (
+  const chip = (
     <div
       ref={measureRef}
       data-layout={layout}
@@ -132,7 +144,14 @@ export function HistogramChip({
       {/* Stacked: the expand/dismiss controls ride on a header row above the outcomes (no spare row below). */}
       {rows && (
         <div style={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
-          <span style={{ color: colors.textDim, fontSize: 11 }}>Top outcomes</span>
+          <span style={{ color: colors.textDim, fontSize: 11, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            Top outcomes
+            {sampleCaption && (
+              <Tooltip label={`${sampleCaption}. ${SAMPLE_EXPLAINER}`} placement="above">
+                <span data-testid="histogram-chip-sample" tabIndex={0} role="note" aria-label="About the Nuclei sample" className="histogram-chip__caption"> · {sampleCaption}</span>
+              </Tooltip>
+            )}
+          </span>
           {controls}
         </div>
       )}
@@ -205,4 +224,5 @@ export function HistogramChip({
       {!rows && controls}
     </div>
   );
+  return chip;
 }

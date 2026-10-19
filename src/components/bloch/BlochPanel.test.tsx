@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { StrictMode } from 'react';
 import { render, cleanup, screen, fireEvent } from '@testing-library/react';
 
 const setViews = vi.fn();
 const dispose = vi.fn();
+const releaseContext = vi.fn();
 const constructed = vi.fn();
 
 vi.mock('./blochStage', () => ({
@@ -13,6 +15,7 @@ vi.mock('./blochStage', () => ({
     setPalette = vi.fn();
     resize = vi.fn();
     dispose = dispose;
+    releaseContext = releaseContext;
   },
 }));
 
@@ -35,6 +38,7 @@ function setCoords(coords: Array<{ x: number; y: number; z: number }>) {
 beforeEach(() => {
   setViews.mockClear();
   dispose.mockClear();
+  releaseContext.mockClear();
   constructed.mockClear();
   measured = { width: 332, height: 240 };
   vi.stubGlobal('matchMedia', (q: string) => ({ matches: false, media: q }) as unknown as MediaQueryList);
@@ -43,6 +47,28 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   useSimulationStore.setState({ result: null });
+});
+
+describe('BlochPanel WebGL context lifetime (IR10-01)', () => {
+  it('releases the GPU context when the canvas really leaves the document', async () => {
+    setCoords([{ x: 0, y: 0, z: 1 }]);
+    const { unmount } = render(<BlochPanel />);
+    expect(constructed).toHaveBeenCalled();
+    unmount();
+    await Promise.resolve();
+    expect(dispose).toHaveBeenCalled();
+    expect(releaseContext).toHaveBeenCalled();
+  });
+
+  it('keeps the context when React re-attaches the same canvas (StrictMode)', async () => {
+    setCoords([{ x: 0, y: 0, z: 1 }]);
+    const { unmount } = render(<StrictMode><BlochPanel /></StrictMode>);
+    await Promise.resolve();
+    // StrictMode's simulated unmount/remount disposed one stage but the canvas stayed connected.
+    expect(dispose).toHaveBeenCalledTimes(1);
+    expect(releaseContext).not.toHaveBeenCalled();
+    unmount();
+  });
 });
 
 describe('BlochPanel', () => {

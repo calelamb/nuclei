@@ -6,6 +6,31 @@ import { useCircuitStore } from '../stores/circuitStore';
 import { setHardwareBackendsSender } from '../lib/hardwareBackendsSender';
 import { vi } from 'vitest';
 
+describe('handleKernelMessage — traceback text (research-r-15)', () => {
+  beforeEach(() => {
+    useSimulationStore.setState({ result: null, isRunning: true, lastRunFailed: false, terminalOutput: [] });
+  });
+  const texts = () => useSimulationStore.getState().terminalOutput.map((l) => l.text);
+
+  it('prints a traceback as the user\'s own file, without "Error:" glued on its first line', () => {
+    const tb = 'Traceback (most recent call last):\n  File "bell.py", line 3, in <module>\nAttributeError: nope';
+    handleKernelMessage({ type: 'error', message: 'AttributeError: nope', traceback: tb, phase: 'execute', code: 'execution_error' }, {});
+    expect(texts()[0]).toBe('Traceback (most recent call last):');
+    expect(texts().some((t) => t.startsWith('Error:'))).toBe(false);
+  });
+
+  it('does not glue "Error:" onto a SyntaxError that starts with its File line', () => {
+    const tb = '  File "bell.py", line 2\n    foo(\n       ^\nSyntaxError: \'(\' was never closed';
+    handleKernelMessage({ type: 'error', message: 'SyntaxError', traceback: tb, phase: 'execute', code: 'execution_error' }, {});
+    expect(texts()[0]).toBe('  File "bell.py", line 2');
+  });
+
+  it('still prefixes a plain one-line message', () => {
+    handleKernelMessage({ type: 'error', message: 'boom', phase: 'execute', code: 'execution_error' }, {});
+    expect(texts()).toEqual(['Error: boom']);
+  });
+});
+
 describe('handleKernelMessage — run failure tracking', () => {
   beforeEach(() => {
     useSimulationStore.setState({ result: null, isRunning: true, lastRunFailed: false, terminalOutput: [] });

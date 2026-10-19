@@ -15,6 +15,7 @@ import {
 } from './pyodide/pyodideClient';
 import { OutputBatcher } from './pyodide/outputBatcher';
 import type { RuntimeFunction } from './pyodide/workerProtocol';
+import { currentUserFilename, displayFilename } from './pyodide/userFilename';
 
 type KernelMessage = { type: string; [key: string]: unknown };
 type MessageHandler = (msg: KernelMessage) => void;
@@ -94,9 +95,11 @@ export class PyodideKernel {
     // A live-preview parse arriving while Python (re)boots is simply skipped:
     // the next edit after boot re-parses, and nothing should reach the user.
     if (msg.type === 'parse' && !this.runtime.isReady()) return;
-    if (msg.type === 'parse') await this.parse(msg.code as string);
-    else if (msg.type === 'execute') await this.execute(msg.code as string, msg);
-    else if (msg.type === 'run_python') await this.runPython(msg.code as string);
+    // Tracebacks name the file being run; a sender may say which, otherwise it is the active tab.
+    const filename = typeof msg.filename === 'string' ? displayFilename(msg.filename) : currentUserFilename();
+    if (msg.type === 'parse') await this.parse(msg.code as string, filename);
+    else if (msg.type === 'execute') await this.execute(msg.code as string, msg, filename);
+    else if (msg.type === 'run_python') await this.runPython(msg.code as string, filename);
   }
 
   private rejectQsharp(phase: 'parse' | 'execute') {
@@ -155,9 +158,9 @@ export class PyodideKernel {
     this.emitError(phase, error instanceof Error ? error.message : String(error));
   }
 
-  private async parse(code: string) {
+  private async parse(code: string, filename: string) {
     try {
-      const data = await this.callRuntime('nuclei_parse', [code], PARSE_TIMEOUT_MS, false);
+      const data = await this.callRuntime('nuclei_parse', [code, filename], PARSE_TIMEOUT_MS, false);
       // Parse runs the user's program, so anything it printed is preview noise
       // from half-typed code: tag it so consumers keep it out of the Terminal.
       if (data.output) this.onMessage({ type: 'output', text: data.output, phase: 'parse' });
@@ -170,11 +173,11 @@ export class PyodideKernel {
     }
   }
 
-  private async execute(code: string, msg: KernelMessage) {
+  private async execute(code: string, msg: KernelMessage, filename: string) {
     const shots = typeof msg.shots === 'number' ? msg.shots : 1024;
     const seed = typeof msg.seed === 'number' ? msg.seed : undefined;
     try {
-      const data = await this.callRuntime('nuclei_execute', [code, shots, seed], EXECUTE_TIMEOUT_MS, true);
+      const data = await this.callRuntime('nuclei_execute', [code, shots, seed, filename], EXECUTE_TIMEOUT_MS, true);
       if (data.output) this.onMessage({ type: 'output', text: data.output });
       if (data.snapshot || data.error) this.onMessage({ type: 'snapshot', data: data.snapshot ?? null });
       if (data.error) {
@@ -194,9 +197,9 @@ export class PyodideKernel {
     }
   }
 
-  private async runPython(code: string) {
+  private async runPython(code: string, filename: string) {
     try {
-      const data = await this.callRuntime('nuclei_run_python', [code], EXECUTE_TIMEOUT_MS, true);
+      const data = await this.callRuntime('nuclei_run_python', [code, filename], EXECUTE_TIMEOUT_MS, true);
       if (data.output) this.onMessage({ type: 'output', text: data.output });
       if (data.error) this.emitError('python', data.error);
       this.onMessage({ type: 'python_result', success: !data.error });

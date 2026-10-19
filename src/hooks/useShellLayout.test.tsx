@@ -5,6 +5,10 @@ import { useShellLayout } from './useShellLayout';
 import { useNavigationStore } from '../stores/navigationStore';
 import { useDiracPanelStore } from '../stores/diracPanelStore';
 import { useBottomPanelStore } from '../stores/bottomPanelStore';
+import { useLearnStore } from '../stores/learnStore';
+import { focusAfterViewSelect } from '../components/layout/focusViz';
+
+vi.mock('../components/layout/focusViz', () => ({ focusAfterViewSelect: vi.fn(() => () => {}) }));
 
 const VIEWS = ['files', 'experiments', 'settings'];
 
@@ -63,6 +67,31 @@ describe('useShellLayout persistence', () => {
     const saved = platform.store.get('layout_shell:research') as { diracOpen: boolean; activeView: string };
     expect(saved.diracOpen).toBe(true);
     expect(saved.activeView).toBe('files');
+  });
+});
+
+describe('useShellLayout takeover memory (shell-r10-01)', () => {
+  const LV = [...VIEWS, 'learning'];
+  afterEach(() => { useLearnStore.setState({ isLearnMode: false }); });
+
+  it('saves the lesson takeover so leaving a mode and coming back reopens it', async () => {
+    const platform = fakePlatform();
+    renderHook(() => useShellLayout({ platform: platform as never, mode: 'learn', validViews: LV, canCollapseSidebar: true }));
+    await waitFor(() => expect(platform.getStoredValue).toHaveBeenCalled());
+    await act(async () => { await Promise.resolve(); });
+    vi.useFakeTimers();
+    act(() => { useNavigationStore.getState().selectView('learning', { toggle: false }); });
+    await act(async () => { vi.advanceTimersByTime(600); });
+    expect(platform.store.get('layout_shell:learn')).toMatchObject({ takeover: 'learning', activeView: null });
+  });
+
+  it('re-enters the saved takeover on hydrate', async () => {
+    const platform = fakePlatform({ 'layout_shell:learn': { activeView: null, takeover: 'learning' } });
+    renderHook(() => useShellLayout({ platform: platform as never, mode: 'learn', validViews: LV, canCollapseSidebar: true }));
+    await waitFor(() => expect(useLearnStore.getState().isLearnMode).toBe(true));
+    expect(useNavigationStore.getState().activeView).toBeNull();
+    // The editor that held focus unmounted: hand focus to the takeover heading, not the mode chip.
+    expect(focusAfterViewSelect).toHaveBeenCalledWith('learning');
   });
 });
 
