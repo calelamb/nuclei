@@ -131,7 +131,7 @@
    and a long model name wraps inside its header so both columns always fit the dialog. */
 .nuclei-table.nuclei-noise-diff { table-layout: fixed; min-width: 0; width: 100%; }
 .nuclei-table.nuclei-noise-diff th, .nuclei-table.nuclei-noise-diff td { overflow-wrap: anywhere; white-space: normal; vertical-align: top; }
-.nuclei-table.nuclei-noise-diff th:first-child, .nuclei-table.nuclei-noise-diff td:first-child { width: 40%; }
+.nuclei-table.nuclei-noise-diff th:first-child, .nuclei-table.nuclei-noise-diff td:first-child { width: 36%; }
 .nuclei-table.nuclei-noise-diff td.nuclei-table__num { white-space: nowrap; }
 
 /* Compare: equal run columns that wrap instead of widening the page. */

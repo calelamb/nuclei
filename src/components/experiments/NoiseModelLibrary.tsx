@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Copy, GitCompare } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { createTauriExperimentFs } from '../../services/experimentFs';
@@ -208,14 +208,14 @@ export function NoiseModelLibrary({ projectRoot, onClose }: { projectRoot: strin
                     <Thead>
                       <Tr>
                         <Th>channel</Th>
-                        <Th numeric plain title={selected.name}>{selected.name}</Th>
-                        <Th numeric plain title={compare.name}>{compare.name}</Th>
+                        <Th numeric plain title={selected.name}><IdentifierText value={selected.name} /></Th>
+                        <Th numeric plain title={compare.name}><IdentifierText value={compare.name} /></Th>
                       </Tr>
                     </Thead>
                     <Tbody>
                       {diff.map((d) => (
                         <Tr key={d.arg}>
-                          <Td muted title={d.arg}>{d.arg}</Td>
+                          <Td muted title={d.arg}><IdentifierText value={d.arg} /></Td>
                           <Td numeric>{d.a ?? '—'}</Td>
                           <Td numeric>{d.b ?? '—'}</Td>
                         </Tr>
@@ -262,6 +262,21 @@ function ModelRow({ model, active, compareActive, onSelect }: { model: NoiseMode
       <span className="nuclei-noise-row__name">{model.name}</span>
       {compareActive && <span className="nuclei-noise-row__tag">compare</span>}
     </button>
+  );
+}
+
+/** An snake_case identifier that may wrap only after an underscore (never mid-word). */
+function IdentifierText({ value }: { value: string }) {
+  const parts = value.split('_');
+  return (
+    <>
+      {parts.map((part, index) => (
+        <Fragment key={`${index}:${part}`}>
+          {part}
+          {index < parts.length - 1 && <>_<wbr /></>}
+        </Fragment>
+      ))}
+    </>
   );
 }
 
