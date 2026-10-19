@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+// @vitest-environment jsdom
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { hasMeaningfulOutput, isResultStale, useSimulationStore } from './simulationStore';
 
 describe('simulationStore.addOutput', () => {
@@ -116,5 +117,24 @@ describe('simulationStore result provenance', () => {
     const info = { text: 'Installing Cirq…', type: 'info' as const, timestamp: 0 };
     expect(hasMeaningfulOutput([info])).toBe(false);
     expect(hasMeaningfulOutput([info, { text: 'boom', type: 'stderr' as const, timestamp: 0 }])).toBe(true);
+  });
+});
+
+describe('simulationStore initial shots', () => {
+  const load = async (persisted: string | null) => {
+    vi.resetModules();
+    if (persisted === null) localStorage.removeItem('nuclei-settings');
+    else localStorage.setItem('nuclei-settings', persisted);
+    return (await import('./simulationStore')).useSimulationStore.getState().shots;
+  };
+
+  it('starts from the persisted Default shots setting', async () => {
+    expect(await load(JSON.stringify({ kernel: { defaultShots: 2048 } }))).toBe(2048);
+  });
+  it('falls back to 1024 without a setting', async () => {
+    expect(await load(null)).toBe(1024);
+  });
+  it('ignores an out-of-range persisted value', async () => {
+    expect(await load(JSON.stringify({ kernel: { defaultShots: 5 } }))).toBe(1024);
   });
 });

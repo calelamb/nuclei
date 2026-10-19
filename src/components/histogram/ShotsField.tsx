@@ -49,7 +49,7 @@ export function ShotsField() {
         size="sm"
         mono
         value={draft ?? shots.toLocaleString('en-US')}
-        onFocus={(e) => { setDraft(String(shots)); e.currentTarget.select(); }}
+        onFocus={(e) => { setHint(null); setDraft(String(shots)); e.currentTarget.select(); }}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={commit}
         onKeyDown={onKeyDown}

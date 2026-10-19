@@ -13,7 +13,9 @@ export interface ShotsCommit {
  * supported range with a hint, and fall back to the current value when the draft is not a number.
  */
 export function commitShotsDraft(draft: string, current: number): ShotsCommit {
-  const parsed = Number.parseInt(draft.trim(), 10);
+  // Committed values are shown grouped ("2,048"), so grouping separators are part of valid input.
+  const digits = draft.replace(/[\s,_]/g, '');
+  const parsed = /^\d+$/.test(digits) ? Number.parseInt(digits, 10) : Number.NaN;
   if (!Number.isFinite(parsed)) {
     return { value: current, hint: `Enter a whole number from ${MIN_SHOTS.toLocaleString('en-US')} to ${MAX_SHOTS.toLocaleString('en-US')}.` };
   }

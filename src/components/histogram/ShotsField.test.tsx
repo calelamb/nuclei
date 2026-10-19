@@ -42,4 +42,27 @@ describe('<ShotsField>', () => {
     act(() => useSimulationStore.getState().setShots(4096));
     expect((screen.getByLabelText('Shots') as HTMLInputElement).value).toBe('4,096');
   });
+
+  it('re-editing a committed, grouped value keeps what was typed', () => {
+    render(<ShotsField />);
+    const input = screen.getByLabelText('Shots') as HTMLInputElement;
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: '2048' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    fireEvent.change(input, { target: { value: '2,049' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(useSimulationStore.getState().shots).toBe(2049);
+    expect(useSettingsStore.getState().kernel.defaultShots).toBe(2049);
+  });
+
+  it('clears the clamp hint when the field is focused again', () => {
+    render(<ShotsField />);
+    const input = screen.getByLabelText('Shots') as HTMLInputElement;
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: '5' } });
+    fireEvent.blur(input);
+    expect(screen.getByRole('status').textContent).toMatch(/Minimum/);
+    fireEvent.focus(input);
+    expect(screen.queryByRole('status')).toBeNull();
+  });
 });

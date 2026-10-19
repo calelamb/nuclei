@@ -19,4 +19,14 @@ describe('commitShotsDraft', () => {
     expect(commitShotsDraft('', 1024).value).toBe(1024);
     expect(commitShotsDraft('abc', 512).hint).not.toBeNull();
   });
+  it('reads comma-grouped numbers as typed', () => {
+    expect(commitShotsDraft('2,048', 1024)).toEqual({ value: 2048, hint: null });
+    expect(commitShotsDraft('2,049', 1024).value).toBe(2049);
+    expect(commitShotsDraft('4,096', 1024).value).toBe(4096);
+    expect(commitShotsDraft(' 1 000 ', 1024).value).toBe(1000);
+  });
+  it('rejects text that merely starts with digits', () => {
+    expect(commitShotsDraft('12abc', 512)).toMatchObject({ value: 512 });
+    expect(commitShotsDraft('12abc', 512).hint).not.toBeNull();
+  });
 });
