@@ -48,7 +48,10 @@ async function resolveToken(getToken?: KernelTokenProvider): Promise<string | nu
 /** WebSocket close code the kernel uses for a missing or wrong token. */
 export const CLOSE_UNAUTHENTICATED = 4401;
 export const KERNEL_AUTH_REJECTED_MESSAGE = 'Kernel rejected the session token — restart Nuclei';
+export const KERNEL_PROOF_FAILED_MESSAGE =
+  'Another program is answering on the kernel port and could not prove it is the Nuclei kernel — quit it and restart Nuclei';
 export const KERNEL_AUTH_ACK_TIMEOUT_MS = 12_000;
+const NONCE_BYTES = 32;
 
 export class KernelAuthRejectedError extends Error {
   constructor() {
@@ -57,43 +60,146 @@ export class KernelAuthRejectedError extends Error {
   }
 }
 
+/** The peer did not prove knowledge of the session token (squatter or stale kernel). */
+export class KernelProofError extends Error {
+  constructor() {
+    super(KERNEL_PROOF_FAILED_MESSAGE);
+    this.name = 'KernelProofError';
+  }
+}
+
 export interface KernelConnection {
   ws: WebSocket;
   /**
-   * Settles once the kernel has accepted the session: resolves on the
-   * `authenticated` ack (or on open when no token is sent), rejects with
-   * `KernelAuthRejectedError` on a 4401 close and with a plain `Error` on any
-   * other close or a missing ack. Callers must not treat the kernel as
-   * connected before it resolves.
+   * Settles once the kernel has accepted the session AND proven it holds the
+   * token: resolves on an `authenticated` ack whose `proof` verifies (or on
+   * open when no token provider exists), rejects with `KernelAuthRejectedError`
+   * on a 4401 close, `KernelProofError` on a missing or wrong proof, and a
+   * plain `Error` on any other close or a missing ack. Callers must not treat
+   * the kernel as connected before it resolves.
+   *
+   * With a token, every frame the caller sends after the authenticate frame
+   * is held back until the proof verifies, so user code never reaches an
+   * unverified listener, and inbound frames are ignored until then.
    */
   authenticated: Promise<void>;
 }
 
-function trackAuthentication(ws: WebSocket, sendsToken: boolean, ackTimeoutMs: number): Promise<void> {
+function hexToBytes(hex: string): Uint8Array<ArrayBuffer> | null {
+  if (hex.length === 0 || hex.length % 2 !== 0 || !/^[0-9a-fA-F]+$/.test(hex)) return null;
+  const bytes = new Uint8Array(new ArrayBuffer(hex.length / 2));
+  for (let i = 0; i < bytes.length; i += 1) bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  return bytes;
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** 32 random bytes, hex encoded. */
+export function generateNonce(): string {
+  return bytesToHex(crypto.getRandomValues(new Uint8Array(NONCE_BYTES)));
+}
+
+/** True when `proofHex` is HMAC-SHA256(token, nonce); compared in constant time by WebCrypto. */
+export async function verifyKernelProof(token: string, nonce: string, proofHex: unknown): Promise<boolean> {
+  if (typeof proofHex !== 'string') return false;
+  const signature = hexToBytes(proofHex);
+  if (!signature) return false;
+  try {
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(token),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['verify'],
+    );
+    return await crypto.subtle.verify('HMAC', key, signature, encoder.encode(nonce));
+  } catch {
+    return false;
+  }
+}
+
+interface Handshake {
+  token: string;
+  nonce: string;
+}
+
+function parseType(event: Event): { type?: string; proof?: unknown } | null {
+  try {
+    return JSON.parse((event as MessageEvent<string>).data) as { type?: string; proof?: unknown };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Holds back caller frames until `release()` and drops them on `discard()`.
+ * The authenticate frame itself goes out through the original `send`.
+ */
+function gateOutbound(ws: WebSocket) {
+  const rawSend = ws.send.bind(ws);
+  const queue: Array<Parameters<WebSocket['send']>[0]> = [];
+  let state: 'pending' | 'open' | 'dead' = 'pending';
+  ws.send = ((data: Parameters<WebSocket['send']>[0]) => {
+    if (state === 'open') rawSend(data);
+    else if (state === 'pending') queue.push(data);
+  }) as WebSocket['send'];
+  return {
+    rawSend,
+    release() {
+      state = 'open';
+      for (const data of queue.splice(0)) rawSend(data);
+    },
+    discard() {
+      state = 'dead';
+      queue.length = 0;
+    },
+  };
+}
+
+function trackAuthentication(
+  ws: WebSocket,
+  handshake: Handshake | null,
+  ackTimeoutMs: number,
+  onVerified: () => void,
+  onFailed: () => void,
+): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const settle = (finish: () => void) => {
+    let settled = false;
+    const settle = (finish: () => void, ok: boolean) => {
+      if (settled) return;
+      settled = true;
       if (timer) clearTimeout(timer);
       timer = null;
+      if (ok) onVerified();
+      else onFailed();
       finish();
     };
     ws.addEventListener('open', () => {
-      if (!sendsToken) {
-        settle(resolve);
+      if (!handshake) {
+        settle(resolve, true);
         return;
       }
       timer = setTimeout(
-        () => settle(() => reject(new Error('Kernel did not acknowledge the session token'))),
+        () => settle(() => reject(new Error('Kernel did not acknowledge the session token')), false),
         ackTimeoutMs,
       );
     });
     ws.addEventListener('message', (event) => {
-      try {
-        const parsed = JSON.parse((event as MessageEvent<string>).data) as { type?: string };
-        if (sendsToken && parsed.type === 'authenticated') settle(resolve);
-      } catch {
-        // Not JSON: not the ack.
-      }
+      if (!handshake || settled) return;
+      const parsed = parseType(event);
+      if (parsed?.type !== 'authenticated') return;
+      void verifyKernelProof(handshake.token, handshake.nonce, parsed.proof).then((valid) => {
+        if (valid) {
+          settle(resolve, true);
+          return;
+        }
+        settle(() => reject(new KernelProofError()), false);
+        try { ws.close(); } catch { /* already closing */ }
+      });
     });
     ws.addEventListener('close', (event) => {
       const code = (event as CloseEvent).code;
@@ -101,7 +207,7 @@ function trackAuthentication(ws: WebSocket, sendsToken: boolean, ackTimeoutMs: n
         code === CLOSE_UNAUTHENTICATED
           ? new KernelAuthRejectedError()
           : new Error('Kernel connection closed before authentication completed'),
-      ));
+      ), false);
     });
   });
 }
@@ -113,22 +219,36 @@ export async function openKernelConnection(
 ): Promise<KernelConnection> {
   const token = await resolveToken(getToken);
   const ws = new WebSocket(url);
-  const authenticated = trackAuthentication(ws, token !== null, ackTimeoutMs);
+  if (token === null) {
+    // No provider at all (web build): nothing to authenticate.
+    const authenticated = trackAuthentication(ws, null, ackTimeoutMs, () => undefined, () => undefined);
+    return { ws, authenticated };
+  }
+
+  const handshake: Handshake = { token, nonce: generateNonce() };
+  const gate = gateOutbound(ws);
+  let verified = false;
+  const authenticated = trackAuthentication(
+    ws,
+    handshake,
+    ackTimeoutMs,
+    () => { verified = true; gate.release(); },
+    () => gate.discard(),
+  );
 
   ws.addEventListener('open', () => {
-    if (token) ws.send(JSON.stringify({ type: 'authenticate', token }));
+    gate.rawSend(JSON.stringify({ type: 'authenticate', token, nonce: handshake.nonce }));
   });
 
-  // Swallow the kernel's acknowledgement so existing message handlers never
-  // see it. Registered after the ack tracker (which has already seen it), and
-  // before any caller handler, so stopImmediatePropagation shields onmessage.
+  // Registered after the verifier and before any caller handler. Until the
+  // proof checks out, nothing from the peer reaches the caller; afterwards
+  // the kernel's acknowledgement is swallowed so handlers never see it.
   ws.addEventListener('message', (event) => {
-    try {
-      const parsed = JSON.parse((event as MessageEvent<string>).data) as { type?: string };
-      if (parsed.type === 'authenticated') event.stopImmediatePropagation();
-    } catch {
-      // Not JSON: leave it for the caller's handler to report.
+    if (!verified) {
+      event.stopImmediatePropagation();
+      return;
     }
+    if (parseType(event)?.type === 'authenticated') event.stopImmediatePropagation();
   });
 
   return { ws, authenticated };

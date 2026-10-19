@@ -12,6 +12,7 @@ import {
   CLOSE_UNAUTHENTICATED,
   KERNEL_AUTH_REJECTED_MESSAGE,
   KernelAuthRejectedError,
+  KernelProofError,
   KernelTokenUnavailableError,
   openKernelConnection,
 } from '../services/kernelSocket';
@@ -501,6 +502,7 @@ export function useKernel() {
 
       authenticated.then(onAuthenticated, (error: unknown) => {
         if (error instanceof KernelAuthRejectedError) failAuthRejected();
+        else if (error instanceof KernelProofError) { if (mountedRef.current) failKernel(error.message); }
         else if (mountedRef.current && ws.readyState === WebSocket.OPEN) ws.close();
       });
 
@@ -518,6 +520,8 @@ export function useKernel() {
         if (!mountedRef.current) return;
         // A rejected token will be rejected again: report it, don't loop.
         if (event.code === CLOSE_UNAUTHENTICATED) { failAuthRejected(); return; }
+        // An impostor kernel (no valid proof) is fatal too; do not loop on it.
+        if (useEditorStore.getState().kernelStatus === 'failed') return;
 
         if (retryCountRef.current < MAX_RETRIES) {
           retryCountRef.current++;

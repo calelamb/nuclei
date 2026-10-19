@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { labAvailability, LabUnavailableError, openLabSession, request } from './labSession';
 import { KernelAuthRejectedError } from '../kernelSocket';
+import { kernelAckFor } from '../../test/kernelAuthProof';
 import type { KernelResponse } from '../../types/quantum';
 
 /**
@@ -27,7 +28,7 @@ class FakeSocket extends EventTarget {
     if (FakeSocket.requireToken && this.sent.length === 0) {
       const frame = JSON.parse(data) as { type?: string; token?: string };
       if (frame.type === 'authenticate' && frame.token === EXPECTED_TOKEN) {
-        this.emit({ type: 'authenticated' });
+        this.emit(kernelAckFor(data, EXPECTED_TOKEN));
       } else {
         this.readyState = 3;
         this.dispatchEvent(Object.assign(new Event('close'), { code: 4401 }));
@@ -118,7 +119,7 @@ describe('openLabSession', () => {
     const { session, socket } = await open();
     const seen: KernelResponse[] = [];
     session.subscribe((m) => seen.push(m));
-    expect(JSON.parse(socket.sent[0])).toEqual({ type: 'authenticate', token: EXPECTED_TOKEN });
+    expect(JSON.parse(socket.sent[0])).toMatchObject({ type: 'authenticate', token: EXPECTED_TOKEN });
     socket.emit({ type: 'authenticated' });
     expect(seen).toEqual([]);
   });
@@ -145,7 +146,7 @@ describe('DEV ?labKernel override with ?labKernelToken', () => {
     });
     const session = await openLabSession('web');
     expect(FakeSocket.last!.url).toBe('ws://127.0.0.1:9777');
-    expect(JSON.parse(FakeSocket.last!.sent[0])).toEqual({ type: 'authenticate', token: EXPECTED_TOKEN });
+    expect(JSON.parse(FakeSocket.last!.sent[0])).toMatchObject({ type: 'authenticate', token: EXPECTED_TOKEN });
     session.close();
   });
 

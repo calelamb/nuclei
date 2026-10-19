@@ -14,9 +14,12 @@ subprocess against a live kernel server (3 points, 64 shots) and asserts
 the table output.
 """
 import asyncio
+import hashlib
+import hmac
 import json
 import os
 import math
+import secrets
 import sys
 
 import websockets
@@ -46,11 +49,17 @@ def load_token() -> str:
 
 
 async def authenticate(ws) -> None:
-    """First frame on every connection: present the token, wait for the ack."""
-    await ws.send(json.dumps({"type": "authenticate", "token": load_token()}))
+    """First frame on every connection: present the token and a random nonce,
+    then check the kernel's proof (HMAC-SHA256(token, nonce)) in the ack."""
+    token = load_token()
+    nonce = secrets.token_hex(32)
+    await ws.send(json.dumps({"type": "authenticate", "token": token, "nonce": nonce}))
     reply = json.loads(await ws.recv())
     if reply.get("type") != "authenticated":
         raise RuntimeError("kernel rejected the authentication token")
+    expected = hmac.new(token.encode(), nonce.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(str(reply.get("proof", "")), expected):
+        raise RuntimeError("peer did not prove it is the Nuclei kernel; refusing to continue")
 
 
 async def request(ws, payload: dict, reply_type: str) -> dict:

@@ -9,7 +9,10 @@ gates before any message reaches a handler:
    WebSockets from a browser tab).  Non-browser clients send no Origin.
 3. The first frame must be ``{"type": "authenticate", "token": ...}`` carrying
    the per-launch token, compared in constant time.  The token never travels
-   in the URL.
+   in the URL.  The frame may also carry a client ``nonce``; the kernel then
+   proves it knows the token by answering with
+   ``{"type": "authenticated", "proof": HMAC-SHA256(token, nonce)}`` (hex), so
+   a client can tell the real kernel from a process squatting the port.
 
 With no token configured the kernel refuses to start unless
 ``NUCLEI_KERNEL_INSECURE_DEV=1`` is set explicitly.
@@ -19,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import atexit
+import hashlib
 import hmac
 import json
 import os
@@ -40,6 +44,8 @@ RUNTIME_FILE_NAME = "kernel.json"
 MIN_TOKEN_LENGTH = 32
 MAX_TOKEN_LENGTH = 1_024
 AUTH_TIMEOUT_SECONDS = 10.0
+MIN_NONCE_LENGTH = 16
+MAX_NONCE_LENGTH = 256
 
 CLOSE_UNAUTHENTICATED = 4401
 CLOSE_FORBIDDEN = 4403
@@ -151,19 +157,50 @@ def origin_allowed(config: KernelAuthConfig, origin: str | None) -> bool:
     return origin is None or origin in config.allowed_origins
 
 
-def token_matches(config: KernelAuthConfig, frame: object) -> bool:
+@dataclass(frozen=True)
+class Authentication:
+    """A successful authenticate frame; ``nonce`` is None for legacy clients."""
+
+    nonce: str | None
+
+
+def check_authentication(config: KernelAuthConfig, frame: object) -> Authentication | None:
+    """Validate an authenticate frame; None means refuse the connection."""
     if config.token is None:
-        return False
+        return None
     try:
         value = json.loads(frame)  # type: ignore[arg-type]
     except (TypeError, ValueError):
-        return False
+        return None
     if not isinstance(value, dict) or value.get("type") != "authenticate":
-        return False
+        return None
     supplied = value.get("token")
     if not isinstance(supplied, str) or not 1 <= len(supplied) <= MAX_TOKEN_LENGTH:
-        return False
-    return hmac.compare_digest(supplied.encode(), config.token.encode())
+        return None
+    if not hmac.compare_digest(supplied.encode(), config.token.encode()):
+        return None
+    if "nonce" not in value:
+        return Authentication(nonce=None)
+    nonce = value["nonce"]
+    if not isinstance(nonce, str) or not MIN_NONCE_LENGTH <= len(nonce) <= MAX_NONCE_LENGTH:
+        return None
+    return Authentication(nonce=nonce)
+
+
+def token_matches(config: KernelAuthConfig, frame: object) -> bool:
+    return check_authentication(config, frame) is not None
+
+
+def server_proof(token: str, nonce: str) -> str:
+    """Hex HMAC-SHA256 keyed by the token over the client's nonce string."""
+    return hmac.new(token.encode(), nonce.encode(), hashlib.sha256).hexdigest()
+
+
+def authenticated_ack(config: KernelAuthConfig, authentication: Authentication) -> str:
+    ack: dict[str, str] = {"type": "authenticated"}
+    if authentication.nonce is not None and config.token is not None:
+        ack["proof"] = server_proof(config.token, authentication.nonce)
+    return json.dumps(ack)
 
 
 def handshake_violation(
@@ -225,10 +262,11 @@ def secure_handler(
             except Exception:  # noqa: BLE001 - timeout, close or protocol error
                 await _reject(websocket, CLOSE_UNAUTHENTICATED, "authentication required")
                 return
-            if not token_matches(config, first):
+            authentication = check_authentication(config, first)
+            if authentication is None:
                 await _reject(websocket, CLOSE_UNAUTHENTICATED, "authentication failed")
                 return
-            await websocket.send(json.dumps({"type": "authenticated"}))
+            await websocket.send(authenticated_ack(config, authentication))
         await inner(websocket)
 
     return handler

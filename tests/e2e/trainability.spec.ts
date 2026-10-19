@@ -22,6 +22,15 @@ async function installStubKernel(page: Page, results: unknown = resultsFixture):
   await page.addInitScript(
     (fixtures) => {
       const e2eToken = fixtures.token;
+      // Mutual auth: prove token knowledge, HMAC-SHA256(token, nonce) in hex.
+      async function hmacHex(key: string, message: string): Promise<string> {
+        const encoder = new TextEncoder();
+        const cryptoKey = await crypto.subtle.importKey(
+          'raw', encoder.encode(key), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
+        );
+        const signature = new Uint8Array(await crypto.subtle.sign('HMAC', cryptoKey, encoder.encode(message)));
+        return Array.from(signature, (b) => b.toString(16).padStart(2, '0')).join('');
+      }
       type Listener = (event: Event | MessageEvent<string>) => void;
       class StubKernelSocket {
         readyState = 0;
@@ -45,13 +54,14 @@ async function installStubKernel(page: Page, results: unknown = resultsFixture):
           // Protocol v2: the first frame must carry the session token. Anything
           // else is refused with 4401, exactly like the real kernel.
           if (!this.authenticated) {
-            const first = JSON.parse(serialized) as { type?: string; token?: string };
+            const first = JSON.parse(serialized) as { type?: string; token?: string; nonce?: string };
             if (first.type === 'authenticate' && first.token === e2eToken) {
               this.authenticated = true;
-              setTimeout(
-                () => this.emit('message', new MessageEvent('message', { data: JSON.stringify({ type: 'authenticated' }) })),
-                0,
-              );
+              void hmacHex(e2eToken, first.nonce ?? '').then((proof) => {
+                this.emit('message', new MessageEvent('message', {
+                  data: JSON.stringify({ type: 'authenticated', proof }),
+                }));
+              });
             } else {
               this.readyState = 3;
               this.emit('close', Object.assign(new Event('close'), { code: 4401 }));

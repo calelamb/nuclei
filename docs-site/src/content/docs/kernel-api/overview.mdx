@@ -55,9 +55,10 @@ is disconnected. See the [protocol changelog](/docs/reference/protocol-changelog
    `NUCLEI_RUNTIME_DIR`), so local scripts can read it. Scripts can use
    `$NUCLEI_KERNEL_TOKEN` instead when they launched the kernel themselves.
 3. The first frame on a connection must be
-   `{"type": "authenticate", "token": "<token>"}`. The kernel answers
-   `{"type": "authenticated"}` and only then handles requests. The token is
-   never sent in the URL.
+   `{"type": "authenticate", "token": "<token>", "nonce": "<64 hex chars>"}`.
+   The kernel answers `{"type": "authenticated", "proof": "<hex>"}` and only
+   then handles requests. The token is never sent in the URL. `nonce` is
+   optional for third-party clients (see [Server proof](#server-proof)).
 4. Browser connections must also come from an allowed `Origin`, and the `Host`
    header must be a loopback name on the kernel's port. Scripts that send no
    `Origin` are accepted only with the token.
@@ -67,12 +68,38 @@ Lab's, the Discovery Engine's, and the audit and conjecture sessions. Replies
 in the [Quantum AI Lab messages](/docs/kernel-api/messages-lab/) examples start
 after the handshake.
 
+### Server proof
+
+Anything can listen on a free port, so the kernel also proves it knows the
+token. The client sends a fresh random `nonce` (32 random bytes as 64 hex
+characters, 16 to 256 characters accepted) in the `authenticate` frame. The ack
+then carries
+
+```text
+proof = hex( HMAC-SHA256( key = token, message = nonce ) )
+```
+
+where `token` and `nonce` are the strings exactly as sent (UTF-8, the nonce is
+not hex-decoded). The client must compare `proof` in constant time and close
+the connection without sending anything else when it is missing or wrong.
+
+- Nuclei's own client always sends a nonce and **requires** the proof. It holds
+  back every other frame (your code, buffers, credentials) until the proof
+  verifies, and treats a missing or wrong proof as a failed kernel.
+- A kernel started by a Nuclei version before 0.14.1 answers without a proof,
+  so the app refuses it.
+- For third-party clients the nonce stays optional: a frame without `nonce` is
+  still accepted and acknowledged without a `proof`. A frame with a malformed
+  `nonce` (not a string, or outside 16 to 256 characters) closes with `4401`.
+  Sending a nonce and checking the proof is recommended; see
+  [client examples](/docs/kernel-api/client-examples/).
+
 ### How a connection is refused
 
 | Situation | Result |
 |-----------|--------|
 | Foreign `Origin` or non-loopback `Host` | HTTP `403` on the WebSocket upgrade; the connection never opens |
-| First frame is not a valid `authenticate` frame, wrong token, or no frame within 10 s | Closed with code `4401` |
+| First frame is not a valid `authenticate` frame, wrong token, malformed `nonce`, or no frame within 10 s | Closed with code `4401` |
 | Request sent before the `authenticated` ack | Not handled; the connection is closed with `4401` |
 
 A client library's "connection refused with 403" therefore means the `Origin`
