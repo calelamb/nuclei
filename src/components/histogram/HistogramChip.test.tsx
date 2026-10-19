@@ -1,9 +1,24 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from 'vitest';
+
 import { render, cleanup, fireEvent } from '@testing-library/react';
 import { HistogramChip } from './HistogramChip';
+import { useSimulationStore } from '../../stores/simulationStore';
 
 afterEach(() => cleanup());
+
+describe('<HistogramChip> sample caption (IR10-08)', () => {
+  afterEach(() => { delete (HTMLElement.prototype as unknown as Record<string, unknown>).clientWidth; useSimulationStore.setState({ result: null }); });
+  it('says the chart is the Nuclei sample, with its shot count, in the stacked header', () => {
+    useSimulationStore.setState({
+      result: { state_vector: [], probabilities: {}, measurements: {}, bloch_coords: [], execution_time_ms: 1, shot_count: 1024 } as never,
+    });
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get() { return 300; } });
+    const { container } = render(<HistogramChip probabilities={{ '0': 0.5, '1': 0.5 }} />);
+    const caption = container.querySelector('[data-testid="histogram-chip-sample"]');
+    expect(caption?.textContent).toContain('Nuclei sample · 1,024 shots');
+  });
+});
 
 describe('<HistogramChip>', () => {
   it('renders nothing when probabilities is null', () => {

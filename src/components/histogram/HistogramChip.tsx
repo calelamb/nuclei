@@ -1,5 +1,7 @@
 import { X, Maximize2 } from 'lucide-react';
-import { IconButton } from '../ui';
+import { IconButton, Tooltip } from '../ui';
+import { useSimulationStore } from '../../stores/simulationStore';
+import { SAMPLE_EXPLAINER, SAMPLE_LABEL } from '../../hooks/runSummary';
 import { EDITOR_FOCUS_TARGET, focusAfterUnmount } from '../../hooks/focusAfterUnmount';
 import './histogram.css';
 import { useThemeStore } from '../../stores/themeStore';
@@ -47,6 +49,7 @@ export function HistogramChip({
 }: HistogramChipProps) {
   const colors = useThemeStore((s) => s.colors);
   const [measureRef, size] = useElementSize<HTMLDivElement>();
+  const shotCount = useSimulationStore((s) => s.result?.shot_count ?? 0);
 
   if (!probabilities) return null;
 
@@ -111,7 +114,8 @@ export function HistogramChip({
     </div>
   );
 
-  return (
+  const sampleCaption = !hasHw && shotCount > 0 ? `${SAMPLE_LABEL} · ${shotCount.toLocaleString('en-US')} ${shotCount === 1 ? 'shot' : 'shots'}` : null;
+  const chip = (
     <div
       ref={measureRef}
       data-layout={layout}
@@ -132,7 +136,9 @@ export function HistogramChip({
       {/* Stacked: the expand/dismiss controls ride on a header row above the outcomes (no spare row below). */}
       {rows && (
         <div style={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
-          <span style={{ color: colors.textDim, fontSize: 11 }}>Top outcomes</span>
+          <span style={{ color: colors.textDim, fontSize: 11, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            Top outcomes{sampleCaption && <span data-testid="histogram-chip-sample"> · {sampleCaption}</span>}
+          </span>
           {controls}
         </div>
       )}
@@ -205,4 +211,5 @@ export function HistogramChip({
       {!rows && controls}
     </div>
   );
+  return sampleCaption ? <Tooltip label={`${sampleCaption}. ${SAMPLE_EXPLAINER}`} placement="below">{chip}</Tooltip> : chip;
 }
