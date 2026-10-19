@@ -9,6 +9,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import { TYPOGRAPHY } from '../../styles/tokens';
 import { useUIModeStore, type UIMode } from '../../stores/uiModeStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
+import { useLearnGateStore } from '../../stores/learnGateStore';
 import { useExperimentRunStore } from '../../stores/experimentRunStore';
 import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 import { useExerciseStore } from '../../stores/exerciseStore';
@@ -168,6 +169,7 @@ export function StatusBar() {
   const themeMode = useThemeStore((s) => s.mode);
   const themeToggle = useThemeStore((s) => s.toggle);
   const workspaceMode = useWorkspaceStore((s) => s.mode);
+  const learnEnabled = useLearnGateStore((s) => s.learnEnabled);
   const activeRun = useExperimentRunStore((s) => s.active);
   const campaignRunning = useQecCampaignStore((s) => s.running);
   const campaignProgress = useQecCampaignStore((s) => s.progress);
@@ -227,7 +229,8 @@ export function StatusBar() {
       borderTop: `1px solid ${colors.border}`,
     }} role="group" aria-label="Status bar">
       {/* Mode chip — far-left mode identity + switcher (PRD 11 Phase B). */}
-      <ModeChip />
+      {/* With Learn gated off there is only Research, so there is nothing to switch. */}
+      {learnEnabled && <ModeChip />}
 
       {/* Left side: editor stats and the layout preset only mean something while the editor is on screen. */}
       {!takeover && (

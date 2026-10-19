@@ -1,10 +1,12 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import '../../test/learnGateOn';
 import { applyOnboardingPath } from './applyOnboardingPath';
 import { useUIModeStore } from '../../stores/uiModeStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useLearnStore } from '../../stores/learnStore';
 import { useNavigationStore } from '../../stores/navigationStore';
 import { TRACKS } from '../../data/lessons/tracks';
+import { useLearnGateStore } from '../../stores/learnGateStore';
 
 const web = vi.hoisted(() => ({ value: false }));
 vi.mock('../../platform/buildTarget', () => ({ isWebBuild: () => web.value }));
@@ -85,5 +87,23 @@ describe('applyOnboardingPath', () => {
       applyOnboardingPath('research');
       expect(useLearnStore.getState().isLearnMode).toBe(false);
     });
+  });
+});
+
+describe('applyOnboardingPath with the Learn workspace gated off', () => {
+  beforeEach(() => useLearnGateStore.getState().setLearnEnabled(false));
+  afterEach(() => useLearnGateStore.getState().setLearnEnabled(true));
+
+  it('turns every Learn path into Research and never enters Learn', () => {
+    for (const path of ['beginner', 'intermediate', 'experienced'] as const) {
+      applyOnboardingPath(path);
+      expect(useWorkspaceStore.getState().mode).toBe('research');
+      expect(useLearnStore.getState().isLearnMode).toBe(false);
+    }
+  });
+
+  it('leaves the UI level alone', () => {
+    applyOnboardingPath('beginner');
+    expect(useUIModeStore.getState().mode).toBe('intermediate');
   });
 });

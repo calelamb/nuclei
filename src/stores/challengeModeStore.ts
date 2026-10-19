@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { bestMetrics } from '../services/challengeEfficiency';
+import { isLearnEnabled } from './learnGateStore';
 import type { CircuitSnapshot, Framework, SimulationResult } from '../types/quantum';
 import type {
   QuantumChallenge,
@@ -176,7 +177,8 @@ export const useChallengeModeStore = create<ChallengeModeState>((set, get) => ({
   inspection: null,
   inspectionView: 'circuit',
 
-  enterChallengeMode: () => set({ isChallengeMode: true }),
+  // Challenges belong to the gated Learn workspace: no-op while it is hidden.
+  enterChallengeMode: () => { if (isLearnEnabled()) set({ isChallengeMode: true }); },
   // The open challenge survives leaving the takeover; only an explicit Back (setActiveProblem(null)) forgets it.
   exitChallengeMode: () => set({ isChallengeMode: false, inspection: null }),
 

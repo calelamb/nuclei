@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { TRACKS } from '../data/lessons/tracks';
+import { isLearnEnabled } from './learnGateStore';
 
 export interface LessonProgress {
   startedAt: string;
@@ -139,7 +140,8 @@ export const useLearnStore = create<LearnState>((set, get) => ({
   assessedLevel: persisted.assessedLevel ?? null,
   needsPythonTrack: persisted.needsPythonTrack ?? null,
 
-  enterLearnMode: () => set({ isLearnMode: true }),
+  // No-op while the Learn workspace is gated off, so no caller needs to check.
+  enterLearnMode: () => { if (isLearnEnabled()) set({ isLearnMode: true }); },
   exitLearnMode: () => set({ isLearnMode: false }),
 
   setCurrentLesson: (trackId, lessonId) => {

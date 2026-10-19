@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import '../../test/learnGateOn';
 import { StrictMode } from 'react';
 import { render, cleanup, screen, fireEvent } from '@testing-library/react';
 

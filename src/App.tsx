@@ -34,6 +34,7 @@ import { usePersistedPrefs } from './hooks/usePersistedPrefs';
 import { scheduleLandingFocus } from './components/onboarding/focusLanding';
 import { applyOnboardingPath, type OnboardingChoice } from './components/onboarding/applyOnboardingPath';
 import { useWorkspaceStore } from './stores/workspaceStore';
+import { useLearnGateStore } from './stores/learnGateStore';
 import { useModeSwitchStore } from './stores/modeSwitchStore';
 import { useModeIdentity } from './hooks/useModeIdentity';
 import { useDiracPanelStore } from './stores/diracPanelStore';
@@ -146,6 +147,8 @@ function AppInner() {
     focusAfterViewSelect(view);
   }, [navigate]);
   const workspaceMode = useWorkspaceStore((s) => s.mode);
+  // Subscribed so the palette's command list rebuilds when the Learn gate flips.
+  useLearnGateStore((s) => s.learnEnabled);
   const experimentalFeatures = useSettingsStore((s) => s.general.experimentalFeatures);
   const experiments = useExperimentStore((s) => s.experiments);
   const selectedRunDir = useExperimentUiStore((s) => s.selectedRunDir);
@@ -425,7 +428,7 @@ function AppInner() {
         // Run shortcut, which stays on the classical simulator.
         case 'launch': useHardwareStore.getState().openLaunch(); break;
         // Switch workspace mode, through the same in-flight-work guard the palette uses.
-        case 'switch-workspace': useModeSwitchStore.getState().requestToggle(); break;
+        case 'switch-workspace': useModeSwitchStore.getState().requestToggle(); break; // no-op while Learn is gated off
         case 'goto-rail-view': {
           // Jump to the Nth top-rail view for the current mode. Read the mode +
           // developer flag fresh so the mapping tracks the live rail.

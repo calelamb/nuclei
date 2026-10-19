@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
+import { useLearnGateStore } from '../../stores/learnGateStore';
 import { QuantumPlayground } from './QuantumPlayground';
 import { EASING, DURATION, prefersReducedMotion } from '../../lib/animations';
 
@@ -278,7 +279,14 @@ function ReturningUserScreen({ onContinue, onStartFresh, lastFile, daysSince }: 
   );
 }
 
+/** Completes onboarding into Research once, on mount, when the chooser has nothing to offer. */
+function ResearchAutoEntry({ onEnter }: { onEnter: () => void }) {
+  useEffect(() => { onEnter(); }, []); // eslint-disable-line react-hooks/exhaustive-deps -- fire once on mount
+  return null;
+}
+
 export function Onboarding({ onComplete, isReturningUser, lastOpenedFile, daysSinceLastSession }: OnboardingProps) {
+  const learnEnabled = useLearnGateStore((s) => s.learnEnabled);
   const [screen, setScreen] = useState<'mode-select' | 'welcome' | 'playground' | 'returning'>(() =>
     isReturningUser ? 'returning' : 'mode-select'
   );
@@ -301,6 +309,9 @@ export function Onboarding({ onComplete, isReturningUser, lastOpenedFile, daysSi
       />
     );
   }
+
+  // Learn is hidden by default: there is nothing to choose, so go straight into Research.
+  if (screen === 'mode-select' && !learnEnabled) return <ResearchAutoEntry onEnter={() => onComplete('research')} />;
 
   if (screen === 'mode-select') {
     return (

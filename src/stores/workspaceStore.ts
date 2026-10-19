@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { canEnterMode, effectiveWorkspaceMode, isLearnEnabled, useLearnGateStore } from './learnGateStore';
 
 /**
  * PRD 09, Phase A — Learn/Research workspace mode.
@@ -22,13 +23,19 @@ function isWorkspaceMode(value: unknown): value is WorkspaceMode {
   return value === 'learn' || value === 'research';
 }
 
-function loadGlobalMode(): WorkspaceMode {
+function loadStoredGlobalMode(): WorkspaceMode {
   try {
     const raw = localStorage.getItem(GLOBAL_KEY);
     return isWorkspaceMode(raw) ? raw : 'learn';
   } catch {
     return 'learn';
   }
+}
+
+/** The mode to open with for a project (or none): remembered, else the global default, then gated. */
+function resolveMode(root: string | null): WorkspaceMode {
+  const remembered = root !== null ? loadProjectModes()[root] : undefined;
+  return effectiveWorkspaceMode(remembered ?? loadStoredGlobalMode(), isLearnEnabled());
 }
 
 function persistGlobalMode(mode: WorkspaceMode): void {
@@ -71,9 +78,11 @@ function persistProjectModes(modes: Record<string, WorkspaceMode>): void {
 let currentProjectRoot: string | null = null;
 
 export const useWorkspaceStore = create<WorkspaceState>((set) => ({
-  mode: loadGlobalMode(),
+  mode: resolveMode(null),
 
   setMode: (mode) => {
+    // Learn is hidden unless the gate is on; refuse centrally so no caller needs to know.
+    if (!canEnterMode(mode, isLearnEnabled())) return;
     set({ mode });
     if (currentProjectRoot) {
       // A project is open: this mode choice is specific to that project.
@@ -103,7 +112,12 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
  */
 export function __notifyProjectRootChanged(root: string | null): void {
   currentProjectRoot = root;
-  const modes = loadProjectModes();
-  const remembered = root !== null ? modes[root] : undefined;
-  useWorkspaceStore.setState({ mode: remembered ?? loadGlobalMode() });
+  useWorkspaceStore.setState({ mode: resolveMode(root) });
 }
+
+// Flipping the gate re-derives the mode from what is stored: off forces
+// Research (stored values stay untouched); on restores the remembered mode.
+useLearnGateStore.subscribe((state, prev) => {
+  if (state.learnEnabled === prev.learnEnabled) return;
+  useWorkspaceStore.setState({ mode: resolveMode(currentProjectRoot) });
+});

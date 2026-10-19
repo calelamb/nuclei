@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
+import '../test/learnGateOn';
 import { renderHook, cleanup, act, waitFor } from '@testing-library/react';
 import { useShellLayout } from './useShellLayout';
 import { useNavigationStore } from '../stores/navigationStore';
