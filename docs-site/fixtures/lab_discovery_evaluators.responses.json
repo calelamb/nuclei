@@ -23,7 +23,8 @@
           },
           "full": {},
           "confirm": {}
-        }
+        },
+        "available": true
       },
       {
         "kind": "state_synthesis",
@@ -45,7 +46,8 @@
           },
           "full": {},
           "confirm": {}
-        }
+        },
+        "available": true
       },
       {
         "kind": "trainability_frontier",
@@ -64,7 +66,8 @@
           },
           "full": {},
           "confirm": {}
-        }
+        },
+        "available": true
       },
       {
         "kind": "vqe_ground_state",
@@ -89,7 +92,8 @@
           },
           "full": {},
           "confirm": {}
-        }
+        },
+        "available": true
       }
     ]
   }

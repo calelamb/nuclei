@@ -14,9 +14,11 @@ import {
 } from '../lab';
 import { DISCOVERY_TEMPLATES, slugifyName, type DiscoveryTemplate } from '../../services/discovery/templates';
 import { FRONTIER_HONESTY, FRONTIER_QUESTION, RED_QUEEN_EXPLAINER } from '../../services/discovery/honesty';
+import { findEvaluator, isEvaluatorAvailable } from '../../services/discovery/availability';
 import { DEFAULT_RED_QUEEN } from '../../services/discovery/redQueen';
 import { useDiscoveryStore } from '../../stores/discoveryStore';
-import { AUDIT_EVERY_MODES, MODEL_TIERS, type AuditEvery, type ModelTier, type MutatorKind } from '../../types/discovery';
+import { AUDIT_EVERY_MODES, MODEL_TIERS, type AuditEvery, type DiscoveryEvaluatorInfo, type ModelTier, type MutatorKind } from '../../types/discovery';
+import { EvaluatorUnavailable } from './EvaluatorUnavailable';
 
 const AUDIT_EVERY_LABEL: Record<AuditEvery, string> = {
   improvement: 'Every improvement (new best or new cell)',
@@ -51,9 +53,21 @@ const DEFAULTS = {
   llmSharePct: 75,
 };
 
-function TemplateCard({ template, selected, onSelect }: { template: DiscoveryTemplate; selected: boolean; onSelect: () => void }) {
+function TemplateCard({
+  template,
+  selected,
+  onSelect,
+  unavailable,
+}: {
+  template: DiscoveryTemplate;
+  selected: boolean;
+  onSelect: () => void;
+  /** The kernel's entry for this template's evaluator when its optional packages are missing. */
+  unavailable?: DiscoveryEvaluatorInfo;
+}) {
   const frontier = template.id === 'trainability-frontier';
   return (
+    <div style={{ display: 'grid', gap: 'var(--space-2)', alignContent: 'start' }}>
     <button
       type="button"
       role="radio"
@@ -79,6 +93,12 @@ function TemplateCard({ template, selected, onSelect }: { template: DiscoveryTem
         </span>
       )}
     </button>
+    {unavailable && (
+      <div style={{ padding: '0 var(--space-4)' }}>
+        <EvaluatorUnavailable info={unavailable} />
+      </div>
+    )}
+    </div>
   );
 }
 
@@ -86,6 +106,7 @@ function TemplateCard({ template, selected, onSelect }: { template: DiscoveryTem
 export function NewDiscoveryWizard() {
   const createFromTemplate = useDiscoveryStore((s) => s.createFromTemplate);
   const closeWizard = useDiscoveryStore((s) => s.closeWizard);
+  const evaluators = useDiscoveryStore((s) => s.evaluators);
   const [templateId, setTemplateId] = useState(DISCOVERY_TEMPLATES[0].id as string);
   const [name, setName] = useState('');
   const [evaluations, setEvaluations] = useState(DEFAULTS.evaluations);
@@ -145,9 +166,18 @@ export function NewDiscoveryWizard() {
       <section aria-label="Template" className="lab-stack">
         <LabSectionLabel>1 · Choose a template</LabSectionLabel>
         <div role="radiogroup" aria-label="Discovery template" className="lab-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', alignItems: 'start' }}>
-          {DISCOVERY_TEMPLATES.map((t) => (
-            <TemplateCard key={t.id} template={t} selected={t.id === templateId} onSelect={() => setTemplateId(t.id)} />
-          ))}
+          {DISCOVERY_TEMPLATES.map((t) => {
+            const info = findEvaluator(evaluators, t.evaluatorKind);
+            return (
+              <TemplateCard
+                key={t.id}
+                template={t}
+                selected={t.id === templateId}
+                onSelect={() => setTemplateId(t.id)}
+                unavailable={info && !isEvaluatorAvailable(info) ? info : undefined}
+              />
+            );
+          })}
         </div>
       </section>
 

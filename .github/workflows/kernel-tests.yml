@@ -66,6 +66,42 @@ jobs:
             kernel/tests/test_lab_token_isolation.py kernel/tests/test_docs_fixtures.py \
             kernel/tests/test_docs_lab_fixtures.py -v
 
+  # The packaged app's managed venv is built from kernel/requirements.txt ONLY. Stim, PyMatching,
+  # Sinter, PyArrow, DuckDB and jsonschema are optional Research-catalog installs, so PRD 14
+  # (Discovery Engine + Trainability Lab) must work -- or degrade to `missing_dependency` -- without
+  # them. This job installs exactly what the app ships (plus test runners) and proves it. Do NOT add
+  # the optional packages here; tests that need them use pytest.importorskip and skip.
+  pytest-minimal-venv:
+    name: PRD 14 without optional packages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install ONLY the shipped kernel requirements plus test runners
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r kernel/requirements.txt
+          pip install pytest pytest-asyncio
+
+      - name: Assert the optional packages are absent
+        run: |
+          python - <<'PY'
+          import importlib.util, sys
+          present = [m for m in ("stim", "sinter", "pymatching", "pyarrow", "duckdb", "jsonschema")
+                     if importlib.util.find_spec(m) is not None]
+          if present:
+              sys.exit(f"optional packages leaked into the minimal venv: {present}")
+          PY
+
+      - name: Run PRD 14 tests without the optional packages
+        run: pytest kernel/tests/test_discovery_optional_deps.py kernel/tests/test_trainability_*.py -v
+
   # Multiprocess sinter under Windows spawn semantics (PRD 10 risk 5 —
   # exercised now, not deferred to the release phase). Scoped to the QEC
   # files: the wider suite uses POSIX-only APIs (`resource`, process

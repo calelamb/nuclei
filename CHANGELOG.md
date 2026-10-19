@@ -71,6 +71,10 @@ ships the Unified QEC Workbench and canonical QEC data import below.
 - **Conjecture Engine**: proposes falsifiable trainability conjectures from a
   run's archive and tests them on held-out circuits (supported / refuted with a
   counterexample / inconclusive), recorded in a ledger.
+- Works on a standard install: the QEC memory evaluator needs the QEC research
+  pack (Stim and PyMatching, from Environment setup) and says so; state
+  synthesis, VQE, the Frontier evaluator, conjectures and the Trainability Lab
+  need no optional packages.
 - Candidates run in a sandbox: macOS `sandbox-exec` blocks network access,
   writes outside a private scratch directory, and reads outside an allow-list.
 

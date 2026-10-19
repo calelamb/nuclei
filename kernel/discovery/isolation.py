@@ -31,6 +31,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Callable, Iterator
 
+from kernel.discovery._optional import is_importable
 from kernel.discovery.constants import ISOLATION_ENV
 from kernel.discovery.procrun import minimal_env, python_command, run_process
 
@@ -80,6 +81,19 @@ _PROBE_REQUEST = {
     "calls": [{"args": [], "kwargs": {}}],
     "cpu_seconds": 20,
 }
+
+# Used when Stim (an optional Research-catalog package) is absent, so the probe still verifies
+# the sandbox with a framework that the managed venv always ships.
+_QISKIT_PROBE_REQUEST = {
+    **_PROBE_REQUEST,
+    "task": "quantum_circuit",
+    "program": "from qiskit import QuantumCircuit\ndef build():\n    qc = QuantumCircuit(1)\n    qc.h(0)\n    return qc\n",
+}
+
+
+def probe_request() -> dict:
+    """The probe program: Stim when installed, otherwise Qiskit (never a package the venv may lack)."""
+    return _PROBE_REQUEST if is_importable("stim") else _QISKIT_PROBE_REQUEST
 
 
 @dataclass(frozen=True)
@@ -220,7 +234,7 @@ def _worker_path() -> str:
 
 def probe_wrapper(wrap: Callable[[list[str]], list[str]]) -> tuple[bool, str]:
     """Run the real worker through ``wrap``; True only on a clean ok response."""
-    payload = json.dumps(_PROBE_REQUEST).encode()
+    payload = json.dumps(probe_request()).encode()
     with private_scratch_dir() as scratch:
         info = IsolationInfo("probe", wrap, scratch_aware=getattr(wrap, "scratch_aware", False))
         command = info.command(python_command(_worker_path()), scratch)

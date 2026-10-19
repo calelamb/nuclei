@@ -15,7 +15,6 @@ from kernel.discovery.mutate import (
     _analyze,
     mutate,
 )
-from kernel.discovery.seeds.qec_repetition import build  # noqa: F401  (import check)
 
 SEED_PATH = "kernel/discovery/seeds/qec_repetition.py"
 
@@ -262,7 +261,8 @@ def test_unicode_before_a_constant_does_not_misplace_edits():
 
 def test_seed_program_mutants_still_build_a_circuit(seed_program):
     """Parseable is the contract; most mutants of the seed should still execute."""
-    import stim
+    stim = pytest.importorskip("stim")
+    pytest.importorskip("kernel.discovery.seeds.qec_repetition")  # import check
 
     ran = 0
     for item in mutate(seed_program, seed=9, count=12):

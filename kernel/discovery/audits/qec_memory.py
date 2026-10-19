@@ -16,8 +16,7 @@ import math
 import threading
 from typing import Any, Callable
 
-import stim
-
+from kernel.discovery._optional import lazy_module
 from kernel.discovery.audits._common import (
     FAIL, PASS, SKIPPED, WARN, aggregate, check, guarded, not_reached, result, scored_metric,
 )
@@ -29,6 +28,8 @@ from kernel.discovery.evaluators.qec_guardrails import (
 )
 from kernel.discovery.evaluators.qec_memory import FITNESS_FLOOR
 from kernel.discovery.evaluators.qec_stats import round_summary, sample_logical_errors
+
+stim = lazy_module("stim")  # optional (Research catalog); imported on first use
 
 ALT_MODEL = {"si1000": "uniform", "uniform": "si1000", "biased_z": "uniform"}
 EXACT_MAX_DISTANCE = 7
