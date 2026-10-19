@@ -153,6 +153,8 @@
 
   /* Motion / spacing / radius / typography tokens are theme-independent */
   :root {
+    /* Graphics (bars, canvases) of results that no longer match the code: dimmed, labels stay readable. */
+    --stale-graphic-opacity: 0.5;
     --duration-fast: 120ms;
     --duration-normal: 200ms;
     --duration-slow: 360ms;

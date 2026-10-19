@@ -4,7 +4,6 @@
 .cmode__sep { width: 1px; height: 16px; background: var(--color-border-strong); }
 .cmode__trophy { color: var(--color-accent-quantum-text); }
 .cmode__title { margin: 0; font-size: var(--font-size-code); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
-[data-landing]:focus { outline: none; } /* programmatic landing target, not a control */
 .cmode__problem { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-chrome-label); color: var(--color-text-secondary); }
 .cmode__content { flex: 1; overflow: hidden; }
 

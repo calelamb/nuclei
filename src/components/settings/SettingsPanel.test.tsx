@@ -147,6 +147,17 @@ describe('SettingsPanel', () => {
     outside.remove();
   });
 
+  it('lands on the sidebar heading, not on the Appearance disclosure, like every other sidebar (shell-r11-03)', async () => {
+    requestSettingsFocus();
+    const { getByRole } = render(
+      <div data-tour-sidebar="">
+        <h2 tabIndex={-1} data-nav-landing="">Settings</h2>
+        <SettingsPanel />
+      </div>,
+    );
+    await waitFor(() => expect(document.activeElement).toBe(getByRole('heading', { name: 'Settings' })));
+  });
+
   it('a request made before the panel mounts is honoured on mount, and consumed once', async () => {
     requestSettingsFocus();
     const { container } = render(<SettingsPanel />);

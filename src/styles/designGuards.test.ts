@@ -176,4 +176,30 @@ describe('design guards', () => {
     const undeclared = [...used].filter((name) => !declared(name)).sort();
     expect(undeclared).toEqual([]);
   });
+
+  it('gives every landing attribute used in markup the one shared no-ring rule in ui.css', () => {
+    const css = files.find((f) => f.rel === 'components/ui/ui.css')?.text ?? '';
+    const used = new Set<string>();
+    for (const f of files.filter((x) => /\.(tsx?)$/.test(x.rel))) {
+      for (const m of f.text.matchAll(/\bdata-(?:nav-|viz-)?landing\b|\bdata-nav-landed\b|(?:VIZ|NAV)_LANDING_ATTR\s*=\s*'(data-[\w-]+)'/g)) {
+        used.add(m[1] ?? m[0]);
+      }
+    }
+    expect([...used].length).toBeGreaterThan(0);
+    const missing = [...used].filter((attr) => !new RegExp(`\\[${attr}\\]`).test(css));
+    expect(missing).toEqual([]);
+  });
+
+  it('keeps landing no-ring rules out of feature stylesheets', () => {
+    expect(offenders((f) => f.rel.endsWith('.css') && f.rel !== 'components/ui/ui.css' && /\[data-(?:nav-|viz-)?landing\]:/.test(f.text))).toEqual([]);
+  });
+
+  it('dims stale result graphics with the one --stale-graphic-opacity token, not per-surface literals', () => {
+    for (const rel of ['components/learning/demo.css', 'components/layout/vizRail.css', 'components/bloch/bloch.css']) {
+      const text = files.find((f) => f.rel === rel)?.text ?? '';
+      expect(text, rel).toMatch(/opacity:\s*var\(--stale-graphic-opacity\)/);
+    }
+    const stale = files.filter((f) => f.rel.endsWith('.css')).flatMap((f) => (f.text.match(/[^{}]*stale[^{}]*\{[^}]*opacity:\s*0?\.\d+[^}]*\}/g) ?? []).map((r) => `${f.rel}: ${r.trim()}`));
+    expect(stale).toEqual([]);
+  });
 });
