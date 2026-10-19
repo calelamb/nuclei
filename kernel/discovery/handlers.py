@@ -29,10 +29,12 @@ from kernel.discovery.evaluators import (
     missing_for,
     normalize_config,
 )
-from kernel.discovery.manager import BusyError, EvaluateRequest, get_manager
+from kernel.discovery.manager import BusyError, ConsentRequiredError, EvaluateRequest, get_manager
 from kernel.discovery.mutate import MutationError, mutate
 from kernel.lab_protocol import request_id_problem, with_request_id
 
+ERR_CONSENT_REQUIRED = "isolation_consent_required"
+VALID_ORIGINS = ("claude", "ast", "symmetry", "user")
 MAX_PROGRAM_BYTES = 400_000
 MAX_MUTATIONS = 64
 MAX_ID_LENGTH = 200
@@ -123,12 +125,38 @@ def parse_evaluate(msg: dict[str, Any]) -> EvaluateRequest:
     stage = msg.get("stage") or DEFAULT_STAGE
     if stage not in VALID_STAGES:
         raise RequestError(ERR_INVALID_REQUEST, f"'stage' must be one of {list(VALID_STAGES)}.")
-    return EvaluateRequest(run_id, candidate_id, spec.kind, config, program, entry, _integer(msg, "seed"), stage)
+    return EvaluateRequest(
+        run_id, candidate_id, spec.kind, config, program, entry, _integer(msg, "seed"), stage,
+        isolation_consent=_consent(msg), origin=_origin(msg),
+    )
+
+
+def _consent(msg: dict[str, Any]) -> bool:
+    value = msg.get("isolation_consent", False)
+    if not isinstance(value, bool):
+        raise RequestError(ERR_INVALID_REQUEST, "'isolation_consent' must be a boolean.")
+    return value
+
+
+def _origin(msg: dict[str, Any]) -> str | None:
+    value = msg.get("origin")
+    if value is None:
+        return None
+    if value not in VALID_ORIGINS:
+        raise RequestError(ERR_INVALID_REQUEST, f"'origin' must be one of {list(VALID_ORIGINS)}.")
+    return value
 
 
 async def _evaluate(msg: dict[str, Any], ctx) -> None:
     request = parse_evaluate(msg)
     manager = get_manager()
+    try:
+        # The first call probes the host (a worker run through each wrapper), so keep it off the loop.
+        await asyncio.to_thread(manager.check_consent, request)
+    except ConsentRequiredError as exc:
+        raise RequestError(
+            ERR_CONSENT_REQUIRED, exc.capability_text, {"capability_text": exc.capability_text, "isolation": "process"},
+        ) from exc
     try:
         job, position = manager.enqueue(ctx.owner, request, ctx.emit_threadsafe)
     except BusyError as exc:

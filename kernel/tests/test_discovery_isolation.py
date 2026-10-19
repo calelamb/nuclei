@@ -13,6 +13,8 @@ from kernel.discovery import isolation as iso  # noqa: E402
 from kernel.discovery.sandbox import default_request, run_candidate  # noqa: E402
 
 GOOD = "import stim\ndef build(d, r):\n    return stim.Circuit('H 0')\n"
+PROCESS_DETAIL = {"reads": "unrestricted", "writes": "unrestricted", "network": "unrestricted"}
+CONFINED_DETAIL = {"reads": "restricted", "writes": "scratch-only", "network": "denied"}
 
 
 @pytest.fixture(autouse=True)
@@ -30,7 +32,7 @@ def test_environment_override_forces_process(monkeypatch):
 
 def test_detected_mode_is_a_known_value_and_cached():
     info = iso.detect_isolation()
-    assert info.mode in {"process", "bwrap", "sandbox-exec"}
+    assert info.mode in {"process", "bwrap", "sandbox-exec", "landlock"}
     assert iso.detect_isolation() is info
 
 
@@ -269,13 +271,13 @@ def test_isolation_detail_is_honest_about_reads():
         isolation=iso.IsolationInfo(iso.MODE_PROCESS),
     )
     assert response["isolation"] == "process"
-    assert response["isolation_detail"] == {"reads": "unrestricted"}
+    assert response["isolation_detail"] == PROCESS_DETAIL
     failure = run_candidate(
         default_request("stim_circuit", "x = (", "build", [{"args": [], "kwargs": {}}]),
         wall_seconds=120,
         isolation=iso.IsolationInfo(iso.MODE_PROCESS),
     )
-    assert failure["isolation_detail"] == {"reads": "unrestricted"}
+    assert failure["isolation_detail"] == PROCESS_DETAIL
 
 
 def test_isolation_detail_reports_restricted_reads_only_when_a_wrapper_ran():
@@ -284,5 +286,427 @@ def test_isolation_detail_reports_restricted_reads_only_when_a_wrapper_ran():
         default_request("stim_circuit", GOOD, "build", [{"args": [], "kwargs": {}}]), wall_seconds=120, isolation=info,
     )
     assert response["isolation"] == "sandbox-exec"
-    assert response["isolation_detail"] == {"reads": "restricted"}
-    assert info.detail == {"reads": "restricted"}
+    assert response["isolation_detail"] == CONFINED_DETAIL
+    assert info.detail == CONFINED_DETAIL
+
+
+# --- PRD 15 R-F / R-19: landlock tier, bwrap userns probe, consent, graceful group kill ------------
+
+import json  # noqa: E402
+import subprocess  # noqa: E402
+import threading  # noqa: E402
+import time  # noqa: E402
+
+from kernel.discovery import landlock  # noqa: E402
+from kernel.discovery.procrun import minimal_env  # noqa: E402
+from kernel.discovery.sandbox import ERR_PRESCREEN, kill_process_group  # noqa: E402
+
+needs_landlock = pytest.mark.skipif(landlock.abi_version() < 1, reason="Landlock unavailable on this kernel")
+CALL = [{"args": [], "kwargs": {}}]
+
+
+def _tier(name: str) -> iso.IsolationInfo:
+    """The verified isolation for tier ``name``, or skip when this host cannot provide it."""
+    if name == "process":
+        return iso.IsolationInfo(iso.MODE_PROCESS)
+    wrap = {"landlock": iso._landlock_wrap, "bwrap": iso._bwrap_wrap, "sandbox-exec": iso._sandbox_exec_wrap}[name]
+    if name == "landlock" and landlock.abi_version() < 1:
+        pytest.skip("Landlock unavailable")
+    if name == "bwrap" and not (sys.platform.startswith("linux") and __import__("shutil").which("bwrap") and iso.userns_probe()[0]):
+        pytest.skip("bwrap unusable (no binary or user namespaces blocked)")
+    if name == "sandbox-exec" and sys.platform != "darwin":
+        pytest.skip("sandbox-exec is macOS only")
+    ok, why = iso.probe_wrapper(wrap)
+    if not ok:
+        pytest.skip(f"{name} did not pass its probe here: {why}")
+    return iso.IsolationInfo(name, wrap, scratch_aware=True, reads=iso.READS_RESTRICTED)
+
+
+def test_landlock_abi_probe_reports_a_version_on_modern_linux():
+    if not sys.platform.startswith("linux"):
+        assert landlock.abi_version() == 0
+        return
+    assert landlock.abi_version() >= 0
+    assert landlock.denies_tcp(4) and not landlock.denies_tcp(3)
+
+
+@needs_landlock
+def test_landlock_tier_is_chosen_when_bwrap_is_blocked_and_reports_observed_detail(monkeypatch):
+    monkeypatch.setattr(iso, "userns_probe", lambda: (False, "bwrap: setting up uid map: Permission denied"))
+    info = iso.detect_isolation(refresh=True)
+    assert info.mode == "landlock", info.note
+    assert info.scratch_aware and not info.needs_consent
+    assert info.reads == "restricted" and info.writes == "scratch-only"
+    assert info.network == ("denied" if landlock.denies_tcp(landlock.abi_version()) else "unrestricted")
+    assert f"ABI {landlock.abi_version()}" in info.note
+
+
+def test_bwrap_is_preferred_over_landlock_when_user_namespaces_work(monkeypatch):
+    if not sys.platform.startswith("linux"):
+        pytest.skip("Linux tiers")
+    monkeypatch.setattr(iso.shutil, "which", lambda name: "/usr/bin/bwrap")
+    monkeypatch.setattr(iso, "userns_probe", lambda: (True, "user namespaces available"))
+    monkeypatch.setattr(landlock, "abi_version", lambda: 8)
+    assert [mode for mode, _ in iso._candidate_modes()] == ["bwrap", "landlock"]
+
+
+def test_process_note_explains_why_stronger_tiers_were_skipped(monkeypatch):
+    if not sys.platform.startswith("linux"):
+        pytest.skip("Linux tiers")
+    monkeypatch.setattr(iso.shutil, "which", lambda name: "/usr/bin/bwrap")
+    monkeypatch.setattr(iso, "userns_probe", lambda: (False, "bwrap: setting up uid map: Permission denied"))
+    monkeypatch.setattr(landlock, "abi_version", lambda: 0)
+    info = iso.detect_isolation(refresh=True)
+    assert info.mode == "process" and info.needs_consent
+    assert "uid map" in info.note and "landlock unavailable" in info.note
+
+
+def test_userns_probe_names_the_apparmor_restriction(monkeypatch, tmp_path):
+    sysctl = tmp_path / "apparmor_restrict_unprivileged_userns"
+    sysctl.write_text("1\n")
+    monkeypatch.setattr(iso, "USERNS_SYSCTL", str(sysctl))
+    failed = subprocess.CompletedProcess([], 1, b"", b"bwrap: setting up uid map: Permission denied\n")
+    monkeypatch.setattr(iso.subprocess, "run", lambda *a, **k: failed)
+    usable, reason = iso.userns_probe()
+    assert not usable
+    assert "uid map" in reason and "apparmor_restrict_unprivileged_userns=1" in reason
+    monkeypatch.setattr(iso.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess([], 0, b"", b""))
+    assert iso.userns_probe() == (True, "user namespaces available")
+
+
+def test_userns_probe_survives_a_missing_binary(monkeypatch):
+    def boom(*args, **kwargs):
+        raise FileNotFoundError("bwrap")
+
+    monkeypatch.setattr(iso.subprocess, "run", boom)
+    usable, reason = iso.userns_probe()
+    assert not usable and "could not be started" in reason
+
+
+def test_confinement_observation_reports_unrestricted_for_a_plain_process():
+    assert iso.observe_confinement(lambda cmd: cmd) == PROCESS_DETAIL
+
+
+@needs_landlock
+def test_confinement_observation_reports_what_landlock_actually_denies():
+    observed = iso.observe_confinement(iso._landlock_wrap)
+    assert observed["reads"] == "restricted" and observed["writes"] == "scratch-only"
+    assert observed["network"] == ("denied" if landlock.denies_tcp(landlock.abi_version()) else "unrestricted")
+
+
+def test_process_tier_needs_consent_unless_the_operator_forced_it(monkeypatch):
+    assert iso.IsolationInfo(iso.MODE_PROCESS).needs_consent
+    assert not iso.IsolationInfo(iso.MODE_LANDLOCK).needs_consent
+    assert not iso.IsolationInfo(iso.MODE_BWRAP).needs_consent
+    monkeypatch.setenv("NUCLEI_DISCOVERY_ISOLATION", "process")
+    forced = iso.detect_isolation(refresh=True)
+    assert forced.mode == "process" and not forced.needs_consent
+
+
+def test_capability_text_states_what_unsandboxed_candidates_can_do():
+    text = iso.PROCESS_CAPABILITY_TEXT
+    for phrase in ("cannot sandbox candidate code", "your own user account", "read, modify and delete any file", "network"):
+        assert phrase in text
+
+
+# --- landlock enforcement, probed through the real launcher -----------------------------------
+
+_ENFORCEMENT_SCRIPT = r"""
+import json, os, socket, sys
+canary, scratch, project = sys.argv[1], sys.argv[2], sys.argv[3]
+def attempt(fn):
+    try:
+        fn(); return "ok"
+    except PermissionError:
+        return "denied"
+    except OSError as exc:
+        return type(exc).__name__
+def write(path):
+    with open(path, "w") as handle:
+        handle.write("x")
+def read(path):
+    with open(path) as handle:
+        handle.read()
+print(json.dumps({
+    "read_outside": attempt(lambda: read(os.path.join(canary, "secret.txt"))),
+    "list_outside": attempt(lambda: os.listdir(canary)),
+    "write_outside": attempt(lambda: write(os.path.join(canary, "new.txt"))),
+    "delete_outside": attempt(lambda: os.remove(os.path.join(canary, "secret.txt"))),
+    "write_scratch": attempt(lambda: write(os.path.join(scratch, "ok.txt"))),
+    "delete_scratch": attempt(lambda: os.remove(os.path.join(scratch, "ok.txt"))),
+    "read_project": attempt(lambda: read(os.path.join(project, "data.txt"))) if project else "n/a",
+    "write_project": attempt(lambda: write(os.path.join(project, "new.txt"))) if project else "n/a",
+    "connect": attempt(lambda: socket.create_connection(("127.0.0.1", 1), timeout=2).close()),
+    "bind": attempt(lambda: socket.socket().bind(("127.0.0.1", 0))),
+}))
+"""
+
+
+def _enforce(tmp_path, project_root=None):
+    canary = tmp_path / "canary"
+    canary.mkdir()
+    (canary / "secret.txt").write_text("SECRET")
+    with iso.private_scratch_dir() as scratch:
+        info = _tier("landlock")
+        argv = [sys.executable, "-I", "-c", _ENFORCEMENT_SCRIPT, str(canary), scratch, str(project_root or "")]
+        extra = (str(project_root),) if project_root else ()
+        out = subprocess.run(
+            info.command(argv, scratch, extra), capture_output=True, text=True, timeout=60, env=minimal_env(iso.scratch_env(scratch)),
+        )
+    assert out.returncode == 0, out.stderr
+    return json.loads(out.stdout.strip().splitlines()[-1]), canary
+
+
+@needs_landlock
+def test_landlock_confines_reads_writes_and_deletes_to_the_scratch_directory(tmp_path):
+    report, canary = _enforce(tmp_path)
+    assert report["read_outside"] == "denied" and report["list_outside"] == "denied"
+    assert report["write_outside"] == "denied" and report["delete_outside"] == "denied"
+    assert report["write_scratch"] == "ok" and report["delete_scratch"] == "ok"
+    assert (canary / "secret.txt").read_text() == "SECRET" and not (canary / "new.txt").exists()
+
+
+@needs_landlock
+@pytest.mark.skipif(landlock.abi_version() < 4, reason="TCP rules need Landlock ABI 4")
+def test_landlock_denies_tcp_connect_and_bind(tmp_path):
+    report, _ = _enforce(tmp_path)
+    assert report["connect"] == "denied" and report["bind"] == "denied"
+
+
+@needs_landlock
+def test_landlock_grants_the_project_root_read_only_on_request(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "data.txt").write_text("rows")
+    report, _ = _enforce(tmp_path, project_root=project)
+    assert report["read_project"] == "ok" and report["write_project"] == "denied"
+    assert not (project / "new.txt").exists()
+
+
+@needs_landlock
+def test_landlock_launcher_failure_exits_71_with_a_recognisable_prefix(capsys):
+    assert landlock.main(["landlock.py", "{not json", "--", "true"]) == landlock.EXIT_LANDLOCK_FAILED
+    assert landlock.main(["landlock.py", json.dumps({"abi": 0}), "--", "true"]) == landlock.EXIT_LANDLOCK_FAILED
+    assert landlock.main(["landlock.py"]) == landlock.EXIT_LANDLOCK_FAILED
+    assert capsys.readouterr().err.count("landlock:") == 3
+
+
+@needs_landlock
+def test_a_landlock_candidate_runs_and_reports_the_observed_tier():
+    info = _tier("landlock")
+    info = iso.IsolationInfo(
+        iso.MODE_LANDLOCK, info.wrap, scratch_aware=True, reads="restricted", writes="scratch-only",
+        network="denied" if landlock.denies_tcp(landlock.abi_version()) else "unrestricted",
+    )
+    response = run_candidate(default_request("stim_circuit", GOOD, "build", [{"args": [3, 3], "kwargs": {}}]),
+                             wall_seconds=120, isolation=info)
+    assert response["status"] == "ok", response
+    assert response["isolation"] == "landlock"
+    assert response["isolation_detail"]["reads"] == "restricted" and response["isolation_detail"]["writes"] == "scratch-only"
+
+
+# --- a candidate calling shutil.rmtree(<dir outside scratch>) is denied or rejected, per tier ---
+
+RMTREE = (
+    "import shutil, stim\n"
+    "def build():\n"
+    "    try:\n"
+    "        shutil.rmtree({victim!r})\n"
+    "        print('DELETED')\n"
+    "    except OSError as exc:\n"
+    "        print('DENIED:' + type(exc).__name__)\n"
+    "    return stim.Circuit('H 0')\n"
+)
+
+
+@pytest.mark.parametrize("tier", ["landlock", "bwrap", "sandbox-exec", "process"])
+def test_landlock_denies_rmtree(tier, tmp_path):
+    """The name is the plan's: every tier either denies the delete (OS) or rejects the program (pre-screen)."""
+    victim = tmp_path / "victim"
+    victim.mkdir()
+    (victim / "keep.txt").write_text("important")
+    info = _tier(tier)
+    # OS tiers get NO pre-screen help (origin=None): the sandbox alone must stop the delete.
+    origin = "claude" if tier == "process" else None
+    request = default_request("stim_circuit", RMTREE.format(victim=str(victim)), "build", CALL)
+    response = run_candidate(request, wall_seconds=120, isolation=info, origin=origin)
+    assert (victim / "keep.txt").read_text() == "important", response
+    if tier == "process":
+        assert response["status"] == "error" and response["error"]["code"] == ERR_PRESCREEN
+    else:
+        assert response["status"] == "ok", response
+        assert response["stdout"].startswith("DENIED:"), response["stdout"]
+
+
+@needs_landlock
+def test_wrapper_failure_falls_back_to_process_with_the_prescreen_applied(tmp_path):
+    victim = tmp_path / "victim"
+    victim.mkdir()
+    (victim / "keep.txt").write_text("important")
+    broken = iso.IsolationInfo(
+        iso.MODE_LANDLOCK,
+        lambda cmd, scratch=None, extra_ro=(): [sys.executable, "-c", "import sys; sys.stderr.write('landlock: boom'); sys.exit(71)"],
+        scratch_aware=True,
+    )
+    hostile = run_candidate(
+        default_request("stim_circuit", RMTREE.format(victim=str(victim)), "build", CALL), wall_seconds=60, isolation=broken,
+    )
+    assert hostile["error"]["code"] == ERR_PRESCREEN and hostile["isolation"] == "process"
+    assert (victim / "keep.txt").exists()
+    clean = run_candidate(default_request("stim_circuit", GOOD, "build", [{"args": [3, 3], "kwargs": {}}]),
+                          wall_seconds=120, isolation=broken)
+    assert clean["status"] == "ok" and clean["isolation"] == "process"
+    assert clean["isolation_detail"] == PROCESS_DETAIL
+
+
+# --- SIGTERM-then-SIGKILL for jobs with children ---------------------------------------------------
+
+
+def _spawn_group(script: str) -> subprocess.Popen:
+    proc = subprocess.Popen(["sh", "-c", script], start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    threading.Thread(target=proc.wait, daemon=True).start()  # reap the leader so the group can empty
+    time.sleep(0.3)  # let the shell install its traps and start its child
+    return proc
+
+
+def _group_alive(pgid: int) -> bool:
+    try:
+        os.killpg(pgid, 0)
+    except ProcessLookupError:
+        return False
+    return True
+
+
+def test_kill_process_group_terminates_politely_first():
+    proc = _spawn_group("sleep 60 & wait")
+    started = time.monotonic()
+    assert kill_process_group(proc.pid, grace_seconds=5.0) is True  # SIGTERM was enough
+    assert time.monotonic() - started < 4.0
+    assert not _group_alive(proc.pid)
+
+
+def test_kill_process_group_escalates_to_sigkill_for_children_that_ignore_sigterm():
+    proc = _spawn_group("trap '' TERM; (trap '' TERM; sleep 60) & wait")
+    assert kill_process_group(proc.pid, grace_seconds=0.4) is False  # needed SIGKILL
+    deadline = time.monotonic() + 5
+    while _group_alive(proc.pid) and time.monotonic() < deadline:
+        time.sleep(0.05)
+    assert not _group_alive(proc.pid), "no descendant may outlive the group kill"
+
+
+def test_kill_process_group_on_a_gone_group_is_a_no_op():
+    proc = subprocess.Popen(["true"], start_new_session=True)
+    proc.wait()
+    assert kill_process_group(proc.pid, grace_seconds=0.1) is True
+
+
+# --- per-request isolation consent on process-only hosts (kernel side of the consent dialog) ---
+
+pytest.importorskip("pymatching")
+
+from kernel.discovery import manager as manager_module  # noqa: E402
+from kernel.discovery.manager import DiscoveryManager  # noqa: E402
+from kernel.tests.test_discovery_handlers import evaluate_msg, evaluations, is_type, session  # noqa: E402
+
+SIMPLE = "import stim\ndef build(d, r):\n    return stim.Circuit('H 0')\n"
+SANDBOX_CALLS: list[dict] = []
+
+
+def _recording_sandbox(request, *, wall_seconds, cancel_event=None):
+    SANDBOX_CALLS.append(request)
+    return {"status": "error", "artifacts": [], "stdout": "", "stderr": "", "isolation": "process",
+            "error": {"code": "worker_no_output", "message": "stub"}}
+
+
+def _install_manager(tmp_path, info: iso.IsolationInfo) -> DiscoveryManager:
+    SANDBOX_CALLS.clear()
+    manager = DiscoveryManager(
+        max_workers=1, cache_dir=str(tmp_path / "cache"), sandbox_runner=_recording_sandbox, isolation_provider=lambda: info,
+    )
+    manager_module.set_manager(manager)
+    return manager
+
+
+@pytest.fixture
+def _process_only_host(tmp_path):
+    manager = _install_manager(tmp_path, iso.IsolationInfo(iso.MODE_PROCESS, note="no OS sandbox here"))
+    yield manager
+    manager_module.set_manager(None)
+
+
+@pytest.mark.asyncio
+async def test_evaluate_without_consent_on_a_process_host_asks_for_it(_process_only_host):
+    ws = await session([evaluate_msg(SIMPLE, candidate_id="c-9", run_id="run-9")], [lambda m: m.get("type") == "error"])
+    (error,) = [m for m in ws.sent if m["type"] == "error"]
+    assert error["code"] == "isolation_consent_required" and error["phase"] == "discovery"
+    assert error["run_id"] == "run-9" and error["candidate_id"] == "c-9"
+    assert error["message"] == iso.PROCESS_CAPABILITY_TEXT == error["capability_text"]
+    assert error["isolation"] == "process"
+    assert not any(m["type"] == "discovery_evaluate_accepted" for m in ws.sent)
+    assert SANDBOX_CALLS == []
+
+
+@pytest.mark.asyncio
+async def test_evaluate_with_consent_runs_on_a_process_host(_process_only_host):
+    ws = await session(
+        [evaluate_msg(SIMPLE, isolation_consent=True)], [is_type("discovery_evaluate_accepted"), is_type("discovery_evaluation")],
+    )
+    assert len(SANDBOX_CALLS) == 1
+    assert evaluations(ws)["c-1"]["failure"]["code"] == "worker_no_output"
+
+
+@pytest.mark.asyncio
+async def test_consent_is_not_remembered_between_requests(_process_only_host):
+    first = await session([evaluate_msg(SIMPLE, isolation_consent=True)], [is_type("discovery_evaluation")])
+    assert "c-1" in evaluations(first)
+    second = await session([evaluate_msg(SIMPLE, candidate_id="c-2")], [lambda m: m.get("type") == "error"])
+    assert [m["code"] for m in second.sent if m["type"] == "error"] == ["isolation_consent_required"]
+
+
+@pytest.mark.asyncio
+async def test_an_os_sandbox_needs_no_consent(tmp_path):
+    _install_manager(tmp_path, iso.IsolationInfo(iso.MODE_LANDLOCK, reads="restricted", writes="scratch-only"))
+    try:
+        ws = await session([evaluate_msg(SIMPLE)], [is_type("discovery_evaluation")])
+    finally:
+        manager_module.set_manager(None)
+    assert evaluations(ws)["c-1"]["failure"]["code"] == "worker_no_output"
+    assert len(SANDBOX_CALLS) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_malformed_consent_flag_is_an_invalid_request(_process_only_host):
+    ws = await session([evaluate_msg(SIMPLE, isolation_consent="yes")], [lambda m: m.get("type") == "error"])
+    assert [m["code"] for m in ws.sent if m["type"] == "error"] == ["invalid_request"]
+
+
+@pytest.mark.asyncio
+async def test_an_unknown_origin_is_an_invalid_request(_process_only_host):
+    ws = await session([evaluate_msg(SIMPLE, isolation_consent=True, origin="mallory")], [lambda m: m.get("type") == "error"])
+    assert [m["code"] for m in ws.sent if m["type"] == "error"] == ["invalid_request"]
+
+
+@pytest.mark.asyncio
+async def test_the_prescreen_rejects_before_the_sandbox_and_consent_does_not_bypass_it(_process_only_host):
+    hostile = "import shutil, stim\ndef build(d, r):\n    shutil.rmtree('/tmp/not-yours')\n    return stim.Circuit('H 0')\n"
+    ws = await session([evaluate_msg(hostile, isolation_consent=True)], [is_type("discovery_evaluation")])
+    failure = evaluations(ws)["c-1"]["failure"]
+    assert failure["stage"] == "sandbox" and failure["code"] == ERR_PRESCREEN
+    assert failure["message"].startswith("prescreen: shutil")
+    assert SANDBOX_CALLS == []
+
+
+@pytest.mark.asyncio
+async def test_untrusted_origin_is_prescreened_even_under_an_os_sandbox(tmp_path):
+    _install_manager(tmp_path, iso.IsolationInfo(iso.MODE_LANDLOCK, reads="restricted", writes="scratch-only"))
+    hostile = "import stim\ndef build(d, r):\n    open('/tmp/x', 'w')\n    return stim.Circuit('H 0')\n"
+    try:
+        ws = await session(
+            [evaluate_msg(hostile, candidate_id="c-claude", origin="claude"), evaluate_msg(hostile, candidate_id="c-user", origin="user")],
+            [is_type("discovery_evaluation", candidate_id="c-claude"), is_type("discovery_evaluation", candidate_id="c-user")],
+        )
+    finally:
+        manager_module.set_manager(None)
+    done = evaluations(ws)
+    assert done["c-claude"]["failure"]["code"] == ERR_PRESCREEN
+    assert done["c-user"]["failure"]["code"] == "worker_no_output", "a user's own code is trusted under an OS sandbox"

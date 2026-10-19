@@ -1,0 +1,158 @@
+---
+title: "Candidate sandboxing"
+description: "How Nuclei contains code it did not write: the four isolation tiers (landlock, bwrap, sandbox-exec, plain process), what each one actually blocks, the static pre-screen, the consent prompt on hosts with no OS sandbox, and what none of it promises."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Several Research features run code that you did not type: the [Discovery
+Engine](/docs/research/discovery-engine/) evaluates programs an LLM or a random
+mutator wrote, and the verified-suggestion and Red Queen features do the same
+with adversarial intent. That code runs in a **candidate sandbox** and is
+scored by a separate trusted process. This page says exactly what the sandbox
+blocks on your machine, because the answer depends on the operating system.
+
+<Aside type="caution" title="Read the label, not the feature name">
+Every evaluation record carries the tier it **actually ran under** and what that
+tier restricted (`isolation` and `isolation_detail`). The interface shows those
+values and never claims more than the kernel measured. If it says `unrestricted`,
+believe it.
+</Aside>
+
+## The four tiers
+
+The kernel picks the strongest tier that passes a **runtime probe** (it runs a
+real worker through the wrapper before trusting it) and falls back, with the
+reason recorded, if a stronger tier fails.
+
+| Tier | Platform | Reads | Writes | Network |
+| --- | --- | --- | --- | --- |
+| `bwrap` | Linux with working unprivileged user namespaces | allow-list only | private scratch directory only | blocked |
+| `landlock` | Linux 5.13+ with Landlock enabled in the kernel | allow-list only | private scratch directory only | blocked on Landlock ABI 4+ (kernel 6.7+) |
+| `sandbox-exec` | macOS | allow-list only | private scratch directory only | blocked |
+| `process` | everything else (and Windows) | **unrestricted** | **unrestricted** | **unrestricted** |
+
+`isolation_detail` has three keys, `reads`, `writes` and `network`, each
+measured rather than assumed. For `landlock` the kernel runs a second probe
+that tries to read and write a file outside the allow-list and to open a TCP
+connection, and reports what was really denied.
+
+### Why `landlock` exists
+
+Ubuntu 24.04 sets `kernel.apparmor_restrict_unprivileged_userns=1`, which makes
+`bwrap` fail with `setting up uid map: Permission denied`. Fixing that needs
+root and changes `bwrap` for every program on the machine, so Nuclei does not
+ask for it. Landlock is a Linux security module that any process may use to
+**restrict itself** with no privileges and no helper binary. On such a host
+Nuclei reports `landlock` instead of silently degrading to `process`.
+
+How it is applied: a small trusted launcher (`kernel/discovery/landlock.py`)
+runs first, builds the ruleset, sets `no_new_privs`, calls
+`landlock_restrict_self`, and only then starts the candidate worker. The
+candidate never executes a single instruction outside the ruleset.
+
+The ruleset:
+
+- **Read and execute:** the Python interpreter and virtual environment, the
+  kernel's own `kernel/` directory, and the system library directories
+  (`/usr`, `/lib`, `/lib64`, `/bin`, `/sbin` and the dynamic-loader cache).
+- **Read and write:** one private scratch directory per evaluation (mode 0700,
+  deleted afterwards). Nothing can be executed from it.
+- **Read-only on request:** the project root, for candidates that import sibling
+  modules or read project data. Where a tier cannot grant that, the candidate is
+  reported as unverifiable ("needs project files"), never silently rejected.
+- **Network:** TCP `connect` and `bind` are denied on ABI 4 and later. Older
+  kernels cannot do this; the record then says `network: unrestricted`.
+- **Signals and abstract sockets** to processes outside the sandbox are denied on
+  ABI 6 and later.
+
+### Honest limits
+
+- **UDP and raw sockets** are not covered by any Landlock ABI today. The worker's
+  import blocker stops the casual ways to open them, and that blocker is
+  cooperative.
+- **Directory names** under the repository root stay listable (the import system
+  needs that to find the `kernel` package). File contents do not.
+- **`/usr`, `/lib` and friends are readable**, as they are under `bwrap`: they
+  hold system files, not your files.
+- A kernel bug, or a candidate that finds a way out of Python's own restrictions
+  *and* of the OS ruleset, defeats this. The sandbox is for containing mistakes
+  and prompt-injected destruction, not for running hostile code on a machine
+  holding secrets.
+
+## The static pre-screen
+
+Before a candidate runs, `kernel/discovery/prescreen.py` parses its source and
+rejects the obvious file-destroying and code-smuggling constructs. It runs
+
+- on **every** candidate when the tier is `process`, and
+- on every candidate written by an untrusted origin (`claude`) at **any** tier.
+  A candidate with no origin is treated as untrusted.
+
+| Rule | Rejects |
+| --- | --- |
+| `dunder_import` | `__import__` |
+| `dynamic_code` | the builtins `eval`, `exec`, `compile` (not `re.compile`) |
+| `importlib` | importing or using `importlib` |
+| `shutil` | importing or using `shutil` |
+| `open_write` | `open` / `io.open` / `Path.open` with a mode containing `w`, `a`, `x` or `+` |
+| `open_dynamic_mode` | `open` whose mode is not a string literal |
+| `os_open` | `os.open` |
+| `file_removal` | `os.remove`, `unlink`, `rmdir`, `removedirs`, `rename`, `replace`, `truncate`; `pathlib` `unlink`, `rmdir`, `write_text`, `write_bytes` |
+| `blocked_getattr` | `getattr(x, "<blocked name>")` and `x["<blocked name>"]` where the name is a string literal (including a literal concatenation) |
+| `introspection` | `__builtins__`, `__subclasses__`, `__globals__` |
+
+A rejected candidate becomes a failed evaluation with `stage: "sandbox"`,
+`code: "prescreen_rejected"` and a message such as
+`prescreen: shutil at line 3: 'shutil' can delete and overwrite files`. Nothing
+was executed.
+
+<Aside type="note" title="A speed bump, not a wall">
+The pre-screen is a static scan of Python source. A determined author can write
+code it does not recognise (a mode computed at run time, an attribute reached
+through a data structure). It exists to stop accidental and prompt-injected
+destruction cheaply and to make the intent of an attack visible. The boundary is
+the OS tier; on `process` there is no boundary, which is why consent is required.
+</Aside>
+
+## Consent on hosts with no OS sandbox
+
+When the best tier is plain `process`, a candidate would run with your account's
+full file access. The kernel therefore refuses to start an evaluation until the
+request carries `isolation_consent: true`, and answers instead with
+
+```json
+{
+  "type": "error",
+  "phase": "discovery",
+  "code": "isolation_consent_required",
+  "run_id": "…",
+  "candidate_id": "…",
+  "isolation": "process",
+  "capability_text": "This computer cannot sandbox candidate code (no landlock, bwrap or sandbox-exec). Candidate programs will run as your own user account: they can read, modify and delete any file you can, and can use your network. A static check blocks the obvious file-deleting calls, but it is not a security boundary.",
+  "message": "…the same text…"
+}
+```
+
+The consent dialog shows `capability_text` verbatim. Consent is **per request and
+never remembered by the kernel**: the client sends it for the runs the user has
+agreed to in the current session. Consent does not switch off the pre-screen.
+
+Setting `NUCLEI_DISCOVERY_ISOLATION=process` forces the baseline on purpose
+(for tests and throwaway runs); because the operator chose it, no prompt is
+needed.
+
+## Cancelling work that has children
+
+A job that spawns child processes (a verification worker running nested candidate
+sandboxes) is stopped with `SIGTERM` to its whole process group, a short grace
+period to let it exit, and then `SIGKILL` for whatever is left, so no candidate
+outlives a cancel.
+
+## What to remember
+
+| If the record says | It means |
+| --- | --- |
+| `isolation: "landlock"`, `reads: "restricted"`, `writes: "scratch-only"` | The OS enforced an allow-list and a scratch-only write area. |
+| `network: "unrestricted"` on `landlock` | The kernel's Landlock is older than ABI 4; outbound TCP was not blocked. |
+| `isolation: "process"` | Nothing was blocked at the OS level. You were asked first. |
