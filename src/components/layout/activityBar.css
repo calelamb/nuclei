@@ -11,3 +11,4 @@
 }
 .activity-btn:hover:not([data-active='true'])::before { background: var(--color-surface-overlay); }
 @media (prefers-reduced-motion: reduce) { .activity-btn::before { transition: none; } }
+.activity-btn:focus-visible { outline-offset: -4px; border-radius: var(--radius-soft); }
