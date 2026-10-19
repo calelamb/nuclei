@@ -47,7 +47,7 @@ import { openRunFolder } from './lib/openRunFolder';
 import { restorePersistedPlugins } from './plugins/pluginLoader';
 import { topRailViewsFor } from './layout/panelRegistry';
 import { featuresFor } from './layout/uiModeFeatures';
-import { useMainTakeoverKind } from './layout/takeover';
+import { useMainTakeoverKind, readMainTakeoverKind } from './layout/takeover';
 import { useUiFeatures } from './hooks/useUiFeatures';
 import type { PlatformBridge } from './platform/bridge';
 import type { Framework, KernelLanguage } from './types/quantum';

@@ -143,7 +143,7 @@
   cursor: pointer; text-align: left; font-family: var(--font-sans);
   border: 1px solid var(--color-border-subtle); border-radius: var(--radius-round);
   /* The accent stripe is an inset shadow so it follows the rounded corners instead of a square border edge. */
-  box-shadow: inset 3px 0 0 var(--choice-accent);
+  box-shadow: inset 3px 0 0 var(--choice-stripe, var(--choice-accent));
   background: var(--color-surface-sunken);
   transition: background-color var(--duration-normal) var(--ease-standard),
               border-color var(--duration-normal) var(--ease-standard);
@@ -154,7 +154,7 @@
 .nuclei-choice-card:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring-color); outline-offset: var(--focus-ring-offset);
   /* The ring is the signal now; a full-strength stripe beside it doubles the left edge. */
-  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--choice-accent) 40%, transparent);
+  --choice-stripe: color-mix(in srgb, var(--choice-accent) 40%, transparent);
 }
 /* In the light theme the sunken surface reads as disabled; resting cards sit on the raised surface and lift to white. */
 :root[data-theme='light'] .nuclei-choice-card { background: var(--color-surface-raised); }
