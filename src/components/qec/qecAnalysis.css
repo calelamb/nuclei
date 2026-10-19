@@ -43,3 +43,19 @@
 .qec-toggle-btn.nuclei-btn[aria-pressed='true']:hover:not(:disabled) {
   background: color-mix(in srgb, var(--color-accent-quantum) 22%, var(--color-surface-raised));
 }
+
+/* Panel header: the shared PanelHeader's bar with a real heading for the title. */
+.qec-panel-header {
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0; padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border-subtle); background: var(--color-surface-base);
+}
+.qec-panel-header__title {
+  margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--font-sans); font-size: 13px; font-weight: var(--font-weight-semibold); color: var(--color-text-primary);
+}
+.qec-panel-header__spacer { flex: 1; }
+
+/* Web QEC Workbench: the page header (h1 + loaded file) and a capped, centred body so wide windows keep readable columns. */
+.qec-web-header__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-caption); color: var(--color-text-tertiary); }
+.qec-web-header__title { display: inline-flex; align-items: center; gap: 7px; margin: 0; flex: 0 0 auto; font-family: var(--font-sans); font-size: 13px; font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
+.qec-web-body { padding-inline: max(0px, calc((100% - 1280px) / 2)); }

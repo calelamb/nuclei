@@ -2,7 +2,7 @@ import { useDeferredValue, useMemo, type ReactNode } from 'react';
 import { Download } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useQecCampaignStore } from '../../stores/qecCampaignStore';
-import { PanelHeader } from '../layout/PanelHeader';
+import { QecPanelHeader } from './QecPanelHeader';
 import { QecEmptyState } from './QecEmptyState';
 import { decoderComparison, formatSecondsPerShot } from '../../lib/qecWorkbench';
 import { decoderTableToCsv } from '../../lib/qecExport';
@@ -45,7 +45,7 @@ export function DecoderWorkbench({ tabs, showUnits = true }: { tabs?: ReactNode;
   const exportCsv = () => downloadCsv(decoderTableToCsv(cmp), 'decoder-workbench.csv');
 
   const header = (
-    <PanelHeader
+    <QecPanelHeader
       title="Decoder Workbench"
       helpHref={DOCS}
       actions={

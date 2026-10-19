@@ -16,6 +16,7 @@ import { QecCsvError } from './QecCsvError';
 import { QecEmptyState } from './QecEmptyState';
 import { QEC_PLOT_CSV_DOCS } from '../../config/docsLinks';
 import { useCsvDrop } from './useCsvDrop';
+import { QecWebHeader } from './QecWebHeader';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
 /** Opening the mapping editor must never squeeze the figure below this; the column scrolls instead. */
@@ -70,7 +71,9 @@ export function QecAnalysisView({ embedded = false, actionsInHeader = false }: {
   const webOnly = isWebBuild(); // no kernel to run campaigns in the browser
   // Before any data there is one way in: the empty state's drop zone. A header Open CSV and a plot title bar would be two more.
   const awaitingData = !hasData && !csvSource && !running && !resumable;
-  const showHeader = !actionsInHeader && !(awaitingData && webOnly);
+  // The web build is a page of its own (no sidebar to name it), so it always carries the titled pane header.
+  const webPage = webOnly && !embedded;
+  const showHeader = !webPage && !actionsInHeader && !(awaitingData && webOnly);
   // A loaded file is named by the mapping summary below; inside the workbench the card heading already says
   // "Campaign Center", so a generic fallback would repeat it.
   const title = csvSource ? null : experiment?.spec.name ?? (embedded ? null : 'Campaign');
@@ -83,6 +86,7 @@ export function QecAnalysisView({ embedded = false, actionsInHeader = false }: {
         outline: over ? `2px dashed ${colors.accent}` : 'none', outlineOffset: -2,
       }}
     >
+      {webPage && <QecWebHeader fileName={csvSource} />}
       {showHeader && (
       <div
         style={{
@@ -149,7 +153,7 @@ export function QecAnalysisView({ embedded = false, actionsInHeader = false }: {
       ) : (
         /* The plot keeps a usable height; on short windows the page scrolls
            instead of squeezing the plot and the decoder table to slivers. */
-        <div ref={scrollRef} data-testid="qec-analysis-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+        <div ref={scrollRef} data-testid="qec-analysis-scroll" className={webPage ? 'qec-web-body' : undefined} style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
           {/* The mapping summary and its editor scroll with the figure: opening the editor must not take height from the plot. */}
           <CsvMappingPreview />
           {tabbed ? (

@@ -38,10 +38,10 @@ export function TranspilerExplorer() {
 
   return (
     <div style={shell(colors)}>
-      <div style={toolbar(colors)}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600 }}>
-          <Shuffle size={14} /> Transpiler Explorer
-        </span>
+      <div className="nuclei-pane-header">
+        <h1 style={{ display: 'flex', alignItems: 'center', gap: 7, margin: 0, fontSize: 13, fontWeight: 600 }}>
+          <Shuffle size={14} aria-hidden="true" /> Transpiler Explorer
+        </h1>
         <div style={{ flex: 1 }} />
         <Tooltip label="Transpiler Explorer docs" placement="below">
           <a href={DOCS} target="_blank" rel="noreferrer" aria-label="Transpiler docs" style={iconBtn(colors)}>
@@ -50,7 +50,7 @@ export function TranspilerExplorer() {
         </Tooltip>
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 16 }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 16, paddingInline: 'max(16px, calc((100% - 1280px) / 2))' }}>
         {isWebBuild() ? (
           <DesktopOnlyState title="Transpiler Explorer runs in the desktop app">
             The browser build doesn't include Qiskit's pass manager.
@@ -234,13 +234,6 @@ function shell(colors: ThemeColors): CSSProperties {
   return {
     height: '100%', display: 'flex', flexDirection: 'column',
     background: colors.bg, color: colors.text, fontFamily: TYPOGRAPHY.fontSans,
-  };
-}
-
-function toolbar(colors: ThemeColors): CSSProperties {
-  return {
-    display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
-    borderBottom: `1px solid ${colors.border}`, flexShrink: 0,
   };
 }
 
