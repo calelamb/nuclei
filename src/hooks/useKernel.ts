@@ -371,6 +371,9 @@ export function useKernel() {
           if (useSimulationStore.getState().isRunning) return;
 
           const language = kernelLanguageFor(useEditorStore.getState().framework, useEditorStore.getState().filePath);
+          // The old squiggle describes code that no longer exists; drop it as the new preview starts
+          // (a slow one can take seconds) rather than when its answer lands.
+          useEditorStore.getState().clearErrors();
           if (isWeb && pyodideRef.current) {
             pyodideRef.current.send({ type: 'parse', code: state.code, language });
           } else if (wsRef.current?.readyState === WebSocket.OPEN) {
