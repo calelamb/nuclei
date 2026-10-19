@@ -85,7 +85,8 @@ export function HistogramChip({
     onDismiss?.();
   };
 
-  const sampleCaption = !hasHw && shotCount > 0 ? `${SAMPLE_LABEL} · ${shotCount.toLocaleString('en-US')} ${shotCount === 1 ? 'shot' : 'shots'}` : null;
+  const shotsText = `${shotCount.toLocaleString('en-US')} ${shotCount === 1 ? 'shot' : 'shots'}`;
+  const sampleCaption = !hasHw && shotCount > 0 ? `${SAMPLE_LABEL} · ${shotsText}` : null;
   // The explainer lives on its own focusable button (same in both layouts) so its focus ring is never clipped
   // by an ellipsised caption, and Expand and Dismiss keep their own tooltips.
   const sampleInfo = sampleCaption && (
@@ -96,7 +97,7 @@ export function HistogramChip({
 
   const controls = (
     <div style={{ display: 'flex', gap: 4, flexShrink: 0, alignItems: 'center', marginLeft: rows ? 'auto' : undefined }}>
-      {sampleInfo}
+      {!rows && sampleInfo}
       {hiddenCount > 0 && (onExpand ? (
         <button
           type="button"
@@ -147,7 +148,13 @@ export function HistogramChip({
         <div style={{ display: 'flex', alignItems: 'center', minWidth: 0, gap: 4, color: colors.textDim, fontSize: 11 }}>
           {sampleCaption ? (
             // The sample caption names the data; "Top outcomes" is implied by the bars below it.
-            <span data-testid="histogram-chip-sample" className="histogram-chip__caption">{sampleCaption}</span>
+            <>
+              <span data-testid="histogram-chip-sample" className="histogram-chip__caption" title={sampleCaption}>
+                <span className="histogram-chip__caption-name">{SAMPLE_LABEL}</span>
+                <span className="histogram-chip__caption-shots">{` · ${shotsText}`}</span>
+              </span>
+              {sampleInfo}
+            </>
           ) : (
             <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Top outcomes</span>
           )}

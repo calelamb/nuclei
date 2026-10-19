@@ -22,6 +22,20 @@ describe('<HistogramChip> sample caption (IR10-08)', () => {
     expect(caption?.getAttribute('role')).toBeNull();
     expect(container.querySelector('button[aria-label="About the Nuclei sample"]')).not.toBeNull();
   });
+
+  it('splits the caption so the name can ellipsise while the shot count stays whole, with the info button beside it', () => {
+    useSimulationStore.setState({
+      result: { state_vector: [], probabilities: {}, measurements: {}, bloch_coords: [], execution_time_ms: 1, shot_count: 1024 } as never,
+    });
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get() { return 300; } });
+    const { container } = render(<HistogramChip probabilities={{ '0': 0.5, '1': 0.5 }} />);
+    const caption = container.querySelector('[data-testid="histogram-chip-sample"]') as HTMLElement;
+    expect(caption.querySelector('.histogram-chip__caption-name')?.textContent).toBe('Nuclei sample');
+    expect(caption.querySelector('.histogram-chip__caption-shots')?.textContent).toBe(' · 1,024 shots');
+    expect(caption.nextElementSibling?.querySelector('button[aria-label="About the Nuclei sample"]')
+      ?? caption.nextElementSibling).not.toBeNull();
+    expect(caption.parentElement?.querySelectorAll('button[aria-label="About the Nuclei sample"]')).toHaveLength(1);
+  });
 });
 
 describe('<HistogramChip>', () => {
