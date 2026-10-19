@@ -1,0 +1,43 @@
+# Resource gates (PRD 15 gate G0): one program per behaviour the editor must survive.
+# Entries state what the kernel SHOULD do; `xfail` entries are known failures whose `current`
+# block records today's behaviour (status keys are drift-checked, the rest is informational).
+schema: 1
+programs:
+  g01-30-qubit-ghz:
+    # R-11: refuse in under a second from an estimate, without allocating.
+    parse: ok
+    execute: error:too_many_qubits
+    max_seconds: 1
+    options: {needs_memory_limit: true, phases: [execute]}
+    xfail:
+      id: R-11
+      reason: no memory-estimate policy; the allocation is attempted and fails inside Aer
+      current: {execute: 'error:simulation_error'}
+  g02-22-qubit-ghz:
+    # R-11: a 22-qubit run is allowed, but its result frame must stay small (no 2^22 amplitudes).
+    execute: ok
+    max_frame_bytes: 8000000
+    options: {needs_memory_limit: true, phases: [execute]}
+    xfail:
+      id: R-11
+      reason: the full 2^22 state vector is serialised into one frame
+      current: {execute: ok, max_frame_bytes: 100664745}
+  g03-plt-show-with-display:
+    # R-12: with an interactive Matplotlib backend and a display, plt.show() must not block the run.
+    # Runs only where Xvfb exists and Matplotlib would pick a GUI backend; skipped otherwise.
+    execute: ok
+    max_seconds: 2
+    options: {display: true, needs_interactive_backend: true, timeout: 20, phases: [execute]}
+    xfail:
+      id: R-12
+      reason: the default GUI backend blocks the worker thread in plt.show()
+      current: {execute: timeout}
+  g04-slow-program-queued-parses:
+    # R-8: five parses queued ahead of Run must not make Run wait for them (program time is ~1 s).
+    execute: ok
+    max_seconds: 2.5
+    options: {queued_parses: 5, phases: [execute]}
+    xfail:
+      id: R-8
+      reason: every parse re-executes the program serially ahead of Run
+      current: {execute: ok, execute_seconds: 6.0}

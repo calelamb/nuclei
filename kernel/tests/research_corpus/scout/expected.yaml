@@ -1,0 +1,541 @@
+# Research-program golden for the scout corpus (PRD 15 gate G0).
+# Entries state what the kernel SHOULD do; `xfail` entries are known failures (audit ids in
+# docs/research/PRD_15/00_RELIABILITY_AUDIT.md) whose `current` block records today's behaviour.
+# The fixing unit flips them (edit here, or restate the program in its own overrides.yaml).
+schema: 1
+programs:
+  c01-bell-measured:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: cirq, qubit_count: 2, depth: 3, gates: 3}
+      result: {probabilities: 2, measured: 1024, bloch: 2, state_vector: 4}
+  c02-bell-NO-measure:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: cirq, qubit_count: 2, depth: 2, gates: 2}
+    xfail:
+      id: R-1
+      reason: no-measurement circuits cannot be run
+      current: {execute: 'error:simulation_error'}
+  c03-param-sympy-unresolved:
+    parse: ok
+    execute: error:unbound_parameters
+    facts:
+      snapshot: {framework: cirq, qubit_count: 2, depth: 3, gates: 3}
+    xfail:
+      id: R-4
+      reason: unbound parameters surface as simulation_error; expected the distinct unbound_parameters code
+      current: {execute: 'error:simulation_error'}
+  c04-param-resolved:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: cirq, qubit_count: 2, depth: 3, gates: 3}
+      result: {probabilities: 2, measured: 1024, bloch: 2, state_vector: 4}
+  c05-GridQubit:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: cirq, qubit_count: 4, depth: 3, gates: 7}
+      result: {probabilities: 16, measured: 1024, bloch: 4, state_vector: 16}
+  c06-noise-with_noise:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: cirq, qubit_count: 2, depth: 6, gates: 9}
+      result: {probabilities: 2, measured: 1024, bloch: 2, state_vector: 4}
+  c07-fractional-gates:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: cirq, qubit_count: 2, depth: 4, gates: 4}
+      result: {probabilities: 4, measured: 1024, bloch: 2, state_vector: 4}
+  c08-user-simulate-print:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: cirq, qubit_count: 3, depth: 3, gates: 3}
+    xfail:
+      id: R-1
+      reason: no-measurement circuits cannot be run
+      current: {execute: 'error:simulation_error'}
+  c09-multikey-measure:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: cirq, qubit_count: 3, depth: 2, gates: 5}
+      result: {probabilities: 8, measured: 1024, bloch: 3, state_vector: 8}
+  c10-circuit-in-function: {parse: ok, execute: 'error:no_circuit', note: 'only module-level circuits are found; a circuit built inside an uncalled helper is not (design, not an audit item)'}
+  c11-custom-gate-decomposed:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: cirq, qubit_count: 1, depth: 2, gates: 2}
+      result: {probabilities: 1, measured: 1024, bloch: 1, state_vector: 2}
+  c12-mat-gate-MatrixGate:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: cirq, qubit_count: 2, depth: 2, gates: 2}
+      result: {probabilities: 4, measured: 1024, bloch: 2, state_vector: 4}
+  c13-qft-cirq-contrib:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: cirq, qubit_count: 3, depth: 2, gates: 2}
+      result: {probabilities: 8, measured: 1024, bloch: 3, state_vector: 8}
+  c14-cirq-pauli-sum-expectation:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: cirq, qubit_count: 2, depth: 2, gates: 2}
+    xfail:
+      id: R-1
+      reason: no-measurement circuits cannot be run
+      current: {execute: 'error:simulation_error'}
+  c15-experiment-params:
+    parse: ok
+    execute: ok
+    options:
+      params: {theta: 1.1}
+      seed: 42
+    facts:
+      snapshot: {framework: cirq, qubit_count: 1, depth: 2, gates: 2}
+      result:
+        probabilities: 2
+        measured: 1024
+        bloch: 1
+        state_vector: 2
+        metrics: {theta_used: 1.1}
+        seed_honored: true
+  e01-plain-python: {parse: 'error:unsupported_framework', execute: 'error:unsupported_framework'}
+  e02-syntax-error: {parse: 'error:compile_error', execute: 'error:compile_error'}
+  e03-runtime-error: {parse: 'error:execution_error', execute: 'error:execution_error'}
+  e05-input-call: {parse: 'error:execution_error', execute: 'error:execution_error', note: 'R-23: interactive input() is unsupported; EOFError is the accepted outcome'}
+  e06-sys-exit:
+    parse: error:user_exit
+    execute: error:user_exit
+    healthy_after: true
+    options: {timeout: 15}
+    xfail:
+      id: R-7
+      reason: SystemExit escapes the worker thread and silences the kernel
+      current: {parse: timeout, execute: timeout, healthy_after: false}
+  e07-relative-file-read:
+    parse: error:execution_error
+    execute: error:execution_error
+    options: {timeout: 15}
+    note: the kernel has no project cwd (R-9) but this program supplies no project either; the R-B unit adds project_root corpus programs of its own
+  e08-numpy-matplotlib-plot:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 1, depth: 2, gates: 2}
+      result: {probabilities: 2, measured: 1024, bloch: 1, state_vector: 2}
+    note: DISPLAY is unset here; the plt.show() hang with a display is the `gates/g03` program (R-12)
+  e09-cudaq: {parse: 'error:missing_dependency', execute: 'error:missing_dependency', note: CUDA-Q is not part of any corpus env}
+  q01-bell-measured:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 2, depth: 3, gates: 4}
+      result: {probabilities: 2, measured: 1024, bloch: 2, state_vector: 4}
+  q02-bell-NO-measure:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 2, depth: 2, gates: 2}
+    xfail:
+      id: R-1
+      reason: no-measurement circuits cannot be run
+      current: {execute: 'error:simulation_error'}
+  q03-measure_all:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 3, depth: 5, gates: 7}
+      result: {probabilities: 2, measured: 1024, bloch: 3, state_vector: 8}
+  q04-param-unbound-ansatz:
+    parse: ok
+    execute: error:unbound_parameters
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 2, depth: 3, gates: 5}
+    xfail:
+      id: R-4
+      reason: unbound parameters surface as simulation_error; expected the distinct unbound_parameters code
+      current: {execute: 'error:simulation_error'}
+  q05-param-bound-nomeasure:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 2, depth: 3, gates: 5}
+    xfail:
+      id: R-1
+      reason: no-measurement circuits cannot be run
+      current: {execute: 'error:simulation_error'}
+  q06-QFT-append-measure:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 3, depth: 3, gates: 5}
+    xfail:
+      id: R-2
+      reason: library gates reach Aer untranspiled
+      current: {execute: 'error:simulation_error'}
+  q07-QFT-inverse-NO-measure:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 4, depth: 2, gates: 5}
+    xfail:
+      id: R-2
+      reason: library gates reach Aer untranspiled
+      current: {execute: 'error:simulation_error'}
+  q08-QFT-decomposed-measure:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 3, depth: 20, gates: 26}
+      result: {probabilities: 8, measured: 1024, bloch: 3, state_vector: 8}
+  q09-EfficientSU2-bound-measure_all:
+    parse: ok
+    execute: ok
+    xfail:
+      id: [R-3, R-2]
+      reason: sub-module imports escape detection, then the library gate hits R-2
+      current: {parse: 'error:unsupported_framework', execute: 'error:unsupported_framework'}
+  q10-EfficientSU2-unbound:
+    parse: ok
+    execute: error:unbound_parameters
+    xfail:
+      id: [R-3, R-4]
+      reason: sub-module imports escape detection, then the unbound ansatz hits R-4
+      current: {parse: 'error:unsupported_framework', execute: 'error:unsupported_framework'}
+  q11-TwoLocal-bound:
+    parse: ok
+    execute: ok
+    xfail:
+      id: [R-3, R-2]
+      reason: sub-module imports escape detection, then the library gate hits R-2
+      current: {parse: 'error:unsupported_framework', execute: 'error:unsupported_framework'}
+  q12-ZZFeatureMap-bound:
+    parse: ok
+    execute: ok
+    xfail:
+      id: [R-3, R-2]
+      reason: sub-module imports escape detection, then the library gate hits R-2
+      current: {parse: 'error:unsupported_framework', execute: 'error:unsupported_framework'}
+  q13-RealAmplitudes-bound:
+    parse: ok
+    execute: ok
+    xfail:
+      id: [R-3, R-2]
+      reason: sub-module imports escape detection, then the library gate hits R-2
+      current: {parse: 'error:unsupported_framework', execute: 'error:unsupported_framework'}
+  q14-Statevector-only:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 2, depth: 2, gates: 2}
+    xfail:
+      id: R-1
+      reason: no-measurement circuits cannot be run
+      current: {execute: 'error:simulation_error'}
+  q15-Estimator-V2-energy:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 2, depth: 3, gates: 3}
+    xfail:
+      id: R-1
+      reason: no-measurement circuits cannot be run
+      current: {execute: 'error:simulation_error'}
+  q16-Sampler-V1-legacy:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 2, depth: 4, gates: 5}
+      result: {probabilities: 2, measured: 1024, bloch: 2, state_vector: 4}
+    envs:
+      qk2: {parse: 'error:execution_error', facts: null, execute: 'error:execution_error', note: 'Qiskit 2 removed the V1 primitives (R-14); the migration hint is a frontend errorRewrite concern, so the
+          kernel error is the expected outcome'}
+  q17-Estimator-V1-legacy:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 2, depth: 4, gates: 5}
+      result: {probabilities: 2, measured: 1024, bloch: 2, state_vector: 4}
+    envs:
+      qk2: {parse: 'error:execution_error', facts: null, execute: 'error:execution_error', note: Qiskit 2 removed the V1 primitives (R-14); see q16}
+  q18-bind_parameters-legacy: {parse: 'error:execution_error', execute: 'error:execution_error', note: 'bind_parameters was removed in Qiskit 1.0: a user-code error on every supported version (R-14 migration
+      hints are frontend)'}
+  q19-c_if-legacy:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 2, depth: 2, gates: 4}
+      result: {probabilities: 2, measured: 1024, bloch: 2, state_vector: 4}
+    envs:
+      qk2: {parse: 'error:execution_error', facts: null, execute: 'error:execution_error', note: Qiskit 2 removed .c_if() (R-14); see q16}
+  q20-if_test-dynamic:
+    parse: ok
+    execute: ok
+    xfail:
+      id: R-13
+      reason: the adapter raises TypeError on non-real gate parameters
+      current: {parse: 'error:adapter_error', execute: 'error:adapter_error'}
+  q21-mid-circuit-reset:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 2, depth: 5, gates: 6}
+      result: {probabilities: 2, measured: 1024, bloch: 2, state_vector: 4}
+  q22-AerNoise-user-sim:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 2, depth: 3, gates: 4}
+      result: {probabilities: 2, measured: 1024, bloch: 2, state_vector: 4}
+  q23-Aer-noise-one-arg-err: {parse: 'error:execution_error', execute: 'error:execution_error', note: 'user-code error: depolarizing_error needs num_qubits'}
+  q24-transpiled-circuit-last:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 3, depth: 17, gates: 27}
+      result: {probabilities: 2, measured: 1024, bloch: 3, state_vector: 8}
+  q25-initialize:
+    parse: ok
+    execute: ok
+    xfail:
+      id: R-13
+      reason: the adapter raises TypeError on non-real gate parameters
+      current: {parse: 'error:adapter_error', execute: 'error:adapter_error'}
+  q26-unitary-gate:
+    parse: ok
+    execute: ok
+    xfail:
+      id: R-13
+      reason: the adapter raises TypeError on non-real gate parameters
+      current: {parse: 'error:adapter_error', execute: 'error:adapter_error'}
+  q27-PauliEvolution-trotter:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 3, depth: 3, gates: 5}
+    xfail:
+      id: R-2
+      reason: library gates reach Aer untranspiled
+      current: {execute: 'error:simulation_error'}
+  q28-gate-zoo-snapshot:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 3, depth: 11, gates: 15}
+    xfail:
+      id: R-2
+      reason: library gates reach Aer untranspiled
+      current: {execute: 'error:simulation_error'}
+  q29-sweep-loop-many-circuits:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 1, depth: 2, gates: 2}
+      result: {probabilities: 1, measured: 1024, bloch: 1, state_vector: 2}
+  q30-12-qubit-ghz:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 12, depth: 13, gates: 24}
+      result: {probabilities: 2, measured: 1024, bloch: 12, state_vector: 4096}
+  q31-26-qubit-ghz-too-big:
+    parse: ok
+    execute: error:too_many_qubits
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 26, depth: 27, gates: 52}
+    xfail:
+      id: R-11
+      reason: 'no memory-estimate policy: the run allocates and dies with MemoryError'
+      current: {execute: 'error:simulation_error'}
+  q32-vqe-h2-style-loop:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 2, depth: 4, gates: 6}
+      result: {probabilities: 2, measured: 1024, bloch: 2, state_vector: 4}
+  q33-draw-text-and-mpl: {parse: 'error:execution_error', execute: 'error:execution_error', note: 'R-23: draw(''mpl'') needs pylatexenc; the MissingOptionalLibraryError text is already clear'}
+  q34-qasm3-export:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 2, depth: 3, gates: 4}
+      result: {probabilities: 2, measured: 1024, bloch: 2, state_vector: 4}
+  q35-params-dict-experiment:
+    parse: ok
+    execute: ok
+    options:
+      params: {theta: 1.1}
+      seed: 42
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 1, depth: 2, gates: 2}
+      result:
+        probabilities: 2
+        measured: 1024
+        bloch: 1
+        state_vector: 2
+        metrics: {theta_used: 1.1}
+        seed_honored: true
+  q36-experiment-no-measure-metrics:
+    parse: ok
+    execute: ok
+    options:
+      params: {theta: 1.1}
+      seed: 7
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 1, depth: 1, gates: 1}
+    xfail:
+      id: R-1
+      reason: no-measurement circuits cannot be run
+      current: {execute: 'error:simulation_error'}
+  q37-two-circuits-which-wins:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 2, depth: 3, gates: 4}
+      result: {probabilities: 2, measured: 1024, bloch: 2, state_vector: 4}
+  q38-circuit-in-function-only: {parse: ok, execute: 'error:no_circuit', note: only module-level circuits are found (see c10)}
+  q39-qiskit-aer-statevector-save:
+    parse: ok
+    execute: error:simulation_error
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 2, depth: 3, gates: 3}
+    note: 'R-23: user code that saves a statevector and runs Aer itself; noted, not a kernel bug'
+  q40-clifford-T-stabilizer:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 3, depth: 6, gates: 8}
+      result: {probabilities: 2, measured: 1024, bloch: 3, state_vector: 8}
+  qs01-bell:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qsharp, qubit_count: 2, depth: 4, gates: 6}
+      result: {probabilities: 2, measured: 1024, bloch: 2, state_vector: 0}
+    envs:
+      min: {parse: 'error:missing_dependency', facts: null, execute: 'error:missing_dependency'}
+  qs02-parameterized-Rotate:
+    parse: ok
+    execute: ok
+    options:
+      params: {theta: 1.1}
+      seed: 3
+    facts:
+      result: {probabilities: 2, measured: 1024, bloch: 1, state_vector: 0, seed_honored: true}
+    envs:
+      min: {parse: 'error:missing_dependency', facts: null, execute: 'error:missing_dependency'}
+  qs03-parameterized-Main-rejected:
+    parse: error:compile_error
+    execute: error:compile_error
+    options:
+      params: {theta: 1.1}
+    note: 'documented: qdk rejects a parameterized `Main` (CLAUDE.md, Experiments)'
+    envs:
+      min: {parse: 'error:missing_dependency', execute: 'error:missing_dependency'}
+  qs04-no-measure-dump:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qsharp, qubit_count: 1, depth: 2, gates: 2}
+      result: {probabilities: 2, measured: 0, bloch: 1, state_vector: 2}
+    envs:
+      min: {parse: 'error:missing_dependency', facts: null, execute: 'error:missing_dependency'}
+  qs05-qft-style-adjoint-controlled:
+    parse: error:compile_error
+    execute: error:compile_error
+    note: the program does not compile on qdk 1.33 (`R1` is not in scope); kept as a compile_error golden
+    envs:
+      min: {parse: 'error:missing_dependency', execute: 'error:missing_dependency'}
+  qs06-syntax-error:
+    parse: error:compile_error
+    execute: error:compile_error
+    envs:
+      min: {parse: 'error:missing_dependency', execute: 'error:missing_dependency'}
+  r01-main-guard:
+    parse: ok
+    execute: ok
+    xfail:
+      id: R-10
+      reason: __name__ is not '__main__' in the exec namespace
+      current: {execute: 'error:no_circuit'}
+  r02-dataclass-class-def:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 3, depth: 2, gates: 6}
+      result: {probabilities: 8, measured: 1024, bloch: 3, state_vector: 8}
+  r03-multiprocessing-pool:
+    parse: error:execution_error
+    execute: ok
+    xfail:
+      id: R-20
+      reason: 'editor functions cannot be pickled: no real __main__ module'
+      current: {execute: 'error:execution_error'}
+  r04-large-stdout-100k-lines:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 1, depth: 1, gates: 1}
+      result: {probabilities: 1, measured: 1024, bloch: 1, state_vector: 2}
+    max_frame_bytes: 524288
+    xfail:
+      id: R-22
+      reason: 'unbounded stdout: one ~1.2 MB `output` frame per run'
+      current: {max_frame_bytes: 1188920}
+  r05-subprocess-and-env:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 1, depth: 1, gates: 1}
+      result: {probabilities: 1, measured: 1024, bloch: 1, state_vector: 2}
+  s01-stim-python-rep3:
+    parse: error:missing_dependency
+    execute: error:missing_dependency
+    envs:
+      full:
+        parse: ok
+        facts:
+          snapshot: {framework: stim, qubit_count: 5, depth: 10, gates: 44}
+          result: {probabilities: 0, measured: 1024, bloch: 0, state_vector: 0}
+        execute: ok
+  s02-stim-raw-text:
+    parse: error:missing_dependency
+    execute: error:missing_dependency
+    envs:
+      full:
+        parse: ok
+        facts:
+          snapshot: {framework: stim, qubit_count: 2, depth: 1, gates: 4}
+          result: {probabilities: 0, measured: 1024, bloch: 0, state_vector: 0}
+        execute: ok
+  s03-stim-python-surface:
+    parse: error:missing_dependency
+    execute: error:missing_dependency
+    envs:
+      full:
+        parse: ok
+        facts:
+          snapshot: {framework: stim, qubit_count: 26, depth: 22, gates: 267}
+          result: {probabilities: 0, measured: 1024, bloch: 0, state_vector: 0}
+        execute: ok
+  z04-infinite-loop-timeout:
+    execute: error:timeout
+    healthy_after: true
+    options:
+      timeout: 40
+      phases: [execute]
+    xfail:
+      id: R-6
+      reason: 'the SIGALRM timeout is dead code off the main thread: the run never ends'
+      current: {execute: timeout, healthy_after: false}
