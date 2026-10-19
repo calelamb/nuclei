@@ -78,7 +78,8 @@ def test_parse_error_reports_only_user_frames():
     assert out["snapshot"] is None
     assert "SyntaxError" in out["error"]
     out = run_browser("nuclei_parse", "x = 1\nundefined_name\n")
-    assert 'File "<string>", line 2' in out["error"]
+    assert 'File "untitled.py", line 2' in out["error"]
+    assert "<string>" not in out["error"]
     assert "_run_user_code" not in out["error"]
     assert out["error"].rstrip().endswith("NameError: name 'undefined_name' is not defined")
 
@@ -373,3 +374,34 @@ def test_import_typo_hides_shim_install_path():
     out = run_browser("nuclei_execute", "from qiskit import QuantumCirquit\n", 10)
     assert "/shim/" not in out["error"] and "__init__.py" not in out["error"]
     assert out["error"].count("Did you mean: 'QuantumCircuit'?") == 1
+
+
+def test_traceback_names_the_running_tab_instead_of_string():
+    out = run_browser("nuclei_parse", "x = 1\nundefined_name\n", "bell.py")
+    assert 'File "bell.py", line 2' in out["error"]
+    out = run_browser("nuclei_execute", "foo(\n", 10, None, "bell.py")
+    assert 'File "bell.py", line 1' in out["error"] and "<string>" not in out["error"]
+    out = run_browser("nuclei_run_python", "raise ValueError('x')\n", "my script.py")
+    assert 'File "my script.py", line 1' in out["error"]
+
+
+def test_hostile_filename_falls_back_to_untitled():
+    out = run_browser("nuclei_run_python", "1/0\n", 'a"\n b.py')
+    assert 'File "a b.py", line 1' in out["error"]
+    out = run_browser("nuclei_run_python", "1/0\n", "   ")
+    assert 'File "untitled.py", line 1' in out["error"]
+
+
+def test_mistyped_top_level_module_gets_one_suggestion():
+    out = run_browser("nuclei_execute", "from qiskitt import QuantumCircuit\n", 10)
+    assert out["error"].rstrip().endswith("No module named 'qiskitt'. Did you mean: 'qiskit'?")
+    assert out["error"].count("Did you mean") == 1
+    out = run_browser("nuclei_run_python", "import numpyy\n")
+    assert "Did you mean: 'numpy'?" in out["error"]
+
+
+def test_unrelated_missing_module_gets_no_suggestion():
+    out = run_browser("nuclei_run_python", "import totally_unrelated_thing\n")
+    assert "Did you mean" not in out["error"]
+    out = run_browser("nuclei_run_python", "import cirq.nope\n")
+    assert out["error"].count("Did you mean") <= 1

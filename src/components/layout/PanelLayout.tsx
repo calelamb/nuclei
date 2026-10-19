@@ -35,6 +35,7 @@ import { DEFAULT_EDITOR_PANE_WIDTH, computeEditorPaneWidth } from './layoutMath'
 import { useDisplaySnapshot } from '../../layout/useDisplaySnapshot';
 import { isSidebarShown } from '../../layout/takeover';
 import { useEditorStore } from '../../stores/editorStore';
+import { setUserFilenameSource } from '../../platform/pyodide/userFilename';
 import { hasMeaningfulOutput, useSimulationStore } from '../../stores/simulationStore';
 import { sampledProbabilities } from '../histogram/histogramData';
 import { shouldRenderBottomPanel } from '../../layout/bottomPanelPresence';
@@ -245,6 +246,16 @@ export function PanelLayout() {
   const railTab = vizRailTab({ vizHasContent, vizFits, diracOpen, sidebarOpen: showSidebar });
   const unseenResult = useUnseenResult(result, railTab !== null);
   useRoomRetreat({ sidebarWidth, vizWanted: vizHasContent, canCollapseSidebar: !editorHidden && !fullViewOwnsArea, sidebarOpen: showSidebar });
+
+  // Web tracebacks name the running tab (File "bell.py"), not "<string>". Lessons and challenges run
+  // their own code, so inside them the editor's file name would be wrong: they get untitled.py.
+  useEffect(() => {
+    setUserFilenameSource(() => {
+      if (useLearnStore.getState().isLearnMode || useChallengeModeStore.getState().isChallengeMode) return null;
+      return useEditorStore.getState().filePath;
+    });
+    return () => setUserFilenameSource(null);
+  }, []);
 
   useShellLayout({
     platform,

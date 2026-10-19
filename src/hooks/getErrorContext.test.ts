@@ -13,6 +13,24 @@ describe('getErrorContext', () => {
     expect(ctx.line).toBe(4);
   });
 
+  it('reads the line from the web kernel\'s bare tab-name frame (research-r-15)', () => {
+    const ctx = getErrorContext({
+      type: 'error',
+      message: 'AttributeError',
+      traceback: 'Traceback (most recent call last):\n  File "bell.py", line 3, in <module>\nAttributeError: x',
+    });
+    expect(ctx.line).toBe(3);
+  });
+
+  it('ignores a library frame that carries a directory', () => {
+    const ctx = getErrorContext({
+      type: 'error',
+      message: 'boom',
+      traceback: 'Traceback (most recent call last):\n  File "<string>", line 2, in <module>\n  File "/lib/qiskit/x.py", line 99, in f\nboom',
+    });
+    expect(ctx.line).toBe(2);
+  });
+
   it('extracts the line from a Q# miette-rendered span', () => {
     const ctx = getErrorContext({
       type: 'error',

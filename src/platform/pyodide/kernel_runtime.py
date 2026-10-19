@@ -7,6 +7,7 @@ objects. Result shapes mirror what the desktop kernel's adapters produce
 agnostic. Also unit-tested under plain CPython (kernel/tests).
 """
 
+import difflib
 import io
 import json
 import re
@@ -16,7 +17,20 @@ import traceback
 
 import numpy as np
 
-USER_FILENAME = "<string>"
+# The file name a traceback shows when the caller does not say which tab is running.
+DEFAULT_USER_FILENAME = "untitled.py"
+_MAX_FILENAME_LEN = 120
+
+# Top-level packages a student plausibly mistypes (the browser build ships these or tells them to use the app).
+_KNOWN_PACKAGES = ("qiskit", "qiskit_aer", "cirq", "numpy", "scipy", "matplotlib", "pennylane", "qutip")
+
+
+def _display_filename(name):
+    """The name user code is compiled under: the running tab's file name, never the internal '<string>'."""
+    if not isinstance(name, str):
+        return DEFAULT_USER_FILENAME
+    cleaned = re.sub(r"[\x00-\x1f\"]", "", name).strip()[:_MAX_FILENAME_LEN]
+    return cleaned or DEFAULT_USER_FILENAME
 
 # Qiskit class names -> canonical gate names (mirrors kernel/adapters/qiskit_adapter.py).
 # Real Qiskit's fixed gates are "singleton" classes (_SingletonHGate, ...) that miss
@@ -38,16 +52,30 @@ _QISKIT_FALLBACK_NAMES = {
 _SHIM_PATH_RE = re.compile(r" \((?:unknown location|[^()\n]*/shim/[^()\n]*)\)")
 
 
-def _format_error(exc):
+def _module_suggestion(exc):
+    """' Did you mean: 'qiskit'?' for a mistyped top-level package, else ''.
+
+    Python only suggests names for attributes and variables; `import qiskitt` gets nothing.
+    """
+    name = getattr(exc, "name", None)
+    if not isinstance(exc, ModuleNotFoundError) or not name or "." in name or name in _KNOWN_PACKAGES:
+        return ""
+    close = difflib.get_close_matches(name, _KNOWN_PACKAGES, n=1, cutoff=0.8)
+    return f". Did you mean: '{close[0]}'?" if close else ""
+
+
+def _format_error(exc, filename=DEFAULT_USER_FILENAME):
     """Traceback limited to the user's own frames plus the final error line."""
-    frames = [f for f in traceback.extract_tb(exc.__traceback__) if f.filename == USER_FILENAME]
+    frames = [f for f in traceback.extract_tb(exc.__traceback__) if f.filename == filename]
     lines = []
     if frames:
         lines.append("Traceback (most recent call last):")
         lines.extend(
-            f'  File "{USER_FILENAME}", line {f.lineno}, in {f.name}' for f in frames
+            f'  File "{filename}", line {f.lineno}, in {f.name}' for f in frames
         )
     lines.extend(part.rstrip("\n") for part in traceback.format_exception_only(type(exc), exc))
+    if "Did you mean" not in lines[-1]:
+        lines[-1] += _module_suggestion(exc)
     # The shim's module name is an implementation detail, never a student's concern.
     text = "\n".join(lines).replace("_nuclei_unsupported.", "")
     # Same for the shim's install path, e.g. "(/opt/nuclei/shim/qiskit/__init__.py)".
@@ -100,13 +128,14 @@ class _LiveBuffer(io.StringIO):
             self._pending = ""
 
 
-def _run_user_code(code, metrics=None, stream=False):
+def _run_user_code(code, metrics=None, stream=False, filename=None):
     """Exec `code` in a fresh namespace. Returns (namespace, stdout, error_text|None).
 
     With `stream=True` and a registered sink, output is delivered line by line
     while the program runs and the returned stdout is "" (it was already shown).
     """
     metrics = metrics if metrics is not None else {}
+    filename = _display_filename(filename)
 
     def record_metric(name, value):
         metrics[str(name)] = float(value)
@@ -117,9 +146,9 @@ def _run_user_code(code, metrics=None, stream=False):
     sys.stdout = sys.stderr = buffer
     error = None
     try:
-        exec(compile(code, USER_FILENAME, "exec"), namespace)
+        exec(compile(code, filename, "exec"), namespace)
     except BaseException as exc:  # SystemExit from exit() must not kill the worker
-        error = _format_error(exc)
+        error = _format_error(exc, filename)
     finally:
         sys.stdout, sys.stderr = old_out, old_err
     buffer.finish()
@@ -306,9 +335,9 @@ def _simulate(framework, circuit, shots, seed, metrics):
 # --------------------------------------------------------------------------
 # Entry points (called from the worker; return JSON strings)
 # --------------------------------------------------------------------------
-def nuclei_parse(code):
+def nuclei_parse(code, filename=None):
     """Run `code` and extract the circuit snapshot. stdout is parse-phase output."""
-    namespace, output, error = _run_user_code(code)
+    namespace, output, error = _run_user_code(code, filename=filename)
     snapshot = None
     if error is None:
         framework, circuit = _find_circuit(namespace)
@@ -316,14 +345,14 @@ def nuclei_parse(code):
             try:
                 snapshot = _snapshot(framework, circuit)
             except Exception as exc:  # a snapshot failure must not look like a user error
-                error = _format_error(exc)
+                error = _format_error(exc, _display_filename(filename))
     return json.dumps({"snapshot": snapshot, "output": output, "error": error})
 
 
-def nuclei_execute(code, shots, seed=None):
+def nuclei_execute(code, shots, seed=None, filename=None):
     metrics = {}
     start = time.time()
-    namespace, output, error = _run_user_code(code, metrics, stream=True)
+    namespace, output, error = _run_user_code(code, metrics, stream=True, filename=filename)
     if error is not None:
         return json.dumps({"result": None, "snapshot": None, "output": output, "error": error})
     framework, circuit = _find_circuit(namespace)
@@ -334,10 +363,10 @@ def nuclei_execute(code, shots, seed=None):
         result["execution_time_ms"] = round((time.time() - start) * 1000, 1)
         snapshot = _snapshot(framework, circuit)
     except Exception as exc:
-        return json.dumps({"result": None, "snapshot": None, "output": output, "error": _format_error(exc)})
+        return json.dumps({"result": None, "snapshot": None, "output": output, "error": _format_error(exc, _display_filename(filename))})
     return json.dumps({"result": result, "snapshot": snapshot, "output": output, "error": None})
 
 
-def nuclei_run_python(code):
-    _namespace, output, error = _run_user_code(code, stream=True)
+def nuclei_run_python(code, filename=None):
+    _namespace, output, error = _run_user_code(code, stream=True, filename=filename)
     return json.dumps({"output": output, "error": error})

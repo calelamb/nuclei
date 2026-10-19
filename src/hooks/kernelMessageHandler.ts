@@ -23,9 +23,21 @@ import { rewriteExecutionError } from '../services/errorRewrite';
 /** Per-provider "connecting" watchdog timers, owned by the hook. */
 export type ConnectTimers = Record<string, ReturnType<typeof setTimeout>>;
 
+/**
+ * A user frame in a Python traceback: the desktop kernel's `<string>`/`<exec>`, or the web kernel's bare
+ * tab name (`File "bell.py", line 3`). Library frames carry a directory, so they never match.
+ */
+const USER_FRAME = /File "(?:<(?:string|exec)>|[^"\\/<>]+)", line (\d+)/g;
+
+/** Terminal text for a failed run. A Python traceback already reads as one; "Error:" would be glue on its first line. */
+export function errorOutputText(detail: string): string {
+  const trimmed = detail.trimStart();
+  return trimmed.startsWith('Traceback') || trimmed.startsWith('File "') ? detail : `Error: ${detail}`;
+}
+
 export function getErrorContext(msg: Extract<KernelResponse, { type: 'error' }>) {
   const detail = msg.traceback ?? msg.message;
-  const frames = detail.match(/File "<(?:string|exec)>", line (\d+)/g) || [];
+  const frames = detail.match(USER_FRAME) || [];
   const lastFrame = frames[frames.length - 1];
   const lineMatch = lastFrame?.match(/line (\d+)/);
   let line = lineMatch ? parseInt(lineMatch[1], 10) : null;
@@ -263,7 +275,7 @@ export function handleKernelMessage(msg: KernelResponse, connectTimers: ConnectT
       // panel says it paused and that Run will execute the code for real.
       const isPreviewTimeout = isParseError && msg.code === 'timeout';
       if (!isParseError) {
-        useSimulationStore.getState().addOutput(`Error: ${detail}`, 'stderr');
+        useSimulationStore.getState().addOutput(errorOutputText(detail), 'stderr');
         useSimulationStore.getState().setRunning(false);
         useSimulationStore.getState().setRunFailed(true);
         useBottomPanelStore.getState().noteError();
