@@ -14,7 +14,7 @@ import type {
 import { validateTestCase, validateValueTestCase } from './challengeValidation';
 import { createKernelSession, type KernelSession, type PlatformKind } from './kernelSession';
 import type { KernelTokenProvider } from './kernelSocket';
-import { errorLineFromTraceback } from '../lib/errorLine';
+import { errorLineFromTraceback, shiftLineMentions } from '../lib/errorLine';
 import { describeKernelFailure } from '../lib/kernelErrors';
 
 const TEST_TIMEOUT_MS = 35_000;
@@ -536,7 +536,7 @@ function classifyExecutionFailure(error: unknown, span?: UserCodeSpan): Challeng
   const message = error instanceof Error ? error.message : 'Unknown execution error';
 
   const code = error instanceof ChallengeKernelError ? error.code : undefined;
-  const normalizedMessage = message.trim();
+  const normalizedMessage = shiftLineMentions(message.trim(), span?.offset ?? 0);
   const line = studentLine(error, span);
 
   if (code === 'unsupported_framework') {
