@@ -13,7 +13,7 @@ describe('primary button identity', () => {
   it('is teal in both themes: light uses the AA accent-text teal with white text', () => {
     const light = rule(":root[data-theme='light'] .nuclei-btn.nuclei-btn--primary:not(:disabled)");
     expect(light).toContain('background: var(--color-accent-quantum-text)');
-    expect(light).toContain('color: #fff');
+    expect(light).toContain('color: var(--color-on-accent-strong)'); // white in light (tokens.css)
     expect(light).not.toContain('--color-text-primary');
   });
 
