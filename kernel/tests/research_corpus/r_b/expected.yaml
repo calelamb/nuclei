@@ -1,0 +1,209 @@
+# PRD 15 unit R-B: one program per user-code exec path hazard (design note
+# docs/research/PRD_15/R_EXECUTION_MODEL.md section 7). Entries state what the kernel SHOULD do;
+# `xfail` entries are known failures flipped as each step of the implementation lands.
+schema: 1
+programs:
+  rb01-sibling-import:
+    parse: ok
+    execute: ok
+    options: {request: {project_root: "$PROJECT", file_path: "$PROJECT/main.py"}}
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 3, depth: 4, gates: 6}
+    xfail:
+      id: R-9
+      reason: 'no project root: the sibling module is not importable and detection never sees the import'
+      current: {parse: 'error:unsupported_framework', execute: 'error:unsupported_framework'}
+  rb02-relative-data-read:
+    parse: ok
+    execute: ok
+    options: {request: {project_root: "$PROJECT", file_path: "$PROJECT/main.py"}}
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 2, depth: 3, gates: 4}
+    xfail:
+      id: R-9
+      reason: 'cwd is the kernel install dir, not the project'
+      current: {parse: 'error:execution_error', execute: 'error:execution_error'}
+  rb03-while-true:
+    parse: error:timeout
+    execute: error:timeout
+    healthy_after: true
+    options: {timeout: 20, request: {limits: {wall_s: 3}}}
+    xfail:
+      id: R-6
+      reason: 'no enforceable timeout off the main thread; the connection is dead afterwards'
+      current: {parse: timeout, execute: timeout, healthy_after: false}
+  rb04-os-exit:
+    parse: error:worker_died
+    execute: error:worker_died
+    healthy_after: true
+    options: {timeout: 20}
+    xfail:
+      id: R-7
+      reason: 'os._exit takes the whole kernel down'
+      current: {parse: closed, execute: closed, healthy_after: false}
+  rb05-sys-exit:
+    parse: error:user_exit
+    execute: error:user_exit
+    healthy_after: true
+    options: {timeout: 20}
+    xfail:
+      id: R-7
+      reason: 'SystemExit escapes the worker thread and silences the kernel'
+      current: {parse: timeout, execute: timeout, healthy_after: false}
+  rb06-exit-builtin:
+    parse: error:user_exit
+    execute: error:user_exit
+    healthy_after: true
+    options: {timeout: 20}
+    xfail:
+      id: R-7
+      reason: 'exit() raises SystemExit, which silences the kernel'
+      current: {parse: timeout, execute: timeout, healthy_after: false}
+  rb07-quit-builtin:
+    parse: error:user_exit
+    execute: error:user_exit
+    healthy_after: true
+    options: {timeout: 20}
+    xfail:
+      id: R-7
+      reason: 'quit() raises SystemExit, which silences the kernel'
+      current: {parse: timeout, execute: timeout, healthy_after: false}
+  rb08-main-guard:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 2, depth: 3, gates: 4}
+    xfail:
+      id: R-10
+      reason: "__name__ is not '__main__' in the exec namespace"
+      current: {parse: ok, execute: 'error:no_circuit'}
+  rb09-file-relative:
+    parse: ok
+    execute: ok
+    options: {request: {project_root: "$PROJECT", file_path: "$PROJECT/main.py"}}
+    xfail:
+      id: R-9
+      reason: '__file__ is undefined and there is no project root'
+      current: {parse: 'error:execution_error', execute: 'error:execution_error'}
+  rb10-run-dir-write:
+    parse: ok
+    execute: ok
+    options: {request: {project_root: "$PROJECT", file_path: "$PROJECT/main.py"}}
+    xfail:
+      id: R-9
+      reason: 'no per-run output directory'
+      current: {parse: 'error:execution_error', execute: 'error:execution_error'}
+  rb11-sibling-kernel:
+    parse: ok
+    execute: ok
+    options: {request: {project_root: "$PROJECT", file_path: "$PROJECT/main.py"}}
+    xfail:
+      id: R-9
+      reason: "Nuclei's own kernel package shadows the researcher's kernel.py"
+      current: {parse: 'error:execution_error', execute: 'error:execution_error'}
+  rb12-sibling-noise:
+    parse: ok
+    execute: ok
+    options: {request: {project_root: "$PROJECT", file_path: "$PROJECT/main.py"}}
+    xfail:
+      id: R-9
+      reason: 'the project root is not on sys.path'
+      current: {parse: 'error:execution_error', execute: 'error:execution_error'}
+  rb13-sibling-models:
+    parse: ok
+    execute: ok
+    options: {request: {project_root: "$PROJECT", file_path: "$PROJECT/main.py"}}
+    xfail:
+      id: R-9
+      reason: "Nuclei's models package shadows the researcher's models.py"
+      current: {parse: 'error:execution_error', execute: 'error:execution_error'}
+  rb14-sibling-symmetry:
+    parse: ok
+    execute: ok
+    options: {request: {project_root: "$PROJECT", file_path: "$PROJECT/main.py"}}
+    xfail:
+      id: R-9
+      reason: 'the project root is not on sys.path'
+      current: {parse: 'error:execution_error', execute: 'error:execution_error'}
+  rb15-pool-map:
+    parse: ok
+    execute: ok
+    options: {request: {project_root: "$PROJECT", file_path: "$PROJECT/main.py"}}
+    xfail:
+      id: [R-10, R-20]
+      reason: 'no real __main__ module: the main guard is false and editor functions cannot be pickled'
+      current: {parse: 'error:execution_error', execute: 'error:execution_error'}
+  rb16-plt-show:
+    parse: ok
+    execute: ok
+    max_seconds: 2
+    options: {display: true, timeout: 20}
+    xfail:
+      id: R-12
+      reason: 'the default GUI backend blocks the worker in plt.show()'
+      current: {execute: timeout}
+  rb17-print-100k:
+    parse: ok
+    execute: ok
+    max_frame_bytes: 400000
+    options: {timeout: 60}
+    xfail:
+      id: R-22
+      reason: 'unbounded stdout: one 1.7 MB output frame'
+      current: {max_frame_bytes: 1688920}
+  rb18-ghz-30:
+    parse: ok
+    execute: error:too_many_qubits
+    max_seconds: 1
+    options: {needs_memory_limit: true, phases: [execute]}
+    xfail:
+      id: R-11
+      reason: 'no memory-estimate policy: the allocation is attempted inside Aer'
+      current: {execute: 'error:simulation_error'}
+  rb19-ghz-24-sampled:
+    parse: ok
+    execute: ok
+    max_frame_bytes: 4000000
+    options: {needs_memory_limit: true, timeout: 120}
+    facts:
+      result: {probabilities: 2, measured: 1024, bloch: 0, state_vector: 0}
+    xfail:
+      id: R-11
+      reason: 'the full 2^24 state vector is built and serialised'
+      current: {execute: closed, healthy_after: false}
+  rb20-efficientsu2-only-import:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 2, depth: 3, gates: 4}
+    xfail:
+      id: R-3
+      reason: 'sub-module imports escape framework detection'
+      current: {parse: 'error:unsupported_framework', execute: 'error:unsupported_framework'}
+  rb21-from-qiskit-aer:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 2, depth: 3, gates: 4}
+    xfail:
+      id: R-3
+      reason: '`from qiskit_aer import` escapes framework detection'
+      current: {parse: 'error:unsupported_framework', execute: 'error:unsupported_framework'}
+  rb22-cirq-contrib:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: cirq, qubit_count: 2}
+    xfail:
+      id: R-3
+      reason: 'cirq sub-module imports escape framework detection'
+      current: {parse: 'error:unsupported_framework', execute: 'error:unsupported_framework'}
+  rb23-queued-parses:
+    parse: ok
+    execute: ok
+    max_seconds: 3.5
+    options: {queued_parses: 5, phases: [execute], timeout: 60}
+    xfail:
+      id: R-8
+      reason: 'every parse re-executes the program serially ahead of Run'
+      current: {execute: ok, execute_seconds: 12.0}
