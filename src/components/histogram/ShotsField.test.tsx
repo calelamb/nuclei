@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from 'vitest';
-import { render, cleanup, fireEvent, screen } from '@testing-library/react';
+import { render, cleanup, fireEvent, screen, act } from '@testing-library/react';
 import { ShotsField } from './ShotsField';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useSettingsStore } from '../../stores/settingsStore';
@@ -39,7 +39,7 @@ describe('<ShotsField>', () => {
 
   it('follows a change made elsewhere', () => {
     render(<ShotsField />);
-    useSimulationStore.getState().setShots(4096);
+    act(() => useSimulationStore.getState().setShots(4096));
     expect((screen.getByLabelText('Shots') as HTMLInputElement).value).toBe('4,096');
   });
 });
