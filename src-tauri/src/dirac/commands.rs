@@ -21,7 +21,9 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use tauri::{Emitter, State};
+use tauri::{Emitter, Manager, State};
+
+use crate::commands::kernel::KernelState;
 
 use super::gateway::ModelGateway;
 use super::kernel::RealKernel;
@@ -125,7 +127,11 @@ pub fn dirac_start_run(
         // R7: the live kernel WebSocket transport. The policy gate
         // (`AutonomyPolicy::safe_default`, real-money OFF) still guards every
         // submission — this port is only the plumbing it gates.
-        let submit = KernelSubmitPort::default();
+        let token_app = app_for_thread.clone();
+        let submit =
+            KernelSubmitPort::default().with_token_provider(std::sync::Arc::new(move || {
+                crate::commands::kernel::read_auth_token(&token_app.state::<KernelState>())
+            }));
         let policy = AutonomyPolicy::safe_default();
         // Let the submit tool resolve a backend's provider / `is_simulator`
         // from the kernel's live backend list ([] if the kernel is down).

@@ -9,7 +9,13 @@ gates before any message reaches a handler:
    WebSockets from a browser tab).  Non-browser clients send no Origin.
 3. The first frame must be ``{"type": "authenticate", "token": ...}`` carrying
    the per-launch token, compared in constant time.  The token never travels
-   in the URL.
+   in the URL.  The frame may also carry a client ``nonce``; the kernel then
+   proves it knows the token by answering with
+   ``{"type": "authenticated", "proof": HMAC-SHA256(token, nonce)}`` (hex), so
+   a client can tell the real kernel from a process squatting the port.
+
+The token comes from stdin (``NUCLEI_KERNEL_TOKEN_STDIN=1``, used by the
+desktop shell) or from ``NUCLEI_KERNEL_TOKEN`` (manual and dev runs).
 
 With no token configured the kernel refuses to start unless
 ``NUCLEI_KERNEL_INSECURE_DEV=1`` is set explicitly.
@@ -19,6 +25,7 @@ from __future__ import annotations
 
 import asyncio
 import atexit
+import hashlib
 import hmac
 import json
 import os
@@ -29,9 +36,14 @@ import tempfile
 import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Mapping
+from typing import Any, Awaitable, Callable, Mapping, TextIO
 
 TOKEN_ENV = "NUCLEI_KERNEL_TOKEN"
+# "1" means the launcher writes the token as one line on stdin (it carries no
+# secret itself). The initial environment block of a process stays readable by
+# same-user processes (sysctl KERN_PROCARGS2, /proc/<pid>/environ), so the
+# desktop shell never puts the token there.
+TOKEN_STDIN_ENV = "NUCLEI_KERNEL_TOKEN_STDIN"
 INSECURE_ENV = "NUCLEI_KERNEL_INSECURE_DEV"
 DEV_ENV = "NUCLEI_KERNEL_DEV"
 STRICT_PORT_ENV = "NUCLEI_KERNEL_STRICT_PORT"
@@ -40,10 +52,21 @@ RUNTIME_DIR_ENV = "NUCLEI_RUNTIME_DIR"
 RUNTIME_FILE_NAME = "kernel.json"
 MIN_TOKEN_LENGTH = 32
 MAX_TOKEN_LENGTH = 1_024
-AUTH_TIMEOUT_SECONDS = 10.0
+# A legitimate client sends `authenticate` as its first frame, immediately after
+# the upgrade. Keep the window short so a local process cannot park the
+# MAX_PRE_AUTH_CONNECTIONS slots for long.
+AUTH_TIMEOUT_SECONDS = 3.0
+# Until a connection authenticates it may only send the small authenticate
+# frame; the normal message limit applies afterwards. The cap on unauthenticated
+# connections stops a local process from parking thousands of idle sockets.
+PRE_AUTH_MAX_SIZE = 8_192
+MAX_PRE_AUTH_CONNECTIONS = 32
+MIN_NONCE_LENGTH = 16
+MAX_NONCE_LENGTH = 256
 
 CLOSE_UNAUTHENTICATED = 4401
 CLOSE_FORBIDDEN = 4403
+CLOSE_BUSY = 4429
 
 PRODUCTION_ORIGINS = frozenset({
     "tauri://localhost",
@@ -73,13 +96,34 @@ def build_config(*, token: str | None, insecure: bool, dev: bool) -> KernelAuthC
     return KernelAuthConfig(token=token, insecure=insecure, allowed_origins=origins)
 
 
-def config_from_env(env: Mapping[str, str] | None = None) -> KernelAuthConfig:
-    """Read the auth setup from the environment, failing closed."""
+def read_token_from_stdin(stream: TextIO | None = None) -> str | None:
+    """One line from ``stream`` (default stdin), stripped; None when empty."""
+    source = sys.stdin if stream is None else stream
+    try:
+        line = source.readline()
+    except (OSError, ValueError):
+        return None
+    return line.strip() or None
+
+
+def config_from_env(
+    env: Mapping[str, str] | None = None, stdin: TextIO | None = None
+) -> KernelAuthConfig:
+    """Read the auth setup from the environment (and stdin), failing closed."""
     env = os.environ if env is None else env
-    token = env.get(TOKEN_ENV) or None
+    if env.get(TOKEN_STDIN_ENV) == "1":
+        token = read_token_from_stdin(stdin)
+        if token is None:
+            raise AuthConfigError(
+                f"{TOKEN_STDIN_ENV}=1 but no token line arrived on stdin; "
+                "refusing to start an unauthenticated kernel."
+            )
+    else:
+        token = env.get(TOKEN_ENV) or None
     if env is os.environ:
         # Child processes (agent worker, user code) must not inherit the secret.
         os.environ.pop(TOKEN_ENV, None)
+        os.environ.pop(TOKEN_STDIN_ENV, None)
     insecure_flag = env.get(INSECURE_ENV, "")
     if insecure_flag not in ("", "0", "1"):
         raise AuthConfigError(f"{INSECURE_ENV} must be exactly 1 to enable insecure mode")
@@ -113,7 +157,7 @@ def config_from_env(env: Mapping[str, str] | None = None) -> KernelAuthConfig:
 def scrubbed_environment(env: Mapping[str, str] | None = None) -> dict[str, str]:
     """Copy of ``env`` without kernel auth variables, for child processes."""
     source = os.environ if env is None else env
-    return {k: v for k, v in source.items() if k not in (TOKEN_ENV, INSECURE_ENV)}
+    return {k: v for k, v in source.items() if k not in (TOKEN_ENV, TOKEN_STDIN_ENV, INSECURE_ENV)}
 
 
 def _request_headers(websocket: Any) -> Mapping[str, str]:
@@ -152,19 +196,50 @@ def origin_allowed(config: KernelAuthConfig, origin: str | None) -> bool:
     return origin is None or origin in config.allowed_origins
 
 
-def token_matches(config: KernelAuthConfig, frame: object) -> bool:
+@dataclass(frozen=True)
+class Authentication:
+    """A successful authenticate frame; ``nonce`` is None for legacy clients."""
+
+    nonce: str | None
+
+
+def check_authentication(config: KernelAuthConfig, frame: object) -> Authentication | None:
+    """Validate an authenticate frame; None means refuse the connection."""
     if config.token is None:
-        return False
+        return None
     try:
         value = json.loads(frame)  # type: ignore[arg-type]
     except (TypeError, ValueError):
-        return False
+        return None
     if not isinstance(value, dict) or value.get("type") != "authenticate":
-        return False
+        return None
     supplied = value.get("token")
     if not isinstance(supplied, str) or not 1 <= len(supplied) <= MAX_TOKEN_LENGTH:
-        return False
-    return hmac.compare_digest(supplied.encode(), config.token.encode())
+        return None
+    if not hmac.compare_digest(supplied.encode(), config.token.encode()):
+        return None
+    if "nonce" not in value:
+        return Authentication(nonce=None)
+    nonce = value["nonce"]
+    if not isinstance(nonce, str) or not MIN_NONCE_LENGTH <= len(nonce) <= MAX_NONCE_LENGTH:
+        return None
+    return Authentication(nonce=nonce)
+
+
+def token_matches(config: KernelAuthConfig, frame: object) -> bool:
+    return check_authentication(config, frame) is not None
+
+
+def server_proof(token: str, nonce: str) -> str:
+    """Hex HMAC-SHA256 keyed by the token over the client's nonce string."""
+    return hmac.new(token.encode(), nonce.encode(), hashlib.sha256).hexdigest()
+
+
+def authenticated_ack(config: KernelAuthConfig, authentication: Authentication) -> str:
+    ack: dict[str, str] = {"type": "authenticated"}
+    if authentication.nonce is not None and config.token is not None:
+        ack["proof"] = server_proof(config.token, authentication.nonce)
+    return json.dumps(ack)
 
 
 def handshake_violation(
@@ -204,12 +279,77 @@ async def _reject(websocket: Any, code: int, reason: str) -> None:
         pass
 
 
+def _raise_message_limit(websocket: Any, max_size: int | None) -> None:
+    """Lift the pre-auth frame cap once the peer has authenticated.
+
+    websockets reads the limit when its frame parser *starts* waiting for the
+    next frame, so changing the attribute alone only affects the frame after
+    next.  While the parser is idle (nothing buffered, no fragmented message in
+    flight) it is therefore restarted so the very next frame gets the new
+    limit.  The attribute is ``max_size`` up to websockets 15 and
+    ``max_message_size`` from 16.
+    """
+    protocol = getattr(websocket, "protocol", None)
+    if max_size is None or protocol is None:
+        return
+    updated = False
+    for name in ("max_size", "max_message_size"):
+        if hasattr(protocol, name):
+            setattr(protocol, name, max_size)
+            updated = True
+    if not updated:
+        return
+    buffered = getattr(getattr(protocol, "reader", None), "buffer", None)
+    idle = not buffered and not getattr(protocol, "cur_size", None) and not getattr(
+        protocol, "current_size", None
+    )
+    if idle and callable(getattr(protocol, "parse", None)) and hasattr(protocol, "parser"):
+        protocol.parser = protocol.parse()
+        next(protocol.parser)
+
+
 def secure_handler(
     inner: Handler,
     config: KernelAuthConfig,
     auth_timeout: float = AUTH_TIMEOUT_SECONDS,
+    *,
+    max_size_after_auth: int | None = None,
+    max_pre_auth_connections: int = MAX_PRE_AUTH_CONNECTIONS,
 ) -> Handler:
-    """Wrap ``inner`` so it only ever sees authenticated, allowed connections."""
+    """Wrap ``inner`` so it only ever sees authenticated, allowed connections.
+
+    The server is expected to be started with ``max_size=PRE_AUTH_MAX_SIZE``;
+    ``max_size_after_auth`` is the limit applied once the peer authenticated.
+    """
+    pending = 0
+
+    async def await_first_frame(websocket: Any) -> tuple[object | None, bool]:
+        """Hold a pre-auth slot only while waiting for the first frame."""
+        nonlocal pending
+        pending += 1
+        try:
+            return await asyncio.wait_for(websocket.recv(), auth_timeout), True
+        except Exception:  # noqa: BLE001 - timeout, close or protocol error
+            return None, False
+        finally:
+            pending -= 1
+
+    async def authenticate(websocket: Any) -> bool:
+        if pending >= max_pre_auth_connections:
+            await _reject(websocket, CLOSE_BUSY, "too many unauthenticated connections")
+            return False
+        first, received = await await_first_frame(websocket)
+        # The slot is already free: closing a peer that never answers the close
+        # handshake can take seconds and must not keep the slot occupied.
+        if not received:
+            await _reject(websocket, CLOSE_UNAUTHENTICATED, "authentication required")
+            return False
+        authentication = check_authentication(config, first)
+        if authentication is None:
+            await _reject(websocket, CLOSE_UNAUTHENTICATED, "authentication failed")
+            return False
+        await websocket.send(authenticated_ack(config, authentication))
+        return True
 
     async def handler(websocket: Any) -> None:
         # Second line of defence: process_request already rejects these with
@@ -220,16 +360,9 @@ def secure_handler(
         if reason is not None:
             await _reject(websocket, CLOSE_FORBIDDEN, reason)
             return
-        if not config.insecure:
-            try:
-                first = await asyncio.wait_for(websocket.recv(), auth_timeout)
-            except Exception:  # noqa: BLE001 - timeout, close or protocol error
-                await _reject(websocket, CLOSE_UNAUTHENTICATED, "authentication required")
-                return
-            if not token_matches(config, first):
-                await _reject(websocket, CLOSE_UNAUTHENTICATED, "authentication failed")
-                return
-            await websocket.send(json.dumps({"type": "authenticated"}))
+        if not config.insecure and not await authenticate(websocket):
+            return
+        _raise_message_limit(websocket, max_size_after_auth)
         await inner(websocket)
 
     return handler

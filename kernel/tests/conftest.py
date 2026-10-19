@@ -9,3 +9,8 @@ local-only.
 """
 
 collect_ignore_glob = ["* 2.py"]
+
+
+def pytest_configure(config) -> None:
+    # PRD 14 marks multi-second physics and sandbox tests; they still run by default.
+    config.addinivalue_line("markers", "slow: takes more than ~10 s on an idle machine")

@@ -7,6 +7,8 @@ import type { PlatformBridge } from '../platform/bridge';
 import { useEditorStore } from '../stores/editorStore';
 import { useSimulationStore } from '../stores/simulationStore';
 import { useKernel } from './useKernel';
+import { retryKernel } from '../lib/kernelControl';
+import { ackForSent } from '../test/kernelAuthProof';
 
 class FakeSocket {
   static instances: FakeSocket[] = [];
@@ -100,7 +102,7 @@ describe('useKernel authentication', () => {
     expect(useEditorStore.getState().kernelConnected).toBe(false);
     expect(useEditorStore.getState().kernelStatus).toBe('connecting');
 
-    ws.receive({ type: 'authenticated' });
+    ws.receive(ackForSent(ws.sent, 'tok'));
     await waitFor(() => expect(useEditorStore.getState().kernelConnected).toBe(true));
     expect(useEditorStore.getState().kernelStatus).toBe('ready');
   });
@@ -126,9 +128,96 @@ describe('useKernel authentication', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const ws = await socketAfterMount();
     ws.open();
-    ws.receive({ type: 'authenticated' });
+    ws.receive(ackForSent(ws.sent, 'tok'));
     ws.closeFromServer(1006);
     await vi.advanceTimersByTimeAsync(2_500);
     await waitFor(() => expect(FakeSocket.instances.length).toBeGreaterThan(1));
+  });
+});
+
+describe('useKernel mutual authentication', () => {
+  beforeEach(() => {
+    FakeSocket.instances = [];
+    vi.stubGlobal('WebSocket', FakeSocket);
+    useEditorStore.setState({
+      kernelConnected: false, kernelReady: false, kernelStatus: 'idle', kernelError: null, code: '',
+    });
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it('fails with a clear error and does not retry when the ack carries no valid proof', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const ws = await socketAfterMount();
+    ws.open();
+    ws.receive({ type: 'authenticated' }); // what a 0.14.0 or squatting kernel would say
+    await waitFor(() => expect(useEditorStore.getState().kernelStatus).toBe('failed'));
+    expect(useEditorStore.getState().kernelError).toMatch(/could not prove it is the Nuclei kernel/);
+    expect(useEditorStore.getState().kernelConnected).toBe(false);
+    ws.closeFromServer(1000);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(FakeSocket.instances).toHaveLength(1);
+    vi.useRealTimers();
+  });
+});
+
+describe('useKernel fail-closed start', () => {
+  beforeEach(() => {
+    FakeSocket.instances = [];
+    vi.stubGlobal('WebSocket', FakeSocket);
+    useEditorStore.setState({
+      kernelConnected: false, kernelReady: false, kernelStatus: 'idle', kernelError: null, code: '',
+    });
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  function failingWrapper(startKernel: () => Promise<string>) {
+    const failing = { ...bridge, startKernel } as unknown as PlatformBridge;
+    return function Wrapper({ children }: { children: ReactNode }) {
+      return <PlatformProvider bridge={failing}>{children}</PlatformProvider>;
+    };
+  }
+
+  it('surfaces the start_kernel error and never opens a socket (upgrade PoC)', async () => {
+    const startKernel = vi.fn(async () => { throw new Error('Port 9742 is already in use'); });
+    renderHook(() => useKernel(), { wrapper: failingWrapper(startKernel) });
+    await waitFor(() => expect(useEditorStore.getState().kernelStatus).toBe('failed'));
+    // The failure banner supplies the "couldn't start" heading (lib/kernelErrors); the status keeps the Rust reason.
+    expect(useEditorStore.getState().kernelError).toBe('Port 9742 is already in use');
+    expect(FakeSocket.instances).toHaveLength(0);
+  });
+
+  it('retries start_kernel when the user hits Retry', async () => {
+    let calls = 0;
+    const startKernel = vi.fn(async () => {
+      calls += 1;
+      if (calls === 1) throw new Error('boom');
+      return 'started';
+    });
+    renderHook(() => useKernel(), { wrapper: failingWrapper(startKernel) });
+    await waitFor(() => expect(useEditorStore.getState().kernelStatus).toBe('failed'));
+    retryKernel();
+    await waitFor(() => expect(FakeSocket.instances).toHaveLength(1));
+    expect(startKernel).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not connect when the token provider fails after a successful start', async () => {
+    const noToken = {
+      ...bridge,
+      getKernelAuthToken: async () => { throw new Error('Kernel is not running'); },
+    } as unknown as PlatformBridge;
+    renderHook(() => useKernel(), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <PlatformProvider bridge={noToken}>{children}</PlatformProvider>
+      ),
+    });
+    await waitFor(() => expect(useEditorStore.getState().kernelStatus).toBe('failed'));
+    expect(useEditorStore.getState().kernelError).toMatch(/token unavailable/);
+    expect(FakeSocket.instances).toHaveLength(0);
   });
 });

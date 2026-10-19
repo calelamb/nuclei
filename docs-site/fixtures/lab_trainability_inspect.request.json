@@ -1,0 +1,8 @@
+{
+  "type": "trainability_inspect",
+  "code": "from qiskit import QuantumCircuit\nfrom qiskit.circuit import ParameterVector\n\nn = params.get(\"n_qubits\", 4)\ntheta = ParameterVector(\"t\", 2 * n)\nqc = QuantumCircuit(n)\nfor q in range(n):\n    qc.ry(theta[q], q)\nfor q in range(n - 1):\n    qc.cz(q, q + 1)\nfor q in range(n):\n    qc.ry(theta[n + q], q)\n",
+  "language": "python",
+  "params": {
+    "n_qubits": 4
+  }
+}

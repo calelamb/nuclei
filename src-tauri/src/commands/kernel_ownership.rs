@@ -29,8 +29,12 @@ pub struct OwnerRecord {
 
 /// Per-user runtime directory shared with the kernel's own runtime file.
 pub fn runtime_dir() -> Option<PathBuf> {
-    if let Some(dir) = std::env::var_os(RUNTIME_DIR_ENV) {
-        return Some(PathBuf::from(dir));
+    // Dev/test override only: a release build never honours it, matching the
+    // kernel, which the shell launches without it.
+    if cfg!(debug_assertions) {
+        if let Some(dir) = std::env::var_os(RUNTIME_DIR_ENV) {
+            return Some(PathBuf::from(dir));
+        }
     }
     let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"))?;
     Some(PathBuf::from(home).join(".nuclei").join("runtime"))

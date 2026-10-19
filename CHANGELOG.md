@@ -5,7 +5,7 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.15.0] - Unreleased
 
 ### Browser runtime and status bar
 
@@ -30,23 +30,113 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Status bar: one truthful kernel/run item, 24 px height, readable contrast, a named
   22 px theme toggle, and the UI-mode control only in Learn.
 
-### Security hardening
+### Kernel
 
-- The kernel WebSocket now requires a per-launch secret token, an allowed
-  `Origin`, and a loopback `Host` before any request is handled; connections
-  that fail are closed. The desktop app supplies the token automatically, and
-  local scripts read it from a user-only runtime file (see the Kernel API
-  overview in the docs).
-- The kernel refuses to start without a token unless
-  `NUCLEI_KERNEL_INSECURE_DEV=1` is set explicitly.
+- Several kernels can run at once without sharing a token: each kernel writes its
+  own `kernel-<port>.json` runtime file, and `kernel.json` is now the "most recent
+  kernel" pointer (see the Kernel API overview). Nuclei removes a stopped kernel's
+  files, and example clients read the file for the port they connect to. The
+  Nuclei 0.14.1 handshake (token over stdin, server proof, fail-closed connect) is
+  unchanged.
+- Hardware backends are listed off the kernel's event loop, so a slow provider no
+  longer stalls other requests.
+
+### Added — QEC circuit explain
+
+- `qec_explain` statically analyses a Stim circuit: why a detector or observable
+  is non-deterministic and a minimum-weight undetected logical error, with each
+  fault located in the source. See the protocol changelog.
+
+## [0.14.1] - 2026-10-18
+
+### Security
+
+- Kernel connections are now authenticated and origin-checked. Every
+  connection, including the Trainability Lab, the Discovery Engine, audits and
+  conjectures, must present a per-launch session token and come from an
+  allowed origin; the desktop app handles this automatically. This is a
+  **breaking change to the kernel protocol (v2) for external clients**: send
+  `{"type":"authenticate","token":...}` first (see the
+  [protocol changelog](https://getnuclei.dev/docs/reference/protocol-changelog/)).
+- The session token is kept out of every subprocess the kernel starts, and
+  sandboxed candidates cannot read the kernel's runtime file.
 - Nuclei no longer force-kills whatever process is listening on the kernel
-  port; it only stops a kernel it recorded itself and reports a conflict
-  otherwise.
-- The kernel no longer passes its token to child processes, rejects foreign
-  `Origin`/`Host` handshakes with HTTP 403, and QEC campaigns, experiment runs
-  and challenge execution now use the same authenticated connection path.
-- Kernel protocol bumped to v2 (breaking for external clients: send the
-  `authenticate` frame first); see the protocol changelog.
+  port; it only stops a kernel it started and reports a conflict otherwise.
+- Upgrading from 0.14.0: a leftover unauthenticated 0.14.0 kernel (same user,
+  running `kernel/server.py`) is stopped on first launch. The app never
+  connects without a session token, and shows "Couldn't start the kernel"
+  with a Retry button when the kernel cannot start.
+- The kernel proves it knows the session token (`proof` in the `authenticated`
+  ack, answering a client `nonce`), so a program squatting the port cannot pass
+  as the kernel. Third-party clients may still omit the nonce.
+- The app waits for the kernel's ready line before releasing the token. The
+  token reaches the kernel and the QEC Data Engine over stdin, not the
+  environment, and pre-auth frames are capped at 8 KiB. Unauthenticated
+  connections get 3 seconds to identify themselves.
+
+### Fixed
+
+- Dirac hardware submission authenticates to the kernel and verifies its proof
+  before sending any request.
+- The kernel is served with the `websockets` asyncio API, so authentication
+  works on `websockets` 13.x (the new floor, `>=13.0`).
+- The kernel is stopped cleanly when Nuclei quits (SIGTERM with a grace period).
+- Blocking desktop commands no longer run on the main thread, and the Tauri
+  npm packages are aligned with the locked crates.
+
+## [0.14.0] - 2026-10-18
+
+Quantum AI Lab release (PRD 14): two Research-mode instruments for the two
+halves of "quantum AI", built on honest-by-default reporting. This release also
+ships the Unified QEC Workbench and canonical QEC data import below.
+
+### Added — Trainability Lab ("the Microscope")
+
+- A `Trainability Lab` rail view that analyzes the active file's parameterized
+  circuit: per-parameter gradient statistics painted onto the circuit as a
+  heatmap, barren-plateau **scaling verdicts** (barren plateau / polynomial /
+  inconclusive, with ΔAIC and exponent CIs), dynamical Lie algebra dimension and
+  classification with the Ragone et al. cost-variance prediction (summed over
+  simple ideals), expressibility, entangling capability, and loss landscapes.
+- An exact **Pauli Propagation Engine**: gradient variances with no sampling
+  noise and rigorous truncation intervals, to 128 qubits. Unresolved results are
+  reported as intervals, never as point estimates.
+- A batched Lab Compiler (rotation merging, diagonal-run fusion, batched adjoint
+  gradients): 256 gradient samples at 12 qubits in under a second.
+- Trainability lint markers in the editor (TRN001–TRN007, with citations) and an
+  exportable, bit-reproducible **Trainability Certificate**. `⌘⇧↵` runs the
+  analyses.
+
+### Added — Discovery Engine
+
+- LLM-guided evolutionary search over quantum programs (`*.discovery.yaml`):
+  MAP-Elites islands, a screen→full→confirm evaluation cascade, a breadth/depth
+  model ensemble with an AST-mutation baseline, lineage, Pareto front, and
+  champion re-confirmation on fresh seeds.
+- Trusted evaluators the candidate never touches: `qec_memory` (Stim +
+  PyMatching, ten guardrails including exact fault-distance verification),
+  `state_synthesis`, `vqe_ground_state`, and the **Frontier** evaluator, which
+  hunts for ansatzes that stay trainable at scale while staying expensive for
+  Pauli propagation.
+- **Red Queen mode**: an adversary evolves programs to reward-hack the
+  evaluators; an independent audit flags exploits, and every exploit becomes a
+  replayed regression fixture.
+- **Conjecture Engine**: proposes falsifiable trainability conjectures from a
+  run's archive and tests them on held-out circuits (supported / refuted with a
+  counterexample / inconclusive), recorded in a ledger.
+- Works on a standard install: the QEC memory evaluator needs the QEC research
+  pack (Stim and PyMatching, from Environment setup) and says so; state
+  synthesis, VQE, the Frontier evaluator, conjectures and the Trainability Lab
+  need no optional packages.
+- Candidates run in a sandbox: macOS `sandbox-exec` blocks network access,
+  writes outside a private scratch directory, and reads outside an allow-list.
+
+### Added — Kernel protocol v1.3 (additive)
+
+- `trainability_*`, `discovery_*`, `discovery_audit*` and
+  `discovery_conjecture*` message families, with optional `request_id`
+  correlation on synchronous requests. See the
+  [protocol changelog](https://getnuclei.dev/docs/reference/protocol-changelog/).
 
 ### Added — Unified QEC Workbench foundation
 

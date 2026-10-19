@@ -15,6 +15,7 @@ import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 import { useExerciseStore } from '../../stores/exerciseStore';
 import { useLayoutStore, type LayoutPreset } from '../../stores/layoutStore';
 import { ModeChip } from './ModeChip';
+import { LabStatusChips } from '../discovery/LabStatusChips';
 import { IconButton, Menu, Tooltip, type MenuEntry } from '../ui';
 import { isMacPlatform, shortcutLabel } from '../../config/keybindings';
 import { useEditorFocusStore } from '../../stores/editorFocusStore';
@@ -285,6 +286,9 @@ export function StatusBar() {
           <span style={{ flexShrink: 0 }}>: resumable</span>
         </span>
       )}
+
+      {/* PRD 14 — Quantum AI Lab work in flight (discovery run, trainability job). */}
+      <LabStatusChips />
 
       <div style={{ flex: 1 }} />
 

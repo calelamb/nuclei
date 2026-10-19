@@ -84,6 +84,9 @@ ready-to-send JSON:
 } | websocat --no-close ws://localhost:9742
 ```
 
-The first response frame is `{"type": "authenticated"}`. Each response frame
+The first response frame is `{"type": "authenticated"}`. (This one-liner omits
+the optional `nonce`, so there is no `proof` to check; the Python and
+TypeScript clients above send a nonce and verify the proof, see
+[Server proof](/docs/kernel-api/overview/#server-proof).) Each response frame
 prints on its own line; exit with Ctrl-C. Without the authenticate frame the
 kernel closes the connection with code 4401.

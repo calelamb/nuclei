@@ -140,6 +140,9 @@ describe('design guards', () => {
       'components/community/UserProfile.tsx': 1,
       'components/editor/EditorTabStrip.tsx': 1,
       'components/qec/import/QecImportWizard.tsx': 1,
+      'components/discovery/NewDiscoveryWizard.tsx': 2, // Quantum AI Lab (v0.14) range/number inputs
+      'components/discovery/tabs/LineageTab.tsx': 1,
+      'components/lab/primitives.tsx': 2, // the Lab's own field primitives
     };
     const over = files
       .filter((f) => f.rel.endsWith('.tsx'))

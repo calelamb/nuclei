@@ -233,7 +233,7 @@ describe('one name for every command (palette, shortcuts sheet, registry)', () =
     'Dirac', 'Python', 'Qiskit', 'Learn', 'Research', 'QEC', 'Bloch', 'Go', 'Layout',
     // Names of surfaces a command navigates to (the rail's own labels).
     'Explorer', 'Learning', 'Experiments', 'Challenges', 'Hardware', 'Resource', 'Estimator', 'Transpiler',
-    'Histogram', 'Launch', 'Community', 'Plugins', 'Search', 'Circuit', 'Settings', 'Workbench', 'Clean', 'Balanced', 'Full', "What's", 'New',
+    'Discovery', 'Engine', 'Trainability', 'Lab', 'Histogram', 'Launch', 'Community', 'Plugins', 'Search', 'Circuit', 'Settings', 'Workbench', 'Clean', 'Balanced', 'Full', "What's", 'New',
   ]);
 
   it.each(['learn', 'research'] as const)('%s: labels are sentence case (no second capitalised word outside proper nouns)', (mode) => {

@@ -44,10 +44,15 @@ registry) is shared process-wide. {/* server.py:20-23, 162-167 */}
 ## Authentication
 
 The kernel executes code it receives, so every connection must authenticate
-before any request is handled.
+before any request is handled. This is **protocol v2** and it is breaking for
+external clients: a client that does not send the `authenticate` frame first
+is disconnected. See the [protocol changelog](/docs/reference/protocol-changelog/).
 
-1. The kernel reads a secret token from `NUCLEI_KERNEL_TOKEN` (the desktop app
-   generates a fresh one per launch). With no token it refuses to start.
+1. The kernel reads a secret token on startup. The desktop app generates a
+   fresh one per launch and writes it to the kernel's stdin
+   (`NUCLEI_KERNEL_TOKEN_STDIN=1`), never into its environment; scripts that
+   launch a kernel themselves can set `NUCLEI_KERNEL_TOKEN` instead. With no
+   token it refuses to start.
 2. It writes the token and port to user-only (`0600`, directory `0700`) runtime
    files in `~/.nuclei/runtime/` (override the directory with
    `NUCLEI_RUNTIME_DIR`), so local scripts can read them. Each kernel writes
@@ -59,15 +64,57 @@ before any request is handled.
    atomically, and are removed on clean shutdown (SIGTERM/SIGINT). Check that
    `pid` is still alive before trusting a file left behind by a crash.
 3. The first frame on a connection must be
-   `{"type": "authenticate", "token": "<token>"}`. The kernel answers
-   `{"type": "authenticated"}`; a wrong or missing token closes the
-   connection. The token is never sent in the URL.
+   `{"type": "authenticate", "token": "<token>", "nonce": "<64 hex chars>"}`.
+   The kernel answers `{"type": "authenticated", "proof": "<hex>"}` and only
+   then handles requests. The token is never sent in the URL. `nonce` is
+   optional for third-party clients (see [Server proof](#server-proof)).
 4. Browser connections must also come from an allowed `Origin`, and the `Host`
    header must be a loopback name on the kernel's port. Scripts that send no
    `Origin` are accepted only with the token.
 
-For throwaway local experiments only, `NUCLEI_KERNEL_INSECURE_DEV=1` disables
-authentication and prints a warning.
+Every socket the app opens authenticates this way: the editor's, the Trainability
+Lab's, the Discovery Engine's, and the audit and conjecture sessions. Replies
+in the [Quantum AI Lab messages](/docs/kernel-api/messages-lab/) examples start
+after the handshake.
+
+### Server proof
+
+Anything can listen on a free port, so the kernel also proves it knows the
+token. The client sends a fresh random `nonce` (32 random bytes as 64 hex
+characters, 16 to 256 characters accepted) in the `authenticate` frame. The ack
+then carries
+
+```text
+proof = hex( HMAC-SHA256( key = token, message = nonce ) )
+```
+
+where `token` and `nonce` are the strings exactly as sent (UTF-8, the nonce is
+not hex-decoded). The client must compare `proof` in constant time and close
+the connection without sending anything else when it is missing or wrong.
+
+- Nuclei's own client always sends a nonce and **requires** the proof. It holds
+  back every other frame (your code, buffers, credentials) until the proof
+  verifies, and treats a missing or wrong proof as a failed kernel.
+- A kernel started by a Nuclei version before 0.14.1 answers without a proof,
+  so the app refuses it.
+- For third-party clients the nonce stays optional: a frame without `nonce` is
+  still accepted and acknowledged without a `proof`. A frame with a malformed
+  `nonce` (not a string, or outside 16 to 256 characters) closes with `4401`.
+  Sending a nonce and checking the proof is recommended; see
+  [client examples](/docs/kernel-api/client-examples/).
+
+### How a connection is refused
+
+| Situation | Result |
+|-----------|--------|
+| Foreign `Origin` or non-loopback `Host` | HTTP `403` on the WebSocket upgrade; the connection never opens |
+| First frame is not a valid `authenticate` frame, wrong token, malformed `nonce`, or no frame within 3 s | Closed with code `4401` |
+| Frame larger than 8 KiB before authentication | Closed with code `1009` (the normal 1 MiB limit applies once authenticated) |
+| More than 32 simultaneous unauthenticated connections | The extra connection is closed at once with code `4429`; wait a moment and reconnect |
+| Request sent before the `authenticated` ack | Not handled; the connection is closed with `4401` |
+
+A client library's "connection refused with 403" therefore means the `Origin`
+or `Host` is wrong, and a `4401` close means the token is wrong or missing.
 
 ### Threat boundary
 
@@ -82,6 +129,10 @@ token as a sandbox against software you already run as yourself.
 When a client is rejected (WebSocket close code `4401`), the token it presented
 did not match the kernel it reached. The Nuclei app shows "Kernel rejected the
 session token — restart Nuclei" instead of retrying.
+
+For throwaway local experiments only, `NUCLEI_KERNEL_INSECURE_DEV=1` disables
+authentication and prints a warning. The kernel never passes its token to the
+processes it starts (code execution, Lab workers, the discovery sandbox).
 
 ## Running the kernel standalone
 

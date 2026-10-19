@@ -1,0 +1,36 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`irToQiskitProgram > rebuilds the IR gate list as a Qiskit program (snapshot) 1`] = `
+""""
+Counterexample to conjecture cj-1.
+
+Brick CZ circuits stay trainable.
+
+Kernel seed: 1002. Family parameters: {"pattern":"brick","layers":6}.
+Rebuilt by Nuclei's Conjecture Engine from the kernel IR: 3 qubits, 8 gates, 3 parameters.
+"""
+from qiskit import QuantumCircuit
+from qiskit.circuit import Parameter
+
+N_QUBITS = 3
+PARAMETER_NAMES = ["t0", "t1", "t2"]
+
+
+def build() -> QuantumCircuit:
+    qc = QuantumCircuit(N_QUBITS)
+    params = {name: Parameter(name) for name in PARAMETER_NAMES}
+    qc.h(0)
+    qc.ry(params["t0"], 0)
+    qc.rz((2.0 * params["t1"] + 0.5), 1)
+    qc.cz(0, 1)
+    qc.cx(1, 2)
+    qc.rx(params["t2"], 2)
+    qc.s(2)
+    qc.rz(0.25, 0)
+    return qc
+
+
+if __name__ == "__main__":
+    print(build())
+"
+`;

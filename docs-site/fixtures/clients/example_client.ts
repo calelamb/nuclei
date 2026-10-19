@@ -4,6 +4,7 @@
 // Requires the `ws` package: npm install ws
 // (This file is documentation — it mirrors example_client.py, which is the
 // variant exercised by the kernel test suite.)
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -64,8 +65,18 @@ async function drainUntil(terminalType: string): Promise<KernelMessage> {
 }
 
 ws.on('open', async () => {
-  ws.send(JSON.stringify({ type: 'authenticate', token: loadToken(url) }));
-  await drainUntil('authenticated');
+  // Send a random nonce and verify the kernel's proof, HMAC-SHA256(token, nonce)
+  // in hex, so a program squatting the port cannot pass as the kernel.
+  const token = loadToken(url);
+  const nonce = randomBytes(32).toString('hex');
+  ws.send(JSON.stringify({ type: 'authenticate', token, nonce }));
+  const ack = await drainUntil('authenticated');
+  const expected = createHmac('sha256', token).update(nonce).digest();
+  const proof = Buffer.from(typeof ack.proof === 'string' ? ack.proof : '', 'hex');
+  if (proof.length !== expected.length || !timingSafeEqual(proof, expected)) {
+    console.error('peer did not prove it is the Nuclei kernel; refusing to continue');
+    process.exit(1);
+  }
   ws.send(JSON.stringify({ type: 'parse', code: BELL, language: 'python' }));
   const snapshot = await drainUntil('snapshot');
   const data = snapshot.data as { gates: unknown[]; depth: number } | null;

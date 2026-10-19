@@ -452,7 +452,7 @@ describe('left-rail registry', () => {
       'files', 'learning', 'challenges', 'launch', 'community', 'settings',
     ]);
     expect(leftPanelsForMode('research', { developerViews: false })).toEqual([
-      'files', 'experiments', 'qec', 'hardware', 'estimator', 'transpiler', 'launch', 'plugins', 'settings',
+      'files', 'experiments', 'discovery', 'trainability', 'qec', 'hardware', 'estimator', 'transpiler', 'launch', 'plugins', 'settings',
     ]);
   });
 

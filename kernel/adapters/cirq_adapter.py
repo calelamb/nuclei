@@ -2,7 +2,12 @@ import re
 import numpy as np
 from kernel.adapters.base import FrameworkAdapter
 from kernel.adapters._math import step_state_payload
-from kernel.models.snapshot import CircuitSnapshot, SimulationResult, Gate
+from kernel.models.snapshot import (
+    UNBOUND_PARAMETERS_MESSAGE,
+    CircuitSnapshot,
+    Gate,
+    SimulationResult,
+)
 
 try:
     import cirq
@@ -30,7 +35,8 @@ def _gate_name(gate) -> str:
     if isinstance(gate, cirq.ZPowGate) and gate.exponent == 0.25:
         return "T"
     if isinstance(gate, (cirq.XPowGate, cirq.YPowGate, cirq.ZPowGate)):
-        base = type(gate).__name__[0]  # X, Y, or Z
+        # isinstance (not the class name) so cirq.rx/ry/rz subclasses map to RX/RY/RZ.
+        base = "X" if isinstance(gate, cirq.XPowGate) else "Y" if isinstance(gate, cirq.YPowGate) else "Z"
         return f"R{base}"
     if isinstance(gate, cirq.CNotPowGate) and gate.exponent == 1:
         return "CNOT"
@@ -43,6 +49,12 @@ def _gate_name(gate) -> str:
     if isinstance(gate, cirq.MeasurementGate):
         return "Measure"
     return str(gate).upper()
+
+
+def _symbol_name(exponent) -> str:
+    """Name of the free symbol in a symbolic exponent (expression text if several)."""
+    free = sorted(str(sym) for sym in getattr(exponent, "free_symbols", ()))
+    return free[0] if len(free) == 1 else str(exponent)
 
 
 class CirqAdapter(FrameworkAdapter):
@@ -77,9 +89,14 @@ class CirqAdapter(FrameworkAdapter):
                     continue
 
                 params = []
+                symbols: list[str | None] | None = None
                 if hasattr(gate, "exponent") and not isinstance(gate, cirq.MeasurementGate):
                     exp = gate.exponent
-                    if isinstance(exp, (int, float)) and exp not in (0, 1):
+                    if cirq.is_parameterized(exp):
+                        # Unbound symbol: emit 0.0 and name the symbol.
+                        params = [0.0]
+                        symbols = [_symbol_name(exp)]
+                    elif isinstance(exp, (int, float)) and exp not in (0, 1):
                         params = [float(exp) * np.pi]
 
                 if gate_name in ("CNOT", "CZ"):
@@ -101,6 +118,7 @@ class CirqAdapter(FrameworkAdapter):
                     controls=controls,
                     params=params,
                     layer=moment_idx,
+                    symbols=symbols,
                 ))
 
         n_qubits = len(all_qubits)
@@ -122,6 +140,9 @@ class CirqAdapter(FrameworkAdapter):
         if not CIRQ_AVAILABLE:
             raise ImportError("cirq")
         import time
+
+        if cirq.is_parameterized(circuit_obj):
+            raise ValueError(UNBOUND_PARAMETERS_MESSAGE)
 
         start = time.time()
         all_qubits = sorted(circuit_obj.all_qubits())

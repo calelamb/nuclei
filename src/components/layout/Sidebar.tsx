@@ -32,6 +32,12 @@ const EstimatorPanel = lazy(async () => ({
 const TranspilerControls = lazy(async () => ({
   default: (await import('../transpiler/TranspilerControls')).TranspilerControls,
 }));
+const DiscoverySidebar = lazy(async () => ({
+  default: (await import('../discovery/DiscoverySidebar')).DiscoverySidebar,
+}));
+const TrainabilitySidebar = lazy(async () => ({
+  default: (await import('../trainability/TrainabilitySidebar')).TrainabilitySidebar,
+}));
 const QecStudySidebar = lazy(async () => ({
   default: (await import('../qec/workbench/QecStudySidebar')).QecStudySidebar,
 }));
@@ -110,6 +116,8 @@ const VIEW_TITLES: Record<ActivityView, string> = {
   qec: 'QEC Workbench',
   estimator: 'Resource Estimator',
   transpiler: 'Transpiler',
+  discovery: 'Discovery Engine',
+  trainability: 'Trainability Lab',
 };
 
 export function Sidebar({ view, width, onWidthChange }: SidebarProps) {
@@ -205,6 +213,16 @@ export function Sidebar({ view, width, onWidthChange }: SidebarProps) {
         {view === 'transpiler' && (
           <SidebarSuspense>
             <TranspilerControls />
+          </SidebarSuspense>
+        )}
+        {view === 'discovery' && (
+          <SidebarSuspense>
+            <DiscoverySidebar />
+          </SidebarSuspense>
+        )}
+        {view === 'trainability' && (
+          <SidebarSuspense>
+            <TrainabilitySidebar />
           </SidebarSuspense>
         )}
       </div>

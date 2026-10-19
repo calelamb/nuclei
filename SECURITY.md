@@ -26,9 +26,18 @@ The following are in scope for security reports:
 - Path traversal or filesystem access beyond permitted directories
 - Vulnerabilities in dependencies
 
+### Kernel connection security
+
+The kernel executes code it is sent, so since 0.14.1 its localhost WebSocket
+requires a per-launch secret token (first frame), an allowed `Origin`, and a
+loopback `Host`. Local scripts read the token from the user-only file
+`~/.nuclei/runtime/kernel.json`. Reports of a way around any of these gates are
+in scope. See the
+[Kernel API overview](https://getnuclei.dev/docs/kernel-api/overview/#authentication).
+
 ### Out of scope
 
-- The Python kernel executes user-provided code by design (same threat model as any local IDE)
+- The Python kernel executes user-provided code by design (same threat model as any local IDE), once a client has authenticated
 - Social engineering attacks
 - Denial of service against the local application
 
@@ -42,4 +51,5 @@ The following are in scope for security reports:
 
 | Version | Supported |
 |---------|-----------|
-| 0.1.x   | Yes       |
+| 0.14.x  | Yes (0.14.1 or later for kernel connection authentication) |
+| 0.1.x   | No        |

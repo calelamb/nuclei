@@ -52,6 +52,7 @@ were free.
 | <kbd>⌘L</kbd> | Focus the Dirac input |
 | <kbd>⌘I</kbd> | Inline compose (Cmd+K-style) |
 | <kbd>⌘↵</kbd> | Run on the simulator |
+| <kbd>⌘⇧↵</kbd> | Run the analyses in the [Trainability Lab](/docs/research/trainability-lab/) (while it is open) |
 | <kbd>⌘⇧R</kbd> | Open the hardware Launch modal |
 | <kbd>⌘O</kbd> / <kbd>⌘S</kbd> / <kbd>⌘⇧S</kbd> / <kbd>⌘N</kbd> | Open / Save / Save As / New file |
 | <kbd>⌘/</kbd> | Keyboard shortcuts reference |
@@ -67,14 +68,16 @@ rail icon to see its number in the tooltip.
 The rail's contents are mode-specific and computed once from the panel
 registry — there are no per-view feature-flag conditionals scattered through
 the UI. Learn mode shows Learning, Challenges, and Community; Research mode
-shows Experiments, the [QEC Workbench](/docs/research/qec-workbench/), Hardware,
+shows Experiments, the Discovery Engine, the Trainability Lab, the [QEC Workbench](/docs/research/qec-workbench/), Hardware,
 the Resource Estimator, the
 [Transpiler Explorer](/docs/developer-tools/transpiler-explorer/), and Plugins.
 Files, Launch, and Settings appear in both. Search and Circuit are
 developer-view tools, gated behind Settings → Advanced.
 
 In the standard Research rail, Explorer is <kbd>⌘1</kbd>, Experiments is
-<kbd>⌘2</kbd>, and QEC Workbench is <kbd>⌘3</kbd>. The registry order remains
+<kbd>⌘2</kbd>, the [Discovery Engine](/docs/research/discovery-engine/) is
+<kbd>⌘3</kbd>, the [Trainability Lab](/docs/research/trainability-lab/) is
+<kbd>⌘4</kbd>, and QEC Workbench is <kbd>⌘5</kbd>. The registry order remains
 the source of truth; the rail tooltip and command palette show the active
 mapping.
 

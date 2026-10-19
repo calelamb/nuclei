@@ -9,7 +9,10 @@ This file is replay-tested: kernel/tests/test_docs_fixtures.py runs it as a
 subprocess against a live kernel server and asserts the histogram output.
 """
 import asyncio
+import hashlib
+import hmac
 import json
+import secrets
 import os
 import sys
 from urllib.parse import urlparse
@@ -75,11 +78,17 @@ def load_token(url: str | None = None) -> str:
 
 
 async def authenticate(ws, url: str | None = None) -> None:
-    """First frame on every connection: present the token, wait for the ack."""
-    await ws.send(json.dumps({"type": "authenticate", "token": load_token(url)}))
+    """First frame on every connection: present the token and a random nonce,
+    then check the kernel's proof (HMAC-SHA256(token, nonce)) in the ack."""
+    token = load_token(url)
+    nonce = secrets.token_hex(32)
+    await ws.send(json.dumps({"type": "authenticate", "token": token, "nonce": nonce}))
     reply = json.loads(await ws.recv())
     if reply.get("type") != "authenticated":
         raise RuntimeError("kernel rejected the authentication token")
+    expected = hmac.new(token.encode(), nonce.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(str(reply.get("proof", "")), expected):
+        raise RuntimeError("peer did not prove it is the Nuclei kernel; refusing to continue")
 
 
 async def drain_until(ws, terminal_type: str) -> dict:

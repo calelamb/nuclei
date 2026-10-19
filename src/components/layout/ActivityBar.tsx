@@ -1,4 +1,4 @@
-import { Files, Search, Cpu, GraduationCap, Blocks, Settings, Server, Users, Trophy, Rocket, FlaskConical, Calculator, Shuffle, Atom } from 'lucide-react';
+import { Files, Search, Cpu, GraduationCap, Blocks, Settings, Server, Users, Trophy, Rocket, FlaskConical, Calculator, Shuffle, Atom, Dna, Microscope } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { Tooltip } from '../ui/Tooltip';
 import { railShortcutLabel, shortcutLabel } from '../../config/keybindings';
@@ -20,7 +20,9 @@ export type ActivityView =
   | 'experiments'
   | 'qec'
   | 'estimator'
-  | 'transpiler';
+  | 'transpiler'
+  | 'trainability'
+  | 'discovery';
 
 interface ActivityBarProps {
   active: ActivityView | null;
@@ -51,6 +53,8 @@ const ITEM_META: Record<ActivityView, { icon: typeof Files; label: string }> = {
   qec: { icon: Atom, label: 'QEC Workbench' },
   estimator: { icon: Calculator, label: 'Resource Estimator' },
   transpiler: { icon: Shuffle, label: 'Transpiler' },
+  discovery: { icon: Dna, label: 'Discovery Engine' },
+  trainability: { icon: Microscope, label: 'Trainability Lab' },
 };
 
 function ActivityIcon({ item, isActive, onClick, shortcut }: {

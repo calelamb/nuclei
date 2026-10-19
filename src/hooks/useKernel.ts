@@ -9,7 +9,14 @@ import { useSettingsStore } from '../stores/settingsStore';
 import { kernelLanguageFor } from '../types/quantum';
 import type { KernelLanguage, KernelResponse } from '../types/quantum';
 import { KERNEL_WS_URL } from '../config/kernel';
-import { CLOSE_UNAUTHENTICATED, KERNEL_AUTH_REJECTED_MESSAGE, KernelAuthRejectedError, openKernelConnection } from '../services/kernelSocket';
+import {
+  CLOSE_UNAUTHENTICATED,
+  KERNEL_AUTH_REJECTED_MESSAGE,
+  KernelAuthRejectedError,
+  KernelProofError,
+  KernelTokenUnavailableError,
+  openKernelConnection,
+} from '../services/kernelSocket';
 import type { PyodideKernel } from '../platform/pyodideKernel';
 import type { PyodideRuntimeClient } from '../platform/pyodide/pyodideClient';
 import {
@@ -133,6 +140,7 @@ export function useKernel() {
 
       authenticated.then(onAuthenticated, (error: unknown) => {
         if (error instanceof KernelAuthRejectedError) failAuthRejected();
+        else if (error instanceof KernelProofError) { if (mountedRef.current) failKernel(error.message); }
         else if (mountedRef.current && ws.readyState === WebSocket.OPEN) ws.close();
       });
 
@@ -154,6 +162,8 @@ export function useKernel() {
         if (!mountedRef.current) return;
         // A rejected token will be rejected again: report it, don't loop.
         if (event.code === CLOSE_UNAUTHENTICATED) { failAuthRejected(); return; }
+        // An impostor kernel (no valid proof) is fatal too; do not loop on it.
+        if (useEditorStore.getState().kernelStatus === 'failed') return;
 
         if (retryCountRef.current < MAX_RETRIES) {
           retryCountRef.current++;
@@ -175,6 +185,12 @@ export function useKernel() {
       };
 
       ws.onerror = () => { ws.close(); };
+    }, (error: unknown) => {
+      // The shell would not give us a token: never fall back to talking to an
+      // unauthenticated listener. Report it and wait for the user's Retry.
+      if (!mountedRef.current) return;
+      const detail = error instanceof KernelTokenUnavailableError ? error.message : String(error);
+      failKernel(`Couldn't connect to the kernel: ${detail}`);
     });
   }, [failAuthRejected, failKernel, handleMessage, isWeb, platform]);
 

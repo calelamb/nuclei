@@ -1,0 +1,164 @@
+"""Small circuit builders shared by the trainability job tests."""
+
+from __future__ import annotations
+
+from kernel.trainability.ir import IrGate, ParamCircuit, ParamRef
+
+
+def build(n: int, spec: list[tuple], params: list[str] | None = None) -> ParamCircuit:
+    """spec items: (name, qubits) or (name, qubits, angle_or_param_name)."""
+    gates = []
+    for i, item in enumerate(spec):
+        name, qubits, *rest = item
+        angles = tuple(ParamRef(a) if isinstance(a, str) else a for a in rest)
+        gates.append(IrGate(name, tuple(qubits), angles, i))
+    return ParamCircuit(n, gates, params or [], "native", [])
+
+
+def deep_random(n: int, layers: int) -> ParamCircuit:
+    """RY-RZ-RY rotations on every qubit then a CZ ring, repeated."""
+    spec: list[tuple] = []
+    params: list[str] = []
+    for layer in range(layers):
+        for q in range(n):
+            for axis in ("RY", "RZ", "RY"):
+                name = f"t{len(params)}"
+                params.append(name)
+                spec.append((axis, (q,), name))
+        for q in range(n):
+            if n > 1:
+                spec.append(("CZ", (q, (q + 1) % n)))
+    return build(n, spec, params)
+
+
+def ghz(n: int) -> ParamCircuit:
+    return build(n, [("H", (0,))] + [("CX", (q, q + 1)) for q in range(n - 1)])
+
+
+# ------------------------------------------------------------------ fakes
+
+import asyncio  # noqa: E402
+import contextlib  # noqa: E402
+import json  # noqa: E402
+import os  # noqa: E402
+import textwrap  # noqa: E402
+import time  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+from kernel.tests._auth_harness import StreamingWS as _BaseStreamingWS, serve_authenticated  # noqa: E402
+
+FAKE_MODULE = "fake_trn_analyses"
+FAKE_SOURCE = textwrap.dedent('''
+    import time
+
+    HANG_SEED = 777
+    BOOM_SEED = 888
+    GRANDCHILD_SEED = 999
+    CPU_SEED = 555
+
+
+    def _spawn_pipe_holding_grandchild():
+        """A grandchild in its own session that inherits every pipe (so the protocol stdout stays open)."""
+        import os, stat, subprocess, sys
+        fds = []
+        for fd in range(3, 64):
+            try:
+                if stat.S_ISFIFO(os.fstat(fd).st_mode):
+                    os.set_inheritable(fd, True)
+                    fds.append(fd)
+            except OSError:
+                pass
+        subprocess.Popen([sys.executable, "-c", "import time; time.sleep(8)"], pass_fds=fds,
+                         start_new_session=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL)
+
+
+    def gradient_statistics(circuit, observable, *, samples, seed, init, method, backend, progress, cancel):
+        progress(0.5, "half way")
+        if seed == HANG_SEED:
+            time.sleep(600)
+        if seed == BOOM_SEED:
+            raise RuntimeError("boom in gradients")
+        if seed == GRANDCHILD_SEED:
+            _spawn_pipe_holding_grandchild()
+        if seed == CPU_SEED:
+            import resource
+            return {"cpu_limit": list(resource.getrlimit(resource.RLIMIT_CPU))}
+        return {"samples": samples, "init": init, "method": method, "backend": backend,
+                "n_qubits": circuit.n_qubits, "observable": observable.to_text(), "per_parameter": []}
+
+
+    def scaling_study(build, *, qubits, layers, observable_spec, samples, seed, init, method, backend,
+                      progress, cancel):
+        points = []
+        for n in qubits:
+            for layer in layers:
+                circuit = build(n, layer)
+                points.append({"n_qubits": circuit.n_qubits, "n_layers": layer,
+                               "n_params": len(circuit.parameters)})
+        return {"points": points, "fits": [], "observable_spec": observable_spec}
+
+
+    def lie_algebra(circuit, *, observable, max_dimension, time_budget_s, progress, cancel):
+        return {"status": "complete", "dimension": 3, "max_dimension": max_dimension,
+                "time_budget_s": time_budget_s}
+''')
+
+QISKIT_CODE = (
+    "from qiskit import QuantumCircuit\n"
+    "from qiskit.circuit import Parameter\n"
+    "n = int(params.get('n_qubits', 2))\n"
+    "layers = int(params.get('n_layers', 1))\n"
+    "qc = QuantumCircuit(n)\n"
+    "for layer in range(layers):\n"
+    "    for q in range(n):\n"
+    "        qc.ry(Parameter(f'a{layer}_{q}'), q)\n"
+    "    for q in range(n - 1):\n"
+    "        qc.cz(q, q + 1)\n"
+)
+
+
+def write_fake_analyses(directory: Path) -> Path:
+    path = directory / f"{FAKE_MODULE}.py"
+    path.write_text(FAKE_SOURCE, encoding="utf-8")
+    return path
+
+
+class StreamingWS(_BaseStreamingWS):
+    """Drives the kernel handler like a live, authenticated connection."""
+
+    def __init__(self) -> None:
+        super().__init__(default_timeout=180.0)
+
+
+@contextlib.asynccontextmanager
+async def connection():
+    """Open a fake connection; closing it runs the server's owner release."""
+    from kernel import server
+
+    ws = StreamingWS()
+    task = asyncio.create_task(serve_authenticated(ws, server._handle_connection))
+    try:
+        yield ws
+    finally:
+        ws.close()
+        await asyncio.wait_for(task, timeout=120)
+
+
+def pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def wait_gone(pids: list[int], timeout: float = 60.0) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if not any(pid_alive(p) for p in pids):
+            return True
+        time.sleep(0.05)
+    return False

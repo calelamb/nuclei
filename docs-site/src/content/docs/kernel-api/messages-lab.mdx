@@ -1,0 +1,301 @@
+---
+title: "Quantum AI Lab messages"
+description: "Protocol v1.3: the trainability_* and discovery_* families (Trainability Lab, Discovery Engine, Red Queen audits and the Conjecture Engine), with replay-tested examples captured from the real kernel."
+---
+
+import { Code, Aside } from '@astrojs/starlight/components';
+import tiReq from '../../../../fixtures/lab_trainability_inspect.request.json?raw';
+import tiRes from '../../../../fixtures/lab_trainability_inspect.responses.json?raw';
+import tlReq from '../../../../fixtures/lab_trainability_lint.request.json?raw';
+import tlRes from '../../../../fixtures/lab_trainability_lint.responses.json?raw';
+import tlbReq from '../../../../fixtures/lab_trainability_lint_invalid_observable.request.json?raw';
+import tlbRes from '../../../../fixtures/lab_trainability_lint_invalid_observable.responses.json?raw';
+import tcReq from '../../../../fixtures/lab_trainability_cancel_unknown.request.json?raw';
+import tcRes from '../../../../fixtures/lab_trainability_cancel_unknown.responses.json?raw';
+import tsbReq from '../../../../fixtures/lab_trainability_start_invalid.request.json?raw';
+import tsbRes from '../../../../fixtures/lab_trainability_start_invalid.responses.json?raw';
+import deReq from '../../../../fixtures/lab_discovery_evaluators.request.json?raw';
+import deRes from '../../../../fixtures/lab_discovery_evaluators.responses.json?raw';
+import dmReq from '../../../../fixtures/lab_discovery_mutate.request.json?raw';
+import dmRes from '../../../../fixtures/lab_discovery_mutate.responses.json?raw';
+import dcReq from '../../../../fixtures/lab_discovery_cancel.request.json?raw';
+import dcRes from '../../../../fixtures/lab_discovery_cancel.responses.json?raw';
+import dekReq from '../../../../fixtures/lab_discovery_evaluate_unknown_evaluator.request.json?raw';
+import dekRes from '../../../../fixtures/lab_discovery_evaluate_unknown_evaluator.responses.json?raw';
+import decReq from '../../../../fixtures/lab_discovery_evaluate_invalid_config.request.json?raw';
+import decRes from '../../../../fixtures/lab_discovery_evaluate_invalid_config.responses.json?raw';
+import dacReq from '../../../../fixtures/lab_discovery_audit_cancel.request.json?raw';
+import dacRes from '../../../../fixtures/lab_discovery_audit_cancel.responses.json?raw';
+import cjsReq from '../../../../fixtures/lab_discovery_conjecture_schema.request.json?raw';
+import cjsRes from '../../../../fixtures/lab_discovery_conjecture_schema.responses.json?raw';
+import cjcReq from '../../../../fixtures/lab_discovery_conjecture_cancel.request.json?raw';
+import cjcRes from '../../../../fixtures/lab_discovery_conjecture_cancel.responses.json?raw';
+import cjiReq from '../../../../fixtures/lab_discovery_conjecture_invalid.request.json?raw';
+import cjiRes from '../../../../fixtures/lab_discovery_conjecture_invalid.responses.json?raw';
+import tsStream from '../../../../fixtures/lab/trainability_start.stream.json?raw';
+import evStream from '../../../../fixtures/lab/discovery_evaluate.stream.json?raw';
+import auStream from '../../../../fixtures/lab/discovery_audit.stream.json?raw';
+import cjStream from '../../../../fixtures/lab/discovery_conjecture_test.stream.json?raw';
+
+<Aside type="note" title="Protocol v1.3 — Quantum AI Lab">
+Everything on this page is additive over v1.2: new message types only. Clients
+that never send a `trainability_*` or `discovery_*` message see no change.
+Every example is a fixture replayed against the real kernel handlers by
+`kernel/tests/test_docs_fixtures.py` (single replies) and
+`kernel/tests/test_docs_lab_fixtures.py` (streams). Fields that vary run to run
+(timings, fingerprints, library versions) show as `"<any>"`, and floating-point
+values as `"<approx:value:tolerance>"`.
+</Aside>
+
+## Conventions
+
+- **Authenticate first** (protocol v2). Every Lab connection begins with
+  `{"type": "authenticate", "token": "<token>"}` and waits for
+  `{"type": "authenticated"}`; see [Authentication](/docs/kernel-api/overview/#authentication).
+  The examples below show the messages that follow the handshake, and the
+  replay tests send the handshake through the real authentication gate before
+  every fixture.
+- Replies are flat `{"type": ...}` objects. Failures are
+  `{"type": "error", "phase": "trainability" | "discovery", "code", "message"}`
+  plus `job_id`, `run_id`, `candidate_id`, `path` or `column` where they apply.
+- **Sync requests** (`trainability_inspect`, `trainability_lint`, the `*_cancel`
+  messages, `discovery_evaluators`, `discovery_mutate`, `discovery_conjecture_schema`)
+  answer with one message.
+- **Job requests** (`trainability_start`, `discovery_evaluate`, `discovery_audit`,
+  `discovery_conjecture_test`) run in subprocesses and stream. The client
+  chooses the id for trainability and conjecture jobs (`job_id`); discovery
+  jobs are keyed by `run_id` and `candidate_id`. A job always ends with its
+  terminal message, even when cancelled.
+- Closing the WebSocket cancels every job the connection owns.
+- A web build has no kernel; the Lab needs the desktop app (or a kernel you run yourself).
+
+## Trainability Lab
+
+### `trainability_inspect`
+
+Executes the code once (same trust as `execute`), finds the parameterized
+circuit and reports what the Lab can analyze. Optional fields: `language`,
+`params`.
+
+<Code code={tiReq} lang="json" title="lab_trainability_inspect.request.json" />
+<Code code={tiRes} lang="json" title="lab_trainability_inspect.responses.json" />
+
+`sweepable_params` lists the names the code reads through `params.get("name")` or `params["name"]`, which the scaling study can sweep.
+`param_gates[].source_index` is the gate's position in the framework's own circuit order.
+
+### `trainability_lint`
+
+The editor-time lint: rules TRN001 to TRN007 under a 0.35 s compute budget.
+`observable` is optional (the code's `nuclei_observable`, else `preset:local_z`).
+Rules that need a complete Lie algebra closure are skipped, and named in
+`summary.skipped_rules`, if it does not finish in time.
+
+<Code code={tlReq} lang="json" title="lab_trainability_lint.request.json" />
+<Code code={tlRes} lang="json" title="lab_trainability_lint.responses.json" />
+
+A malformed observable answers with an `error` whose `column` is the 0-based
+offset of the problem in the observable text:
+
+<Code code={tlbReq} lang="json" title="lab_trainability_lint_invalid_observable.request.json" />
+<Code code={tlbRes} lang="json" title="lab_trainability_lint_invalid_observable.responses.json" />
+
+See [the lint rule table](/docs/research/trainability-lab/#lint-rules) for what each code means.
+
+### `trainability_start`
+
+Starts an analysis job. Required: `job_id` (client-chosen, at most 128 characters),
+`code`, `observable` (may be empty). Optional: `language`, `params`, `analyses`
+(a subset of `gradients`, `scaling`, `lie`, `expressibility`, `entanglement`,
+`landscape`) and `settings` (clamped; the clamped values come back in
+`provenance.settings`).
+
+Stream: `trainability_started`, `trainability_progress` (at most about 10 per second,
+omitted from the fixture), one `trainability_partial` per finished analysis, then
+`trainability_result` with `status` `complete`, `cancelled` or `failed`, per-analysis
+`results` and `errors`, and the `provenance` block that powers the
+[Trainability Certificate](/docs/research/trainability-lab/#the-trainability-certificate).
+
+<Code code={tsStream} lang="json" title="lab/trainability_start.stream.json" />
+
+At most 2 jobs run per connection and 4 globally; more answer `trainability_busy`.
+Jobs are killed after 20 minutes. A request with no `job_id` is refused:
+
+<Code code={tsbReq} lang="json" title="lab_trainability_start_invalid.request.json" />
+<Code code={tsbRes} lang="json" title="lab_trainability_start_invalid.responses.json" />
+
+### `trainability_cancel`
+
+Replies `trainability_cancelled` with `accepted: true` when the job was running.
+
+<Code code={tcReq} lang="json" title="lab_trainability_cancel_unknown.request.json" />
+<Code code={tcRes} lang="json" title="lab_trainability_cancel_unknown.responses.json" />
+
+### Trainability error codes
+
+| Code | Meaning |
+|------|---------|
+| `invalid_request` | A field is missing or the wrong type |
+| `invalid_observable` | The observable does not parse; carries `column` |
+| `compile_error` | The code has a syntax error |
+| `unbound_parameters` | The circuit still has free symbols the code never binds |
+| `ppe_not_applicable`, `ppe_required` | The exact Pauli-propagation engine was requested (or needed beyond 20 qubits) but the circuit is outside its class |
+| `analysis_unavailable`, `analysis_failed` | The analysis could not run, or raised |
+| `out_of_memory` | The analysis exhausted memory |
+| `trainability_busy` | Too many jobs for this connection or kernel |
+
+Error codes raised by the circuit converters (for example an unsupported gate) are passed through with their own code.
+
+## Discovery Engine
+
+### `discovery_evaluators`
+
+Lists the registered evaluators. Each entry carries `kind`, `version`, `title`,
+`description`, `task`, `entry_signature`, `objectives`, `descriptors`, a JSON
+Schema 2020-12 `config_schema` and a `default_config`. The fixture below pins
+the order and the kinds; the other fields are summarized as `"<any>"`.
+
+<Code code={deReq} lang="json" title="lab_discovery_evaluators.request.json" />
+<Code code={deRes} lang="json" title="lab_discovery_evaluators.responses.json" />
+
+Kinds: `qec_memory`, `state_synthesis`, `vqe_ground_state`, `trainability_frontier`.
+
+Every entry also carries `available` (boolean). The installed app does not ship
+Stim or PyMatching (they come from the in-app Research catalog), so `qec_memory`
+is still listed but reports `available: false` together with `missing` (import
+names, for example `["stim", "pymatching"]`) and `install`
+(`{catalog_ids, hint}`, the Research catalog entry ids). `discovery_evaluate`
+and `discovery_audit` for such an evaluator fail fast with
+`{type: "error", phase: "discovery", code: "missing_dependency", message, missing, install}`.
+The other evaluators, conjectures and the whole Trainability Lab need only
+numpy and the quantum frameworks. Clients on older kernels see no `available`
+field and should treat that as available. The fixture above was recorded with
+the research packages installed, so every entry is available.
+
+### `discovery_evaluate`
+
+Scores one candidate program. Required: `run_id`, `candidate_id`, `evaluator`
+(`{kind, config}`), `program`, `seed`. Optional: `entry` (default per
+evaluator), `stage` (`screen`, `full`, `confirm`; default `full`).
+The reply is `discovery_evaluate_accepted` with a `queue_position`, then later
+one `discovery_evaluation` carrying the evaluation record.
+
+<Code code={evStream} lang="json" title="lab/discovery_evaluate.stream.json" />
+
+The record is always returned, whatever happened: `status` is `scored`,
+`rejected` (a guardrail failed; see `rejection` and the `guardrails` list,
+in which later guardrails are `skipped`) or `failed` (the sandbox or scorer
+broke; see `failure`). `isolation` says how the candidate was contained:
+`sandbox-exec` (macOS), `bwrap` (Linux) or `process`.
+`cache_hit: true` means an in-kernel LRU (512 entries, keyed by program,
+fingerprint, seed and stage) answered.
+
+Errors: an unknown kind and a config that fails the schema.
+
+<Code code={dekReq} lang="json" title="lab_discovery_evaluate_unknown_evaluator.request.json" />
+<Code code={dekRes} lang="json" title="lab_discovery_evaluate_unknown_evaluator.responses.json" />
+
+<Code code={decReq} lang="json" title="lab_discovery_evaluate_invalid_config.request.json" />
+<Code code={decRes} lang="json" title="lab_discovery_evaluate_invalid_config.responses.json" />
+
+### `discovery_cancel`
+
+`candidate_id` is optional; omit it to cancel everything in a run. `cancelled`
+counts jobs. A cancelled job still emits a `discovery_evaluation` with status
+`failed` and code `cancelled`.
+
+<Code code={dcReq} lang="json" title="lab_discovery_cancel.request.json" />
+<Code code={dcRes} lang="json" title="lab_discovery_cancel.responses.json" />
+
+### `discovery_mutate`
+
+The AST baseline mutator. `start_marker` and `end_marker` default to
+`# EVOLVE-BLOCK-START` and `# EVOLVE-BLOCK-END`; `count` is 1 to 64. The same
+program and seed give the same mutations.
+
+<Code code={dmReq} lang="json" title="lab_discovery_mutate.request.json" />
+<Code code={dmRes} lang="json" title="lab_discovery_mutate.responses.json" />
+
+### Discovery error codes
+
+| Code | Meaning |
+|------|---------|
+| `invalid_request` | A field is missing or malformed |
+| `invalid_config` | The evaluator config failed validation |
+| `unknown_evaluator` | No evaluator of that kind |
+| `discovery_busy` | More than 64 jobs queued for this connection |
+| `mutation_failed` | The program could not be mutated (for example it does not parse) |
+| `discovery_internal` | A handler bug; the connection survives |
+
+## Red Queen audits (`discovery_audit*`)
+
+An audit re-scores a candidate's artifact independently of the evaluator and
+compares the two (see [Red Queen mode](/docs/research/discovery-engine/#red-queen-mode)).
+
+### `discovery_audit`
+
+Required: `run_id`, `candidate_id`, `evaluator`, `program`, `seed` and
+`evaluation` (the record the evaluator produced, with a valid `status`).
+Evaluators without an audit answer `audit_unavailable`.
+The reply is `discovery_audit_accepted`, then `discovery_audit_result`.
+`audit.verdict` is `consistent`, `exploit` or `inconclusive`; `gap` is
+evaluator fitness minus audit fitness; every `checks[]` entry is shown, passed or not.
+
+<Code code={auStream} lang="json" title="lab/discovery_audit.stream.json" />
+
+### `discovery_audit_cancel`
+
+<Code code={dacReq} lang="json" title="lab_discovery_audit_cancel.request.json" />
+<Code code={dacRes} lang="json" title="lab_discovery_audit_cancel.responses.json" />
+
+## Conjecture Engine (`discovery_conjecture*`)
+
+### `discovery_conjecture_schema`
+
+Returns what a conjecture may say: the structural `features` a predicate can
+filter on, the `quantities` a prediction can bound, the test-family JSON Schema
+(`families`), the predicate grammar and the `limits` (circuits 5 to 32, points
+4 to 8, n up to 128, 60 s per circuit, 600 s total). The app validates every
+model-proposed conjecture against this reply, so the model cannot propose what
+the kernel will not run.
+
+<Code code={cjsReq} lang="json" title="lab_discovery_conjecture_schema.request.json" />
+<Code code={cjsRes} lang="json" title="lab_discovery_conjecture_schema.responses.json" />
+
+### `discovery_conjecture_test`
+
+Required: `job_id`, `conjecture`, optional `seed` (0 to 2^31 - 1, default 0).
+Stream: `discovery_conjecture_started`, `discovery_conjecture_progress`
+(throttled; omitted from the fixture), one `discovery_conjecture_evidence` per
+held-out circuit, then `discovery_conjecture_result` with `status`
+`complete`, `cancelled` or `failed`. A `complete` result carries a
+`verdict` (`supported`, `refuted` or `inconclusive`), a `tally`, the evidence,
+any `counterexamples` (each with the IR needed to rebuild the circuit) and a
+`fingerprint` of the tester.
+
+The example below is a real run, and it is a refutation: the conjecture
+claimed that brick-pattern CZ circuits with Y and Z rotations keep
+`beta_upper95` below 0.1 under a local observable; every one of the five
+held-out circuits violated it. Evidence and counterexample bodies are
+summarized as `"<any>"` in the fixture.
+
+<Code code={cjStream} lang="json" title="lab/discovery_conjecture_test.stream.json" />
+
+A malformed conjecture is refused before anything runs, with the `path` of the
+first problem:
+
+<Code code={cjiReq} lang="json" title="lab_discovery_conjecture_invalid.request.json" />
+<Code code={cjiRes} lang="json" title="lab_discovery_conjecture_invalid.responses.json" />
+
+### `discovery_conjecture_cancel`
+
+<Code code={cjcReq} lang="json" title="lab_discovery_conjecture_cancel.request.json" />
+<Code code={cjcRes} lang="json" title="lab_discovery_conjecture_cancel.responses.json" />
+
+### Conjecture error codes
+
+| Code | Meaning |
+|------|---------|
+| `invalid_conjecture` | The conjecture failed validation; `path` names the field |
+| `invalid_request` | Bad `job_id`, `seed` or duplicate job |
+| `conjecture_busy` | Too many tests running |
+| `conjecture_internal` | A handler bug or the worker failed to start |

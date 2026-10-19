@@ -24,6 +24,8 @@ import { personaPreamble } from '../services/diracPersona';
 import { useExperimentUiStore } from '../stores/experimentUiStore';
 import { useExperimentStore } from '../services/experimentStore';
 import { buildExperimentContext } from '../services/experimentContext';
+import { buildTrainabilityContextFromStores } from '../services/trainability/contextFromStores';
+import { buildDiscoveryContextFromStores } from '../services/discovery/contextFromStores';
 import { buildQecContext } from '../services/qecContext';
 import { useQecStore } from '../stores/qecStore';
 import { useQecCampaignStore } from '../stores/qecCampaignStore';
@@ -218,7 +220,7 @@ const TOOL_DEFINITIONS = [
 // services/diracRouting.ts so the Settings → Dirac AI knobs are applied
 // in one pure, tested place.
 
-function buildContextBlock(plan: ContextPlan): string {
+export function buildContextBlock(plan: ContextPlan): string {
   const { code, framework } = useEditorStore.getState();
   const snapshot = useCircuitStore.getState().snapshot;
   const { result, terminalOutput } = useSimulationStore.getState();
@@ -325,6 +327,15 @@ function buildContextBlock(plan: ContextPlan): string {
         parts.push(buildExperimentContext({ ...experiment, spec: experiment.spec }, selectedRuns));
       }
     }
+  }
+
+  // PRD 14 — Trainability Lab and Discovery Engine context (Research only, guarded like the
+  // experiments context above; Learn mode's assembly is unaffected).
+  if (workspaceMode === 'research' && includeExperimentContext(contextDepth)) {
+    const trainabilityContext = buildTrainabilityContextFromStores();
+    if (trainabilityContext) parts.push(trainabilityContext);
+    const discoveryContext = buildDiscoveryContextFromStores();
+    if (discoveryContext) parts.push(discoveryContext);
   }
 
   return parts.join('\n\n');

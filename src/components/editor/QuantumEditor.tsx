@@ -26,6 +26,8 @@ import { useEditorFocusStore } from '../../stores/editorFocusStore';
 import { syncTabFocusToStore } from './tabFocusSync';
 import { isMacPlatform } from '../../config/keybindings';
 import type { Framework } from '../../types/quantum';
+import { useTrainabilityLint } from '../../services/trainability/useTrainabilityLint';
+import { useTrainabilityReveal } from '../../services/trainability/useTrainabilityReveal';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
 type StandaloneEditor = monaco.editor.IStandaloneCodeEditor;
@@ -285,6 +287,11 @@ export function QuantumEditor() {
     }).filter((m) => m.startLineNumber >= 1 && m.startLineNumber <= lineCount);
     monacoApi.editor.setModelMarkers(model, 'ruff', markers);
   }, [lintDiagnostics, language]);
+
+  // PRD 14 — Research-mode trainability markers (owner 'trainability') and
+  // jump-to-line from the Trainability Lab's lint list. Logic lives in hooks.
+  useTrainabilityLint({ monacoApi: monacoInstance, editor: editorInstance, language });
+  useTrainabilityReveal(editorInstance);
 
   const handleChange = useCallback((value: string | undefined) => {
     if (value !== undefined) {

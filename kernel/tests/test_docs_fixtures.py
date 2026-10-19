@@ -62,6 +62,7 @@ with mock.patch.dict(os.environ, {
     import kernel.server as server
 
 from kernel import auth
+from ._auth_harness import HandshakeSocket, serve_authenticated
 import kernel.hardware.credential_store as credential_store
 from kernel.executor import ADAPTER_SPECS
 from kernel.hardware.job_store import JobStore
@@ -168,7 +169,7 @@ def assert_matches(expected, actual, *, captured_job_id=None, path="$"):
 # ───────────────────────── fake websocket ─────────────────────────
 
 
-class FakeWebSocket:
+class FakeWebSocket(HandshakeSocket):
     """In-process stand-in for a websockets server connection.
 
     ``handle_message`` consumes its socket with ``async for raw in websocket``
@@ -198,7 +199,12 @@ class FakeWebSocket:
         self.steps.append([])
         return json.dumps(request)
 
+    def close(self, code: int, reason: str = ""):
+        return self._reject(code, reason)
+
     async def send(self, text: str) -> None:
+        if self._swallow_ack(text):
+            return
         message = json.loads(text)
         if message.get("type") == "hardware_job_submitted":
             job_id = message.get("job", {}).get("id")
@@ -223,7 +229,7 @@ class FakeWebSocket:
 
 def replay(requests: list[dict]) -> FakeWebSocket:
     websocket = FakeWebSocket(requests)
-    asyncio.run(server.handle_message(websocket))
+    asyncio.run(serve_authenticated(websocket))
     return websocket
 
 
@@ -369,13 +375,13 @@ def test_python_example_client_against_live_server():
     """
     pytest.importorskip("qiskit")
     pytest.importorskip("qiskit_aer")
-    import websockets
+    from websockets.asyncio.server import serve as ws_serve
 
     client_path = FIXTURES_DIR / "clients" / "example_client.py"
     assert client_path.is_file(), f"missing client example: {client_path}"
 
     async def run() -> tuple[int, str, str]:
-        async with websockets.serve(
+        async with ws_serve(
             auth.secure_handler(server.handle_message, _client_auth_config()),
             "127.0.0.1", 0,
             max_size=server.MAX_MESSAGE_SIZE,
@@ -406,13 +412,13 @@ def test_sweep_driver_against_live_server():
     point. Same live-server harness as the example-client test above."""
     pytest.importorskip("qiskit")
     pytest.importorskip("qiskit_aer")
-    import websockets
+    from websockets.asyncio.server import serve as ws_serve
 
     driver_path = FIXTURES_DIR / "clients" / "sweep_driver.py"
     assert driver_path.is_file(), f"missing sweep driver: {driver_path}"
 
     async def run() -> tuple[int, str, str]:
-        async with websockets.serve(
+        async with ws_serve(
             auth.secure_handler(server.handle_message, _client_auth_config()),
             "127.0.0.1", 0,
             max_size=server.MAX_MESSAGE_SIZE,

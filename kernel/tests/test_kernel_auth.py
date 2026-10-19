@@ -319,6 +319,86 @@ def test_real_server_accepts_originless_authenticated_client():
     assert received[0]["type"] == "authenticated"
 
 
+# ── mutual authentication (server proof) ─────────────────────────────────
+
+NONCE = "ab" * 32
+
+
+def _nonce_frame(nonce=NONCE, token=TOKEN) -> str:
+    return json.dumps({"type": "authenticate", "token": token, "nonce": nonce})
+
+
+def _expected_proof(token=TOKEN, nonce=NONCE) -> str:
+    import hashlib
+    import hmac
+    return hmac.new(token.encode(), nonce.encode(), hashlib.sha256).hexdigest()
+
+
+def test_ack_carries_hmac_proof_when_client_sends_a_nonce():
+    async def scenario():
+        ws_server, port = await _serve(_config(), Recorder())
+        try:
+            return await _attempt(port, [_nonce_frame()])
+        finally:
+            ws_server.close()
+    received, _ = _run(scenario())
+    assert received[0] == {"type": "authenticated", "proof": _expected_proof()}
+
+
+def test_ack_has_no_proof_for_a_legacy_frame_without_a_nonce():
+    async def scenario():
+        ws_server, port = await _serve(_config(), Recorder())
+        try:
+            return await _attempt(port, [_auth_frame()])
+        finally:
+            ws_server.close()
+    received, _ = _run(scenario())
+    assert received[0] == {"type": "authenticated"}
+
+
+@pytest.mark.parametrize("nonce", [7, None, "", "short", "x" * 257, ["a"]])
+def test_malformed_nonce_is_refused(nonce):
+    async def scenario():
+        inner = Recorder()
+        ws_server, port = await _serve(_config(), inner)
+        try:
+            return inner, await _attempt(port, [_nonce_frame(nonce), '{"type":"ping"}'])
+        finally:
+            ws_server.close()
+    inner, (received, close_code) = _run(scenario())
+    assert inner.frames == []
+    assert all(m.get("type") != "authenticated" for m in received)
+    assert close_code == auth.CLOSE_UNAUTHENTICATED
+
+
+def test_wrong_token_never_yields_a_proof():
+    async def scenario():
+        ws_server, port = await _serve(_config(), Recorder())
+        try:
+            return await _attempt(port, [_nonce_frame(token="w" * 43)])
+        finally:
+            ws_server.close()
+    received, _ = _run(scenario())
+    assert received == []
+
+
+def test_proof_differs_per_nonce_and_token():
+    assert auth.server_proof(TOKEN, NONCE) != auth.server_proof(TOKEN, "cd" * 32)
+    assert auth.server_proof(TOKEN, NONCE) != auth.server_proof("u" * 43, NONCE)
+
+
+def test_real_server_returns_proof():
+    async def scenario():
+        ws_server = await server._try_serve(0, _config())
+        port = _real_server_port(ws_server)
+        try:
+            return await _attempt(port, [_nonce_frame()])
+        finally:
+            ws_server.close()
+    received, _ = _run(scenario())
+    assert received[0]["proof"] == _expected_proof()
+
+
 # ── configuration (fail closed) ──────────────────────────────────────────
 
 

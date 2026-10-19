@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ackForSent } from '../test/kernelAuthProof';
 import { createKernelSession } from './kernelSession';
 
 class FakeSocket {
@@ -57,13 +58,12 @@ describe('createKernelSession (desktop)', () => {
     await vi.waitFor(() => expect(FakeSocket.instances).toHaveLength(1));
     const ws = FakeSocket.instances[0];
     ws.open();
-    ws.receive({ type: 'authenticated' });
+    ws.receive(ackForSent(ws.sent, 'tok'));
     const session = await pending;
     session.send({ type: 'qec_campaign_list' } as never);
-    expect(ws.sent).toEqual([
-      JSON.stringify({ type: 'authenticate', token: 'tok' }),
-      JSON.stringify({ type: 'qec_campaign_list' }),
-    ]);
+    expect(ws.sent).toHaveLength(2);
+    expect(JSON.parse(ws.sent[0])).toMatchObject({ type: 'authenticate', token: 'tok' });
+    expect(ws.sent[1]).toBe(JSON.stringify({ type: 'qec_campaign_list' }));
   });
 
   it('does not forward the authenticated ack to the caller', async () => {
@@ -72,7 +72,7 @@ describe('createKernelSession (desktop)', () => {
     await vi.waitFor(() => expect(FakeSocket.instances).toHaveLength(1));
     const ws = FakeSocket.instances[0];
     ws.open();
-    ws.receive({ type: 'authenticated' });
+    ws.receive(ackForSent(ws.sent, 'tok'));
     await pending;
     ws.receive({ type: 'snapshot' });
     expect(seen).toEqual([{ type: 'snapshot' }]);
@@ -86,7 +86,7 @@ describe('createKernelSession (desktop)', () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(settled).toBe(false);
-    FakeSocket.instances[0].receive({ type: 'authenticated' });
+    FakeSocket.instances[0].receive(ackForSent(FakeSocket.instances[0].sent, 'tok'));
     await pending;
     expect(settled).toBe(true);
   });

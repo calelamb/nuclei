@@ -27,6 +27,7 @@ export function ModeSwitchDialog() {
       width={420}
       onClose={cancelPending}
       hideClose
+      role="alertdialog"
       initialFocus="[data-confirm]"
       footer={(
         <>
@@ -38,7 +39,7 @@ export function ModeSwitchDialog() {
       <span style={{ fontSize: 13, lineHeight: 1.5 }}>
         <strong style={{ color: colors.text }}>{pending.runningName}</strong> is running.
         Switching modes will <strong style={{ color: colors.text }}>not</strong> stop it — the
-        run keeps going, the Experiments panel just won't be visible in {targetLabel}.
+        run keeps going, the {pending.panelName ?? 'Experiments panel'} just won't be visible in {targetLabel}.
       </span>
     </Dialog>
   );

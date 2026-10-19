@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { buildSystemPrompt } from './useDirac';
+import { buildContextBlock, buildSystemPrompt } from './useDirac';
+import { selectContextSections } from '../services/diracRouting';
+import { useDiscoveryStore } from '../stores/discoveryStore';
+import { makeSpec } from '../services/discovery/testkit';
 import { useWorkspaceStore } from '../stores/workspaceStore';
 import { useStudentStore } from '../stores/studentStore';
 import { useLearnStore } from '../stores/learnStore';
@@ -57,5 +60,23 @@ describe('buildSystemPrompt (Learn-mode byte-compatibility)', () => {
     useWorkspaceStore.setState({ mode: 'research' });
     expect(buildSystemPrompt()).not.toBe(EXPECTED_LEARN_SYSTEM_PROMPT);
     expect(buildSystemPrompt()).toContain('research collaborator');
+  });
+});
+
+describe('buildContextBlock Lab context (PRD 14)', () => {
+  beforeEach(() => {
+    useDiscoveryStore.getState().reset();
+    useDiscoveryStore.setState({
+      definitions: [{ fileName: 'toy.discovery.yaml', path: '/p/experiments/toy.discovery.yaml', spec: makeSpec() }],
+      selectedDefinition: 'toy.discovery.yaml',
+    });
+  });
+
+  it('injects the Discovery Engine context in Research mode only', () => {
+    const plan = selectContextSections('standard');
+    useWorkspaceStore.setState({ mode: 'research' });
+    expect(buildContextBlock(plan)).toContain('## Discovery Engine');
+    useWorkspaceStore.setState({ mode: 'learn' });
+    expect(buildContextBlock(plan)).not.toContain('## Discovery Engine');
   });
 });

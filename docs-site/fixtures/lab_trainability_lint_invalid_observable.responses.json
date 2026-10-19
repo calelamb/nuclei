@@ -1,0 +1,9 @@
+[
+  {
+    "type": "error",
+    "phase": "trainability",
+    "code": "invalid_observable",
+    "message": "<any>",
+    "column": 3
+  }
+]
