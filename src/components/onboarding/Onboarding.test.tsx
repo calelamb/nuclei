@@ -22,9 +22,23 @@ describe('Onboarding as a modal dialog', () => {
     expect(dialog.getAttribute('aria-label') ?? dialog.getAttribute('aria-labelledby')).toBeTruthy();
   });
 
-  it('moves focus to the first choice on mount', () => {
+  it('lands focus on the dialog, not a card, so no card opens with a focus ring (r7-learn-06)', () => {
     render(<Onboarding onComplete={vi.fn()} />);
+    expect(document.activeElement).toBe(screen.getByRole('dialog'));
+  });
+
+  it('the first arrow key or Tab moves focus onto the first card', () => {
+    render(<Onboarding onComplete={vi.fn()} />);
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'ArrowDown' });
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Learn quantum computing' }));
+  });
+
+  it('uses one content width on every step so the layout does not jump', () => {
+    render(<Onboarding onComplete={vi.fn()} />);
+    const width = () => (screen.getByRole('dialog').firstElementChild as HTMLElement).style.maxWidth;
+    const chooser = width();
+    fireEvent.click(screen.getByRole('button', { name: 'Learn quantum computing' }));
+    expect(width()).toBe(chooser);
   });
 
   it('keeps Tab inside the dialog', () => {
@@ -38,6 +52,7 @@ describe('Onboarding as a modal dialog', () => {
   it('moves between cards with the arrow keys', () => {
     render(<Onboarding onComplete={vi.fn()} />);
     const learn = screen.getByRole('button', { name: 'Learn quantum computing' });
+    learn.focus();
     fireEvent.keyDown(learn, { key: 'ArrowDown' });
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Research workspace' }));
     fireEvent.keyDown(document.activeElement as Element, { key: 'ArrowUp' });
@@ -72,10 +87,10 @@ describe('Learn level step Back button', () => {
   it('offers a visible Back that returns to the chooser with focus on the first card', () => {
     render(<Onboarding onComplete={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Learn quantum computing' }));
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: "I'm brand new" }));
+    expect(document.activeElement).toBe(screen.getByRole('dialog'));
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     expect(screen.getByRole('dialog', { name: 'Welcome to Nuclei' })).toBeTruthy();
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Learn quantum computing' }));
+    expect(document.activeElement).toBe(screen.getByRole('dialog'));
   });
 });
 

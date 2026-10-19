@@ -257,6 +257,10 @@ export function ExerciseBlock({
     }
   };
 
+  const expectedKets = useMemo(
+    () => Object.keys(expectedMeasurements && hasExpectedDistribution(expectedMeasurements) ? expectedMeasurements : expectedProbabilities ?? {}),
+    [expectedMeasurements, expectedProbabilities],
+  );
   const hasProbabilities = Boolean(result && Object.values(result.probabilities).some((p) => p > 0.001));
   const ranEmpty = hasRun && !isRunning && hasExpectations && !feedback && !error && !unsupported
     && output.length === 0 && !hasProbabilities;
@@ -282,14 +286,18 @@ export function ExerciseBlock({
       <div className="demo__actions demo__actions--divided">
         <LessonRunButton isRunning={isRunning} pythonLoading={kernel.loading} progress={kernel.progress} onRun={handleRun} onCancelQueued={handleCancelQueued} />
         <Button
+          variant={resetArmed ? 'danger' : 'secondary'}
+          className="exercise__reset"
           onClick={handleResetClick}
           onBlur={() => setResetArmed(false)}
+          onKeyDown={(e) => { if (e.key === 'Escape' && resetArmed) { e.stopPropagation(); setResetArmed(false); } }}
           disabled={localCode === starterCode}
           icon={<RotateCcw size={12} aria-hidden="true" />}
           title="Restore the starter code"
         >
           {resetArmed ? 'Discard edits?' : 'Reset'}
         </Button>
+        <span className="demo__sr" aria-live="polite">{resetArmed ? 'Press again to discard your edits' : ''}</span>
         {hasRun && hasExpectations && !isRunning && (
           <Button onClick={checkSolution} icon={<CheckCircle size={12} aria-hidden="true" />}>Check solution</Button>
         )}
@@ -308,9 +316,16 @@ export function ExerciseBlock({
         <div className="exercise__idle" role="status">Ran · no output yet. Edit the starter code, then Run.</div>
       )}
 
-      {unsupported && <div className="demo__notice"><UnsupportedNotice message={unsupported} /></div>}
+      {feedback && (
+        <div className={feedback.success ? 'exercise__feedback exercise__feedback--ok' : 'exercise__feedback exercise__feedback--fail'} role="status">
+          {feedback.success ? <CheckCircle size={16} aria-hidden="true" /> : <XCircle size={16} aria-hidden="true" />}
+          <span>{feedback.message}</span>
+        </div>
+      )}
 
       {error && <div className="demo__error" role="alert">{error}</div>}
+
+      {unsupported && <div className="demo__notice"><UnsupportedNotice message={unsupported} /></div>}
 
       {hintsRevealed > 0 && (
         <div className="exercise__hints">
@@ -331,14 +346,7 @@ export function ExerciseBlock({
       )}
 
       {result && hasProbabilities && (
-        <div className="exercise__results"><OutcomeResults result={result} /></div>
-      )}
-
-      {feedback && (
-        <div className={feedback.success ? 'exercise__feedback exercise__feedback--ok' : 'exercise__feedback exercise__feedback--fail'} role="status">
-          {feedback.success ? <CheckCircle size={16} aria-hidden="true" /> : <XCircle size={16} aria-hidden="true" />}
-          <span>{feedback.message}</span>
-        </div>
+        <div className="exercise__results"><OutcomeResults result={result} expectedKets={expectedKets} /></div>
       )}
 
       {showDiracPrompt && !isPassed && (

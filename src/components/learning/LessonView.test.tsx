@@ -107,4 +107,27 @@ describe('LessonView completion', () => {
     expect(screen.queryByText(/Lesson complete/)).toBeNull();
     expect(screen.getByText('Up next')).toBeTruthy();
   });
+
+  it('reads 0% at the top and follows the scroll position (r7-learn-04)', () => {
+    useLearnStore.setState({ currentBlockIndex: 3 });
+    const { container } = render(<LessonView lesson={lesson} trackId={track.id} />);
+    const bar = screen.getByRole('progressbar', { name: 'Reading progress' });
+    expect(bar.getAttribute('aria-valuenow')).toBe('0');
+    expect(useLearnStore.getState().currentBlockIndex).toBe(0);
+
+    const scroller = container.querySelector('.lesson__scroll') as HTMLElement;
+    Object.defineProperty(scroller, 'scrollHeight', { configurable: true, value: 1000 });
+    Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: 500 });
+    scroller.scrollTop = 250;
+    fireEvent.scroll(scroller);
+    expect(bar.getAttribute('aria-valuenow')).toBe('50');
+    scroller.scrollTop = 500;
+    fireEvent.scroll(scroller);
+    expect(bar.getAttribute('aria-valuenow')).toBe('100');
+    expect(useLearnStore.getState().currentBlockIndex).toBe(lesson.contentBlocks.length - 1);
+    scroller.scrollTop = 0;
+    fireEvent.scroll(scroller);
+    expect(bar.getAttribute('aria-valuenow')).toBe('0');
+    expect(useLearnStore.getState().currentBlockIndex).toBe(0);
+  });
 });

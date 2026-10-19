@@ -14,7 +14,7 @@ const OPTIONS: ReadonlyArray<SegmentedOption<DistributionKind>> = [
  * repeated runs differ the way real hardware does) with an Ideal toggle for
  * the exact amplitudes.
  */
-export function OutcomeResults({ result }: { result: SimulationResult }) {
+export function OutcomeResults({ result, expectedKets }: { result: SimulationResult; expectedKets?: ReadonlyArray<string> }) {
   const [kind, setKind] = useState<DistributionKind>('sampled');
   const sampled = sampledProbabilities(result);
   const showing: DistributionKind = sampled ? kind : 'ideal';
@@ -30,7 +30,7 @@ export function OutcomeResults({ result }: { result: SimulationResult }) {
           <SegmentedControl aria-label="Outcome distribution" value={showing} options={OPTIONS} onChange={setKind} />
         )}
       </div>
-      <ProbabilityBars probabilities={probabilities} />
+      <ProbabilityBars probabilities={probabilities} pinned={expectedKets} />
     </div>
   );
 }

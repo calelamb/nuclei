@@ -162,6 +162,23 @@ describe('ExerciseBlock draft persistence', () => {
   });
 });
 
+describe('ExerciseBlock armed Reset (r7-learn-02)', () => {
+  it('turns destructive, announces itself, and Escape disarms with focus kept', () => {
+    render(<ExerciseBlock {...props} />);
+    fireEvent.change(screen.getByLabelText('code'), { target: { value: 'print(9)' } });
+    const reset = () => screen.getByRole('button', { name: /^(Reset|Discard edits\?)/ });
+    reset().focus();
+    fireEvent.click(reset());
+    expect(reset().className).toMatch(/nuclei-btn--danger/);
+    expect(screen.getByText('Press again to discard your edits')).toBeTruthy();
+    fireEvent.keyDown(reset(), { key: 'Escape' });
+    expect(reset().textContent).toBe('Reset');
+    expect(reset().className).not.toMatch(/nuclei-btn--danger/);
+    expect(document.activeElement).toBe(reset());
+    expect((screen.getByLabelText('code') as HTMLTextAreaElement).value).toBe('print(9)');
+  });
+});
+
 describe('ExerciseBlock run feedback', () => {
   it('says so when a run produced nothing', async () => {
     await runWith(STARTER, []);

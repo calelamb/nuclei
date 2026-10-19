@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { useLearnSectionStore } from './learnSectionStore';
 import { useLearnStore } from '../../stores/learnStore';
 import { getTrack } from '../../data/lessons/tracks';
@@ -39,6 +39,17 @@ function ContentBlockRenderer({ block }: { block: ContentBlock }) {
 interface LessonViewProps {
   lesson: Lesson;
   trackId: string;
+}
+
+const EDGE_PX = 8;
+
+/** Scroll fraction (0..1) plus the block to force current at either end of the lesson, else null. */
+function readPosition(scrollTop: number, scrollHeight: number, clientHeight: number, blockCount: number) {
+  const max = scrollHeight - clientHeight;
+  const next = max > 0 ? Math.min(1, Math.max(0, scrollTop / max)) : 0;
+  if (scrollTop < EDGE_PX) return { next: 0, block: 0 };
+  if (max > 0 && max - scrollTop < EDGE_PX && blockCount > 0) return { next: 1, block: blockCount - 1 };
+  return { next, block: null };
 }
 
 export function LessonView({ lesson, trackId }: LessonViewProps) {
@@ -103,6 +114,8 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
           if (e.isIntersecting) visible.add(idx);
           else visible.delete(idx);
         }
+        // At the very top the first block is current, whatever the band happens to catch.
+        if (root.scrollTop < EDGE_PX) return;
         if (visible.size > 0) setCurrentBlockIndex(Math.min(...visible));
       },
       { root, rootMargin: '-30% 0px -60% 0px', threshold: 0 },
@@ -111,7 +124,21 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
     return () => io.disconnect();
   }, [lesson.id, setCurrentBlockIndex]);
 
-  const readProgress = blockCount > 0 ? Math.min(1, (currentBlockIndex + 1) / blockCount) : 0;
+  // Reading progress is the scroll position itself, so it is 0 at the top and 1 at the bottom.
+  const [readProgress, setReadProgress] = useState(0);
+  useEffect(() => {
+    const root = scrollRef.current;
+    if (!root) return;
+    const sync = (e?: Event) => {
+      const { next, block } = readPosition(root.scrollTop, root.scrollHeight, root.clientHeight, blockCount);
+      setReadProgress(next);
+      // The initial pass only reads progress; a remembered position owns the current block.
+      if (e && block !== null) setCurrentBlockIndex(block);
+    };
+    sync();
+    root.addEventListener('scroll', sync, { passive: true });
+    return () => root.removeEventListener('scroll', sync);
+  }, [lesson.id, blockCount, setCurrentBlockIndex]);
 
   return (
     <div className="lesson">

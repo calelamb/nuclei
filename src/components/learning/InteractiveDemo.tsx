@@ -10,6 +10,7 @@ import { UnsupportedNotice } from './UnsupportedNotice';
 import { OutcomeResults } from './OutcomeResults';
 import { useLessonKernel } from './useLessonKernel';
 import { LessonRunButton } from './LessonRunButton';
+import { StaleResultNotice } from '../layout/StaleResultNotice';
 import { formatCircuitMeta } from './outcomeDistribution';
 import './demo.css';
 
@@ -34,6 +35,8 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
   const [error, setError] = useState<string | null>(null);
   const [unsupported, setUnsupported] = useState<string | null>(null);
   const [showOutput, setShowOutput] = useState(false);
+  // The code the shown result came from; an edit after a run makes that result stale.
+  const [ranCode, setRanCode] = useState<string | null>(null);
   const localCodeRef = useRef(initialCode);
   // Bumped on every Run and on cancel, so a Run queued behind the Python boot can be withdrawn.
   const runTokenRef = useRef(0);
@@ -103,6 +106,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
     setUnsupported(null);
     setOutput([]);
     setResult(null);
+    setRanCode(localCode);
 
     // Learning content is Python-only today, so the language is fixed.
     const message = isQuantumCode(localCode)
@@ -128,13 +132,10 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
   };
 
   const handleReset = () => {
+    // Restores the code only: the last result stays, marked stale, until the next run.
     localCodeRef.current = initialCode;
     setLocalCode(initialCode);
-    setResult(null);
-    setSnapshot(null);
-    setOutput([]);
     setError(null);
-    setShowOutput(false);
     sendParse(initialCode);
   };
 
@@ -163,6 +164,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
   const hasResults = Boolean(result && Object.keys(result.probabilities).length > 0);
   const hasOutput = output.length > 0;
   const hasCircuit = Boolean(snapshot && snapshot.gates.length > 0);
+  const isStale = ranCode !== null && ranCode !== localCode && (hasResults || hasOutput);
   const hasBelow = hasResults || hasOutput || Boolean(error) || hasCircuit;
   const viewOptions: ReadonlyArray<SegmentedOption<ResultView>> = [
     ...(hasOutput ? [{ value: 'output' as const, label: 'Output', icon: <Terminal size={12} aria-hidden="true" /> }] : []),
@@ -189,7 +191,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
           onRun={handleRun}
           onCancelQueued={handleCancelQueued}
         />
-        <Button onClick={handleReset} icon={<RotateCcw size={12} aria-hidden="true" />}>Reset</Button>
+        <Button onClick={handleReset} disabled={localCode === initialCode} icon={<RotateCcw size={12} aria-hidden="true" />}>Reset</Button>
 
         {viewOptions.length > 1 && (
           <>
@@ -222,6 +224,10 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
 
       {error && <div className="demo__error" role="alert">{error}</div>}
 
+      {isStale && (
+        <div className="demo__stale"><StaleResultNotice inline label="From last run · Run again" onActivate={handleRun} /></div>
+      )}
+
       {hasOutput && (showOutput || !hasResults) && (
         <div className="demo__output" aria-label="Output">
           {output.map((line, i) => <div key={i}>{line}</div>)}
@@ -229,7 +235,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
       )}
 
       {result && hasResults && !(showOutput && hasOutput) && (
-        <div className="demo__results">
+        <div className="demo__results" data-stale={isStale || undefined}>
           <OutcomeResults result={result} />
         </div>
       )}
