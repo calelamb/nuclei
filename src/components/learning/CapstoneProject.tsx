@@ -16,7 +16,8 @@ export function CapstoneProjectView() {
   const exitLearnMode = useLearnStore((s) => s.exitLearnMode);
   const { confirm, confirmDialog } = useConfirm();
   const [revealedHints, setRevealedHints] = useState(0);
-  const [openIds, setOpenIds] = useState<ReadonlySet<string>>(new Set());
+  // Steps the learner folded or unfolded by hand; every other step is open only while it is current.
+  const [manualOpen, setManualOpen] = useState<Readonly<Record<string, boolean>>>({});
   const [loaded, setLoaded] = useState<LoadedNote | null>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const stepTitleRefs = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -31,11 +32,6 @@ export function CapstoneProjectView() {
     if (projectId) titleRef.current?.focus({ preventScroll: true });
   }, [projectId]);
 
-  // The current step is always open; steps the learner opened to read stay open.
-  useEffect(() => {
-    if (currentId) setOpenIds((prev) => new Set(prev).add(currentId));
-  }, [currentId]);
-
   // Mark complete removes its own button, so focus moves to the step the learner is on now.
   useEffect(() => {
     if (!focusCurrentStepRef.current || !currentId) return;
@@ -49,11 +45,8 @@ export function CapstoneProjectView() {
   const currentMilestone = activeProject.milestones[activeMilestoneIndex];
   const allDone = activeProject.milestones.every((m) => projectCompleted.includes(m.id));
 
-  const toggleStep = (id: string) => setOpenIds((prev) => {
-    const next = new Set(prev);
-    if (next.has(id)) next.delete(id); else next.add(id);
-    return next;
-  });
+  const isStepOpen = (id: string) => manualOpen[id] ?? id === currentId;
+  const toggleStep = (id: string) => setManualOpen((prev) => ({ ...prev, [id]: !(prev[id] ?? id === currentId) }));
 
   const showNextHint = () => {
     if (currentMilestone && revealedHints < currentMilestone.hints.length) setRevealedHints((h) => h + 1);
@@ -71,10 +64,8 @@ export function CapstoneProjectView() {
 
   const handleComplete = () => {
     focusCurrentStepRef.current = true;
-    // A finished step folds away so the page keeps pointing at what is next.
-    if (currentMilestone) {
-      setOpenIds((prev) => new Set([...prev].filter((id) => id !== currentMilestone.id)));
-    }
+    // The finished step folds away on its own: it is no longer current.
+    setManualOpen({});
     completeMilestone();
     setRevealedHints(0);
     setLoaded(null);
@@ -136,7 +127,7 @@ export function CapstoneProjectView() {
           const isCompleted = projectCompleted.includes(milestone.id);
           const isCurrent = i === activeMilestoneIndex;
           const state: StepState = isCompleted ? 'done' : isCurrent ? 'current' : 'future';
-          const open = openIds.has(milestone.id);
+          const open = isStepOpen(milestone.id);
 
           return (
             <li key={milestone.id} className="capv__step" data-state={state}>
