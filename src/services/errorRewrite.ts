@@ -1,6 +1,7 @@
 import { callClaude } from './claudeClient';
 import { useWorkspaceStore, type WorkspaceMode } from '../stores/workspaceStore';
 import { personaPreamble } from './diracPersona';
+import { qiskit2MigrationHint, type Qiskit2Hint } from './errorRewriteQiskit2';
 
 // Learn-mode text is unchanged from before PRD 09 (see errorRewrite.test.ts).
 const SYSTEM_PROMPT = `You are Dirac, a patient quantum computing tutor. A student's code hit an error. Rewrite the error output (a Python traceback or Q# compiler diagnostic) into a ONE-PARAGRAPH concept-level explanation that a first-semester student can understand. Use quantum-computing vocabulary only when the student's code uses it. If a minimal correct fix exists, include it. For Q# compiler errors, name the construct the student got wrong and show the corrected line.
@@ -44,7 +45,18 @@ function extractJson(raw: string): unknown | null {
   }
 }
 
+function migrationFor(input: RewriteInput, mode: WorkspaceMode): Qiskit2Hint | null {
+  // Research code only: Learn-mode behaviour is unchanged.
+  return mode === 'research' ? qiskit2MigrationHint(input.traceback) : null;
+}
+
+function hintAsRewrite(hint: Qiskit2Hint): RewrittenError {
+  return { explanation: `Qiskit 2 migration: ${hint.explanation}`, fix: hint.fix };
+}
+
 export async function rewriteExecutionError(input: RewriteInput): Promise<RewrittenError | null> {
+  const mode = useWorkspaceStore.getState().mode;
+  const migration = migrationFor(input, mode);
   const userPrompt = [
     `Framework: ${input.framework}`,
     '',
@@ -53,22 +65,26 @@ export async function rewriteExecutionError(input: RewriteInput): Promise<Rewrit
     '',
     'Error output:',
     input.traceback.slice(0, 2500),
+    ...(migration
+      ? ['', `Known Qiskit 2 migration: ${migration.explanation}`, 'Replacement:', migration.fix]
+      : []),
   ].join('\n');
 
   const res = await callClaude({
-    system: systemPromptFor(useWorkspaceStore.getState().mode),
+    system: systemPromptFor(mode),
     user: userPrompt,
     maxTokens: 500,
   });
-  if (!res.text) return null;
+  const fallback = migration ? hintAsRewrite(migration) : null;
+  if (!res.text) return fallback;
 
   const parsed = extractJson(res.text);
-  if (!parsed || typeof parsed !== 'object') return null;
+  if (!parsed || typeof parsed !== 'object') return fallback;
   const obj = parsed as Record<string, unknown>;
   const explanation = obj.explanation;
-  if (typeof explanation !== 'string' || explanation.length === 0) return null;
+  if (typeof explanation !== 'string' || explanation.length === 0) return fallback;
 
   const fixRaw = obj.fix;
-  const fix = typeof fixRaw === 'string' && fixRaw.length > 0 ? fixRaw : null;
+  const fix = typeof fixRaw === 'string' && fixRaw.length > 0 ? fixRaw : (migration?.fix ?? null);
   return { explanation, fix };
 }

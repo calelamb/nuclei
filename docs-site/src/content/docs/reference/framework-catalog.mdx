@@ -13,7 +13,7 @@ Verbatim from `CATALOG` at the time of writing:
 
 | id | Label | pip package(s) | Import probe | Group | ~Size (MB) | Recommended |
 |----|-------|----------------|--------------|-------|-----------:|-------------|
-| `qiskit` | Qiskit | `qiskit qiskit-aer` | `qiskit` | core | 220 | yes |
+| `qiskit` | Qiskit | `qiskit>=1.2,<3 qiskit-aer>=0.15,<1` | `qiskit` | core | 220 | yes |
 | `cirq` | Cirq | `cirq` | `cirq` | core | 60 | yes |
 | `cuda-q` | CUDA-Q | `cuda-quantum` | `cudaq` | core | 500 | no |
 | `qsharp` | Microsoft QDK (Q#) | `qdk` | `qdk` | core | 25 | yes |
@@ -28,6 +28,18 @@ dropped the direct API-token auth the kernel's provider uses — see the
 [hardware overview](/docs/hardware/overview/#credential-fields) for the
 version note and why Azure Quantum is the recommended path to Quantinuum
 hardware today. {/* kernel/hardware/quantinuum_provider.py:30-54 */}
+
+The Qiskit entry carries one version range, `qiskit>=1.2,<3`, the same
+specifier as `kernel/requirements.txt` and CI: Qiskit 1.x and 2.x are both
+supported. Qiskit 2 removed several 1.x APIs (V1 `Sampler`/`Estimator`,
+`c_if`, `bind_parameters`, `qasm()`); in Research mode Dirac recognises the
+resulting errors and shows the replacement.
+
+The Research group also lists two optional extras for the Quantumness Lab,
+`torch` (`torch>=2.4,<3`, PyTorch CPU) and `onnx` (`onnx>=1.16,<2`). Nothing
+requires them: every feature has a numpy path, and a missing package is shown
+as an install card. `scipy` is likewise optional: qiskit and cirq pull it in,
+the kernel uses it only as an accelerator and never requires it.
 
 ## How it's used
 

@@ -34,7 +34,10 @@ const CATALOG: &[FrameworkInfo] = &[
         id: "qiskit",
         label: "Qiskit",
         description: "IBM's quantum computing SDK — most widely used in coursework.",
-        pip_name: "qiskit qiskit-aer",
+        // One Qiskit range (1.x and 2.x) shared with kernel/requirements.txt and
+        // CI (PRD 15 R-14); each spec is a single whitespace-free token, so the
+        // split_whitespace install path hands pip two requirement specs.
+        pip_name: "qiskit>=1.2,<3 qiskit-aer>=0.15,<1",
         import_name: "qiskit",
         group: "core",
         approximate_size_mb: 220,
@@ -180,6 +183,29 @@ const CATALOG: &[FrameworkInfo] = &[
         import_name: "pyarrow, duckdb, jsonschema",
         group: "research",
         approximate_size_mb: 200,
+        recommended: false,
+    },
+    // Quantumness Lab extras (PRD 15). Both optional and lazily imported by
+    // the kernel: every feature has a numpy path, so a missing package is an
+    // install card, never an error.
+    FrameworkInfo {
+        id: "torch",
+        label: "PyTorch (CPU)",
+        description: "Neural-network decoders and surrogates (transformer/conv). Optional: a numpy MLP works without it.",
+        pip_name: "torch>=2.4,<3",
+        import_name: "torch",
+        group: "research",
+        approximate_size_mb: 200,
+        recommended: false,
+    },
+    FrameworkInfo {
+        id: "onnx",
+        label: "ONNX",
+        description: "Export trained surrogates to an .onnx file. Optional: numpy and JSON exports work without it.",
+        pip_name: "onnx>=1.16,<2",
+        import_name: "onnx",
+        group: "research",
+        approximate_size_mb: 20,
         recommended: false,
     },
 ];
@@ -367,11 +393,21 @@ fn installed_frameworks(venv_py: &Path) -> Vec<String> {
 /// report). `ensure_venv` only bootstraps pip; these are the deps the
 /// kernel itself imports at module load.
 /// websockets >= 13.0 because the kernel serves with `websockets.asyncio.server`.
-const KERNEL_CORE_DEPS: &[&str] = &["websockets>=13.0,<17.0", "numpy>=1.26,<3.0", "keyring>=24"];
+/// `ruff` powers the editor's lint and format; without it both silently
+/// degrade to nothing (PRD 15 R-16). Specifiers mirror `kernel/requirements.txt`
+/// (`kernel/tests/test_env_provisioning.py` checks they agree).
+const KERNEL_CORE_DEPS: &[&str] = &[
+    "websockets>=13.0,<17.0",
+    "numpy>=1.26,<3.0",
+    "ruff>=0.6,<1.0",
+    "keyring>=24",
+];
 
 /// Imports that must succeed for the kernel to boot. `websockets.asyncio.server`
 /// (not bare `websockets`) so a venv stuck on websockets 12 gets upgraded.
-const KERNEL_CORE_IMPORT_PROBE: &str = "import websockets.asyncio.server, numpy, keyring";
+/// `ruff` is probed too, so a venv created before it was provisioned is upgraded
+/// on the next kernel launch.
+const KERNEL_CORE_IMPORT_PROBE: &str = "import websockets.asyncio.server, numpy, ruff, keyring";
 
 /// Fast-check whether the venv already has the kernel's core runtime
 /// deps. A `-c import ...` takes ~50ms when Python can find everything,
@@ -403,7 +439,7 @@ pub fn install_kernel_core_deps(app: &AppHandle, venv: &Path) -> Result<(), Stri
         app,
         "installing-core-deps",
         None,
-        Some("websockets, numpy, keyring"),
+        Some("websockets, numpy, ruff, keyring"),
     );
     let mut args: Vec<&str> = vec!["install", "--upgrade"];
     args.extend(KERNEL_CORE_DEPS.iter().copied());
@@ -919,7 +955,13 @@ pub struct EnvironmentReport {
 /// diagnostics view and support ("paste your environment report").
 #[tauri::command(async)]
 pub fn environment_report(app: AppHandle) -> Result<EnvironmentReport, String> {
-    let venv = venv_path(&app)?;
+    collect_environment_report(&app)
+}
+
+/// The report behind `environment_report`; also logged at every startup
+/// (`logging::log_startup_report`) so `nuclei.log` carries it for support.
+pub fn collect_environment_report(app: &AppHandle) -> Result<EnvironmentReport, String> {
+    let venv = venv_path(app)?;
     let venv_py = venv_python(&venv);
     let venv_exists = venv_py.exists();
 
@@ -1035,6 +1077,61 @@ mod tests {
         // install pin must not admit 12.x.
         assert!(KERNEL_CORE_IMPORT_PROBE.contains("websockets.asyncio.server"));
         assert!(KERNEL_CORE_DEPS.contains(&"websockets>=13.0,<17.0"));
+    }
+
+    fn catalog_entry(id: &str) -> &'static FrameworkInfo {
+        CATALOG
+            .iter()
+            .find(|f| f.id == id)
+            .unwrap_or_else(|| panic!("catalog has no {id} entry"))
+    }
+
+    #[test]
+    fn qiskit_catalog_entry_pins_the_same_range_as_requirements() {
+        // R-14: one Qiskit range (1.x and 2.x) across the catalog, requirements.txt
+        // and CI. The entry is split on whitespace for pip, so each spec is one token.
+        let specs: Vec<&str> = catalog_entry("qiskit")
+            .pip_name
+            .split_whitespace()
+            .collect();
+        assert_eq!(specs, vec!["qiskit>=1.2,<3", "qiskit-aer>=0.15,<1"]);
+        assert_eq!(
+            base_pkg_names(catalog_entry("qiskit").pip_name),
+            vec!["qiskit", "qiskit-aer"]
+        );
+    }
+
+    #[test]
+    fn torch_and_onnx_are_optional_research_entries() {
+        let torch = catalog_entry("torch");
+        assert_eq!(torch.pip_name, "torch>=2.4,<3");
+        assert_eq!(torch.import_name, "torch");
+        let onnx = catalog_entry("onnx");
+        assert_eq!(onnx.pip_name, "onnx>=1.16,<2");
+        assert_eq!(onnx.import_name, "onnx");
+        for fw in [torch, onnx] {
+            assert_eq!(fw.group, "research");
+            assert!(!fw.recommended, "{} must not be recommended", fw.id);
+            assert!(!fw.pip_name.contains(char::is_whitespace));
+        }
+    }
+
+    #[test]
+    fn catalog_ids_are_unique() {
+        let mut ids: Vec<&str> = CATALOG.iter().map(|f| f.id).collect();
+        ids.sort_unstable();
+        let before = ids.len();
+        ids.dedup();
+        assert_eq!(before, ids.len());
+    }
+
+    #[test]
+    fn core_deps_provision_ruff_so_lint_and_format_work() {
+        // R-16: ruff is in requirements.txt but was not provisioned, so lint was
+        // silently empty. It must be installed AND probed, so an existing venv
+        // without it is upgraded on the next kernel launch.
+        assert!(KERNEL_CORE_DEPS.contains(&"ruff>=0.6,<1.0"));
+        assert!(KERNEL_CORE_IMPORT_PROBE.contains("ruff"));
     }
 
     #[test]

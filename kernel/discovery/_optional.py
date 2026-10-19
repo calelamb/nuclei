@@ -30,6 +30,8 @@ CATALOG_IDS: dict[str, str] = {
     "pyarrow": "qec-data",
     "duckdb": "qec-data",
     "jsonschema": "qec-data",
+    "torch": "torch",
+    "onnx": "onnx",
 }
 #: catalog id -> label shown in the app
 CATALOG_LABELS: dict[str, str] = {
@@ -37,6 +39,8 @@ CATALOG_LABELS: dict[str, str] = {
     "sinter": "Sinter",
     "pymatching": "PyMatching",
     "qec-data": "QEC Data Engine",
+    "torch": "PyTorch (CPU)",
+    "onnx": "ONNX",
 }
 
 

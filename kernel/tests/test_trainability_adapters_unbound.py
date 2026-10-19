@@ -38,6 +38,11 @@ circuit = cirq.Circuit(
 """
 
 
+def _terms(expr: str) -> list[str]:
+    """Order-insensitive view of a symbolic sum (R-14: term order differs across Qiskit majors)."""
+    return sorted(term.strip() for term in expr.split(" + "))
+
+
 def test_message_constant_is_the_spec_text():
     assert UNBOUND_PARAMETERS_MESSAGE == SPEC_MESSAGE
 
@@ -59,7 +64,9 @@ def test_qiskit_unbound_snapshot():
     by_idx = d["gates"]
     assert [g["type"] for g in by_idx] == ["H", "RX", "RY", "CNOT", "RZ", "RZ", "Measure", "Measure"]
     assert by_idx[1]["params"] == [0.0] and by_idx[1]["symbols"] == ["theta"]
-    assert by_idx[2]["params"] == [0.0] and by_idx[2]["symbols"] == ["2*theta + 0.3"]
+    assert by_idx[2]["params"] == [0.0]
+    # Qiskit 1.x prints "2*theta + 0.3", 2.x prints "0.3 + 2*theta": the sum is the same.
+    assert _terms(by_idx[2]["symbols"][0]) == _terms("2*theta + 0.3")
     assert by_idx[4]["symbols"] == ["v[0]"]
     assert by_idx[5]["params"] == [0.5] and "symbols" not in by_idx[5]
     assert "symbols" not in by_idx[0] and "symbols" not in by_idx[3]

@@ -1,3 +1,4 @@
+pub mod cli;
 pub mod commands;
 // The Dirac trusted-runtime harness is the crate's agent API surface: the R4
 // orchestrator, model gateway, execution port, policy/budget, and analysis are
@@ -6,6 +7,7 @@ pub mod commands;
 // live crate root, so the trusted-runtime code needs no blanket dead_code
 // allows to build warning-clean under `-D warnings`.
 pub mod dirac;
+pub mod logging;
 
 use commands::kernel::KernelState;
 use commands::qec_data::QecDataManager;
@@ -41,6 +43,7 @@ pub fn run() {
             commands::frameworks::python_install,
             commands::frameworks::environment_report,
             commands::frameworks::venv_repair,
+            logging::open_logs,
             commands::git_info::git_project_info,
             commands::qec_study::qec_create_study_manifest,
             commands::qec_study::qec_read_study_manifests,
@@ -52,16 +55,10 @@ pub fn run() {
             dirac::commands::dirac_cancel_run,
         ])
         .setup(|app| {
-            let log_level = if cfg!(debug_assertions) {
-                log::LevelFilter::Info
-            } else {
-                log::LevelFilter::Warn
-            };
-            app.handle().plugin(
-                tauri_plugin_log::Builder::default()
-                    .level(log_level)
-                    .build(),
-            )?;
+            app.handle()
+                .plugin(logging::plugin(cfg!(debug_assertions)))?;
+            logging::log_startup_report(app.handle());
+            commands::kernel::health::spawn_monitor(app.handle().clone());
             Ok(())
         })
         .on_window_event(|_window, event| {

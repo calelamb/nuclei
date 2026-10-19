@@ -1,9 +1,12 @@
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Mutex};
 use std::thread;
 use std::time::Duration;
 use tauri::{Manager, State};
+
+pub mod health;
 
 use super::kernel_legacy;
 use super::kernel_ownership as ownership;
@@ -24,11 +27,18 @@ const TOKEN_STDIN_ENV: &str = "NUCLEI_KERNEL_TOKEN_STDIN";
 const RUNTIME_DIR_ENV: &str = "NUCLEI_RUNTIME_DIR";
 const STRICT_PORT_ENV: &str = "NUCLEI_KERNEL_STRICT_PORT";
 const DEV_ENV: &str = "NUCLEI_KERNEL_DEV";
+// Extra loopback dev-server origins the kernel accepts in dev mode only.
+const DEV_ORIGINS_ENV: &str = "NUCLEI_KERNEL_DEV_ORIGINS";
+// Figures are captured by the kernel, never shown: no GUI backend, ever.
+const MPLBACKEND_ENV: &str = "MPLBACKEND";
 const INSECURE_ENV: &str = "NUCLEI_KERNEL_INSECURE_DEV";
 
 pub struct KernelState {
     process: Mutex<Option<Child>>,
     token: Mutex<Option<String>>,
+    /// True from a successful start until an intentional stop: the health
+    /// supervisor only restarts a kernel the user still wants running.
+    supervised: AtomicBool,
 }
 
 impl KernelState {
@@ -36,10 +46,21 @@ impl KernelState {
         Self {
             process: Mutex::new(None),
             token: Mutex::new(None),
+            supervised: AtomicBool::new(false),
         }
     }
 
+    fn is_supervised(&self) -> bool {
+        self.supervised.load(Ordering::SeqCst)
+    }
+
+    fn set_supervised(&self, supervised: bool) {
+        self.supervised.store(supervised, Ordering::SeqCst);
+    }
+
     pub fn stop(&self) {
+        // First, so the supervisor never restarts what we are deliberately stopping.
+        self.set_supervised(false);
         if let Ok(mut guard) = self.process.lock() {
             if let Some(ref mut child) = *guard {
                 stop_child_gracefully(child, KERNEL_STOP_GRACE);
@@ -55,20 +76,24 @@ impl KernelState {
     }
 }
 
-/// Environment for the kernel child: stdin token mode, strict port, and no
-/// dev/test overrides in release builds (a stray `NUCLEI_KERNEL_DEV` would
-/// widen the allowed Origins and `NUCLEI_RUNTIME_DIR` would redirect the
-/// runtime file).
+/// Environment for the kernel child: stdin token mode, strict port, a headless
+/// matplotlib backend, and no dev/test overrides in release builds (a stray
+/// `NUCLEI_KERNEL_DEV` or `NUCLEI_KERNEL_DEV_ORIGINS` would widen the allowed
+/// Origins and `NUCLEI_RUNTIME_DIR` would redirect the runtime file).
 fn configure_kernel_env(command: &mut Command, debug_build: bool) {
     command
         .env_remove(TOKEN_ENV)
         .env(TOKEN_STDIN_ENV, "1")
         .env(STRICT_PORT_ENV, "1")
+        .env(MPLBACKEND_ENV, "Agg")
         .env_remove(INSECURE_ENV);
     if debug_build {
         command.env(DEV_ENV, "1");
     } else {
-        command.env_remove(DEV_ENV).env_remove(RUNTIME_DIR_ENV);
+        command
+            .env_remove(DEV_ENV)
+            .env_remove(DEV_ORIGINS_ENV)
+            .env_remove(RUNTIME_DIR_ENV);
     }
 }
 
@@ -160,12 +185,76 @@ impl Drop for KernelState {
     }
 }
 
+/// Why a kernel start was requested.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StartMode {
+    /// The frontend asked (first launch, reconnect, "restart kernel"): always
+    /// replace whatever is running.
+    Always,
+    /// The health supervisor asked: do nothing if, once the process lock is
+    /// held, the kernel turns out to be fine (or no longer wanted) after all.
+    IfUnhealthy,
+}
+
+enum StartOutcome {
+    Started { pid: u32, message: String },
+    Skipped,
+}
+
+/// True when the recorded child is alive and its port has a listener.
+fn kernel_is_healthy(child: &mut Option<Child>) -> bool {
+    match child.as_mut() {
+        Some(child) => {
+            matches!(child.try_wait(), Ok(None)) && health::port_is_listening(KERNEL_PORT)
+        }
+        None => false,
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum StartDecision {
+    Proceed,
+    Skip,
+}
+
+/// Decide, with the process lock held, whether a start request should run.
+/// A supervisor restart is dropped if the kernel recovered meanwhile or is no
+/// longer wanted. An explicit start stops supervision until it succeeds, so a
+/// failed manual start (say, the port is held by another app) is reported to the
+/// user instead of being retried behind their back.
+fn begin_start(state: &KernelState, child: &mut Option<Child>, mode: StartMode) -> StartDecision {
+    match mode {
+        StartMode::IfUnhealthy if !state.is_supervised() || kernel_is_healthy(child) => {
+            StartDecision::Skip
+        }
+        StartMode::IfUnhealthy => StartDecision::Proceed,
+        StartMode::Always => {
+            state.set_supervised(false);
+            StartDecision::Proceed
+        }
+    }
+}
+
 #[tauri::command(async)]
 pub fn start_kernel(
     state: State<'_, KernelState>,
     app_handle: tauri::AppHandle,
 ) -> Result<String, String> {
+    match start_kernel_inner(&state, &app_handle, StartMode::Always)? {
+        StartOutcome::Started { message, .. } => Ok(message),
+        StartOutcome::Skipped => Err("Kernel start was skipped".to_string()),
+    }
+}
+
+fn start_kernel_inner(
+    state: &KernelState,
+    app_handle: &tauri::AppHandle,
+    mode: StartMode,
+) -> Result<StartOutcome, String> {
     let mut guard = state.process.lock().map_err(|e| e.to_string())?;
+    if begin_start(state, &mut guard, mode) == StartDecision::Skip {
+        return Ok(StartOutcome::Skipped);
+    }
     *state.token.lock().map_err(|e| e.to_string())? = None;
 
     // Kill existing in-process handle if any — relevant during reconnect
@@ -250,7 +339,7 @@ pub fn start_kernel(
     // whatever's globally available — not great, but better than no
     // kernel at all.
     let python_path: std::path::PathBuf =
-        match crate::commands::frameworks::ensure_kernel_runtime(&app_handle) {
+        match crate::commands::frameworks::ensure_kernel_runtime(app_handle) {
             Ok(p) => p,
             Err(e) => {
                 log::warn!("Managed venv unavailable ({e}); falling back to system python3");
@@ -344,12 +433,16 @@ pub fn start_kernel(
     }
     *guard = Some(child);
     *state.token.lock().map_err(|e| e.to_string())? = Some(token);
+    state.set_supervised(true);
 
-    Ok(format!(
-        "Kernel started with PID {} (cwd: {})",
+    Ok(StartOutcome::Started {
         pid,
-        kernel_cwd.display()
-    ))
+        message: format!(
+            "Kernel started with PID {} (cwd: {})",
+            pid,
+            kernel_cwd.display()
+        ),
+    })
 }
 
 #[tauri::command(async)]
@@ -530,6 +623,67 @@ mod tests {
         configure_kernel_env(&mut debug, true);
         assert_eq!(env_of(&debug, DEV_ENV), Some(Some("1".into())));
         assert_eq!(env_of(&debug, RUNTIME_DIR_ENV), None);
+    }
+
+    #[test]
+    fn release_builds_strip_the_dev_origins_override() {
+        // The kernel honours NUCLEI_KERNEL_DEV_ORIGINS only in dev mode, but a stray
+        // value in a user's shell must never reach a release kernel at all.
+        let mut release = Command::new("true");
+        configure_kernel_env(&mut release, false);
+        assert_eq!(env_of(&release, DEV_ORIGINS_ENV), Some(None));
+
+        let mut debug = Command::new("true");
+        configure_kernel_env(&mut debug, true);
+        assert_eq!(env_of(&debug, DEV_ORIGINS_ENV), None);
+    }
+
+    #[test]
+    fn kernel_runs_with_a_headless_matplotlib_backend() {
+        // R-12: a GUI backend inherited from the user's shell would try to open a
+        // window from the kernel; figures are captured, never shown.
+        for debug in [true, false] {
+            let mut command = Command::new("true");
+            configure_kernel_env(&mut command, debug);
+            assert_eq!(env_of(&command, MPLBACKEND_ENV), Some(Some("Agg".into())));
+        }
+    }
+
+    #[test]
+    fn a_supervisor_restart_is_dropped_when_unwanted_and_an_explicit_start_pauses_supervision() {
+        let state = KernelState::new();
+        let mut none: Option<Child> = None;
+
+        // Not wanted (never started, or deliberately stopped): leave it alone.
+        assert_eq!(
+            begin_start(&state, &mut none, StartMode::IfUnhealthy),
+            StartDecision::Skip
+        );
+
+        // Wanted and the child is gone: restart, and stay supervised.
+        state.set_supervised(true);
+        assert_eq!(
+            begin_start(&state, &mut none, StartMode::IfUnhealthy),
+            StartDecision::Proceed
+        );
+        assert!(state.is_supervised());
+
+        // An exited child is unhealthy whatever the port says. (A live child with no
+        // listener is covered by the supervisor tests; port 9742 itself may be held
+        // by a real Nuclei on a dev box, so it is not probed here.)
+        let mut exited = Some(Command::new("true").spawn().unwrap());
+        exited.as_mut().unwrap().wait().unwrap();
+        assert_eq!(
+            begin_start(&state, &mut exited, StartMode::IfUnhealthy),
+            StartDecision::Proceed
+        );
+
+        // An explicit start always runs and pauses supervision until it succeeds.
+        assert_eq!(
+            begin_start(&state, &mut none, StartMode::Always),
+            StartDecision::Proceed
+        );
+        assert!(!state.is_supervised());
     }
 
     #[test]
