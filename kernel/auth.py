@@ -52,11 +52,17 @@ RUNTIME_FILE_NAME = "kernel.json"
 MIN_TOKEN_LENGTH = 32
 MAX_TOKEN_LENGTH = 1_024
 AUTH_TIMEOUT_SECONDS = 10.0
+# Until a connection authenticates it may only send the small authenticate
+# frame; the normal message limit applies afterwards. The cap on unauthenticated
+# connections stops a local process from parking thousands of idle sockets.
+PRE_AUTH_MAX_SIZE = 8_192
+MAX_PRE_AUTH_CONNECTIONS = 32
 MIN_NONCE_LENGTH = 16
 MAX_NONCE_LENGTH = 256
 
 CLOSE_UNAUTHENTICATED = 4401
 CLOSE_FORBIDDEN = 4403
+CLOSE_BUSY = 4429
 
 PRODUCTION_ORIGINS = frozenset({
     "tauri://localhost",
@@ -269,12 +275,70 @@ async def _reject(websocket: Any, code: int, reason: str) -> None:
         pass
 
 
+def _raise_message_limit(websocket: Any, max_size: int | None) -> None:
+    """Lift the pre-auth frame cap once the peer has authenticated.
+
+    websockets reads the limit when its frame parser *starts* waiting for the
+    next frame, so changing the attribute alone only affects the frame after
+    next.  While the parser is idle (nothing buffered, no fragmented message in
+    flight) it is therefore restarted so the very next frame gets the new
+    limit.  The attribute is ``max_size`` up to websockets 15 and
+    ``max_message_size`` from 16.
+    """
+    protocol = getattr(websocket, "protocol", None)
+    if max_size is None or protocol is None:
+        return
+    updated = False
+    for name in ("max_size", "max_message_size"):
+        if hasattr(protocol, name):
+            setattr(protocol, name, max_size)
+            updated = True
+    if not updated:
+        return
+    buffered = getattr(getattr(protocol, "reader", None), "buffer", None)
+    idle = not buffered and not getattr(protocol, "cur_size", None) and not getattr(
+        protocol, "current_size", None
+    )
+    if idle and callable(getattr(protocol, "parse", None)) and hasattr(protocol, "parser"):
+        protocol.parser = protocol.parse()
+        next(protocol.parser)
+
+
 def secure_handler(
     inner: Handler,
     config: KernelAuthConfig,
     auth_timeout: float = AUTH_TIMEOUT_SECONDS,
+    *,
+    max_size_after_auth: int | None = None,
+    max_pre_auth_connections: int = MAX_PRE_AUTH_CONNECTIONS,
 ) -> Handler:
-    """Wrap ``inner`` so it only ever sees authenticated, allowed connections."""
+    """Wrap ``inner`` so it only ever sees authenticated, allowed connections.
+
+    The server is expected to be started with ``max_size=PRE_AUTH_MAX_SIZE``;
+    ``max_size_after_auth`` is the limit applied once the peer authenticated.
+    """
+    pending = 0
+
+    async def authenticate(websocket: Any) -> bool:
+        nonlocal pending
+        if pending >= max_pre_auth_connections:
+            await _reject(websocket, CLOSE_BUSY, "too many unauthenticated connections")
+            return False
+        pending += 1
+        try:
+            try:
+                first = await asyncio.wait_for(websocket.recv(), auth_timeout)
+            except Exception:  # noqa: BLE001 - timeout, close or protocol error
+                await _reject(websocket, CLOSE_UNAUTHENTICATED, "authentication required")
+                return False
+            authentication = check_authentication(config, first)
+            if authentication is None:
+                await _reject(websocket, CLOSE_UNAUTHENTICATED, "authentication failed")
+                return False
+            await websocket.send(authenticated_ack(config, authentication))
+            return True
+        finally:
+            pending -= 1
 
     async def handler(websocket: Any) -> None:
         # Second line of defence: process_request already rejects these with
@@ -285,17 +349,9 @@ def secure_handler(
         if reason is not None:
             await _reject(websocket, CLOSE_FORBIDDEN, reason)
             return
-        if not config.insecure:
-            try:
-                first = await asyncio.wait_for(websocket.recv(), auth_timeout)
-            except Exception:  # noqa: BLE001 - timeout, close or protocol error
-                await _reject(websocket, CLOSE_UNAUTHENTICATED, "authentication required")
-                return
-            authentication = check_authentication(config, first)
-            if authentication is None:
-                await _reject(websocket, CLOSE_UNAUTHENTICATED, "authentication failed")
-                return
-            await websocket.send(authenticated_ack(config, authentication))
+        if not config.insecure and not await authenticate(websocket):
+            return
+        _raise_message_limit(websocket, max_size_after_auth)
         await inner(websocket)
 
     return handler

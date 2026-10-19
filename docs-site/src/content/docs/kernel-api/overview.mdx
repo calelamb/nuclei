@@ -100,6 +100,8 @@ the connection without sending anything else when it is missing or wrong.
 |-----------|--------|
 | Foreign `Origin` or non-loopback `Host` | HTTP `403` on the WebSocket upgrade; the connection never opens |
 | First frame is not a valid `authenticate` frame, wrong token, malformed `nonce`, or no frame within 10 s | Closed with code `4401` |
+| Frame larger than 8 KiB before authentication | Closed with code `1009` (the normal 1 MiB limit applies once authenticated) |
+| More than 32 simultaneous unauthenticated connections | The extra connection is closed at once with code `4429` |
 | Request sent before the `authenticated` ack | Not handled; the connection is closed with `4401` |
 
 A client library's "connection refused with 403" therefore means the `Origin`

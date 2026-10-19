@@ -1145,11 +1145,13 @@ async def _handle_connection(websocket):
 
 async def _try_serve(port: int, auth_config: auth.KernelAuthConfig):
     return await ws_serve(
-        auth.secure_handler(_handle_connection, auth_config),
+        auth.secure_handler(
+            _handle_connection, auth_config, max_size_after_auth=MAX_MESSAGE_SIZE
+        ),
         "localhost",
         port,
         process_request=auth.make_process_request(auth_config),
-        max_size=MAX_MESSAGE_SIZE,
+        max_size=auth.PRE_AUTH_MAX_SIZE,  # raised to MAX_MESSAGE_SIZE after auth
         ping_interval=PING_INTERVAL,
         ping_timeout=PING_TIMEOUT,
     )
