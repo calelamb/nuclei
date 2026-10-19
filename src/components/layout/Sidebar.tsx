@@ -8,6 +8,7 @@ import type { ActivityView } from './ActivityBar';
 import { createPlatformQecStudyFs, createTauriQecStudyFs } from '../../services/qecStudyFs';
 import { usePlatform } from '../../platform/PlatformProvider';
 
+import { LANDING_PROPS } from '../../hooks/useLandingRef';
 import { TYPOGRAPHY } from '../../styles/tokens';
 import { TextInput } from '../ui';
 const LearningPathSidebar = lazy(async () => ({
@@ -70,7 +71,7 @@ function CircuitInfoPanel() {
 function SidebarHeader({ title }: { title: string }) {
   return (
     <div className="nuclei-pane-header">
-      <h2 className="nuclei-pane-header__title nuclei-overline" tabIndex={-1} data-nav-landing="">{title}</h2>
+      <h2 className="nuclei-pane-header__title nuclei-overline" {...LANDING_PROPS}>{title}</h2>
     </div>
   );
 }

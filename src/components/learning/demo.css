@@ -15,11 +15,11 @@
 .demo__gates { display: flex; flex-wrap: wrap; gap: var(--space-1); }
 .demo__gate { padding: 1px var(--space-1); border-radius: var(--radius-xs); background: color-mix(in srgb, var(--color-accent-quantum) 12%, transparent); color: var(--color-text-primary); font-weight: var(--font-weight-medium); }
 .demo__notice { padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border-strong); }
-.demo__error { padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--color-border-strong); background: color-mix(in srgb, var(--color-danger) 10%, transparent); color: var(--color-danger); font: var(--font-size-chrome-label) var(--font-mono); line-height: 1.5; white-space: pre-wrap; }
+.demo__error { padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--color-border-strong); background: color-mix(in srgb, var(--color-danger) 10%, transparent); color: var(--color-danger-text); font: var(--font-size-chrome-label) var(--font-mono); line-height: 1.5; white-space: pre-wrap; }
 .demo__output { max-height: 160px; overflow-y: auto; padding: var(--space-3) var(--space-4); background: var(--color-surface-sunken); font: var(--font-size-chrome-label) var(--font-mono); line-height: 1.6; color: var(--color-text-primary); white-space: pre-wrap; }
 .demo__stale { padding: var(--space-2) var(--space-4) 0; }
 /* Stale results: graphics dim, labels stay readable (same recipe as the viz rail). */
-[data-stale] .prob-bars__fill { opacity: 0.4; transition: opacity var(--duration-fast) var(--ease-standard); }
+[data-stale] .prob-bars__fill { opacity: var(--stale-graphic-opacity); transition: opacity var(--duration-fast) var(--ease-standard); }
 .demo__results { padding: var(--space-3) var(--space-4); }
 .demo__prompt { margin: 0; padding: var(--space-3) var(--space-4) var(--space-4); border-top: 1px solid var(--color-border-strong); font-size: var(--font-size-code); font-style: italic; line-height: 1.5; color: var(--color-text-secondary); }
 
@@ -74,4 +74,5 @@
   color: var(--color-text-tertiary);
   cursor: not-allowed;
 }
-[data-stale] .exercise__output-lines { opacity: 0.6; }
+/* Text never dims by opacity (it fell below AA); the stale pill says why. */
+[data-stale] .exercise__output-lines { color: var(--color-text-secondary); }

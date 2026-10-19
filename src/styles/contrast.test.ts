@@ -39,14 +39,31 @@ describe.each([['dark', DARK_COLORS], ['light', LIGHT_COLORS]] as const)('%s pal
       expect(ratio(c.borderControl, c[surface])).toBeGreaterThanOrEqual(3);
     });
   }
-  it.each([['successText', 'success'], ['warningText', 'warning'], ['dangerText', 'danger']] as const)(
-    '%s on its own 12%% badge wash keeps AA at 11px (the badge background)',
-    (textKey, fillKey) => {
+  // Every Badge tone: the text colour ui.css pins on `.nuclei-badge--<tone>` over that tone's own 12% wash,
+  // on every surface the badge can sit on.
+  it.each([
+    ['accent', 'accentQuantumStrong', 'accentQuantum'],
+    ['success', 'successText', 'success'],
+    ['warning', 'warningText', 'warning'],
+    ['danger', 'dangerText', 'danger'],
+    ['research', 'modeResearch', 'modeResearch'],
+    ['dirac', 'accentDiracText', 'accentDirac'],
+  ] as const)(
+    'the %s badge text (%s) on its own 12%% wash keeps AA at 11px on every surface',
+    (_tone, textKey, fillKey) => {
       for (const surface of SURFACES) {
         expect(ratio(c[textKey], wash(c[fillKey], c[surface], 0.12)), `${textKey} on ${surface}`).toBeGreaterThanOrEqual(4.5);
       }
     },
   );
+  // Text painted over a danger wash (error bands, demo errors) uses dangerText, never the fill colour.
+  it('dangerText on the 8-10% danger washes of error bands keeps AA on every surface', () => {
+    for (const surface of SURFACES) {
+      for (const alpha of [0.08, 0.1]) {
+        expect(ratio(c.dangerText, wash(c.danger, c[surface], alpha)), `${surface} @${alpha}`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
   it('keeps the text hierarchy ordered (primary > secondary > tertiary > disabled)', () => {
     const r = (k: keyof ColorTokens) => ratio(c[k], c.surfaceBase);
     expect(r('textPrimary')).toBeGreaterThan(r('textSecondary'));

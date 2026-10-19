@@ -3,6 +3,8 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useResearchTourStore, RESEARCH_TOUR_STEP_COUNT } from '../../stores/researchTourStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
+import { useHelpOverlayStore } from '../../stores/helpOverlayStore';
+import { useHardwareStore } from '../../stores/hardwareStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { isWebBuild } from '../../platform/buildTarget';
 import { researchTourSteps } from './researchTourSteps';
@@ -79,6 +81,7 @@ export function ResearchTour() {
   const next = useResearchTourStore((s) => s.next);
   const prev = useResearchTourStore((s) => s.prev);
   const dismiss = useResearchTourStore((s) => s.dismiss);
+  const stop = useResearchTourStore((s) => s.stop);
   const [rect, setRect] = useState<Rect | null>(null);
   const [sidebarRight, setSidebarRight] = useState<number | null>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
@@ -86,6 +89,14 @@ export function ResearchTour() {
   const mode = useWorkspaceStore((s) => s.mode);
   const hasProject = useProjectStore((s) => s.projectRoot !== null);
   const cardRef = useRef<HTMLDivElement>(null);
+  // The tour is a coach-mark for Research surfaces and the topmost layer. It ends (unseen, so it can
+  // still show later) the moment the mode leaves Research or another modal opens.
+  const overlayOpen = useHelpOverlayStore((s) => s.paletteOpen || s.shortcutsOpen || s.composeOpen);
+  const launchOpen = useHardwareStore((s) => s.launchOpen);
+  const otherModalOpen = overlayOpen || launchOpen;
+  useEffect(() => {
+    if (active && (mode !== 'research' || otherModalOpen)) stop();
+  }, [active, mode, otherModalOpen, stop]);
   const steps = researchTourSteps({ web: isWebBuild(), hasProject, mode });
   const current = steps[step] ?? steps[0];
 

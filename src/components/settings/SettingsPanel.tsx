@@ -12,6 +12,7 @@ import { EnvironmentPanel } from './EnvironmentPanel';
 import { Button, IconButton, SecretField, SegmentedControl, Select, Switch, TextInput, useConfirm } from '../ui';
 import { WorkspaceSection, HelpSection } from './SettingsWorkspaceHelp';
 import { Section, SettingRow, RowLabelContext } from './SettingsPrimitives';
+import { LANDING_ATTR } from '../../hooks/useLandingRef';
 import { onSettingsFocusRequest, takeSettingsFocusRequest } from './settingsFocus';
 import { featuresFor } from '../../layout/uiModeFeatures';
 import { isWebBuild } from '../../platform/buildTarget';
@@ -213,21 +214,25 @@ export function SettingsPanel() {
     if (settingsTarget) clearSettingsTarget();
   }, [settingsTarget, clearSettingsTarget]);
 
-  // Opened from the keyboard: move focus onto the first control, once the frame has settled
+  // Opened from the keyboard: move focus onto the Settings heading, once the frame has settled
   // (a closing palette hands focus back to the editor in the same tick).
   const rootRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let frame = 0;
     let settleTimer = 0;
     let stopGuard: (() => void) | null = null;
+    // Like every other sidebar, Settings lands on its heading (no ring; Tab then reaches the first section). Without a
+    // sidebar around it (a bare panel), the first control is the fallback.
+    const scopeOf = (root: HTMLElement) => root.closest<HTMLElement>('[data-tour-sidebar]') ?? root;
     const focusTarget = (root: HTMLElement) =>
-      root.querySelector<HTMLElement>('button:not([disabled]), input, select');
+      scopeOf(root).querySelector<HTMLElement>(`[${LANDING_ATTR}]`)
+      ?? root.querySelector<HTMLElement>('button:not([disabled]), input, select');
     // A view that mounts after Settings (the editor, from Challenges) grabs focus for itself. For a short settle window,
     // anything outside the panel that takes focus hands it straight back, so the next Tab does not indent code.
     const guardFocus = (root: HTMLElement) => {
       stopGuard?.();
       const onFocusIn = (e: FocusEvent) => {
-        if (e.target instanceof Node && !root.contains(e.target)) focusTarget(root)?.focus({ focusVisible: true } as FocusOptions);
+        if (e.target instanceof Node && !scopeOf(root).contains(e.target)) focusTarget(root)?.focus({ focusVisible: true } as FocusOptions);
       };
       document.addEventListener('focusin', onFocusIn);
       const stop = () => {
@@ -472,7 +477,7 @@ function FrameworksSection() {
     <Section title="Environment" defaultOpen={false}>
       <EnvironmentPanel />
       {!isWebBuild() && (
-        <Button variant="ghost" size="sm" className="nuclei-framework-btn" style={{ marginTop: 12 }} onClick={() => openModal(false)}>
+        <Button variant="ghost" size="sm" className="nuclei-framework-btn settings-link" onClick={() => openModal(false)}>
           Open the setup wizard…
         </Button>
       )}

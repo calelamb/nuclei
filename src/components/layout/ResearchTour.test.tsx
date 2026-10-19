@@ -4,14 +4,32 @@ import { render, cleanup, fireEvent, act, waitFor } from '@testing-library/react
 import { ResearchTour } from './ResearchTour';
 import { useResearchTourStore } from '../../stores/researchTourStore';
 import { useNavigationStore } from '../../stores/navigationStore';
+import { useWorkspaceStore } from '../../stores/workspaceStore';
+import { useHelpOverlayStore } from '../../stores/helpOverlayStore';
 
 describe('ResearchTour', () => {
   beforeEach(() => {
+    useWorkspaceStore.setState({ mode: 'research' });
+    useHelpOverlayStore.setState({ paletteOpen: false, shortcutsOpen: false, composeOpen: false });
     useResearchTourStore.setState({ active: true, step: 0, seen: false });
   });
   afterEach(() => {
     cleanup();
     useResearchTourStore.setState({ active: false, step: 0 });
+  });
+
+  it('ends, unseen, the moment the workspace leaves Research', () => {
+    render(<ResearchTour />);
+    act(() => { useWorkspaceStore.setState({ mode: 'learn' }); });
+    expect(document.querySelector('.research-tour')).toBeNull();
+    expect(useResearchTourStore.getState().active).toBe(false);
+    expect(useResearchTourStore.getState().seen).toBe(false);
+  });
+
+  it('ends when the command palette opens', () => {
+    render(<ResearchTour />);
+    act(() => { useHelpOverlayStore.getState().setPaletteOpen(true); });
+    expect(useResearchTourStore.getState().active).toBe(false);
   });
 
   it('Enter on the Back button goes back instead of advancing (research-16)', () => {

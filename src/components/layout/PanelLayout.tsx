@@ -9,6 +9,7 @@ import { VizZone } from '../qec/VizZone';
 import { useQecStore } from '../../stores/qecStore';
 import './vizRail.css';
 import { useDiracPanelStore } from '../../stores/diracPanelStore';
+import { useSidebarFoldFocus } from '../../hooks/useSidebarFoldFocus';
 import { useRoomRetreat } from '../../layout/useRoomRetreat';
 import { useShellLayout } from '../../hooks/useShellLayout';
 import { useUiFeatures } from '../../hooks/useUiFeatures';
@@ -245,6 +246,7 @@ export function PanelLayout() {
   const closeDirac = useDiracPanelStore((s) => s.close);
   const railTab = vizRailTab({ vizHasContent, vizFits, diracOpen, sidebarOpen: showSidebar });
   const unseenResult = useUnseenResult(result, railTab !== null);
+  useSidebarFoldFocus();
   useRoomRetreat({ sidebarWidth, vizWanted: vizHasContent, canCollapseSidebar: !editorHidden && !fullViewOwnsArea, sidebarOpen: showSidebar });
 
   // Web tracebacks name the running tab (File "bell.py"), not "<string>". Lessons and challenges run

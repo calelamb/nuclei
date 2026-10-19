@@ -196,6 +196,27 @@ describe('DiracSidePanel', () => {
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('textbox', { name: /message/i })));
   });
 
+  it('an automatic fold takes no focus when focus was elsewhere (resize must never move focus)', async () => {
+    resetStores('sk-ant-test');
+    const elsewhere = document.createElement('button');
+    document.body.appendChild(elsewhere);
+    render(<DiracSidePanel />);
+    elsewhere.focus();
+    act(() => { useDiracPanelStore.getState().applyNarrow(false); useDiracPanelStore.getState().applyNarrow(true); });
+    elsewhere.remove(); // the panel it sat beside is gone; focus falls to <body>
+    await act(async () => { await new Promise((r) => setTimeout(r, 60)); });
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('a fold with focus inside the panel hands focus to the rail tab', async () => {
+    resetStores('sk-ant-test');
+    render(<DiracSidePanel />);
+    const collapse = screen.getByRole('button', { name: 'Collapse Dirac panel' });
+    collapse.focus();
+    fireEvent.click(collapse);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Open Dirac panel' })));
+  });
+
   it('opening from the rail lands focus in the API key field when none is saved (interaction-r-17)', async () => {
     resetStores(null);
     useDiracPanelStore.setState({ isOpen: false });
@@ -204,6 +225,21 @@ describe('DiracSidePanel', () => {
     rail.focus();
     fireEvent.click(rail);
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Anthropic API key')));
+  });
+
+  it('a mouse click on the rail tab without focusing it (WebKit) still lands focus in the key field', async () => {
+    resetStores(null);
+    useDiracPanelStore.setState({ isOpen: false });
+    render(<DiracSidePanel />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open Dirac panel' }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Anthropic API key')));
+  });
+
+  it('a mouse click on Collapse without focusing it (WebKit) hands focus to the rail tab', async () => {
+    resetStores('sk-ant-test');
+    render(<DiracSidePanel />);
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse Dirac panel' }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Open Dirac panel' })));
   });
 
   it('renders a rejected key as a friendly card with an Update key action (learn-14)', () => {

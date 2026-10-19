@@ -22,6 +22,7 @@ class MemoryStorage {
 
 (globalThis as unknown as { localStorage: MemoryStorage }).localStorage = new MemoryStorage();
 
+import { useWorkspaceStore } from './workspaceStore';
 import { useResearchTourStore, RESEARCH_TOUR_STEP_COUNT } from './researchTourStore';
 
 const SEEN_KEY = 'nuclei:research_tour_seen';
@@ -29,6 +30,7 @@ const SEEN_KEY = 'nuclei:research_tour_seen';
 describe('researchTourStore (PRD 11 Phase B)', () => {
   beforeEach(() => {
     localStorage.clear();
+    useWorkspaceStore.setState({ mode: 'research' });
     useResearchTourStore.setState({ seen: false, active: false, step: 0 });
   });
 
@@ -89,5 +91,23 @@ describe('researchTourStore (PRD 11 Phase B)', () => {
     useResearchTourStore.getState().start();
     expect(useResearchTourStore.getState().active).toBe(true);
     expect(useResearchTourStore.getState().step).toBe(0);
+  });
+
+  it('neither start nor maybeAutoStart runs the tour outside Research', () => {
+    useWorkspaceStore.setState({ mode: 'learn' });
+    useResearchTourStore.getState().start();
+    expect(useResearchTourStore.getState().active).toBe(false);
+    useResearchTourStore.getState().maybeAutoStart();
+    expect(useResearchTourStore.getState().active).toBe(false);
+  });
+
+  it('stop ends the tour without marking it seen', () => {
+    useResearchTourStore.getState().start();
+    useResearchTourStore.getState().next();
+    useResearchTourStore.getState().stop();
+    expect(useResearchTourStore.getState().active).toBe(false);
+    expect(useResearchTourStore.getState().step).toBe(0);
+    expect(useResearchTourStore.getState().seen).toBe(false);
+    expect(localStorage.getItem(SEEN_KEY)).toBeNull();
   });
 });

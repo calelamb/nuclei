@@ -28,7 +28,7 @@
 .nuclei-btn.nuclei-btn--primary { background: var(--color-accent-quantum); border-color: var(--color-accent-quantum); color: var(--color-on-accent); }
 .nuclei-btn.nuclei-btn--primary:hover:not(:disabled) { background: var(--color-accent-quantum-soft); border-color: var(--color-accent-quantum-soft); }
 /* Light: the AA teal (5.36:1 with white) so the button reads as the same teal identity in both themes. */
-:root[data-theme='light'] .nuclei-btn.nuclei-btn--primary:not(:disabled) { color: #fff; background: var(--color-accent-quantum-text); border-color: var(--color-accent-quantum-text); }
+:root[data-theme='light'] .nuclei-btn.nuclei-btn--primary:not(:disabled) { color: var(--color-on-accent-strong); background: var(--color-accent-quantum-text); border-color: var(--color-accent-quantum-text); }
 :root[data-theme='light'] .nuclei-btn.nuclei-btn--primary:hover:not(:disabled) { background: color-mix(in srgb, var(--color-accent-quantum-text) 80%, #000); border-color: color-mix(in srgb, var(--color-accent-quantum-text) 80%, #000); }
 .nuclei-btn.nuclei-btn--primary:active:not(:disabled):not([aria-busy='true']) { filter: brightness(0.92); }
 .nuclei-btn.nuclei-btn--primary:disabled { background: var(--color-surface-overlay); border-color: var(--color-border-strong); color: var(--color-text-disabled); opacity: 1; }
@@ -234,12 +234,16 @@
   color: var(--badge-text, var(--color-text-secondary));
   font-family: var(--font-sans); font-size: var(--font-size-caption); font-weight: var(--font-weight-medium); line-height: 1; white-space: nowrap;
 }
-.nuclei-badge--accent { --badge-color: var(--color-accent-quantum); --badge-text: var(--color-accent-quantum-text); }
+.nuclei-badge--accent { --badge-color: var(--color-accent-quantum); --badge-text: var(--color-accent-quantum-strong); }
 .nuclei-badge--success { --badge-color: var(--color-success); --badge-text: var(--color-success-text); }
 .nuclei-badge--warning { --badge-color: var(--color-warning); --badge-text: var(--color-warning-text); }
 .nuclei-badge--danger { --badge-color: var(--color-danger); --badge-text: var(--color-danger-text); }
 .nuclei-badge--research { --badge-color: var(--color-mode-research); --badge-text: var(--color-mode-research); }
 .nuclei-badge--dirac { --badge-color: var(--color-accent-dirac); --badge-text: var(--color-accent-dirac-text); }
+
+/* Programmatic landing targets (a heading a keyboard route hands focus to, the viz column's landing): not controls,
+   so no ring. One rule for every landing attribute; a guard test keeps new attributes from slipping past it. */
+:is([data-landing], [data-nav-landing], [data-nav-landed], [data-viz-landing]):is(:focus, :focus-visible) { outline: none; }
 
 /* Open/expanded state for menu triggers */
 .nuclei-icon-btn[aria-expanded='true'] { background: var(--color-surface-overlay); color: var(--color-text-primary); }

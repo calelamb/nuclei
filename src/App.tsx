@@ -16,6 +16,7 @@ import { LaunchModal } from './components/hardware/LaunchModal';
 import { FrameworkSetup } from './components/onboarding/FrameworkSetup';
 import { useFrameworksStore, needsFirstRunSetup, type FrameworkStatus } from './stores/frameworksStore';
 import { useHardwareStore } from './stores/hardwareStore';
+import { useResearchTourStore } from './stores/researchTourStore';
 import { useKernel } from './hooks/useKernel';
 import { useFileOps } from './hooks/useFileOps';
 import { useActiveTabSync } from './hooks/useActiveTabSync';
@@ -33,7 +34,6 @@ import { scheduleLandingFocus } from './components/onboarding/focusLanding';
 import { applyOnboardingPath, type OnboardingChoice } from './components/onboarding/applyOnboardingPath';
 import { useWorkspaceStore } from './stores/workspaceStore';
 import { useModeSwitchStore } from './stores/modeSwitchStore';
-import { useResearchTourStore } from './stores/researchTourStore';
 import { useModeIdentity } from './hooks/useModeIdentity';
 import { useDiracPanelStore } from './stores/diracPanelStore';
 import { useNavigationStore } from './stores/navigationStore';
@@ -390,6 +390,8 @@ function AppInner() {
     const handler = (e: KeyboardEvent) => {
       // The first-launch chooser is modal: no global shortcut may act behind it.
       if (showOnboarding) return;
+      // The Research tour is modal too: the keys it owns are handled by the tour itself.
+      if (useResearchTourStore.getState().active) return;
       // F1 opens the shortcut sheet from anywhere, including the editor.
       if (e.key === 'F1' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
         e.preventDefault();

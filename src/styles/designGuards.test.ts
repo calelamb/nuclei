@@ -157,4 +157,51 @@ describe('design guards', () => {
     const css = files.find((f) => f.rel === 'components/ui/ui.css')?.text ?? '';
     expect(css).toMatch(/\.nuclei-field-group\s*>\s*\.nuclei-bare-input:focus-visible\s*\{[^}]*box-shadow:\s*none/);
   });
+
+  it('never paints text in var(--color-danger) in a stylesheet that washes a surface in danger; text on the wash needs --color-danger-text (AA)', () => {
+    const offending = files
+      .filter((f) => f.rel.endsWith('.css'))
+      .filter((f) => /background[^;]*color-mix\([^;]*var\(--color-danger\)/.test(f.text) && /(?:^|[;{\s])color:\s*var\(--color-danger\)\s*[;}]/.test(f.text))
+      .map((f) => f.rel);
+    expect(offending).toEqual([]);
+  });
+
+  it('resolves every var(--x): a custom property used without a fallback is declared somewhere', () => {
+    const all = files.map((f) => f.text).join('\n');
+    const declared = (name: string) => new RegExp(`${name}\\s*:|['"\`]${name}['"\`]|${name}\\$\\{|setProperty\\(\\s*['"]${name}`).test(all);
+    const used = new Set<string>();
+    for (const f of files) {
+      for (const m of f.text.matchAll(/var\(\s*(--[\w-]+)\s*\)/g)) used.add(m[1]);
+    }
+    const undeclared = [...used].filter((name) => !declared(name)).sort();
+    expect(undeclared).toEqual([]);
+  });
+
+  it('gives every landing attribute used in markup the one shared no-ring rule in ui.css', () => {
+    const css = files.find((f) => f.rel === 'components/ui/ui.css')?.text ?? '';
+    const used = new Set<string>();
+    for (const f of files.filter((x) => /\.(tsx?)$/.test(x.rel))) {
+      for (const m of f.text.matchAll(/\bdata-(?:nav-|viz-)?landing\b|\bdata-nav-landed\b|(?:VIZ|NAV)_LANDING_ATTR\s*=\s*'(data-[\w-]+)'/g)) {
+        used.add(m[1] ?? m[0]);
+      }
+    }
+    expect([...used].length).toBeGreaterThan(0);
+    const missing = [...used].filter((attr) => !new RegExp(`\\[${attr}\\]`).test(css));
+    expect(missing).toEqual([]);
+  });
+
+  it('keeps landing no-ring rules out of feature stylesheets', () => {
+    expect(offenders((f) => f.rel.endsWith('.css') && f.rel !== 'components/ui/ui.css' && /\[data-(?:nav-|viz-)?landing\]:/.test(f.text))).toEqual([]);
+  });
+
+  it('dims stale result graphics with the one --stale-graphic-opacity token, not per-surface literals', () => {
+    const demo = files.find((f) => f.rel === 'components/learning/demo.css')?.text ?? '';
+    expect(demo).not.toMatch(/exercise__output-lines\s*\{[^}]*opacity/);
+    for (const rel of ['components/learning/demo.css', 'components/layout/vizRail.css', 'components/bloch/bloch.css']) {
+      const text = files.find((f) => f.rel === rel)?.text ?? '';
+      expect(text, rel).toMatch(/opacity:\s*var\(--stale-graphic-opacity\)/);
+    }
+    const stale = files.filter((f) => f.rel.endsWith('.css')).flatMap((f) => (f.text.match(/[^{}]*stale[^{}]*\{[^}]*opacity:\s*0?\.\d+[^}]*\}/g) ?? []).map((r) => `${f.rel}: ${r.trim()}`));
+    expect(stale).toEqual([]);
+  });
 });

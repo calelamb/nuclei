@@ -255,10 +255,31 @@ export function DiracSidePanel() {
 
   // Folding or unfolding the panel removes the control that had focus; hand focus to the
   // counterpart (rail tab / collapse button) rather than letting it fall to <body>. Only when
-  // focus really was lost, so an editor that still has it keeps it.
+  // focus was in Dirac (panel or rail tab) just before the flip: a window resize that folds Dirac
+  // on its own, or a different panel unmounting, must never pull focus here.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const focusWasInDirac = useRef(false);
+  const wasAutoCollapsed = useRef(false);
+  useEffect(() => {
+    const onFocusIn = (e: FocusEvent) => {
+      const target = e.target as Node | null;
+      focusWasInDirac.current = target !== null
+        && (railRef.current === target || (rootRef.current?.contains(target) ?? false));
+    };
+    document.addEventListener('focusin', onFocusIn);
+    return () => document.removeEventListener('focusin', onFocusIn);
+  }, []);
   useEffect(() => {
     if (wasOpen.current === isOpen) return undefined;
     wasOpen.current = isOpen;
+    // Band-driven flips (resize fold / unfold) need proof focus was in Dirac. User flips do not:
+    // WebKit never focuses a button on click, so no focusin is seen for a mouse toggle.
+    const autoNow = useDiracPanelStore.getState().autoCollapsed;
+    const bandDriven = autoNow || wasAutoCollapsed.current;
+    wasAutoCollapsed.current = autoNow;
+    const hadFocus = focusWasInDirac.current;
+    focusWasInDirac.current = false;
+    if (bandDriven && !hadFocus) return undefined;
     const frame = requestAnimationFrame(() => {
       const active = document.activeElement;
       if (active && active !== document.body) return;
@@ -414,7 +435,7 @@ export function DiracSidePanel() {
   }
 
   return (
-    <div style={{
+    <div ref={rootRef} style={{
       width, height: '100%',
       display: 'flex', flexDirection: 'column',
       backgroundColor: colors.bg,

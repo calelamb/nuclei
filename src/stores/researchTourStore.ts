@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useWorkspaceStore } from './workspaceStore';
 
 /**
  * PRD 11 Phase B — first-run Research orientation tour.
@@ -28,6 +29,11 @@ function persistSeen(): void {
   }
 }
 
+/** The tour describes Research surfaces, so it may only run while the workspace is in Research. */
+function inResearch(): boolean {
+  return useWorkspaceStore.getState().mode === 'research';
+}
+
 interface ResearchTourState {
   seen: boolean;
   active: boolean;
@@ -38,6 +44,8 @@ interface ResearchTourState {
   prev(): void;
   /** End the tour and mark it seen-forever. */
   dismiss(): void;
+  /** End the tour without marking it seen (the mode left Research, or another modal took over). */
+  stop(): void;
   /** Auto-start once, on first Research entry, if never seen. No-op otherwise. */
   maybeAutoStart(): void;
 }
@@ -47,7 +55,12 @@ export const useResearchTourStore = create<ResearchTourState>((set, get) => ({
   active: false,
   step: 0,
 
-  start: () => set({ active: true, step: 0 }),
+  start: () => {
+    if (!inResearch()) return;
+    set({ active: true, step: 0 });
+  },
+
+  stop: () => set({ active: false, step: 0 }),
 
   next: () =>
     set((s) => {
@@ -68,7 +81,7 @@ export const useResearchTourStore = create<ResearchTourState>((set, get) => ({
 
   maybeAutoStart: () => {
     const { seen, active } = get();
-    if (seen || active) return;
+    if (seen || active || !inResearch()) return;
     set({ active: true, step: 0 });
   },
 }));
