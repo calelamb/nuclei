@@ -22,6 +22,8 @@ interface PortalProviderCardProps {
  */
 export function PortalProviderCard({ provider, status, reason, inert, onPick }: PortalProviderCardProps) {
   const colors = useThemeStore((s) => s.colors);
+  // Dim only the logo and copy; the "Desktop app" reason must stay legible.
+  const dim: React.CSSProperties = inert ? { opacity: 0.5 } : {};
   const card = (
     <button
       className={inert ? undefined : 'nuclei-hover-lift'}
@@ -40,28 +42,31 @@ export function PortalProviderCard({ provider, status, reason, inert, onPick }: 
         display: 'flex',
         flexDirection: 'column',
         gap: 6,
-        opacity: inert ? 0.5 : 1,
         transition: 'border-color var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard), transform var(--duration-fast) var(--ease-standard)',
       }}
     >
       <div
         style={{
-          width: 30, height: 30, borderRadius: 6, background: `${colors.accent}14`, color: colors.accentLight,
+          ...dim, width: 30, height: 30, borderRadius: 6, background: `${colors.accent}14`, color: colors.accentLight,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}
       >
         <ProviderLogo provider={provider.name} size={20} />
       </div>
-      <div className="launch-grid__name" style={{ fontSize: 12, fontWeight: 600, color: colors.text }}>{provider.label}</div>
+      <div className="launch-grid__name" style={{ ...dim, fontSize: 12, fontWeight: 600, color: colors.text }}>{provider.label}</div>
       <div
         style={{
-          fontSize: 11, color: colors.textMuted, lineHeight: 1.4, overflow: 'hidden',
+          ...dim, fontSize: 11, color: colors.textMuted, lineHeight: 1.4, overflow: 'hidden',
           display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' as const,
         }}
       >
         {provider.tagline}
       </div>
-      {status.kind === 'desktop-only' && <ProviderStatusBadge status={status} />}
+      {status.kind === 'desktop-only' && (
+        <span data-testid="portal-badge-cell" style={{ alignSelf: 'flex-start', display: 'flex' }}>
+          <ProviderStatusBadge status={status} />
+        </span>
+      )}
     </button>
   );
   // A blocked card stays focusable so its reason is reachable by keyboard as well as by pointer.

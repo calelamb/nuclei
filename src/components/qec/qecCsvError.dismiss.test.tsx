@@ -26,6 +26,17 @@ describe('compact CSV error is dismissible (qec-r-74)', () => {
     expect(alert.isConnected).toBe(false);
   });
 
+  it('moves focus to the analysis view after Dismiss instead of dropping it on body', () => {
+    useQecCampaignStore.getState().loadFromCsv([HEADER, ...csv].join('\n'), 'd.csv');
+    useQecCampaignStore.setState({ csvError: 'Not a sinter stats CSV: missing columns' });
+    const { container } = render(<QecAnalysisView />);
+    const btn = screen.getByRole('button', { name: 'Dismiss' });
+    btn.focus();
+    fireEvent.click(btn);
+    expect(document.activeElement).not.toBe(document.body);
+    expect(container.contains(document.activeElement)).toBe(true);
+  });
+
   it('the full (non-compact) notice has no dismiss control', () => {
     render(<QecCsvError id="e" message="Not a sinter stats CSV: x" />);
     expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull();

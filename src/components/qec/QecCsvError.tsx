@@ -24,10 +24,12 @@ interface QecCsvErrorProps {
   /** When a file is already showing, a compact line says it is still on screen. */
   stillShowing?: string | null;
   compact?: boolean;
+  /** Called after Dismiss so the parent can park keyboard focus somewhere stable. */
+  onDismissed?: () => void;
 }
 
 /** An inline danger notice for a rejected CSV: icon, one lead sentence, the specifics beneath. Keeps role=alert. */
-export function QecCsvError({ message, id, stillShowing, compact = false }: QecCsvErrorProps) {
+export function QecCsvError({ message, id, stillShowing, compact = false, onDismissed }: QecCsvErrorProps) {
   const colors = useThemeStore((s) => s.colors);
   const clearCsvError = useQecCampaignStore((s) => s.clearCsvError);
   const { lead, detail } = splitCsvError(message);
@@ -50,7 +52,7 @@ export function QecCsvError({ message, id, stillShowing, compact = false }: QecC
         {detail && <div style={{ color: colors.textMuted, fontSize: 11 }}>{detail}</div>}
       </div>
       {compact && (
-        <IconButton size="sm" aria-label="Dismiss" onClick={clearCsvError} style={{ marginLeft: 'auto', marginTop: -2 }}>
+        <IconButton size="sm" aria-label="Dismiss" onClick={() => { clearCsvError(); onDismissed?.(); }} style={{ marginLeft: 'auto', marginTop: -2 }}>
           <X size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} aria-hidden="true" />
         </IconButton>
       )}

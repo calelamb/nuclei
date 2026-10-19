@@ -94,6 +94,15 @@ describe('LaunchPortal on the web build (interaction-r-04)', () => {
     expect(sim.textContent).not.toContain('Desktop app');
   });
 
+  it('the Desktop app badge is a compact chip at full opacity, not a stretched, dimmed bar', () => {
+    const { container } = renderWeb();
+    const card = providerButton(container, 'IBM Quantum');
+    expect(card.style.opacity).toBe('');
+    const cell = card.querySelector('[data-testid="portal-badge-cell"]') as HTMLElement;
+    expect(cell.style.alignSelf).toBe('flex-start');
+    expect(cell.textContent).toContain('Desktop app');
+  });
+
   it('clicking a desktop-only provider opens the launcher at the provider step, not a dead-end provider page', () => {
     const { container } = renderWeb();
     fireEvent.click(providerButton(container, 'IBM Quantum'));

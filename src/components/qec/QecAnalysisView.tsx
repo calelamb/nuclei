@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 import { useExperimentStore } from '../../services/experimentStore';
@@ -57,6 +57,7 @@ export function QecAnalysisView({ embedded = false, actionsInHeader = false }: {
   const hasData = useQecCampaignStore((s) => Object.keys(s.rowsByStrongId).length > 0);
 
   const [scrollRef, scrollSize] = useElementSize<HTMLDivElement>();
+  const rootRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState<AnalysisTab>('plot');
   const tabbed = isShortAnalysis(scrollSize.height, scrollSize.width);
   const lambdaBelow = tabbed && canStackLambda(scrollSize.height, scrollSize.width);
@@ -81,9 +82,12 @@ export function QecAnalysisView({ embedded = false, actionsInHeader = false }: {
   return (
     <div
       {...handlers}
+      ref={rootRef}
+      tabIndex={-1}
       style={{
+        outlineStyle: over ? 'dashed' : 'none',
         height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg,
-        outline: over ? `2px dashed ${colors.accent}` : 'none', outlineOffset: -2,
+        outlineWidth: 2, outlineColor: colors.accent, outlineOffset: -2,
       }}
     >
       {webPage && <QecWebHeader fileName={csvSource} />}
@@ -109,7 +113,7 @@ export function QecAnalysisView({ embedded = false, actionsInHeader = false }: {
         </div>
       )}
       {/* With no data the drop-zone card explains a rejected file where the person acted; otherwise a compact line does. */}
-      {csvError && (hasData || csvSource) && <QecCsvError compact id={CSV_ERROR_ID} message={csvError} stillShowing={csvSource} />}
+      {csvError && (hasData || csvSource) && <QecCsvError compact id={CSV_ERROR_ID} message={csvError} stillShowing={csvSource} onDismissed={() => rootRef.current?.focus()} />}
       {(running || resumable) && (
         <div
           aria-live="polite"
