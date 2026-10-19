@@ -2,6 +2,7 @@ import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recha
 import { useThemeStore } from '../../stores/themeStore';
 import { formatProbabilityTick, getMultiSeriesHistogramData, PROBABILITY_TICKS, type HistogramSeriesInput } from './histogramData';
 import { hasMeasurements, tooltipOrder } from './multiSeriesHelpers';
+import { MultiSeriesTooltip, type TooltipRow } from './MultiSeriesTooltip';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
 export interface MultiSeriesHistogramSeries extends HistogramSeriesInput {
@@ -62,17 +63,15 @@ export function MultiSeriesHistogram({ series }: { series: MultiSeriesHistogramS
           />
           <Tooltip
             cursor={{ fill: colors.bgElevated }}
-            contentStyle={{
-              background: colors.bgElevated,
-              border: `1px solid ${colors.borderStrong}`,
-              borderRadius: 6,
-              fontSize: 12,
-              fontFamily: TYPOGRAPHY.fontMono,
-            }}
-            labelStyle={{ color: colors.text }}
-            separator=": "
-            itemSorter={(item) => tooltipOrder(plotted, item.dataKey)}
-            formatter={(value, name) => [typeof value === 'number' ? value.toFixed(4) : String(value ?? ''), String(name ?? '')]}
+            content={(props) => (
+              <MultiSeriesTooltip
+                active={props.active}
+                label={props.label}
+                payload={props.payload as readonly TooltipRow[] | undefined}
+                colors={colors}
+                order={(dataKey) => tooltipOrder(plotted, dataKey)}
+              />
+            )}
           />
           {plotted.map((s) => (
             <Bar key={s.label} dataKey={s.label} fill={s.color} radius={[3, 3, 0, 0]} />

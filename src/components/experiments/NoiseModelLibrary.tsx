@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Copy, GitCompare } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { createTauriExperimentFs } from '../../services/experimentFs';
@@ -9,6 +9,7 @@ import {
   noiseModelToYaml,
   diffNoiseModels,
   GENERATOR_ARG_NAMES,
+  coefficientOf,
   type NoiseModelDef,
 } from '../../types/noiseModel';
 import { TYPOGRAPHY, ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
@@ -104,6 +105,7 @@ export function NoiseModelLibrary({ projectRoot, onClose }: { projectRoot: strin
     </div>
   ) : undefined;
 
+  const diffHasZero = diff.some((d) => d.a === 0 || d.b === 0);
   const entryOnlyCompare = compare !== null && (selected.generator_args === null || compare.generator_args === null);
 
   return (
@@ -167,13 +169,13 @@ export function NoiseModelLibrary({ projectRoot, onClose }: { projectRoot: strin
             ) : (
               <Table label="Generator arguments" dense>
                 <Thead>
-                  <Tr><Th plain>argument</Th><Th numeric plain>coefficient</Th></Tr>
+                  <Tr><Th>argument</Th><Th numeric>coefficient</Th></Tr>
                 </Thead>
                 <Tbody>
                   {GENERATOR_ARG_NAMES.map((arg) => (
                     <Tr key={arg}>
                       <Td muted>{arg}</Td>
-                      <Td numeric>{selected.generator_args?.[arg] ?? '—'}</Td>
+                      <Td numeric>{coefficientOf(selected, arg) ?? '—'}</Td>
                     </Tr>
                   ))}
                 </Tbody>
@@ -198,23 +200,24 @@ export function NoiseModelLibrary({ projectRoot, onClose }: { projectRoot: strin
                 </div>
               ) : (
                 <div style={{ marginTop: 8 }}>
-                  {entryOnlyCompare && (
+                  {(entryOnlyCompare || diffHasZero) && (
                     <p style={{ fontSize: 11, color: colors.textMuted, margin: '0 0 8px' }}>
-                      — means an entry-only model: no per-gate rates to compare.
+                      {entryOnlyCompare && '— means an entry-only model: no per-gate rates to compare. '}
+                      {diffHasZero && '0 means the channel is off.'}
                     </p>
                   )}
-                  <Table label="Generator argument differences" dense>
+                  <Table label="Generator argument differences" dense className="nuclei-noise-diff">
                     <Thead>
                       <Tr>
-                        <Th plain>channel</Th>
-                        <Th numeric plain>{selected.name}</Th>
-                        <Th numeric plain>{compare.name}</Th>
+                        <Th>channel</Th>
+                        <Th numeric plain title={selected.name}><IdentifierText value={selected.name} /></Th>
+                        <Th numeric plain title={compare.name}><IdentifierText value={compare.name} /></Th>
                       </Tr>
                     </Thead>
                     <Tbody>
                       {diff.map((d) => (
                         <Tr key={d.arg}>
-                          <Td muted>{d.arg}</Td>
+                          <Td muted title={d.arg}><IdentifierText value={d.arg} /></Td>
                           <Td numeric>{d.a ?? '—'}</Td>
                           <Td numeric>{d.b ?? '—'}</Td>
                         </Tr>
@@ -255,10 +258,27 @@ function ModelRow({ model, active, compareActive, onSelect }: { model: NoiseMode
       className="nuclei-menu-item nuclei-noise-row"
       data-active={active}
       data-compare={compareActive}
+      aria-current={active ? 'true' : undefined}
       onClick={onSelect}
     >
-      {model.name}
+      <span className="nuclei-noise-row__name">{model.name}</span>
+      {compareActive && <span className="nuclei-noise-row__tag">compare</span>}
     </button>
+  );
+}
+
+/** An snake_case identifier that may wrap only after an underscore (never mid-word). */
+function IdentifierText({ value }: { value: string }) {
+  const parts = value.split('_');
+  return (
+    <>
+      {parts.map((part, index) => (
+        <Fragment key={`${index}:${part}`}>
+          {part}
+          {index < parts.length - 1 && <>_<wbr /></>}
+        </Fragment>
+      ))}
+    </>
   );
 }
 

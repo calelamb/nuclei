@@ -109,8 +109,11 @@
 .qec-import-warnings { display: grid; gap: 5px; }
 .qec-import-warnings li { display: flex; align-items: center; gap: 6px; color: var(--qec-warning); font-size: var(--font-size-chrome-label); }
 
-.qec-import-destination { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr); gap: 10px; padding: 12px; }
+.qec-import-destination { display: grid; align-items: start; grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr); gap: 10px; padding: 12px; }
 .qec-import-destination .qec-import-policy { grid-column: 1 / -1; margin: 0; }
+/* The destination token stays in one piece; only a genuinely overlong id may break. */
+.qec-import-token { display: inline-block; max-width: 100%; font: inherit; vertical-align: bottom; overflow-wrap: anywhere; }
+.qec-import-destination__error { min-height: 16px; color: var(--color-danger-text); font-size: var(--font-size-chrome-label); font-weight: 400; }
 .qec-import-progress { display: grid; grid-template-columns: 24px auto minmax(0, 1fr) auto; color: var(--qec-analytical-strong); }
 .qec-import-progress__id { display: inline-flex; min-width: 0; align-items: center; justify-content: flex-end; gap: 4px; }
 .qec-import-progress .qec-mono { overflow: hidden; color: var(--qec-text-muted); font-size: var(--font-size-chrome-label); text-align: right; text-overflow: ellipsis; }
@@ -128,6 +131,8 @@
 .qec-tray__hash { display: flex; align-items: center; gap: 4px; }
 .qec-tray__jobs dt { color: var(--qec-text-muted); font-size: var(--font-size-chrome-label); }
 .qec-tray__jobs dd { overflow-wrap: anywhere; color: var(--qec-text); font-size: var(--font-size-chrome-label); }
+/* Paths wrap only after a slash (PathText supplies the break points); hashes and ids keep breaking anywhere. */
+.qec-facts dd.qec-path, .qec-import-facts dd.qec-path, .qec-tray__jobs dd.qec-path { overflow-wrap: break-word; }
 
 .qec-import-wizard__footer { display: flex; min-height: 64px; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 14px; border-top: 1px solid var(--qec-line); background: var(--qec-canvas); }
 .qec-import-wizard__footer--finished { justify-content: flex-end; }

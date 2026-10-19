@@ -46,8 +46,10 @@
   display: flex; align-items: center; gap: var(--space-1); min-width: 0; padding: 0 var(--space-2);
   background: transparent; text-align: left; justify-content: flex-start;
   color: var(--color-text-secondary); font-family: var(--font-sans); font-size: var(--font-size-caption);
-  font-weight: var(--font-weight-semibold); text-transform: none; letter-spacing: 0;
+  font-weight: var(--font-weight-semibold); text-transform: uppercase; letter-spacing: 0.04em;
 }
+/* Same recipe as .nuclei-table th: prose headers (Run) are overlines; swept parameters and metric names stay the identifiers the script uses. */
+.nuclei-runs-header__cell[data-kind='param'], .nuclei-runs-header__cell[data-kind='metric'] { text-transform: none; letter-spacing: 0; }
 .nuclei-runs-header__cell[data-numeric='true'] { justify-content: flex-end; text-align: right; }
 .nuclei-runs-header__sort {
   display: inline-flex; align-items: center; gap: var(--space-1); min-width: 0; max-width: 100%; padding: 0; border: none; background: transparent; cursor: pointer;
@@ -59,7 +61,7 @@
 /* Metric names wrap to two lines instead of clipping to "COUNTS_ENTR...". */
 .nuclei-runs-header__label {
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.25;
-  overflow-wrap: anywhere; text-transform: none; letter-spacing: 0;
+  overflow-wrap: anywhere; text-transform: inherit; letter-spacing: inherit;
 }
 
 /* Identity columns (checkbox + run) stay visible while metrics scroll sideways. */
@@ -114,8 +116,23 @@
   background: transparent; border: none; border-left: 2px solid transparent;
   color: var(--color-text-primary); font-family: var(--font-sans); font-size: var(--font-size-chrome-label);
 }
+.nuclei-noise-row { display: flex; align-items: center; gap: var(--space-2); }
+.nuclei-noise-row__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nuclei-noise-row__tag {
+  flex: none; padding: 0 var(--space-2); border: 1px solid var(--color-border-strong); border-radius: var(--radius-pill);
+  color: var(--color-accent-quantum-text); font-size: var(--font-size-caption);
+}
+/* Inset ring: the list scrolls and clips an outset ring at its edges. */
+.nuclei-noise-row:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring-color); outline-offset: -2px; }
 .nuclei-noise-row[data-active='true'] { background: var(--color-surface-overlay); }
 .nuclei-noise-row[data-compare='true'] { border-left-color: var(--color-accent-quantum); }
+
+/* Noise comparison: the channel column takes the slack and wraps; value columns hug their numbers,
+   and a long model name wraps inside its header so both columns always fit the dialog. */
+.nuclei-table.nuclei-noise-diff { table-layout: fixed; min-width: 0; width: 100%; }
+.nuclei-table.nuclei-noise-diff th, .nuclei-table.nuclei-noise-diff td { overflow-wrap: anywhere; white-space: normal; vertical-align: top; }
+.nuclei-table.nuclei-noise-diff th:first-child, .nuclei-table.nuclei-noise-diff td:first-child { width: 36%; }
+.nuclei-table.nuclei-noise-diff td.nuclei-table__num { white-space: nowrap; }
 
 /* Compare: equal run columns that wrap instead of widening the page. */
 .nuclei-table.nuclei-compare-diff { table-layout: fixed; min-width: 0; width: 100%; }
@@ -163,3 +180,6 @@
   background: color-mix(in srgb, var(--color-accent-quantum) 14%, transparent);
   border-color: var(--color-accent-quantum); color: var(--color-accent-quantum-text);
 }
+
+/* Compare chart tooltip layout; colours come from the theme via inline props. */
+.nuclei-chart-tooltip { padding: var(--space-2) var(--space-3); border-radius: var(--radius-soft); font-size: var(--font-size-caption); }

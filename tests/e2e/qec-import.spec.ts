@@ -45,11 +45,13 @@ test('@qec imports a detector stream and restores the canonical session after re
     await installQecDataStartBoundary(page, engine.endpoint);
     await openWorkbench(page);
 
+    // The row actions are revealed on hover; a real person hovers the row first.
+    await page.locator('.qec-source-row-shell', { has: page.getByRole('button', { name: 'Import minimal-dets' }) }).hover();
     await page.getByRole('button', { name: 'Import minimal-dets' }).click();
     const wizard = page.getByRole('region', { name: 'Import captures/minimal.dets' });
     await expect(wizard).toBeVisible();
     await expect(wizard).toHaveCSS('background-color', 'rgb(241, 245, 249)');
-    await expect(wizard.getByText(SOURCE_HASH)).toBeVisible();
+    await expect(wizard.getByTitle(SOURCE_HASH)).toBeVisible();
 
     await nextStage(page, 'Adapter');
     await page.getByRole('radio', { name: /Stim-results adapter/ }).check();
@@ -71,7 +73,15 @@ test('@qec imports a detector stream and restores the canonical session after re
     );
     await nextStage(page, 'Validation');
     await nextStage(page, 'Destination');
-    await page.getByLabel('Session ID').fill('minimal-capture');
+    const sessionId = page.getByLabel('Session ID');
+    await expect(sessionId).toHaveValue(/^minimal-\d{4}-\d{2}-\d{2}$/);
+    await expect(sessionId).not.toHaveAttribute('aria-invalid', 'true');
+    await expect(page.locator('.qec-import-destination').getByRole('alert')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Next stage' })).toBeEnabled();
+    // Real typing after a real focus: the suggestion is selected, so keystrokes replace it instead of appending.
+    await sessionId.focus();
+    await page.keyboard.type('minimal-capture');
+    await expect(sessionId).toHaveValue('minimal-capture');
     await nextStage(page, 'Import');
     await page.getByRole('button', { name: 'Import data' }).click();
     await expect(page.getByText('2 records written')).toBeVisible({ timeout: ENGINE_RESULT_TIMEOUT_MS });

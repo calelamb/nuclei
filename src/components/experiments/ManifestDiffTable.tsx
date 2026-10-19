@@ -34,7 +34,7 @@ export function ManifestDiffTable({ diff, runs }: { diff: DiffResult; runs: read
             <Table label="Differing manifest fields" dense className="nuclei-compare-diff">
               <Thead>
                 <Tr>
-                  <Th plain style={{ width: FIELD_COLUMN_WIDTH }}>Field</Th>
+                  <Th style={{ width: FIELD_COLUMN_WIDTH }}>Field</Th>
                   {runs.map((run) => <Th key={run.dir} plain title={run.dir}>{runLabel(run)}</Th>)}
                 </Tr>
               </Thead>

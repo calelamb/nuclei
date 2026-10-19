@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { seedCompareRuns } from './support/r12Experiments';
 
 const FIXTURE_URL = '/?e2eProject=qec-project&workspace=research';
 const VARIANTS = ['primary', 'danger', 'dirac'] as const;
@@ -217,4 +218,28 @@ test.describe('Accent badge stays AA on every surface in light (design-r11-02)',
       expect(ratio as number, surface).toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST);
     }
   });
+});
+
+test.describe('Compare chart tooltip stays AA (design-r12-01)', () => {
+  for (const theme of THEMES) {
+    test(`${theme}: tooltip rows use neutral text on the tooltip surface, at least ${MIN_TEXT_CONTRAST}:1, with a colour swatch`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: theme });
+      await page.goto(FIXTURE_URL);
+      await expect(page.locator('.monaco-editor')).toBeVisible();
+      await seedCompareRuns(page);
+      await page.getByRole('button', { name: /Experiments/i }).first().click();
+      const boxes = page.locator('.nuclei-runs-row input[type=checkbox]');
+      for (const i of [0, 1, 2]) await boxes.nth(i).check();
+      await page.getByRole('button', { name: /Compare \(3\)/ }).click();
+      await page.locator('.recharts-bar-rectangle path').first().hover({ force: true });
+      await expect(page.locator('.nuclei-chart-tooltip')).toBeVisible();
+      await expect(page.locator('.nuclei-chart-tooltip [data-swatch]')).toHaveCount(3);
+      for (const row of [2, 3, 4]) {
+        const selector = `.nuclei-chart-tooltip > div:nth-child(${row}) > span:last-child`;
+        const ratio = await page.evaluate(PAINTED_CONTRAST_SCRIPT, selector);
+        expect(ratio, `${theme} tooltip row ${row - 1}`).not.toBeNull();
+        expect(ratio as number, `${theme} tooltip row ${row - 1}`).toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST);
+      }
+    });
+  }
 });

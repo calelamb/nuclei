@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { adapterDisplayName, countLabel, buildMapping, completeRows, adapterNeedsNoMapping, mappingIsReviewed, sessionIdIssue, stageDescription, supportedAdapters } from './qecImportModel';
+import { adapterDisplayName, countLabel, buildMapping, completeRows, adapterNeedsNoMapping, mappingIsReviewed, sessionIdIssue, stageDescription, suggestSessionId, supportedAdapters } from './qecImportModel';
 
 const EMPTY_OPTIONS = {
   outputKind: '', detectorCount: '', observableCount: '', timestampUnit: '', bitOrder: '',
@@ -64,8 +64,8 @@ describe('qecImportModel', () => {
 
   it('accepts a bounded portable session id', () => {
     expect(sessionIdIssue('capture-2026-07-22')).toBeNull();
-    expect(sessionIdIssue('🧪'.repeat(256))).toBeNull();
-    expect(sessionIdIssue('🧪'.repeat(257))).toBe('session ID must be 256 characters or fewer');
+    expect(sessionIdIssue('a'.repeat(128))).toBeNull();
+    expect(sessionIdIssue('a'.repeat(129))).toBe('session ID must be 128 characters or fewer');
   });
 });
 
@@ -81,5 +81,25 @@ describe('wizard copy helpers (qec-r-19)', () => {
     expect(countLabel(1, 'canonical partition')).toBe('1 canonical partition');
     expect(countLabel(46, 'record')).toBe('46 records');
     expect(countLabel(0, 'partition')).toBe('0 partitions');
+  });
+
+  it('suggests a valid session id from the source basename and date', () => {
+    const day = new Date(2026, 6, 4);
+    expect(suggestSessionId('captures/repetition-d3.dets', day)).toBe('repetition-d3-2026-07-04');
+    expect(suggestSessionId('a\\b\\run:1?.csv', day)).toBe('run-1--2026-07-04');
+    expect(suggestSessionId('', day)).toBe('import-2026-07-04');
+    expect(suggestSessionId('x/..', day)).toBe('import-2026-07-04');
+    expect(suggestSessionId('My Capture (1).csv', day)).toBe('My-Capture-1--2026-07-04');
+    expect(suggestSessionId('données.dets', day)).toBe('donn-es-2026-07-04');
+    expect(suggestSessionId('.hidden_run.csv', day)).toBe('hidden_run-2026-07-04');
+    expect(Array.from(suggestSessionId(`${'a'.repeat(200)}.csv`, day)).length).toBe(128);
+    for (const source of ['captures/repetition-d3.dets', 'x/..', 'weird<>name.csv', '', 'run 3.csv', `${'é'.repeat(300)}.csv`, '_x.csv']) {
+      expect(sessionIdIssue(suggestSessionId(source, day))).toBeNull();
+    }
+  });
+
+  it('rejects ids the kernel grammar would refuse', () => {
+    for (const bad of ['run 3', '.x', '-x', 'é', 'a'.repeat(129)]) expect(sessionIdIssue(bad)).not.toBeNull();
+    for (const ok of ['run-3', 'a.b_c-1', 'a'.repeat(128)]) expect(sessionIdIssue(ok)).toBeNull();
   });
 });
