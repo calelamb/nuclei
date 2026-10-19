@@ -49,7 +49,7 @@ import { useProjectStore } from '../../stores/projectStore';
 
 const CODE = 'from qiskit import QuantumCircuit\nqc = QuantumCircuit(1)\nqc.h(0)';
 
-beforeEach(() => { boot.current = null; boot.sent = []; boot.failInit = false; boot.inits = 0; });
+beforeEach(() => { useEditorStore.setState({ kernelStatus: 'idle', kernelError: null }); boot.current = null; boot.sent = []; boot.failInit = false; boot.inits = 0; });
 afterEach(cleanup);
 
 describe('InteractiveDemo on the web before Python is ready', () => {
@@ -100,19 +100,48 @@ describe('InteractiveDemo on the web before Python is ready', () => {
   });
 });
 
-describe('InteractiveDemo on the web when Python fails to start', () => {
-  it('keeps the web error on Run (never the desktop sentence) and retries the boot', async () => {
+describe('InteractiveDemo on the web when Python fails to start (learn-r10-02)', () => {
+  it("says Python didn't start with a Retry, shares the failure with the status bar, and never shows a boot step", async () => {
     boot.failInit = true;
     render(<InteractiveDemo code={CODE} framework="qiskit" description="demo" />);
     await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(screen.getByText("Python didn't start")).toBeTruthy();
     expect(screen.getByText(/Couldn't start the browser Python engine/)).toBeTruthy();
+    expect(useEditorStore.getState().kernelStatus).toBe('failed');
     expect(boot.inits).toBe(1);
+    // The Run slot is not stuck on a boot stage, and nothing queued.
+    expect(screen.getByRole('button', { name: /^Run$/ })).toBeTruthy();
+    expect(screen.queryByText(/Queued|Starting/)).toBeNull();
+  });
 
-    fireEvent.click(screen.getByRole('button', { name: /^Run$/ }));
+  it('does not boot a second time behind a failure the status bar already reported', async () => {
+    useEditorStore.getState().setKernelStatus('failed', "Couldn't start the browser Python engine. Check your connection or content blocker, then retry.");
+    render(<InteractiveDemo code={CODE} framework="qiskit" description="demo" />);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(boot.inits).toBe(0);
+    expect(screen.getByText("Python didn't start")).toBeTruthy();
+  });
+
+  it('Retry (and Run) boot again only on an explicit press, never with the desktop sentence', async () => {
+    boot.failInit = true;
+    render(<InteractiveDemo code={CODE} framework="qiskit" description="demo" />);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    fireEvent.click(screen.getByRole('button', { name: /^Retry$/ }));
     await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
     expect(boot.inits).toBe(2);
     expect(screen.queryByText(/Kernel not connected/)).toBeNull();
-    expect(screen.getByText(/Couldn't start the browser Python engine/)).toBeTruthy();
+  });
+});
+
+describe('InteractiveDemo error line (learn-r10-08)', () => {
+  it('prefixes the line parsed from the traceback', async () => {
+    render(<InteractiveDemo code="print(1)" framework="qiskit" description="demo" />);
+    await act(async () => { await Promise.resolve(); boot.resolveInit(); await Promise.resolve(); await Promise.resolve(); });
+    fireEvent.click(screen.getByRole('button', { name: /^Run$/ }));
+    await act(async () => {
+      boot.onMessage({ type: 'error', message: 'SyntaxError: invalid syntax', traceback: '  File "<string>", line 2\n    x = (' });
+    });
+    expect(screen.getByRole('alert').textContent).toBe('Line 2 · SyntaxError: invalid syntax');
   });
 });
 

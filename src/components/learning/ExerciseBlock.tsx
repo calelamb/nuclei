@@ -8,6 +8,8 @@ import { hasAnyExpectation, hasExpectedDistribution, isQuantumCode, shouldAutoGr
 import { UnsupportedNotice } from './UnsupportedNotice';
 import { OutcomeResults } from './OutcomeResults';
 import { useLessonKernel } from './useLessonKernel';
+import { LessonEngineFailed } from './LessonEngineFailed';
+import { describeCodeError } from '../../lib/errorLine';
 import { LessonRunButton } from './LessonRunButton';
 import { Button } from '../ui';
 import { StaleResultNotice } from '../layout/StaleResultNotice';
@@ -58,6 +60,7 @@ export function ExerciseBlock({
   const [output, setOutput] = useState<string[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorLine, setErrorLine] = useState<number | null>(null);
   const [unsupported, setUnsupported] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ success: boolean; message: string } | null>(null);
   const [hintsRevealed, setHintsRevealed] = useState(0);
@@ -142,14 +145,15 @@ export function ExerciseBlock({
         return;
       }
       if (msg.phase === 'parse') return;
-      setError(msg.message);
+      { const described = describeCodeError(msg.message, msg.traceback); setError(described.text); setErrorLine(described.line); }
       setIsRunning(false);
     }
   }, [finishRun, wantsDistribution]);
 
   const kernel = useLessonKernel({
     onMessage: handleMessage,
-    onInitError: (message) => { setError(message); setIsRunning(false); },
+    // The failed-start notice (with Retry) owns the explanation; no second error line.
+    onInitError: () => { setIsRunning(false); },
   });
   const { send: kernelSend } = kernel;
 
@@ -185,6 +189,7 @@ export function ExerciseBlock({
   }, [flushDraft]);
 
   const handleCodeChange = (value: string | undefined) => {
+    setErrorLine(null);
     codeRef.current = value ?? '';
     setLocalCode(value ?? '');
     setResetArmed(false);
@@ -229,6 +234,8 @@ export function ExerciseBlock({
   };
 
   const handleRun = () => {
+    // A failed start stays failed until the explicit Retry; Run is that Retry.
+    if (kernel.failed) { kernel.retry(); return; }
     const token = ++runTokenRef.current;
     setIsRunning(true);
     setError(null);
@@ -291,7 +298,7 @@ export function ExerciseBlock({
       </div>
 
       <div className="demo__editor">
-        <LessonCodeEditor value={localCode} onChange={handleCodeChange} />
+        <LessonCodeEditor value={localCode} onChange={handleCodeChange} errorLine={error ? errorLine : null} errorMessage={error ?? undefined} />
       </div>
 
       <div className="demo__actions demo__actions--divided">
@@ -334,7 +341,9 @@ export function ExerciseBlock({
         </div>
       )}
 
-      {error && <div className="demo__error" role="alert">{error}</div>}
+      {kernel.failed && <LessonEngineFailed detail={kernel.failureDetail} onRetry={kernel.retry} />}
+
+      {error && !kernel.failed && <div className="demo__error" role="alert">{error}</div>}
 
       {unsupported && <div className="demo__notice"><UnsupportedNotice message={unsupported} /></div>}
 
