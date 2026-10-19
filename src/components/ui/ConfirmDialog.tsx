@@ -31,6 +31,7 @@ export function ConfirmDialog({
       title={title}
       description={description}
       width={400}
+      role="alertdialog"
       onClose={onCancel}
       hideClose
       initialFocus="[data-confirm-cancel]"

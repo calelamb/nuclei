@@ -34,6 +34,8 @@ export interface DialogProps {
   hideClose?: boolean;
   /** Stacking order; the default sits above panels and below tooltips. */
   zIndex?: number;
+  /** `alertdialog` for confirmations that interrupt with a decision. Default `dialog`. */
+  role?: 'dialog' | 'alertdialog';
 }
 
 /**
@@ -44,7 +46,7 @@ export interface DialogProps {
  */
 export function Dialog({
   title, description, leading, trailing, onClose, children, footer, width = 440, align = 'center',
-  dismissible = true, initialFocus, className, flush = false, hideClose = false, zIndex = 4600,
+  dismissible = true, initialFocus, className, flush = false, hideClose = false, zIndex = 4600, role = 'dialog',
 }: DialogProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
@@ -83,7 +85,7 @@ export function Dialog({
     >
       <div
         ref={panelRef}
-        role="dialog"
+        role={role}
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={description ? descId : undefined}
