@@ -46,6 +46,7 @@ export function LessonRunButton({ isRunning, pythonLoading, progress, onRun, onC
       onClick={cancellable ? onCancelQueued : onRun}
       loading={isRunning && !cancellable}
       keepFocus
+      data-lesson-run
       title={title}
       aria-pressed={pythonLoading && onCancelQueued ? queued : undefined}
       icon={<Play size={12} fill="currentColor" aria-hidden="true" />}

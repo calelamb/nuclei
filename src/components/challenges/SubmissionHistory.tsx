@@ -66,7 +66,7 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
           fontFamily: TYPOGRAPHY.fontMono,
           width: 20,
         }}>
-          #{index + 1}
+          #{index}
         </span>
 
         {/* Status badge */}

@@ -14,7 +14,7 @@ import { describeCodeError } from '../../lib/errorLine';
 import { LessonRunButton } from './LessonRunButton';
 import { StaleResultNotice } from '../layout/StaleResultNotice';
 import { formatCircuitMeta } from './outcomeDistribution';
-import { focusBlockEditor } from './focusBlockEditor';
+import { focusBlockEditor, focusBlockRun } from './focusBlockEditor';
 import './demo.css';
 
 const PYTHON_FAILED_MESSAGE = 'The program did not finish. Check the code and run it again.';
@@ -46,6 +46,8 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
   const blockRef = useRef<HTMLDivElement>(null);
   // Bumped on every Run and on cancel, so a Run queued behind the Python boot can be withdrawn.
   const runTokenRef = useRef(0);
+  // A Run the learner asked for that has not been handed to Python yet; the Retry notice re-issues it.
+  const wantedRunRef = useRef(false);
 
   const handleMessage = useCallback((msg: KernelResponse) => {
     switch (msg.type) {
@@ -104,13 +106,22 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
   }
 
   const handleCancelQueued = () => {
+    wantedRunRef.current = false;
     runTokenRef.current += 1;
     setIsRunning(false);
   };
 
+  const handleRetry = () => {
+    // The notice unmounts as the engine restarts: put focus on Run first so it never drops to <body>.
+    focusBlockRun(blockRef.current);
+    if (wantedRunRef.current) handleRun();
+    else kernel.retry();
+  };
+
   const handleRun = () => {
     // A failed start stays failed until the explicit Retry; Run is that Retry.
-    if (kernel.failed) { kernel.retry(); return; }
+    if (kernel.failed) kernel.retry();
+    wantedRunRef.current = true;
     const token = ++runTokenRef.current;
     setIsRunning(true);
     setError(null);
@@ -130,6 +141,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
 
     kernelSend(message, { isCancelled: () => runTokenRef.current !== token }).then(
       (sent) => {
+        if (sent) wantedRunRef.current = false;
         if (!sent) {
           setError(kernel.unavailableMessage());
           setIsRunning(false);
@@ -237,7 +249,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
         <div className="demo__notice"><UnsupportedNotice message={unsupported} /></div>
       )}
 
-      {kernel.failed && <LessonEngineFailed detail={kernel.failureDetail} onRetry={kernel.retry} />}
+      {kernel.failed && <LessonEngineFailed detail={kernel.failureDetail} onRetry={handleRetry} />}
 
       {error && !kernel.failed && <div className="demo__error" role="alert">{error}</div>}
 

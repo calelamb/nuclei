@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeCodeError, errorLineFromTraceback } from './errorLine';
+import { describeCodeError, errorLineFromTraceback, shiftLineMentions } from './errorLine';
 
 describe('errorLineFromTraceback', () => {
   it('reads a syntax error line', () => {
@@ -19,6 +19,24 @@ describe('errorLineFromTraceback', () => {
     expect(errorLineFromTraceback('File "<string>", line 1', 3)).toBeNull();
     expect(errorLineFromTraceback('NameError: x')).toBeNull();
     expect(errorLineFromTraceback(undefined)).toBeNull();
+  });
+});
+
+describe('errorLineFromTraceback file names', () => {
+  it.each(['untitled.py', 'bell.py', '<string>'])('reads frames named %s', (name) => {
+    expect(errorLineFromTraceback(`Traceback (most recent call last):\n  File "${name}", line 7, in <module>\nNameError: x`)).toBe(7);
+  });
+
+  it('ignores runtime frames', () => {
+    const tb = 'File "bell.py", line 3, in solve\n  File "/lib/python3.12/site-packages/qiskit/x.py", line 99, in h';
+    expect(errorLineFromTraceback(tb)).toBe(3);
+  });
+});
+
+describe('shiftLineMentions', () => {
+  it('moves "on line N" into student numbering', () => {
+    expect(shiftLineMentions('IndentationError: expected an indented block after function definition on line 4', 1))
+      .toBe('IndentationError: expected an indented block after function definition on line 3');
   });
 });
 

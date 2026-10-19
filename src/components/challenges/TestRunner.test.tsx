@@ -53,6 +53,20 @@ describe('TestRunner result tabs', () => {
   });
 });
 
+describe('TestRunner focus contract (learn-r11-04)', () => {
+  it('keeps Run focusable (aria-disabled, not disabled) while it works', async () => {
+    render(<TestRunner challenge={CHALLENGE} />);
+    const runButton = screen.getByRole('button', { name: /Run visible tests/ });
+    runButton.focus();
+    fireEvent.click(runButton);
+    const busy = screen.getByRole('button', { name: /Running/ });
+    expect(busy.hasAttribute('disabled')).toBe(false);
+    expect(busy.getAttribute('aria-disabled')).toBe('true');
+    expect(document.activeElement).toBe(busy);
+    await waitFor(() => expect(screen.getByRole('button', { name: /Run visible tests/ })).toBeTruthy());
+  });
+});
+
 describe('TestRunner verdict', () => {
   it('reserves the verdict pill for Submit and reports pass counts for visible runs', async () => {
     render(<TestRunner challenge={CHALLENGE} />);
@@ -79,7 +93,7 @@ describe('TestRunner when the code does not run (learn-r10-03)', () => {
     run.results = [SYNTAX('t1'), SYNTAX('t2')];
     render(<TestRunner challenge={TWO_CASES} />);
     fireEvent.click(screen.getByRole('button', { name: /Run visible tests/ }));
-    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain("Your code didn't run: SyntaxError on line 5"));
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain("Your code didn't run (line 5)"));
     expect(screen.getAllByText('Not run')).toHaveLength(2);
     expect(screen.queryByText(/fidelity 0%|match 0%/)).toBeNull();
     expect(screen.getByRole('status').textContent).toContain('0 of 2 cases ran');

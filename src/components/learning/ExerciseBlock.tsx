@@ -14,7 +14,7 @@ import { LessonRunButton } from './LessonRunButton';
 import { Button } from '../ui';
 import { StaleResultNotice } from '../layout/StaleResultNotice';
 import { CheckSolutionButton } from './CheckSolutionButton';
-import { focusBlockEditor } from './focusBlockEditor';
+import { focusBlockEditor, focusBlockRun } from './focusBlockEditor';
 import '../dirac/dirac.css';
 import './demo.css';
 
@@ -74,6 +74,8 @@ export function ExerciseBlock({
   const codeRef = useRef(localCode);
   const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const runTokenRef = useRef(0);
+  // A Run the learner asked for that has not been handed to Python yet; the Retry notice re-issues it.
+  const wantedRunRef = useRef(false);
   const outputRef = useRef<string[]>([]);
   const resultRef = useRef<SimulationResult | null>(null);
   const expectations = useMemo(
@@ -229,13 +231,22 @@ export function ExerciseBlock({
   };
 
   const handleCancelQueued = () => {
+    wantedRunRef.current = false;
     runTokenRef.current += 1;
     setIsRunning(false);
   };
 
+  const handleRetry = () => {
+    // The notice unmounts as the engine restarts: put focus on Run first so it never drops to <body>.
+    focusBlockRun(blockRef.current);
+    if (wantedRunRef.current) handleRun();
+    else kernel.retry();
+  };
+
   const handleRun = () => {
     // A failed start stays failed until the explicit Retry; Run is that Retry.
-    if (kernel.failed) { kernel.retry(); return; }
+    if (kernel.failed) kernel.retry();
+    wantedRunRef.current = true;
     const token = ++runTokenRef.current;
     setIsRunning(true);
     setError(null);
@@ -255,6 +266,7 @@ export function ExerciseBlock({
 
     kernelSend(message, { isCancelled: () => token !== runTokenRef.current }).then(
       (sent) => {
+        if (sent) wantedRunRef.current = false;
         if (!sent && token === runTokenRef.current) {
           setError(kernel.unavailableMessage());
           setIsRunning(false);
@@ -341,7 +353,7 @@ export function ExerciseBlock({
         </div>
       )}
 
-      {kernel.failed && <LessonEngineFailed detail={kernel.failureDetail} onRetry={kernel.retry} />}
+      {kernel.failed && <LessonEngineFailed detail={kernel.failureDetail} onRetry={handleRetry} />}
 
       {error && !kernel.failed && <div className="demo__error" role="alert">{error}</div>}
 

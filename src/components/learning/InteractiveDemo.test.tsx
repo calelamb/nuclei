@@ -133,6 +133,19 @@ describe('InteractiveDemo on the web when Python fails to start (learn-r10-02)',
   });
 });
 
+describe('InteractiveDemo Run after a failed start (learn-r11-06)', () => {
+  it('Run is the retry and the run it asked for happens once Python is ready', async () => {
+    boot.failInit = true;
+    render(<InteractiveDemo code="print(1)" framework="qiskit" description="demo" />);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    boot.failInit = false;
+    fireEvent.click(screen.getByRole('button', { name: /^Run$/ }));
+    await waitFor(() => expect(boot.inits).toBe(2));
+    await act(async () => { boot.resolveInit(); await new Promise((r) => setTimeout(r, 10)); });
+    expect(boot.sent.filter((m) => m.type === 'run_python')).toHaveLength(1);
+  });
+});
+
 describe('InteractiveDemo error line (learn-r10-08)', () => {
   it('prefixes the line parsed from the traceback', async () => {
     render(<InteractiveDemo code="print(1)" framework="qiskit" description="demo" />);

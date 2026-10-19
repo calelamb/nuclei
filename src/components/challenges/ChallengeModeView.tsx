@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { useChallengeModeStore } from '../../stores/challengeModeStore';
 import { ProblemBrowser } from './ProblemBrowser';
 import { ProblemWorkspace } from './ProblemWorkspace';
@@ -9,6 +10,24 @@ export function ChallengeModeView() {
   const activeProblem = useChallengeModeStore((s) => s.activeProblem);
   const setActiveProblem = useChallengeModeStore((s) => s.setActiveProblem);
   const exitChallengeMode = useChallengeModeStore((s) => s.exitChallengeMode);
+
+  const problemTitleRef = useRef<HTMLSpanElement>(null);
+  const previousIdRef = useRef<string | null>(activeProblem?.id ?? null);
+  const activeId = activeProblem?.id ?? null;
+
+  // Keyboard focus follows the learner: the problem title when one opens, its row when Back returns to the list.
+  useEffect(() => {
+    const previous = previousIdRef.current;
+    previousIdRef.current = activeId;
+    if (previous === activeId) return;
+    if (activeId) {
+      problemTitleRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    const row = previous ? document.querySelector<HTMLElement>(`[data-problem-id="${CSS.escape(previous)}"]`) : null;
+    row?.scrollIntoView({ block: 'nearest' });
+    row?.focus({ preventScroll: true });
+  }, [activeId]);
 
   return (
     <div className="cmode">
@@ -30,13 +49,13 @@ export function ChallengeModeView() {
         {activeProblem && (
           <>
             <span className="cmode__sep" aria-hidden="true" />
-            <span className="cmode__problem">{activeProblem.title}</span>
+            <span ref={problemTitleRef} className="cmode__problem" role="heading" aria-level={2} data-landing tabIndex={-1}>{activeProblem.title}</span>
           </>
         )}
       </div>
 
       <div className="cmode__content">
-        {activeProblem ? <ProblemWorkspace /> : <ProblemBrowser />}
+        {activeProblem ? <ProblemWorkspace key={activeProblem.id} /> : <ProblemBrowser />}
       </div>
     </div>
   );
