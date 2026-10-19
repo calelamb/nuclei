@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 const boot = vi.hoisted(() => {
   const state = {
@@ -44,6 +44,8 @@ vi.mock('../../platform/pyodideKernel', () => ({
 }));
 
 import { InteractiveDemo } from './InteractiveDemo';
+import { useEditorStore } from '../../stores/editorStore';
+import { useProjectStore } from '../../stores/projectStore';
 
 const CODE = 'from qiskit import QuantumCircuit\nqc = QuantumCircuit(1)\nqc.h(0)';
 
@@ -199,5 +201,43 @@ describe('InteractiveDemo Python-only runs (learn-r9-01)', () => {
     await runPlain();
     await act(async () => { boot.onMessage({ type: 'python_result', success: false }); });
     expect(screen.getByRole('alert').textContent).toMatch(/did not finish/i);
+  });
+});
+
+describe('InteractiveDemo Open in editor (interaction-r-01)', () => {
+  const WORK = '# MY IMPORTANT WORK\n';
+  beforeEach(() => {
+    useProjectStore.setState({ tabs: [], activeTabPath: null });
+    useEditorStore.setState({ code: WORK, isDirty: true, filePath: null, framework: 'qiskit' });
+  });
+
+  it('asks before replacing unsaved code, and keeps it when cancelled', async () => {
+    render(<InteractiveDemo code={CODE} framework="qiskit" description="demo" />);
+    await act(async () => { await Promise.resolve(); });
+    fireEvent.click(screen.getByRole('button', { name: /Open in editor/ }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog.textContent).toContain('Replace your code with the demo code?');
+    expect(useEditorStore.getState().code).toBe(WORK);
+    fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(useEditorStore.getState().code).toBe(WORK);
+  });
+
+  it('replaces the code once confirmed', async () => {
+    render(<InteractiveDemo code={CODE} framework="qiskit" description="demo" />);
+    await act(async () => { await Promise.resolve(); });
+    fireEvent.click(screen.getByRole('button', { name: /Open in editor/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Replace' }));
+    await waitFor(() => expect(useEditorStore.getState().code).toBe(CODE));
+  });
+
+  it('opens a new tab in project mode without asking', async () => {
+    useProjectStore.getState().openTab({ path: '/p/bell.py', content: WORK });
+    render(<InteractiveDemo code={CODE} framework="qiskit" description="demo" />);
+    await act(async () => { await Promise.resolve(); });
+    fireEvent.click(screen.getByRole('button', { name: /Open in editor/ }));
+    await waitFor(() => expect(useEditorStore.getState().code).toBe(CODE));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(useProjectStore.getState().tabs.find((t) => t.path === '/p/bell.py')?.content).toBe(WORK);
   });
 });

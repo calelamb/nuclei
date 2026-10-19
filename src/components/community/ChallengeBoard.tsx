@@ -1,7 +1,7 @@
-import { Badge, Button, EmptyState, SegmentedControl, Table, Tbody, Td, Th, Thead, Tr, type BadgeTone } from '../ui';
+import { Badge, Button, useConfirm, EmptyState, SegmentedControl, Table, Tbody, Td, Th, Thead, Tr, type BadgeTone } from '../ui';
 import { useThemeStore } from '../../stores/themeStore';
 import { useChallengeStore } from '../../stores/challengeStore';
-import { useEditorStore } from '../../stores/editorStore';
+import { loadIntoEditor } from '../editor/loadIntoEditor';
 import { useDiracPanelStore } from '../../stores/diracPanelStore';
 import { Play, Lightbulb, Trophy } from 'lucide-react';
 import { ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
@@ -32,17 +32,16 @@ export function ChallengeBoard() {
   const activeChallenge = useChallengeStore((s) => s.activeChallenge);
   const leaderboard = useChallengeStore((s) => s.leaderboard);
   const setActiveChallenge = useChallengeStore((s) => s.setActiveChallenge);
-  const setCode = useEditorStore((s) => s.setCode);
+  const { confirm, confirmDialog } = useConfirm();
   const openDirac = useDiracPanelStore((s) => s.open);
 
   const displayed = activeChallenge ?? challenges[0] ?? null;
   const ended = displayed ? hasEnded(displayed.deadline) : false;
 
-  const handleStart = () => {
-    if (displayed) {
-      setCode(displayed.starterCode);
-      setActiveChallenge(displayed);
-    }
+  const handleStart = async () => {
+    if (!displayed) return;
+    const outcome = await loadIntoEditor(displayed.starterCode, { label: 'challenge starter', confirm });
+    if (outcome !== 'cancelled') setActiveChallenge(displayed);
   };
 
   const handleHint = () => {
@@ -147,7 +146,7 @@ export function ChallengeBoard() {
 
         {/* Actions stack so the labels never wrap in the narrow rail */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <Button variant={ended ? 'secondary' : 'primary'} size="sm" icon={<Play size={ICON_SIZE.xs} aria-hidden="true" />} onClick={handleStart} style={{ width: '100%' }}>
+          <Button variant={ended ? 'secondary' : 'primary'} size="sm" icon={<Play size={ICON_SIZE.xs} aria-hidden="true" />} onClick={() => { void handleStart(); }} style={{ width: '100%' }}>
             {ended ? 'Practice this challenge' : 'Start challenge'}
           </Button>
           <Button variant="secondary" size="sm" icon={<Lightbulb size={ICON_SIZE.xs} aria-hidden="true" />} onClick={handleHint} style={{ width: '100%' }}>
@@ -188,6 +187,7 @@ export function ChallengeBoard() {
           </Table>
         )}
       </div>
+      {confirmDialog}
     </div>
   );
 }

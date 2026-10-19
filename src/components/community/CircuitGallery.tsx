@@ -1,9 +1,9 @@
-import { EmptyState, Select } from '../ui';
+import { EmptyState, Select, useConfirm } from '../ui';
 import { useRef } from 'react';
 import { Search, Share2 } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useCommunityStore } from '../../stores/communityStore';
-import { useEditorStore } from '../../stores/editorStore';
+import { loadIntoEditor } from '../editor/loadIntoEditor';
 import { CircuitCard } from './CircuitCard';
 import { CircuitDetail } from './CircuitDetail';
 
@@ -39,7 +39,7 @@ export function CircuitGallery() {
   const toggleLike = useCommunityStore((s) => s.toggleLike);
   const toggleBookmark = useCommunityStore((s) => s.toggleBookmark);
   const selectCircuit = useCommunityStore((s) => s.selectCircuit);
-  const setCode = useEditorStore((s) => s.setCode);
+  const { confirm, confirmDialog } = useConfirm();
 
   // Filter and sort locally
   let filtered = [...circuits];
@@ -184,11 +184,13 @@ export function CircuitGallery() {
           circuit={selectedCircuit}
           onClose={() => selectCircuit(null)}
           onOpenInEditor={() => {
-            setCode(selectedCircuit.code);
-            selectCircuit(null);
+            void loadIntoEditor(selectedCircuit.code, { label: 'shared circuit', confirm }).then((outcome) => {
+              if (outcome !== 'cancelled') selectCircuit(null);
+            });
           }}
         />
       )}
+      {confirmDialog}
     </div>
   );
 }
