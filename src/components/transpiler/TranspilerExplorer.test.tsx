@@ -55,12 +55,18 @@ describe('Transpiler Explorer platform honesty', () => {
     expect(useTranspileStore.getState().error).toBe("The kernel isn't connected. Check the status bar, then try again.");
   });
 
-  it('after a failed start, Transpile points at the failed start, not a dropped connection (research-r-03)', () => {
+  it('after a failed start, Transpile is disabled and named for the failed start, with a Retry beside it (research-r-17)', () => {
     platform.web = false;
+    const retry = vi.fn();
+    registerKernelRetry(retry);
     useEditorStore.setState({ kernelStatus: 'failed' });
     render(<TranspilerControls />);
-    fireEvent.click(screen.getByRole('button', { name: /Transpile/ }));
-    expect(useTranspileStore.getState().error).toBe("Kernel didn't start. Check the status bar, then retry.");
+    const button = screen.getByRole('button', { name: "Kernel didn't start" }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: /^Transpile$/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(retry).toHaveBeenCalled();
+    registerKernelRetry(null);
   });
 
   it('shows an engine failure as an alert with Retry that restarts the kernel', () => {

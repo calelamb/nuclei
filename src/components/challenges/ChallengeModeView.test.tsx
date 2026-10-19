@@ -35,4 +35,13 @@ describe('ChallengeModeView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     expect(setActiveProblem).toHaveBeenCalledWith(null);
   });
+
+  it('makes the takeover title the programmatic landing H1 (shell-r10-02)', () => {
+    render(<ChallengeModeView />);
+    const title = screen.getByRole('heading', { level: 1, name: 'Quantum challenges' });
+    expect(title.getAttribute('tabindex')).toBe('-1');
+    expect(title.hasAttribute('data-landing')).toBe(true);
+    // First heading in the takeover, so the keyboard landing query finds it before the list's own heading.
+    expect(document.querySelector(':is(h1, h2)')).toBe(title);
+  });
 });

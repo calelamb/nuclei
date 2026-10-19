@@ -114,7 +114,7 @@ export function kernelUnavailableMessage(
 ): string {
   const isWeb = options.isWeb ?? isWebBuild();
   if (status === 'connecting') return kernelStartingMessage({ isWeb, again: options.again });
-  if (status === 'failed') return `${kernelStartFailureTitle(isWeb)}. Check the status bar, then retry.`;
+  if (status === 'failed') return `${kernelStartFailureTitle(isWeb)}. Use Retry in the status bar to start it again.`;
   return kernelNotConnectedMessage({ isWeb });
 }
 

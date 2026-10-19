@@ -85,7 +85,6 @@ export function ProblemWorkspace() {
         <div className="pwork__meta">
           {isValueContract && (
             <>
-              <Badge tone="accent">Python value contract</Badge>
               <Badge tone="success">Browser + Desktop</Badge>
             </>
           )}

@@ -6,7 +6,8 @@ import { useEditorStore } from '../../stores/editorStore';
 import { useHardwareStore } from '../../stores/hardwareStore';
 import { useTranspileStore, SIMULATOR_TARGET_ID } from '../../stores/transpileStore';
 import { requestTranspile } from '../../lib/transpileSender';
-import { kernelUnavailableMessage, kernelWaitingLabel } from '../../lib/kernelErrors';
+import { kernelStartFailureTitle, kernelUnavailableMessage, kernelWaitingLabel } from '../../lib/kernelErrors';
+import { retryKernel } from '../../lib/kernelControl';
 import { isWebBuild } from '../../platform/buildTarget';
 import { ConnectivityMap } from '../hardware/ConnectivityMap';
 import { resolveTargetRequest } from './transpileMath';
@@ -28,7 +29,8 @@ export function TranspilerControls() {
   const framework = useEditorStore((s) => s.framework);
   const backends = useHardwareStore((s) => s.backends);
   const kernelStatus = useEditorStore((s) => s.kernelStatus);
-  const kernelStarting = kernelStatus === 'connecting';
+  const kernelFailed = kernelStatus === 'failed';
+  const kernelNotReady = kernelStatus !== 'ready';
 
   const targetId = useTranspileStore((s) => s.targetId);
   const optimizationLevel = useTranspileStore((s) => s.optimizationLevel);
@@ -86,15 +88,21 @@ export function TranspilerControls() {
 
   return (
     <div style={shell}>
-      <Button
-        variant="primary"
-        onClick={run}
-        loading={pending}
-        disabled={kernelStarting}
-        icon={pending || kernelStarting ? undefined : <Shuffle size={14} />}
-      >
-        {kernelStarting ? kernelWaitingLabel() : pending ? 'Transpiling…' : result ? 'Re-transpile' : 'Transpile'}
-      </Button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Button
+          variant="primary"
+          onClick={run}
+          loading={pending}
+          disabled={kernelNotReady}
+          icon={pending || kernelNotReady ? undefined : <Shuffle size={14} />}
+          style={{ flex: 1 }}
+        >
+          {kernelFailed
+            ? kernelStartFailureTitle(desktopOnly)
+            : kernelNotReady ? kernelWaitingLabel() : pending ? 'Transpiling…' : result ? 'Re-transpile' : 'Transpile'}
+        </Button>
+        {kernelFailed && <Button onClick={retryKernel}>Retry</Button>}
+      </div>
 
       <label style={fieldLabel(colors)}>
         Target

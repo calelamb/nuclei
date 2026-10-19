@@ -65,7 +65,6 @@ export function ProblemFilters() {
             onChange={(next) => setDifficultyFilter(next === 'all' ? null : next)}
           />
         </FilterGroup>
-        <span className="pfilters__sep" aria-hidden="true" />
         <FilterGroup label="Category">
           <SegmentedControl
             aria-label="Category"
@@ -74,7 +73,6 @@ export function ProblemFilters() {
             onChange={(next) => setCategoryFilter(next === 'all' ? null : next)}
           />
         </FilterGroup>
-        <span className="pfilters__sep" aria-hidden="true" />
         <FilterGroup label="Status">
           <SegmentedControl aria-label="Status" value={statusFilter} options={STATUS_OPTIONS} onChange={setStatusFilter} />
         </FilterGroup>

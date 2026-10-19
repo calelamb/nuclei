@@ -24,12 +24,13 @@ key distribution.
 ### Your Task
 
 Given a \`bell_index\` (0 through 3), construct the corresponding Bell state on a
-two-qubit circuit. After measurement, the probability distribution must match the
-expected outcome for that state.
+two-qubit circuit. After measurement, the prepared state must match
+the target state, including its relative phase.
 
 > **Note:** \`|Φ⁺⟩\` and \`|Φ⁻⟩\` produce the same measurement
 > probabilities (\`{00: 0.5, 11: 0.5}\`) but differ in relative phase. The same is
-> true for the \`|Ψ⟩\` pair. This challenge validates measurement distributions only.`,
+> true for the \`|Ψ⟩\` pair. This challenge grades the prepared state, phase included, so matching counts
+> alone is not enough: each case reports its fidelity with the target state.`,
 
   constraints: [
     'Use exactly 2 qubits and 2 classical bits',
@@ -58,7 +59,7 @@ expected outcome for that state.
       label: 'Phi+',
       description: 'bell_index=0: produce |Phi+> = (|00> + |11>) / sqrt(2)',
       params: { bell_index: 0 },
-      validation: { type: 'state_fidelity' },
+      validation: { type: 'state_fidelity', expected_probabilities: { '00': 0.5, '11': 0.5 } },
       hidden: false,
       weight: 0.25,
     },
@@ -67,7 +68,7 @@ expected outcome for that state.
       label: 'Phi-',
       description: 'bell_index=1: produce |Phi-> = (|00> - |11>) / sqrt(2)',
       params: { bell_index: 1 },
-      validation: { type: 'state_fidelity' },
+      validation: { type: 'state_fidelity', expected_probabilities: { '00': 0.5, '11': 0.5 } },
       hidden: false,
       weight: 0.25,
     },
@@ -76,7 +77,7 @@ expected outcome for that state.
       label: 'Psi+',
       description: 'bell_index=2: produce |Psi+> = (|01> + |10>) / sqrt(2)',
       params: { bell_index: 2 },
-      validation: { type: 'state_fidelity' },
+      validation: { type: 'state_fidelity', expected_probabilities: { '01': 0.5, '10': 0.5 } },
       hidden: false,
       weight: 0.25,
     },
@@ -85,7 +86,7 @@ expected outcome for that state.
       label: 'Psi-',
       description: 'bell_index=3: produce |Psi-> = (|01> - |10>) / sqrt(2)',
       params: { bell_index: 3 },
-      validation: { type: 'state_fidelity' },
+      validation: { type: 'state_fidelity', expected_probabilities: { '01': 0.5, '10': 0.5 } },
       hidden: false,
       weight: 0.25,
     },

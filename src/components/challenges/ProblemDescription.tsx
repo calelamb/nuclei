@@ -106,9 +106,7 @@ function ExampleBox({ example, index }: { example: ChallengeExample; index: numb
 
 export function ProblemDescription({ challenge }: ProblemDescriptionProps) {
   const colors = useThemeStore((s) => s.colors);
-  const signature = `${challenge.entrypoint_name ?? 'solve'}(${(challenge.arguments ?? []).map((arg) => arg.name).join(', ')})`;
   const isValueContract = challenge.contract_kind === 'returns_value';
-  const returnType = isValueContract ? 'JSON value' : 'QuantumCircuit';
   const contractBlurb = isValueContract
     ? 'Return a JSON-serializable value. The harness injects the inputs below and validates the output against visible and hidden tests.'
     : 'Return a measured Qiskit circuit. The harness injects the inputs below and validates the output against visible and hidden tests.';
@@ -136,14 +134,6 @@ export function ProblemDescription({ challenge }: ProblemDescriptionProps) {
           marginBottom: 8,
         }}>
           Solver Contract
-        </div>
-        <div style={{
-          color: colors.accentText,
-          fontSize: 13,
-          fontFamily: TYPOGRAPHY.fontMono,
-          marginBottom: 8,
-        }}>
-          {signature} -&gt; {returnType}
         </div>
         <div style={{
           color: colors.textMuted,

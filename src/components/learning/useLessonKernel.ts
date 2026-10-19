@@ -4,6 +4,8 @@ import { KERNEL_WS_URL } from '../../config/kernel';
 import { openAuthenticatedKernelSocket } from '../../services/kernelSocket';
 import type { KernelResponse } from '../../types/quantum';
 import type { BootProgress } from '../../platform/pyodide/workerProtocol';
+import { useEditorStore } from '../../stores/editorStore';
+import { retryKernel } from '../../lib/kernelControl';
 
 export type LessonKernelMessage = { type: string; [key: string]: unknown };
 
@@ -32,6 +34,12 @@ export interface LessonKernel {
   stage: string | null;
   /** Web only: the current boot stage with its step count, for the Run button. */
   progress: BootProgress | null;
+  /** The Python engine did not start (shared with the status bar). Nothing boots again until retry(). */
+  failed: boolean;
+  /** Why it did not start, when the runtime said. */
+  failureDetail: string | null;
+  /** The explicit Retry: restart the engine the status bar's Retry restarts. */
+  retry: () => void;
   /** What to tell the user when send() resolved false: platform-appropriate, never the desktop sentence on the web. */
   unavailableMessage: () => string;
 }
@@ -55,6 +63,11 @@ export function useLessonKernel({ onMessage, onInitError, onReady }: Options): L
   const isWeb = platform.getPlatform() === 'web';
   const [loading, setLoading] = useState(isWeb);
   const [progress, setProgress] = useState<BootProgress | null>(null);
+  // One source of truth with the status bar: a failed start stays failed until Retry.
+  const failed = useEditorStore((s) => s.kernelStatus === 'failed');
+  const failureDetail = useEditorStore((s) => s.kernelError);
+  const failedRef = useRef(failed);
+  useEffect(() => { failedRef.current = failed; }, [failed]);
   const wsRef = useRef<WebSocket | null>(null);
   const webRef = useRef<Promise<WebKernel | null> | null>(null);
   const handlers = useRef({ onMessage, onInitError, onReady });
@@ -70,6 +83,12 @@ export function useLessonKernel({ onMessage, onInitError, onReady }: Options): L
       lastErrorRef.current = message;
       if (!cancelledRef.current) {
         setLoading(false);
+        setProgress(null);
+        // Tell the shared status the start failed, or its 'Starting 1/3' never resolves.
+        const editor = useEditorStore.getState();
+        editor.setKernelConnected(false);
+        editor.setKernelReady(false);
+        editor.setKernelStatus('failed', message);
         handlers.current.onInitError(message);
       }
       return null;
@@ -88,8 +107,8 @@ export function useLessonKernel({ onMessage, onInitError, onReady }: Options): L
       if (cancelledRef.current) return null;
       offsRef.current.forEach((off) => off());
       offsRef.current = [
-        pyodideRuntime.onProgress((p) => { if (!cancelledRef.current) setProgress(p); }),
-        pyodideRuntime.onState((s) => { if (!cancelledRef.current) setLoading(s !== 'ready'); }),
+        pyodideRuntime.onProgress((p) => { if (!cancelledRef.current && !failedRef.current) setProgress(p); }),
+        pyodideRuntime.onState((s) => { if (!cancelledRef.current) setLoading(s !== 'ready' && !failedRef.current); }),
       ];
       setLoading(!pyodideRuntime.isReady());
       setProgress(pyodideRuntime.currentProgress());
@@ -109,7 +128,12 @@ export function useLessonKernel({ onMessage, onInitError, onReady }: Options): L
   useEffect(() => {
     if (!isWeb) return undefined;
     cancelledRef.current = false;
-    void startBoot();
+    // The editor already reported a failed start: do not boot a second time behind its back.
+    if (failedRef.current) {
+      setLoading(false);
+    } else {
+      void startBoot();
+    }
     return () => {
       cancelledRef.current = true;
       offsRef.current.forEach((off) => off());
@@ -148,7 +172,9 @@ export function useLessonKernel({ onMessage, onInitError, onReady }: Options): L
     if (isWeb) {
       let kernel = await webRef.current;
       if (!kernel) {
-        // The earlier boot failed (offline, blocked worker): Run is the retry.
+        // A failed start stays failed until the explicit Retry; nothing boots behind the notice.
+        if (failedRef.current) return false;
+        // The earlier boot failed without being reported: Run is the retry.
         setLoading(true);
         kernel = await startBoot();
       }
@@ -164,9 +190,28 @@ export function useLessonKernel({ onMessage, onInitError, onReady }: Options): L
     return false;
   }, [isWeb, startBoot]);
 
+  const retry = useCallback(() => {
+    if (isWeb) {
+      setLoading(true);
+      setProgress(null);
+    }
+    retryKernel();
+    if (isWeb) void startBoot();
+  }, [isWeb, startBoot]);
+
   const unavailableMessage = useCallback(
     () => (isWeb ? lastErrorRef.current : DESKTOP_KERNEL_UNAVAILABLE),
     [isWeb],
   );
-  return { send, loading, stage: progress?.label ?? null, progress, unavailableMessage };
+  const shownProgress = failed ? null : progress;
+  return {
+    send,
+    loading: loading && !failed,
+    stage: shownProgress?.label ?? null,
+    progress: shownProgress,
+    failed,
+    failureDetail,
+    retry,
+    unavailableMessage,
+  };
 }

@@ -149,9 +149,9 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
         </Button>
 
         <div className="lesson__crumbs">
-          <span className="lesson__crumb-track">{track?.title}</span>
+          <span className="lesson__crumb-track" title={track?.title}>{track?.title}</span>
           <ChevronRight className="lesson__crumb-sep" size={12} aria-hidden="true" />
-          <span className="lesson__crumb-title">{lesson.title}</span>
+          <span className="lesson__crumb-title" title={lesson.title}>{lesson.title}</span>
           {isCompleted && <CheckCircle className="lesson__done" size={14} aria-label="Completed" />}
         </div>
 

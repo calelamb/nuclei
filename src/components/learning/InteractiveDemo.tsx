@@ -9,6 +9,8 @@ import { isQuantumCode } from './exerciseValidation';
 import { UnsupportedNotice } from './UnsupportedNotice';
 import { OutcomeResults } from './OutcomeResults';
 import { useLessonKernel } from './useLessonKernel';
+import { LessonEngineFailed } from './LessonEngineFailed';
+import { describeCodeError } from '../../lib/errorLine';
 import { LessonRunButton } from './LessonRunButton';
 import { StaleResultNotice } from '../layout/StaleResultNotice';
 import { formatCircuitMeta } from './outcomeDistribution';
@@ -35,6 +37,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
   const [output, setOutput] = useState<string[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorLine, setErrorLine] = useState<number | null>(null);
   const [unsupported, setUnsupported] = useState<string | null>(null);
   const [showOutput, setShowOutput] = useState(false);
   // The code the shown result came from; an edit after a run makes that result stale.
@@ -77,7 +80,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
         }
         // While typing, errors from the live preview wait until the student runs.
         if (msg.phase === 'parse') break;
-        setError(msg.message);
+        { const described = describeCodeError(msg.message, msg.traceback); setError(described.text); setErrorLine(described.line); }
         setIsRunning(false);
         break;
     }
@@ -85,7 +88,8 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
 
   const kernel = useLessonKernel({
     onMessage: handleMessage,
-    onInitError: (message) => { setError(message); setIsRunning(false); },
+    // The failed-start notice (with Retry) owns the explanation; no second error line.
+    onInitError: () => { setIsRunning(false); },
     onReady: () => sendParse(localCodeRef.current),
   });
   const { send: kernelSend } = kernel;
@@ -105,6 +109,8 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
   };
 
   const handleRun = () => {
+    // A failed start stays failed until the explicit Retry; Run is that Retry.
+    if (kernel.failed) { kernel.retry(); return; }
     const token = ++runTokenRef.current;
     setIsRunning(true);
     setError(null);
@@ -156,6 +162,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
   };
 
   const handleCodeChange = (value: string | undefined) => {
+    setErrorLine(null);
     const v = value ?? '';
     localCodeRef.current = v;
     setLocalCode(v);
@@ -173,7 +180,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
   const hasOutput = output.length > 0;
   const hasCircuit = Boolean(snapshot && snapshot.gates.length > 0);
   const isStale = ranCode !== null && ranCode !== localCode && (hasResults || hasOutput);
-  const hasBelow = hasResults || hasOutput || Boolean(error) || hasCircuit;
+  const hasBelow = hasResults || hasOutput || Boolean(error) || hasCircuit || kernel.failed;
   const viewOptions: ReadonlyArray<SegmentedOption<ResultView>> = [
     ...(hasOutput ? [{ value: 'output' as const, label: 'Output', icon: <Terminal size={12} aria-hidden="true" /> }] : []),
     ...(hasResults ? [{ value: 'probabilities' as const, label: 'Probabilities', icon: <BarChart3 size={12} aria-hidden="true" /> }] : []),
@@ -188,7 +195,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
       </div>
 
       <div className="demo__editor">
-        <LessonCodeEditor value={localCode} onChange={handleCodeChange} />
+        <LessonCodeEditor value={localCode} onChange={handleCodeChange} errorLine={error ? errorLine : null} errorMessage={error ?? undefined} />
       </div>
 
       <div className={hasBelow ? 'demo__actions demo__actions--divided' : 'demo__actions'}>
@@ -230,7 +237,9 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
         <div className="demo__notice"><UnsupportedNotice message={unsupported} /></div>
       )}
 
-      {error && <div className="demo__error" role="alert">{error}</div>}
+      {kernel.failed && <LessonEngineFailed detail={kernel.failureDetail} onRetry={kernel.retry} />}
+
+      {error && !kernel.failed && <div className="demo__error" role="alert">{error}</div>}
 
       {isStale && (
         <div className="demo__stale"><StaleResultNotice inline label="From last run · Run again" onActivate={handleRun} /></div>

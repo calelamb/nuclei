@@ -86,6 +86,16 @@ describe('challengeExecution', () => {
     expect(code).not.toContain("solve(__nuclei_oracle, hidden_string");
   });
 
+  it('does not leave the reference circuit in the namespace after fidelity (the kernel snapshots the last circuit)', () => {
+    const code = buildTestCode(
+      'def solve(bell_index):\n    from qiskit import QuantumCircuit\n    return QuantumCircuit(2, 2)\n',
+      { ...baseChallenge, referenceCode: 'from qiskit import QuantumCircuit\n\ndef reference(bell_index):\n    return QuantumCircuit(2, 2)\n' },
+      { bell_index: 0 },
+      'qiskit',
+    );
+    expect(code.lastIndexOf('__nuclei_ref_circuit = None')).toBeGreaterThan(code.lastIndexOf('= reference('));
+  });
+
   it('omits the fidelity block when no referenceCode is present', () => {
     const code = buildTestCode(
       'def solve(bell_index):\n    pass\n',
@@ -150,8 +160,60 @@ describe('challengeExecution', () => {
     expect(onError).toHaveBeenCalledWith('offline');
     expect(onResult).toHaveBeenCalledTimes(2);
     expect(results.every((result) => result.passed === false)).toBe(true);
-    expect(results[0].message).toContain('Connection error');
+    expect(results[0].message).not.toContain('Connection error');
     expect(results[0].verdict).toBe('runtime_error');
+  });
+
+  it("marks every case 'engine unavailable' (not run, not scored) when Python never started (learn-r10-02)", async () => {
+    const { createKernelSession } = await import('./kernelSession');
+    vi.mocked(createKernelSession).mockRejectedValue(
+      new Error("Couldn't start the browser Python engine. Check your connection or content blocker, then retry."),
+    );
+    const testCases: TestCase[] = [{
+      id: 'tc-1', label: 'Case 1', description: 'd', params: {},
+      validation: { type: 'state_fidelity' }, hidden: false, weight: 1,
+    }];
+
+    const results = await runTestCases(
+      'x', { ...baseChallenge, testCases }, testCases, 'qiskit', 'web', 1024, vi.fn(), vi.fn(), vi.fn(),
+    );
+
+    expect(results).toHaveLength(1);
+    expect(results[0].engineUnavailable).toBe(true);
+    expect(results[0].message).toContain("Python didn't start");
+    expect(results[0].message).not.toMatch(/kernel/i);
+  });
+
+  describe('code errors (learn-r10-03)', () => {
+    const cases: TestCase[] = [0, 1].map((n) => ({
+      id: `tc-${n}`, label: `Case ${n}`, description: 'd', params: { bell_index: n },
+      validation: { type: 'state_fidelity' } as const, hidden: false, weight: 1,
+    }));
+    const userCode = 'from qiskit import QuantumCircuit\ndef solve(bell_index):\n    qc.h(0))\n';
+
+    async function runWithError(message: string, traceback: string) {
+      const { createKernelSession } = await import('./kernelSession');
+      vi.mocked(createKernelSession).mockImplementation(async (_platform, onMessage) => ({
+        send: vi.fn(() => { onMessage({ type: 'error', message, traceback, phase: 'execute', code: 'execution_error' }); }),
+        close: vi.fn(),
+      }));
+      return runTestCases(userCode, { ...baseChallenge, testCases: cases }, cases, 'qiskit', 'web', 1024, vi.fn(), vi.fn(), vi.fn());
+    }
+
+    it("reports the student's own line (harness lines subtracted) and drops the verdict prefix", async () => {
+      // The harness puts one comment line before the student's code, so wrapped line 4 is student line 3.
+      const results = await runWithError("SyntaxError: unmatched ')'", '  File "<string>", line 4\n    qc.h(0))\nSyntaxError: unmatched \')\'');
+      expect(results.map((r) => r.verdict)).toEqual(['compile_error', 'compile_error']);
+      expect(results[0].message).toBe("SyntaxError: unmatched ')'");
+      expect(results[0].errorLine).toBe(3);
+      expect(results[0].engineUnavailable).toBeUndefined();
+    });
+
+    it('gives no line when the error sits in the harness after the student code', async () => {
+      const results = await runWithError('TypeError: solve(...) must return a QuantumCircuit', '  File "<string>", line 40, in <module>');
+      expect(results[0].verdict).toBe('runtime_error');
+      expect(results[0].errorLine).toBeUndefined();
+    });
   });
 
   it('runs value-return challenges through run_python in web mode', async () => {
