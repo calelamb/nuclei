@@ -39,6 +39,10 @@ import { validateNewName } from './createNameValidation';
 import { flattenVisible, resolveTreeKey } from './treeNavigation';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
+import { shortcutLabel } from '../../config/keybindings';
+
+/** Platform-aware (⌘S on macOS, Ctrl+S elsewhere), from the one keybinding registry. */
+const SAVE_KEY = shortcutLabel('save') ?? 'Save';
 const EXTENSION_ICONS: Record<string, LucideIcon> = {
   py: FileCode,
   qs: Sigma,
@@ -268,7 +272,7 @@ export function FileExplorer() {
     // instead of silently doing nothing.
     if (memory) {
       if (!isFileKind) {
-        setCreateError('Save the project first (⌘S) to add folders or packages.');
+        setCreateError(`Save the project first (${SAVE_KEY}) to add folders or packages.`);
         return;
       }
       const content = pending.kind === 'circuit' ? STARTER_TEMPLATES[pending.framework] : '';
@@ -723,7 +727,7 @@ export function FileExplorer() {
                 fontFamily: TYPOGRAPHY.fontSans,
               }}
             >
-              Unsaved — ⌘S to save to disk
+              Unsaved — {SAVE_KEY} to save to disk
             </div>
             {memoryTabEntries.map((e) => renderEntry(e, 0))}
             {memoryTabEntries.length === 0 && (
@@ -735,7 +739,7 @@ export function FileExplorer() {
                   fontFamily: TYPOGRAPHY.fontSans,
                 }}
               >
-                Click + to add a file or circuit. ⌘S to save to disk.
+                Click + to add a file or circuit. {SAVE_KEY} to save to disk.
               </div>
             )}
           </>
