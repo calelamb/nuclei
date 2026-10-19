@@ -1,7 +1,8 @@
 use std::io::{BufRead, BufReader};
 use std::process::{Child, Command};
-use std::sync::Mutex;
+use std::sync::{mpsc, Mutex};
 use std::thread;
+use std::time::Duration;
 use tauri::{Manager, State};
 
 use super::kernel_legacy;
@@ -45,6 +46,43 @@ impl KernelState {
         if let Some(dir) = ownership::runtime_dir() {
             ownership::remove_owner_record(&dir);
         }
+    }
+}
+
+/// How long a freshly spawned kernel has to print its ready line (Python and
+/// numpy imports are slow on a cold disk). Only after that line is the token
+/// stored and handed to the webview.
+const KERNEL_READY_TIMEOUT: Duration = Duration::from_secs(20);
+
+/// True for exactly `Nuclei kernel ready on ws://localhost:<port>`.
+fn is_ready_line(line: &str, port: u16) -> bool {
+    line.trim() == format!("Nuclei kernel ready on ws://localhost:{port}")
+}
+
+#[derive(Debug, Eq, PartialEq)]
+enum StartupSignal {
+    Ready,
+    /// The kernel's stdout closed before it reported ready (it exited).
+    Ended,
+}
+
+/// Block until the drain thread reports the ready line, the stream ends, or
+/// the timeout expires.
+fn wait_for_ready(
+    signals: &mpsc::Receiver<StartupSignal>,
+    timeout: Duration,
+) -> Result<(), String> {
+    match signals.recv_timeout(timeout) {
+        Ok(StartupSignal::Ready) => Ok(()),
+        Ok(StartupSignal::Ended) | Err(mpsc::RecvTimeoutError::Disconnected) => Err(
+            "The kernel exited before it was ready (is port 9742 held by another \
+             application, or is Python missing a dependency?)."
+                .to_string(),
+        ),
+        Err(mpsc::RecvTimeoutError::Timeout) => Err(format!(
+            "The kernel did not report ready within {} seconds.",
+            timeout.as_secs()
+        )),
     }
 }
 
@@ -93,12 +131,14 @@ pub fn start_kernel(
     app_handle: tauri::AppHandle,
 ) -> Result<String, String> {
     let mut guard = state.process.lock().map_err(|e| e.to_string())?;
+    *state.token.lock().map_err(|e| e.to_string())? = None;
 
     // Kill existing in-process handle if any — relevant during reconnect
     // flows where the user triggered a kernel restart from the UI.
     if let Some(ref mut child) = *guard {
         stop_child_gracefully(child, KERNEL_STOP_GRACE);
     }
+    *guard = None;
 
     // Reap a kernel that a previous Nuclei run recorded and left behind
     // (verified by pid + command line). Never kill an arbitrary listener.
@@ -215,11 +255,18 @@ pub fn start_kernel(
     // forever, with no trace of the actual error. Reading the streams
     // drains the pipes AND emits the Python output into nuclei.log so
     // the next diagnostic round has something to work with.
+    let (signal_tx, signal_rx) = mpsc::channel();
     if let Some(stdout) = child.stdout.take() {
         thread::spawn(move || {
+            let mut announced = false;
             for line in BufReader::new(stdout).lines().map_while(Result::ok) {
                 log::info!("[kernel stdout] {}", line);
+                if !announced && is_ready_line(&line, KERNEL_PORT) {
+                    announced = true;
+                    let _ = signal_tx.send(StartupSignal::Ready);
+                }
             }
+            let _ = signal_tx.send(StartupSignal::Ended);
         });
     }
     if let Some(stderr) = child.stderr.take() {
@@ -240,6 +287,18 @@ pub fn start_kernel(
             log::warn!("Could not record kernel ownership: {e}");
         }
     }
+
+    // Do not hand out the token (or report success) until our own child has
+    // bound the port and said so: a process that grabbed 9742 first makes the
+    // strict-port kernel exit, which lands here as an error instead of the
+    // webview sending credentials to the squatter.
+    if let Err(message) = wait_for_ready(&signal_rx, KERNEL_READY_TIMEOUT) {
+        stop_child_gracefully(&mut child, KERNEL_STOP_GRACE);
+        if let Some(dir) = runtime_dir.as_deref() {
+            ownership::remove_owner_record(dir);
+        }
+        return Err(message);
+    }
     *guard = Some(child);
     *state.token.lock().map_err(|e| e.to_string())? = Some(token);
 
@@ -258,12 +317,20 @@ pub fn stop_kernel(state: State<'_, KernelState>) -> Result<String, String> {
 
 /// Per-launch token the frontend presents in its first WebSocket frame.
 /// Only the Tauri webview can invoke this; it is never placed in a URL.
+///
+/// `async` + `spawn_blocking`: a restart holds the process lock for as long as
+/// the kernel takes to become ready, and the main thread must never wait on it.
 #[tauri::command]
-pub fn kernel_auth_token(state: State<'_, KernelState>) -> Result<String, String> {
-    // Only hand the token out while the kernel we spawned is alive. If it
-    // exited (e.g. strict-port bind failure because a foreign process holds
-    // the port) the token is withheld, so it can never be sent to a listener
-    // Nuclei did not start.
+pub async fn kernel_auth_token(app: tauri::AppHandle) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || read_auth_token(&app.state::<KernelState>()))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// The token exists only once `start_kernel` saw the child print its ready
+/// line, and is withheld again if that child has since died (e.g. a strict-port
+/// bind failure), so it can never be sent to a listener Nuclei did not start.
+fn read_auth_token(state: &KernelState) -> Result<String, String> {
     let alive = match state.process.lock().map_err(|e| e.to_string())?.as_mut() {
         Some(child) => matches!(child.try_wait(), Ok(None)),
         None => false,
@@ -276,7 +343,7 @@ pub fn kernel_auth_token(state: State<'_, KernelState>) -> Result<String, String
         .lock()
         .map_err(|e| e.to_string())?
         .clone()
-        .ok_or_else(|| "Kernel has not been started".to_string())
+        .ok_or_else(|| "Kernel is not ready yet".to_string())
 }
 
 #[cfg(all(test, unix))]
@@ -308,5 +375,84 @@ mod tests {
         std::thread::sleep(Duration::from_millis(200));
         stop_child_gracefully(&mut child, Duration::from_millis(300));
         assert!(child.try_wait().unwrap().is_some());
+    }
+
+    #[test]
+    fn ready_line_must_match_exactly_for_our_port() {
+        assert!(is_ready_line(
+            "Nuclei kernel ready on ws://localhost:9742",
+            9742
+        ));
+        assert!(is_ready_line(
+            "Nuclei kernel ready on ws://localhost:9742\n",
+            9742
+        ));
+        assert!(!is_ready_line(
+            "Nuclei kernel ready on ws://localhost:9743",
+            9742
+        ));
+        assert!(!is_ready_line(
+            "Nuclei kernel ready on ws://localhost:97420",
+            9742
+        ));
+        assert!(!is_ready_line(
+            "WARNING Nuclei kernel ready on ws://localhost:9742",
+            9742
+        ));
+        assert!(!is_ready_line("", 9742));
+    }
+
+    #[test]
+    fn wait_for_ready_succeeds_only_on_the_ready_signal() {
+        let (tx, rx) = mpsc::channel();
+        tx.send(StartupSignal::Ready).unwrap();
+        assert!(wait_for_ready(&rx, Duration::from_secs(1)).is_ok());
+    }
+
+    #[test]
+    fn wait_for_ready_errors_when_the_kernel_exits_first() {
+        let (tx, rx) = mpsc::channel();
+        tx.send(StartupSignal::Ended).unwrap();
+        assert!(wait_for_ready(&rx, Duration::from_secs(1)).is_err());
+        let (tx, rx) = mpsc::channel::<StartupSignal>();
+        drop(tx);
+        assert!(wait_for_ready(&rx, Duration::from_secs(1)).is_err());
+    }
+
+    #[test]
+    fn wait_for_ready_times_out_when_nothing_arrives() {
+        let (_tx, rx) = mpsc::channel::<StartupSignal>();
+        let err = wait_for_ready(&rx, Duration::from_millis(50)).unwrap_err();
+        assert!(err.contains("did not report ready"));
+    }
+
+    fn state_with(child: Option<Child>, token: Option<&str>) -> KernelState {
+        let state = KernelState::new();
+        *state.process.lock().unwrap() = child;
+        *state.token.lock().unwrap() = token.map(str::to_string);
+        state
+    }
+
+    #[test]
+    fn token_is_withheld_until_ready_and_while_the_child_is_dead() {
+        // Not started / not ready yet: no token.
+        assert!(read_auth_token(&state_with(None, None)).is_err());
+        let live = Command::new("sleep").arg("30").spawn().unwrap();
+        let state = state_with(Some(live), None);
+        assert_eq!(
+            read_auth_token(&state),
+            Err("Kernel is not ready yet".to_string())
+        );
+        // Ready and alive: token handed out.
+        *state.token.lock().unwrap() = Some("tok".to_string());
+        assert_eq!(read_auth_token(&state), Ok("tok".to_string()));
+        // Child died (e.g. strict-port bind failure): withheld again.
+        {
+            let mut guard = state.process.lock().unwrap();
+            let child = guard.as_mut().unwrap();
+            child.kill().unwrap();
+            child.wait().unwrap();
+        }
+        assert!(read_auth_token(&state).is_err());
     }
 }
