@@ -36,6 +36,13 @@ pub fn runtime_dir() -> Option<PathBuf> {
             return Some(PathBuf::from(dir));
         }
     }
+    // Unit tests must never resolve the real per-user runtime directory: it
+    // holds the owner record of the developer's running app, and
+    // `KernelState::stop()` (run on `Drop`) deletes that record. A test that
+    // wants a runtime directory sets `NUCLEI_RUNTIME_DIR` to a tempdir.
+    if cfg!(test) {
+        return None;
+    }
     let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"))?;
     Some(PathBuf::from(home).join(".nuclei").join("runtime"))
 }
@@ -368,6 +375,59 @@ mod tests {
         let port = listener.local_addr().unwrap().port();
         assert!(port_in_use(port));
         drop(listener);
+    }
+
+    /// Set in the re-run below so the guard test does not recurse.
+    const GUARD_CHILD_ENV: &str = "NUCLEI_TEST_RUNTIME_GUARD_CHILD";
+
+    fn read_dir_contents(dir: &Path) -> std::collections::BTreeMap<String, Vec<u8>> {
+        fs::read_dir(dir)
+            .unwrap()
+            .map(|entry| {
+                let entry = entry.unwrap();
+                let name = entry.file_name().to_string_lossy().into_owned();
+                (name, fs::read(entry.path()).unwrap())
+            })
+            .collect()
+    }
+
+    /// Regression for R-21: `KernelState::stop()` (run by `Drop`) removed the
+    /// owner record from `runtime_dir()`, which fell back to the real
+    /// `~/.nuclei/runtime`, so `cargo test` deleted the running app's
+    /// `kernel-owner.json`. Re-run every kernel unit test in a child process
+    /// whose HOME is a fake home with no `NUCLEI_RUNTIME_DIR`, and assert the
+    /// fake runtime directory is byte-for-byte untouched.
+    #[test]
+    fn kernel_unit_tests_never_touch_the_runtime_dir_under_home() {
+        if std::env::var_os(GUARD_CHILD_ENV).is_some() {
+            return;
+        }
+        let home = tempfile::tempdir().unwrap();
+        let runtime = home.path().join(".nuclei").join("runtime");
+        fs::create_dir_all(&runtime).unwrap();
+        fs::write(runtime.join(OWNER_FILE_NAME), r#"{"pid":2587203,"port":9742}"#).unwrap();
+        fs::write(runtime.join("kernel.json"), r#"{"port":9742}"#).unwrap();
+        let before = read_dir_contents(&runtime);
+
+        let output = Command::new(std::env::current_exe().unwrap())
+            .args(["commands::kernel", "--test-threads=2"])
+            .env("HOME", home.path())
+            .env("USERPROFILE", home.path())
+            .env_remove(RUNTIME_DIR_ENV)
+            .env(GUARD_CHILD_ENV, "1")
+            .output()
+            .unwrap();
+
+        assert!(
+            output.status.success(),
+            "child kernel tests failed:\n{}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+        assert_eq!(
+            read_dir_contents(&runtime),
+            before,
+            "kernel unit tests modified the runtime dir under HOME"
+        );
     }
 
     #[test]

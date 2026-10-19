@@ -6,6 +6,10 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+
+pytest.importorskip("duckdb")
+pytest.importorskip("pyarrow")
+
 import pyarrow.parquet as pq
 
 from kernel.qec_data.adapters.base import ImportChunk, SourceSpan

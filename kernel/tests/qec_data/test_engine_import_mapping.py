@@ -6,6 +6,10 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import pytest
+
+pytest.importorskip("duckdb")
+pytest.importorskip("pyarrow")
+
 import pytest_asyncio
 from websockets.legacy.client import WebSocketClientProtocol, connect
 

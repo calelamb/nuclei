@@ -7,8 +7,12 @@ import threading
 from dataclasses import replace
 from pathlib import Path
 
-import duckdb
 import pytest
+
+pytest.importorskip("duckdb")
+pytest.importorskip("pyarrow")
+
+import duckdb
 
 import kernel.qec_data.queries as queries_module
 from kernel.qec_data.catalog import QecCatalog

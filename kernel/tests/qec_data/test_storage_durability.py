@@ -7,6 +7,9 @@ from pathlib import Path
 
 import pytest
 
+pytest.importorskip("duckdb")
+pytest.importorskip("pyarrow")
+
 import kernel.qec_data.storage_durability as durability
 from kernel.qec_data.storage import SessionStorage
 from kernel.qec_data.storage_durability import (

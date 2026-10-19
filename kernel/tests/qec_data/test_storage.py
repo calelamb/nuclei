@@ -7,9 +7,13 @@ import threading
 from dataclasses import FrozenInstanceError, replace
 from pathlib import Path
 
+import pytest
+
+pytest.importorskip("duckdb")
+pytest.importorskip("pyarrow")
+
 import pyarrow as pa
 import pyarrow.parquet as pq
-import pytest
 
 import kernel.qec_data.storage_parquet as parquet_storage
 from kernel.qec_data.hashing import (

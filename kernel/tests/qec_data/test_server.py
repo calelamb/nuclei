@@ -9,6 +9,10 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+
+pytest.importorskip("duckdb")
+pytest.importorskip("pyarrow")
+
 import pytest_asyncio
 from websockets.exceptions import ConnectionClosedError
 from websockets.legacy.client import WebSocketClientProtocol, connect
