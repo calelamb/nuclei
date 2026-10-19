@@ -80,11 +80,13 @@ describe('ExerciseBlock Run while Python boots', () => {
 });
 
 describe('ExerciseBlock grading honesty', () => {
-  it('withdraws Check solution once the code is edited after a run', async () => {
+  it('cannot grade the old run once the code is edited: Check solution waits for a re-run', async () => {
     await runWith('print(41)', ['41']);
     expect(screen.getByRole('button', { name: /Check solution/ })).toBeTruthy();
     fireEvent.change(screen.getByLabelText('code'), { target: { value: 'print(42)' } });
-    expect(screen.queryByRole('button', { name: /Check solution/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Check solution/ }));
+    expect(passed()).toEqual([]);
+    expect(screen.queryByText(/checks out|Nice\./)).toBeNull();
   });
 
   it('does not record a pass when Run is pressed on the untouched starter', async () => {
@@ -140,13 +142,13 @@ describe('ExerciseBlock draft persistence', () => {
 
   it('keeps Reset in place but disabled until edited, and asks before discarding', () => {
     render(<ExerciseBlock {...props} />);
-    const reset = () => screen.getByRole('button', { name: /^(Reset|Discard edits\?)/ }) as HTMLButtonElement;
+    const reset = () => screen.getByRole('button', { name: /^(Reset|Discard\?)/ }) as HTMLButtonElement;
     expect(reset().disabled).toBe(true);
     fireEvent.change(screen.getByLabelText('code'), { target: { value: 'print(9)' } });
     expect(reset().disabled).toBe(false);
     fireEvent.click(reset());
     expect((screen.getByLabelText('code') as HTMLTextAreaElement).value).toBe('print(9)');
-    expect(reset().textContent).toMatch(/Discard edits\?/);
+    expect(reset().textContent).toMatch(/Discard\?/);
     fireEvent.click(reset());
     expect((screen.getByLabelText('code') as HTMLTextAreaElement).value).toBe(STARTER);
     expect(draft()).toBeUndefined();
@@ -166,7 +168,7 @@ describe('ExerciseBlock armed Reset (r7-learn-02)', () => {
   it('turns destructive, announces itself, and Escape disarms with focus kept', () => {
     render(<ExerciseBlock {...props} />);
     fireEvent.change(screen.getByLabelText('code'), { target: { value: 'print(9)' } });
-    const reset = () => screen.getByRole('button', { name: /^(Reset|Discard edits\?)/ });
+    const reset = () => screen.getByRole('button', { name: /^(Reset|Discard\?)/ });
     reset().focus();
     fireEvent.click(reset());
     expect(reset().className).toMatch(/nuclei-btn--danger/);
@@ -199,5 +201,27 @@ describe('ExerciseBlock live region (r8-01)', () => {
     const live = container.querySelector('[aria-live="polite"]') as HTMLElement;
     expect(live.classList.contains('nuclei-sr-only')).toBe(true);
     expect(container.querySelector('.demo__sr')).toBeNull();
+  });
+});
+
+describe('ExerciseBlock stale results and Reset focus (r7-learn-01, interaction-r-06)', () => {
+  it('marks output from older code stale and keeps Check solution, waiting, instead of removing it', async () => {
+    await runWith('print(41)', ['41']);
+    expect(screen.queryByTestId('stale-result-notice')).toBeNull();
+    fireEvent.change(screen.getByLabelText('code'), { target: { value: 'print(42)' } });
+    expect(screen.getByRole('button', { name: /From last run · Run again/ })).toBeTruthy();
+    const check = screen.getByRole('button', { name: 'Check solution' });
+    expect(check.getAttribute('aria-disabled')).toBe('true');
+    expect(document.querySelector('.exercise__output')?.getAttribute('data-stale')).toBe('true');
+  });
+
+  it('lands focus on the editor after a confirmed Reset instead of <body>', () => {
+    render(<ExerciseBlock {...props} />);
+    fireEvent.change(screen.getByLabelText('code'), { target: { value: 'print(9)' } });
+    const reset = screen.getByRole('button', { name: /^Reset/ });
+    reset.focus();
+    fireEvent.click(reset);
+    fireEvent.click(screen.getByRole('button', { name: /^Discard/ }));
+    expect(document.activeElement).toBe(screen.getByLabelText('code'));
   });
 });
