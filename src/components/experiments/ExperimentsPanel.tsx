@@ -216,7 +216,7 @@ export function ExperimentsPanel() {
           </Button>
         )}
         <NewQecExperimentMenu projectRoot={projectRoot} />
-        <IconButton variant="secondary" aria-label="Noise models" title="Noise models" onClick={() => setNoiseLibOpen(true)}>
+        <IconButton variant="secondary" aria-label="Noise models" tooltip={{ label: 'Noise models', placement: 'below' }} onClick={() => setNoiseLibOpen(true)}>
           <Waves size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />
         </IconButton>
       </div>
