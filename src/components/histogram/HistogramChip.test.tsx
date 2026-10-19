@@ -32,9 +32,37 @@ describe('<HistogramChip> sample caption (IR10-08)', () => {
     const caption = container.querySelector('[data-testid="histogram-chip-sample"]') as HTMLElement;
     expect(caption.querySelector('.histogram-chip__caption-name')?.textContent).toBe('Nuclei sample');
     expect(caption.querySelector('.histogram-chip__caption-shots')?.textContent).toBe(' · 1,024 shots');
+    // The separator space must survive: the shots span keeps its leading space instead of collapsing it.
+    expect(caption.textContent).toContain('Nuclei sample · ');
+    expect(caption.querySelector('.histogram-chip__caption-shots')?.className).toContain('histogram-chip__caption-shots');
     expect(caption.nextElementSibling?.querySelector('button[aria-label="About the Nuclei sample"]')
       ?? caption.nextElementSibling).not.toBeNull();
     expect(caption.parentElement?.querySelectorAll('button[aria-label="About the Nuclei sample"]')).toHaveLength(1);
+  });
+});
+
+describe('<HistogramChip> caption affordances', () => {
+  afterEach(() => { delete (HTMLElement.prototype as unknown as Record<string, unknown>).clientWidth; useSimulationStore.setState({ result: null }); });
+  it('has no native title on the caption and the info button carries only the tooltip', () => {
+    useSimulationStore.setState({
+      result: { state_vector: [], probabilities: {}, measurements: {}, bloch_coords: [], execution_time_ms: 1, shot_count: 1024 } as never,
+    });
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get() { return 300; } });
+    const { container } = render(<HistogramChip probabilities={{ '0': 0.5, '1': 0.5 }} />);
+    expect(container.querySelector('[data-testid="histogram-chip-sample"]')?.getAttribute('title')).toBeNull();
+    expect(container.querySelector('button[aria-label="About the Nuclei sample"]')?.getAttribute('title')).toBeNull();
+  });
+
+  it('keeps +N more out of the caption header when stacked so the name never ellipsises', () => {
+    useSimulationStore.setState({
+      result: { state_vector: [], probabilities: {}, measurements: {}, bloch_coords: [], execution_time_ms: 1, shot_count: 1024 } as never,
+    });
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get() { return 300; } });
+    const probs = Object.fromEntries(Array.from({ length: 8 }, (_, i) => [i.toString(2).padStart(3, '0'), 0.125]));
+    const { container } = render(<HistogramChip probabilities={probs} onExpand={() => {}} />);
+    const caption = container.querySelector('[data-testid="histogram-chip-sample"]') as HTMLElement;
+    expect(caption.parentElement?.querySelector('.histogram-chip__more')).toBeNull();
+    expect(container.querySelector('.histogram-chip__more')?.textContent).toBe('+5 more');
   });
 });
 

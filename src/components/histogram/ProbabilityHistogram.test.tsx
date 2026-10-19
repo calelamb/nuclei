@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
-import { render, cleanup, fireEvent, screen } from '@testing-library/react';
+import { render, cleanup, fireEvent, screen, act } from '@testing-library/react';
 import { ProbabilityHistogram } from './ProbabilityHistogram';
 import { useSimulationStore } from '../../stores/simulationStore';
+import { useEditorStore } from '../../stores/editorStore';
 
 const SCROLLBAR_PX = 6;
 
@@ -66,5 +67,32 @@ describe('<ProbabilityHistogram> without a result (research-r-03)', () => {
   it('uses the shared "No results yet" state when idle', () => {
     render(<ProbabilityHistogram />);
     expect(screen.getByText('No results yet')).toBeTruthy();
+  });
+});
+
+describe('<ProbabilityHistogram> honesty about the sample', () => {
+  it('captions the chart with the sample shot count and flags a different next-run count', () => {
+    loadResult(1);
+    useSimulationStore.getState().setShots(1024);
+    const { rerender } = render(<ProbabilityHistogram />);
+    expect(screen.getByTestId('histogram-caption').textContent).toContain('Nuclei sample · 1,024 shots');
+    expect(screen.queryByText(/Next run/)).toBeNull();
+    act(() => useSimulationStore.getState().setShots(100));
+    rerender(<ProbabilityHistogram />);
+    expect(screen.getByText('Next run: 100 shots')).toBeTruthy();
+    act(() => useSimulationStore.getState().setShots(1024));
+  });
+
+  it('shows the From last run notice and dims the bars when the code changed after the run', () => {
+    useEditorStore.getState().setCode('qc.h(0)');
+    useSimulationStore.setState({ runCode: 'qc.h(0)' });
+    loadResult(1);
+    const { container } = render(<ProbabilityHistogram />);
+    expect(screen.queryByTestId('stale-result-notice')).toBeNull();
+    expect(container.querySelector('.histogram-stale')).toBeNull();
+    act(() => useEditorStore.getState().setCode('qc.x(0)'));
+    expect(screen.getByTestId('stale-result-notice').textContent).toMatch(/From last run/);
+    expect(container.querySelector('.histogram-stale')).not.toBeNull();
+    expect(screen.getByTestId('histogram-caption').textContent).toMatch(/^.*Ran in 1 ms$/);
   });
 });

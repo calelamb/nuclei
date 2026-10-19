@@ -95,10 +95,7 @@ export function HistogramChip({
     </Tooltip>
   );
 
-  const controls = (
-    <div style={{ display: 'flex', gap: 4, flexShrink: 0, alignItems: 'center', marginLeft: rows ? 'auto' : undefined }}>
-      {!rows && sampleInfo}
-      {hiddenCount > 0 && (onExpand ? (
+  const moreAffordance = hiddenCount > 0 && (onExpand ? (
         <button
           type="button"
           aria-label={`Show ${hiddenLabel} more outcomes`}
@@ -111,7 +108,12 @@ export function HistogramChip({
         <span className="histogram-chip__more histogram-chip__more--static" title={`${hiddenLabel} more outcomes. Open the full histogram to see them.`}>
           +{hiddenLabel} more
         </span>
-      ))}
+      ));
+
+  const controls = (
+    <div style={{ display: 'flex', gap: 4, flexShrink: 0, alignItems: 'center', marginLeft: rows ? 'auto' : undefined }}>
+      {!rows && sampleInfo}
+      {!rows && moreAffordance}
       {onExpand && (
         <IconButton size="sm" className="histogram-chip__icon" aria-label="Expand histogram" tooltip={{ placement: 'above' }} onClick={onExpand}>
           <Maximize2 size={12} />
@@ -149,7 +151,7 @@ export function HistogramChip({
           {sampleCaption ? (
             // The sample caption names the data; "Top outcomes" is implied by the bars below it.
             <>
-              <span data-testid="histogram-chip-sample" className="histogram-chip__caption" title={sampleCaption}>
+              <span data-testid="histogram-chip-sample" className="histogram-chip__caption">
                 <span className="histogram-chip__caption-name">{SAMPLE_LABEL}</span>
                 <span className="histogram-chip__caption-shots">{` · ${shotsText}`}</span>
               </span>
@@ -227,6 +229,8 @@ export function HistogramChip({
           </div>
         ))}
       </div>
+      {/* Stacked: +N more sits under the bars, not in the caption header where it would squeeze the name. */}
+      {rows && moreAffordance && <div style={{ display: 'flex' }}>{moreAffordance}</div>}
       {!rows && controls}
     </div>
   );
