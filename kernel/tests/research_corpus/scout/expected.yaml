@@ -350,14 +350,16 @@ programs:
       snapshot: {framework: qiskit, qubit_count: 12, depth: 13, gates: 24}
       result: {probabilities: 2, measured: 1024, bloch: 12, state_vector: 4096}
   q31-26-qubit-ghz-too-big:
+    # The execute outcome is deliberately unconstrained: R-11's memory-estimate policy sizes the
+    # budget from the host (min(25% of RAM, setting)), so 26 qubits (1 GiB per copy) is refused
+    # on a small host and allowed on a large one. The host-independent refusal check is g01
+    # (gates unit). What this entry keeps is that parsing works and the kernel stays healthy
+    # (healthy_after) after the run, whatever it answers. It allocates, so it runs only under
+    # the harness's address-space cap.
     parse: ok
-    execute: error:too_many_qubits
     facts:
       snapshot: {framework: qiskit, qubit_count: 26, depth: 27, gates: 52}
-    xfail:
-      id: R-11
-      reason: 'no memory-estimate policy: the run allocates and dies with MemoryError'
-      current: {execute: 'error:simulation_error'}
+    options: {needs_memory_limit: true}
   q32-vqe-h2-style-loop:
     parse: ok
     execute: ok
