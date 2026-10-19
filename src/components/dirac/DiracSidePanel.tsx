@@ -259,7 +259,8 @@ export function DiracSidePanel() {
   // on its own, or a different panel unmounting, must never pull focus here.
   const rootRef = useRef<HTMLDivElement>(null);
   const focusWasInDirac = useRef(false);
-  const wasAutoCollapsed = useRef(false);
+  // Set by the store itself at the moment of a flip: did the window band cause it (auto fold / unfold), or the person?
+  const flipBandDriven = useRef(false);
   useEffect(() => {
     const onFocusIn = (e: FocusEvent) => {
       const target = e.target as Node | null;
@@ -269,14 +270,15 @@ export function DiracSidePanel() {
     document.addEventListener('focusin', onFocusIn);
     return () => document.removeEventListener('focusin', onFocusIn);
   }, []);
+  useEffect(() => useDiracPanelStore.subscribe((state, prev) => {
+    if (state.isOpen !== prev.isOpen) flipBandDriven.current = state.autoCollapsed || state.lastNarrow !== prev.lastNarrow;
+  }), []);
   useEffect(() => {
     if (wasOpen.current === isOpen) return undefined;
     wasOpen.current = isOpen;
     // Band-driven flips (resize fold / unfold) need proof focus was in Dirac. User flips do not:
     // WebKit never focuses a button on click, so no focusin is seen for a mouse toggle.
-    const autoNow = useDiracPanelStore.getState().autoCollapsed;
-    const bandDriven = autoNow || wasAutoCollapsed.current;
-    wasAutoCollapsed.current = autoNow;
+    const bandDriven = flipBandDriven.current;
     const hadFocus = focusWasInDirac.current;
     focusWasInDirac.current = false;
     if (bandDriven && !hadFocus) return undefined;
