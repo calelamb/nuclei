@@ -61,7 +61,7 @@ describe('HardwarePanel on desktop (research-r-04)', () => {
     useEditorStore.setState({ kernelStatus: 'failed' });
     render(<PlatformProvider bridge={desktop}><HardwarePanel /></PlatformProvider>);
     const row = screen.getByText('Local Simulator').parentElement as HTMLElement;
-    expect(within(row).getByText('Not running')).toBeTruthy();
+    expect(within(row).getByText("Didn't start")).toBeTruthy();
     expect(within(row).queryByText('Ready')).toBeNull();
     expect(within(row).getByRole('button', { name: 'Retry' })).toBeTruthy();
   });
@@ -76,5 +76,11 @@ describe('HardwarePanel on desktop (research-r-04)', () => {
     expect(name.style.overflow).toBe('');
     expect(within(row).getByText('Connect')).toBeTruthy();
     expect(within(row).getByRole('button', { name: 'Configure IBM Quantum' })).toBeTruthy();
+  });
+
+  it('reserves the trailing action slot on every provider row so badges right-align (R8-03)', () => {
+    render(<PlatformProvider bridge={web}><HardwarePanel /></PlatformProvider>);
+    const rows = screen.getByText('IBM Quantum').parentElement!.parentElement!;
+    expect(within(rows).getAllByTestId('provider-action-slot').length).toBe(10);
   });
 });

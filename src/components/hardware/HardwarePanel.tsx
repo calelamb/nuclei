@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight, RotateCcw, Rocket, Settings2, Trash2 } from 
 import { useThemeStore } from '../../stores/themeStore';
 import { useHardwareStore } from '../../stores/hardwareStore';
 import { hasActiveJobForBackend } from '../../lib/hardwareJobs';
+import './launchPortal.css';
 import { useFrameworksStore } from '../../stores/frameworksStore';
 import { usePlatform } from '../../platform/PlatformProvider';
 import { ProviderStatusBadge } from './ProviderStatusBadge';
@@ -85,7 +86,7 @@ const PROVIDER_LABELS: Record<HardwareProviderType, string> = {
 
 const PANEL_SHORT_LABELS: Readonly<Record<string, string>> = {
   'Connect to enable': 'Connect',
-  "Kernel didn't start": 'Not running',
+  "Kernel didn't start": "Didn't start",
 };
 
 /** The narrow panel needs shorter status words than the Launch dialog so a row fits on one line. */
@@ -157,16 +158,19 @@ export function HardwarePanel() {
               <span style={{ flex: '1 1 0', minWidth: 0, display: 'flex', justifyContent: 'flex-end', overflow: 'hidden' }}>
                 <ProviderStatusBadge status={panelStatus(status, isWeb && p.name === 'simulator')} />
               </span>
-              {status.kind === 'unavailable' && (
-                <IconButton size="sm" aria-label="Retry" tooltip={{ label: 'Retry starting the kernel', placement: 'above' }} onClick={retryKernel}>
-                  <RotateCcw aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />
-                </IconButton>
-              )}
-              {configurable && (
-                <IconButton size="sm" aria-label={`Configure ${label}`} tooltip={{ label: `Configure ${label}`, placement: 'above' }} onClick={() => setShowCredentialSetup(p.name)}>
-                  <Settings2 aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />
-                </IconButton>
-              )}
+              {/* Every row reserves the 24px action slot so status badges share one right edge. */}
+              <span className="hw-provider-action" data-testid="provider-action-slot">
+                {status.kind === 'unavailable' && (
+                  <IconButton size="sm" aria-label="Retry" tooltip={{ label: 'Retry starting the kernel', placement: 'above' }} onClick={retryKernel}>
+                    <RotateCcw aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />
+                  </IconButton>
+                )}
+                {configurable && (
+                  <IconButton size="sm" aria-label={`Configure ${label}`} tooltip={{ label: `Configure ${label}`, placement: 'above' }} onClick={() => setShowCredentialSetup(p.name)}>
+                    <Settings2 aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />
+                  </IconButton>
+                )}
+              </span>
             </div>
             );
           })}
