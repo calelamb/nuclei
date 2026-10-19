@@ -222,9 +222,6 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
   );
 }
 
-/** Kept as an alias so App.tsx and the palette share the registry's rail label. */
-export const railShortcutFor = railShortcutLabel;
-
 export interface CommandContext {
   mode: WorkspaceMode;
   developerViews: boolean;
@@ -312,7 +309,7 @@ export function buildCommands(actions: CommandActions, context: CommandContext):
   let railIndex = 0;
   for (const view of views) {
     const isTop = !bottomPinned.has(view);
-    const shortcut = view === 'settings' ? sc('settings') : isTop ? railShortcutFor(railIndex, mac) : undefined;
+    const shortcut = view === 'settings' ? sc('settings') : isTop ? railShortcutLabel(railIndex, mac) : undefined;
     if (isTop) railIndex += 1;
     commands.push({
       id: `goto-${view}`,

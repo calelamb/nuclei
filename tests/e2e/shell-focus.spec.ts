@@ -70,3 +70,49 @@ test.describe('focus is never on <body> after a collapse or a mode switch', () =
     await expect(page.getByRole('tab', { name: 'Terminal' })).toHaveCount(0);
   });
 });
+
+const headingFocused = (page: Page) => page.evaluate(() => {
+  const a = document.activeElement;
+  return a && /^H[12]$/.test(a.tagName) ? a.textContent?.trim() ?? '' : null;
+});
+
+test.describe('every route lands focus on a visible heading, cold or warm', () => {
+  test('Cmd+2 then Cmd+3 on a cold session lands on the Challenges heading, not <body> (shell-r9-01)', async ({ page }) => {
+    await page.goto(LEARN_URL);
+    await page.locator('.monaco-editor').first().click();
+    await page.keyboard.press('ControlOrMeta+2');
+    await expect.poll(() => headingFocused(page)).toMatch(/Learn/i);
+    await page.keyboard.press('ControlOrMeta+3');
+    await expect.poll(() => page.evaluate(() => document.activeElement?.closest('[data-takeover="challenges"]') !== null)).toBe(true);
+    await expect.poll(() => headingFocused(page)).not.toBeNull();
+  });
+
+  test('leaving a takeover by key lands on the sidebar heading, not the editor (shell-r9-02)', async ({ page }) => {
+    await page.goto(LEARN_URL);
+    await page.locator('.monaco-editor').first().click();
+    await page.keyboard.press('ControlOrMeta+2');
+    await expect.poll(() => headingFocused(page)).not.toBeNull();
+    await page.keyboard.press('ControlOrMeta+4');
+    await expect.poll(() => headingFocused(page)).toMatch(/launch/i);
+    await page.waitForTimeout(400);
+    expect(await headingFocused(page)).toMatch(/launch/i);
+  });
+
+  test('a rail tooltip is gone once a modal takes focus (shell-r9-03)', async ({ page }) => {
+    await page.goto(LEARN_URL);
+    await page.getByRole('button', { name: 'Switch workspace mode' }).hover();
+    await expect(page.getByRole('tooltip')).toBeVisible();
+    await openPalette(page, "what's new");
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await expect(page.getByRole('tooltip')).toHaveCount(0);
+  });
+
+  test('Replay in Settings gets focus back when the tour ends (shell-r8-02)', async ({ page }) => {
+    await page.goto('/?e2eProject=qec-project&workspace=research');
+    await page.getByRole('button', { name: /^Settings/ }).first().click();
+    const replay = page.getByRole('button', { name: 'Replay' });
+    await replay.click();
+    await page.keyboard.press('Escape');
+    await expect(replay).toBeFocused();
+  });
+});

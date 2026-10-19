@@ -5,7 +5,7 @@
   position: absolute;
   inset: 6px 8px;
   z-index: -1;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-soft);
   background: transparent;
   transition: background var(--duration-fast, 120ms) ease;
 }
