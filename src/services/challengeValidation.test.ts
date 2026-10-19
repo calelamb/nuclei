@@ -42,6 +42,15 @@ describe('challengeValidation state_fidelity', () => {
     expect(r.message.toLowerCase()).toContain('entanglement');
   });
 
+  it('states the overlap and the threshold instead of claiming the histogram looks right (learn-r9-08)', () => {
+    const r = validateTestCase(fidelityCase(), resultWithMetrics({ fidelity: 0.25 }), 5);
+    expect(r.message).toContain('25% overlap with the target');
+    expect(r.message).toContain('99% needed');
+    expect(r.message).not.toMatch(/may look right/i);
+    const near = validateTestCase(fidelityCase(), resultWithMetrics({ fidelity: 0.9895 }), 5);
+    expect(near.message).toContain('98.9% overlap');
+  });
+
   it('respects a custom min_fidelity', () => {
     expect(validateTestCase(fidelityCase(0.8), resultWithMetrics({ fidelity: 0.85 }), 5).passed).toBe(true);
     expect(validateTestCase(fidelityCase(0.9), resultWithMetrics({ fidelity: 0.85 }), 5).passed).toBe(false);
