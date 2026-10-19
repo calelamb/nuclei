@@ -142,7 +142,7 @@ describe('ThresholdPanel', () => {
     expect(container.querySelectorAll('svg text').length).toBeGreaterThan(6);
     fireEvent.click(getByRole('button', { name: 'Export plot as SVG' }));
     expect((downloadSvg.mock.calls.at(-1)![0] as SVGSVGElement).querySelector('desc')!.textContent).toMatch(/Λ = .* synth r=d|synth r=d.*Λ = /);
-    expect(container.textContent).toMatch(/synth rounds = 3d/);
+    expect(container.textContent).toMatch(/rounds = 3d/);
   });
 
   it('does not crash on malformed rows and says they were skipped', () => {

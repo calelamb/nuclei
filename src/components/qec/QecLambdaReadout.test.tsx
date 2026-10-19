@@ -34,3 +34,19 @@ describe('QecLambdaReadout length (qec-r-35)', () => {
     expect(body()).toBe(meaningful);
   });
 });
+
+describe('QecLambdaReadout experiment groups (qec-r-79)', () => {
+  afterEach(cleanup);
+  const labelled = (label: string) => rows.slice(0, 16).map((r) => ({ ...r, strong_id: `${label}-${r.strong_id}`, json_metadata: { ...r.json_metadata, label } }));
+
+  it('renders one group row per experiment, none for a single experiment', () => {
+    const colors = useThemeStore.getState().colors;
+    const two = lambdaEstimates([...labelled('a'), ...labelled('b')], { units: 'per_round' });
+    const { container, unmount } = render(<QecLambdaReadout decoders={['pymatching']} estimates={two} units="per_round" colors={colors} />);
+    expect(container.querySelectorAll('tr.qec-lambda-group').length).toBe(2);
+    unmount();
+    const one = lambdaEstimates(labelled('a'), { units: 'per_round' });
+    const r2 = render(<QecLambdaReadout decoders={['pymatching']} estimates={one} units="per_round" colors={colors} />);
+    expect(r2.container.querySelectorAll('tr.qec-lambda-group').length).toBe(0);
+  });
+});

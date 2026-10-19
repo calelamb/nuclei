@@ -1,3 +1,4 @@
+import { experimentNames } from './qecExperimentName';
 import type { ThresholdSeries } from '../types/qecStats';
 import type { ThemeMode } from '../styles/tokens';
 
@@ -87,9 +88,10 @@ export function buildPlotStyle(
     });
   }
   if (labels.length > 1) {
+    const names = experimentNames(labels);
     legend.push({
       kind: 'experiment', title: 'Experiment',
-      entries: labels.map((l) => ({ id: l, label: l, color: neutral, shape: 'circle' as const, dash: dashOf(l) })),
+      entries: labels.map((l) => ({ id: l, label: names.get(l) ?? l, color: neutral, shape: 'circle' as const, dash: dashOf(l) })),
     });
   }
   return { byKey, legend };

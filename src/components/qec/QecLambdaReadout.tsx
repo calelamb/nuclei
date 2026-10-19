@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { TriangleAlert } from 'lucide-react';
 import { MIN_LAMBDA_DISTANCES, type LambdaGroupEstimate, type RateUnits } from '../../lib/qecFit';
 import { buildLambdaTable, lambdaRangeSummary, LAMBDA_ROW_LIMIT, type LambdaDecoderGroup, type LambdaRowView } from '../../lib/qecLambdaTable';
@@ -73,7 +73,7 @@ function DecoderLambdaTable({ group: g, colors }: { group: LambdaDecoderGroup; c
           </Tr>
         </Thead>
         <Tbody>
-          {shown.map((r) => <LambdaRow key={`${r.experiment}|${r.noise}`} row={r} colors={colors} />)}
+          <LambdaRows rows={shown} colors={colors} />
         </Tbody>
         {g.collapsed && (
           <Tbody>
@@ -83,7 +83,7 @@ function DecoderLambdaTable({ group: g, colors }: { group: LambdaDecoderGroup; c
                   <summary style={{ cursor: 'pointer' }}>{g.collapsed.summary}</summary>
                   <Table label={`Λ for ${g.decoder}, rows not meaningful`} dense className="qec-lambda-table">
                     <Tbody>
-                      {g.collapsed.rows.map((r) => <LambdaRow key={`${r.experiment}|${r.noise}`} row={r} colors={colors} />)}
+                      <LambdaRows rows={g.collapsed.rows} colors={colors} />
                     </Tbody>
                   </Table>
                 </details>
@@ -101,6 +101,24 @@ function DecoderLambdaTable({ group: g, colors }: { group: LambdaDecoderGroup; c
   );
 }
 
+/** Rows in order; with several experiments each gets one sub-heading row instead of a label inside the p cell. */
+function LambdaRows({ rows, colors }: { rows: readonly LambdaRowView[]; colors: ThemeColors }) {
+  return (
+    <>
+      {rows.map((r, i) => (
+        <Fragment key={`${r.experiment}|${r.noise}`}>
+          {r.experiment !== null && r.experiment !== rows[i - 1]?.experiment && (
+            <Tr className="qec-lambda-group">
+              <Td colSpan={5} text style={{ color: colors.textMuted }}>{r.experiment}</Td>
+            </Tr>
+          )}
+          <LambdaRow row={r} colors={colors} />
+        </Fragment>
+      ))}
+    </>
+  );
+}
+
 function LambdaRow({ row, colors }: { row: LambdaRowView; colors: ThemeColors }) {
   const flagText = row.flags.join('\n');
   const tone = row.meaningful ? colors.text : colors.textMuted;
@@ -108,7 +126,6 @@ function LambdaRow({ row, colors }: { row: LambdaRowView; colors: ThemeColors })
     <Tr>
       <Td style={{ color: tone }}>
         {row.p}
-        {row.experiment && <div style={{ fontSize: 11, color: colors.textMuted, fontFamily: TYPOGRAPHY.fontSans }}>{row.experiment}</div>}
       </Td>
       <Td numeric style={{ color: tone, fontWeight: row.meaningful ? 600 : 400 }}>{row.lambda}</Td>
       <Td numeric style={{ color: tone }}>{row.ci ?? '—'}</Td>
