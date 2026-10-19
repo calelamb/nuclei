@@ -3,7 +3,8 @@
 .nuclei-btn.nuclei-export-btn--unavailable,
 .nuclei-btn.nuclei-export-btn--unavailable:hover {
   background: var(--color-surface-raised);
-  color: var(--color-text-primary);
-  opacity: 0.5;
+  /* Dimmed with tokens, not opacity: opacity would also fade the focus ring below 3:1. */
+  color: var(--color-text-tertiary);
+  border-color: var(--color-border);
   cursor: not-allowed;
 }
