@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Circle, Sun, Moon, X, Command } from 'lucide-react';
 import { usePlatform } from '../../platform/PlatformProvider';
 import { usePreviewPending } from '../../layout/usePreviewPending';
@@ -41,8 +42,7 @@ const MENU_TRIGGER_STYLE: React.CSSProperties = {
   cursor: 'pointer', fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, fontWeight: 500,
 };
 
-/** Qubits and Depth describe the code before the last edit while the diagram is stale or catching up. */
-const STALE_STATS_OPACITY = 0.6;
+const STALE_STATS_TOOLTIP = 'From the last run';
 
 /* ── Learn level picker ── */
 const LEVEL_OPTIONS: ReadonlyArray<{ value: UIMode; label: string; hint: string }> = [
@@ -135,6 +135,15 @@ function KernelDot({ color, pulse }: { color: string; pulse: boolean }) {
   );
 }
 
+/**
+ * Qubits and Depth describe the code before the last edit while the diagram is stale or
+ * catching up. Staleness is a quieter text token (never opacity, which fails contrast) plus a tip.
+ */
+function StatSpan({ stale, color, children }: { stale: boolean; color: string; children: ReactNode }) {
+  const span = <span style={{ color: stale ? 'var(--color-text-tertiary)' : color }}>{children}</span>;
+  return stale ? <Tooltip label={STALE_STATS_TOOLTIP} placement="above">{span}</Tooltip> : span;
+}
+
 /* ── Status Bar ── */
 export function StatusBar() {
   const { snapshot, stale } = useDisplaySnapshot();
@@ -219,12 +228,8 @@ export function StatusBar() {
       {/* Left side: editor stats and the layout preset only mean something while the editor is on screen. */}
       {!takeover && (
         <>
-          <span style={{ color: colors.textMuted, opacity: statsStale ? STALE_STATS_OPACITY : 1 }}>
-            Qubits: {snapshot ? snapshot.qubit_count : '—'}
-          </span>
-          <span style={{ color: colors.textMuted, opacity: statsStale ? STALE_STATS_OPACITY : 1 }}>
-            Depth: {snapshot ? snapshot.depth : '—'}
-          </span>
+          <StatSpan stale={statsStale} color={colors.textMuted}>Qubits: {snapshot ? snapshot.qubit_count : '—'}</StatSpan>
+          <StatSpan stale={statsStale} color={colors.textMuted}>Depth: {snapshot ? snapshot.depth : '—'}</StatSpan>
           {features.layoutPresets && <LayoutPresetSwitcher />}
         </>
       )}

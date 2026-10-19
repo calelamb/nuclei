@@ -1,5 +1,5 @@
 import { ChevronDown } from 'lucide-react';
-import { Button, Menu, type MenuEntry } from '../ui';
+import { Button, Menu, useConfirm, type MenuEntry } from '../ui';
 import { useEditorStore } from '../../stores/editorStore';
 import { usePlatform } from '../../platform/PlatformProvider';
 import { kernelLanguageFor } from '../../types/quantum';
@@ -34,6 +34,7 @@ export function FrameworkSelector({ compact = false }: { compact?: boolean } = {
   const code = useEditorStore((s) => s.code);
   const isDirty = useEditorStore((s) => s.isDirty);
   const filePath = useEditorStore((s) => s.filePath);
+  const { confirm, confirmDialog } = useConfirm();
   const platform = usePlatform();
   const isWeb = platform.getPlatform() === 'web';
 
@@ -44,11 +45,15 @@ export function FrameworkSelector({ compact = false }: { compact?: boolean } = {
   const fullLabelFor = (f: Framework) => (isWeb && f === 'qiskit' ? 'Qiskit (browser subset)' : displayName(f));
   const labelFor = (f: Framework) => (compact ? displayName(f) : fullLabelFor(f));
 
-  const applyTemplate = (f: Framework) => {
+  const applyTemplate = async (f: Framework) => {
     if (isDirty) {
-      const ok = window.confirm(
-        'You have unsaved changes. Replacing the buffer will lose them. Continue?',
-      );
+      const ok = await confirm({
+        title: `Replace your code with the ${displayName(f)} starter?`,
+        description: 'Your unsaved edits will be lost.',
+        confirmLabel: 'Replace',
+        cancelLabel: 'Keep editing',
+        tone: 'danger',
+      });
       if (!ok) return;
     }
     setCode(STARTER_TEMPLATES[f]);
@@ -70,7 +75,7 @@ export function FrameworkSelector({ compact = false }: { compact?: boolean } = {
    * those picks we confirm, swap in the target starter, and detach the
    * file path so we don't pretend e.g. a .py file contains Q#.
    */
-  const handleFrameworkPick = (f: Framework) => {
+  const handleFrameworkPick = async (f: Framework) => {
     if (f === framework) {
       return;
     }
@@ -81,9 +86,13 @@ export function FrameworkSelector({ compact = false }: { compact?: boolean } = {
       return;
     }
     if (kernelLanguageFor(f) !== kernelLanguageFor(framework)) {
-      const ok = window.confirm(
-        `Switching languages replaces the editor buffer with a ${displayName(f)} starter template. Unsaved changes will be lost. Continue?`,
-      );
+      const ok = await confirm({
+        title: `Replace your code with the ${displayName(f)} starter?`,
+        description: 'Switching languages replaces the editor buffer. Your unsaved edits will be lost.',
+        confirmLabel: 'Replace',
+        cancelLabel: 'Keep editing',
+        tone: 'danger',
+      });
       if (!ok) return;
       setCode(STARTER_TEMPLATES[f]);
       setFramework(f);
@@ -103,7 +112,7 @@ export function FrameworkSelector({ compact = false }: { compact?: boolean } = {
       disabled: isDisabled(f),
       title: isDisabled(f) ? DESKTOP_ONLY : undefined,
       hint: isDisabled(f) ? 'Desktop' : undefined,
-      onSelect: () => handleFrameworkPick(f),
+      onSelect: () => { void handleFrameworkPick(f); },
     })),
     { id: 'sep', separator: true },
     { id: 'h-template', heading: 'New from template' },
@@ -112,11 +121,14 @@ export function FrameworkSelector({ compact = false }: { compact?: boolean } = {
       label: `New ${displayName(f)} file`,
       disabled: isDisabled(f),
       title: isDisabled(f) ? DESKTOP_ONLY : undefined,
-      onSelect: () => applyTemplate(f),
+      hint: isDisabled(f) ? 'Desktop' : undefined,
+      onSelect: () => { void applyTemplate(f); },
     })),
   ];
 
   return (
+    <>
+    {confirmDialog}
     <Menu
       label="Framework"
       entries={entries}
@@ -141,5 +153,6 @@ export function FrameworkSelector({ compact = false }: { compact?: boolean } = {
         </Button>
       )}
     />
+    </>
   );
 }

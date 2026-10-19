@@ -197,7 +197,7 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
         </div>
 
         {/* Results */}
-        <div id={listId} ref={listFadeRef} onScroll={onListScroll} style={{ ...listFadeStyle, maxHeight: LIST_MAX_HEIGHT, overflow: 'auto', padding: '4px 0' }} role="listbox" aria-label="Commands">
+        <div id={listId} ref={listFadeRef} onScroll={onListScroll} style={{ ...listFadeStyle, maxHeight: LIST_MAX_HEIGHT, overflow: 'auto', padding: '4px 0' }} role="listbox" aria-label="Commands" tabIndex={-1}>
           {filtered.length === 0 ? (
             <div style={{ padding: 16, color: colors.textMuted, fontSize: 13, fontFamily: TYPOGRAPHY.fontSans, textAlign: 'center' }}>
               No matching commands
@@ -233,6 +233,8 @@ export interface CommandContext {
   developerViews: boolean;
   /** Learn Beginner has no Explorer sidebar; Go to Explorer and the numbering skip it. Defaults to true. */
   explorerSidebar?: boolean;
+  /** Whether the status bar shows the layout switcher (Learn Beginner hides it); the Layout commands follow. Defaults to true. */
+  layoutPresets?: boolean;
   /** Discovered experiments, for "Run experiment <name>". */
   experiments: ReadonlyArray<{ fileName: string; name: string }>;
   /** Whether a run is selected (enables "Open run folder"). */
@@ -286,7 +288,7 @@ export function buildCommands(actions: CommandActions, context: CommandContext):
   // Workspace + orientation.
   commands.push({ id: 'workspace-mode', label: bindingLabel('switch-workspace'), category: 'Navigate', shortcut: sc('switch-workspace'), keywords: ['learn', 'research', 'workspace'], action: actions.switchWorkspaceMode });
   if (context.mode === 'research') {
-    commands.push({ id: 'research-tour', label: 'Replay Research tour', category: 'Navigate', action: actions.startResearchTour });
+    commands.push({ id: 'research-tour', label: 'Replay Research tour', category: 'Help', action: actions.startResearchTour });
   }
 
   // Go to <view> — every rail view this mode offers, in registry order.
@@ -321,7 +323,8 @@ export function buildCommands(actions: CommandActions, context: CommandContext):
   }
 
   // Layout presets: one command each, findable by "layout" or "preset".
-  for (const [preset, label] of [['clean', 'Clean'], ['balanced', 'Balanced'], ['full', 'Full']] as const) {
+  // Only offered while the status bar can show the resulting preset.
+  for (const [preset, label] of context.layoutPresets === false ? [] : [['clean', 'Clean'], ['balanced', 'Balanced'], ['full', 'Full']] as const) {
     commands.push({
       id: `layout-${preset}`,
       label: `Layout: ${label}`,

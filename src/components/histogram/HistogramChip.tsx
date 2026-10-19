@@ -1,5 +1,6 @@
 import { X, Maximize2 } from 'lucide-react';
 import { IconButton } from '../ui';
+import { EDITOR_FOCUS_TARGET, focusAfterUnmount } from '../../hooks/focusAfterUnmount';
 import './histogram.css';
 import { useThemeStore } from '../../stores/themeStore';
 import { useElementSize } from '../../hooks/useElementSize';
@@ -75,6 +76,12 @@ export function HistogramChip({
   const layout = chooseChipLayout(entries.map(([s]) => chipLabel(s)), size.width, hasHw);
   const rows = layout === 'rows';
 
+  // The dismissed chip takes its own button with it: keep the keyboard in the editor.
+  const dismiss = () => {
+    focusAfterUnmount(document.activeElement, [EDITOR_FOCUS_TARGET]);
+    onDismiss?.();
+  };
+
   const controls = (
     <div style={{ display: 'flex', gap: 4, flexShrink: 0, alignItems: 'center', marginLeft: rows ? 'auto' : undefined }}>
       {hiddenCount > 0 && (onExpand ? (
@@ -92,12 +99,12 @@ export function HistogramChip({
         </span>
       ))}
       {onExpand && (
-        <IconButton size="sm" className="histogram-chip__icon" aria-label="Expand histogram" onClick={onExpand}>
+        <IconButton size="sm" className="histogram-chip__icon" aria-label="Expand histogram" tooltip={{ placement: 'above' }} onClick={onExpand}>
           <Maximize2 size={12} />
         </IconButton>
       )}
       {onDismiss && (
-        <IconButton size="sm" className="histogram-chip__icon histogram-chip__icon--danger" aria-label="Dismiss histogram" onClick={onDismiss}>
+        <IconButton size="sm" className="histogram-chip__icon histogram-chip__icon--danger" aria-label="Dismiss histogram" tooltip={{ placement: 'above' }} onClick={dismiss}>
           <X size={12} />
         </IconButton>
       )}

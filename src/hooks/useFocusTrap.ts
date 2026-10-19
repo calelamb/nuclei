@@ -14,7 +14,9 @@ interface FocusTrapOptions {
 
 function focusableWithin(root: HTMLElement): HTMLElement[] {
   return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-    (el) => !el.hasAttribute('hidden') && el.getAttribute('aria-hidden') !== 'true',
+    // tabIndex < 0 (roving options, programmatic-only targets) is not a Tab stop, so it can
+    // never be the wrap-around boundary.
+    (el) => !el.hasAttribute('hidden') && el.getAttribute('aria-hidden') !== 'true' && el.tabIndex >= 0,
   );
 }
 
@@ -49,7 +51,9 @@ export function useFocusTrap(
       const first = items[0];
       const last = items[items.length - 1];
       const active = document.activeElement;
-      const inside = active instanceof Node && container.contains(active);
+      // Focus on a non-tabbable inner node (a scroller, a roving option) counts as outside the
+      // Tab order: natural Tab from there would leave the container.
+      const inside = active instanceof HTMLElement && items.includes(active);
       if (!inside) {
         e.preventDefault();
         (e.shiftKey ? last : first).focus();

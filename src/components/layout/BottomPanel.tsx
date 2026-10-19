@@ -9,6 +9,7 @@ import { ProbabilityHistogram } from '../histogram/ProbabilityHistogram';
 import { TYPOGRAPHY } from '../../styles/tokens';
 import { Badge, Button, IconButton, Tabs, TextInput, Tooltip } from '../ui';
 import './bottomPanel.css';
+import { EDITOR_FOCUS_TARGET, focusAfterUnmount } from '../../hooks/focusAfterUnmount';
 
 /* ── Terminal Panel ── */
 
@@ -315,6 +316,13 @@ export function BottomPanel({
     }
   }, [showFullHistogram, activeTab, setActiveTab]);
 
+  // Collapsing an expanded histogram hands the rail its chip back and unmounts this panel,
+  // button included: land on the chip that opened it, else the editor, never <body>.
+  const collapseOrExpand = () => {
+    if (!collapsed) focusAfterUnmount(document.activeElement, ['[aria-label="Expand histogram"]', EDITOR_FOCUS_TARGET]);
+    toggleCollapsed();
+  };
+
   const tabs: Array<BottomPanelTab> = showFullHistogram
     ? ['terminal', 'histogram']
     : ['terminal'];
@@ -336,7 +344,7 @@ export function BottomPanel({
           }))}
         />
         <div style={{ flex: 1 }} />
-        <IconButton size="sm" onClick={toggleCollapsed} aria-label={collapsed ? 'Expand panel' : 'Collapse panel'} tooltip={{ placement: 'above' }} style={{ marginRight: 6 }}>
+        <IconButton size="sm" onClick={collapseOrExpand} aria-label={collapsed ? 'Expand panel' : 'Collapse panel'} tooltip={{ placement: 'above' }} style={{ marginRight: 6 }}>
           {collapsed ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
         </IconButton>
       </div>

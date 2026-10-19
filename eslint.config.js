@@ -43,6 +43,22 @@ export default defineConfig([
     },
   },
   {
+    // Native dialogs block the UI thread, ignore the theme and are auto-dismissed by test
+    // drivers: every confirmation goes through useConfirm()/ConfirmDialog.
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['**/*.test.{ts,tsx}'],
+    rules: {
+      'no-restricted-globals': ['error',
+        { name: 'confirm', message: 'Use useConfirm() from components/ui instead of a native confirm.' },
+        { name: 'alert', message: 'Use a toast or Dialog instead of a native alert.' },
+      ],
+      'no-restricted-properties': ['error',
+        { object: 'window', property: 'confirm', message: 'Use useConfirm() from components/ui instead of a native confirm.' },
+        { object: 'window', property: 'alert', message: 'Use a toast or Dialog instead of a native alert.' },
+      ],
+    },
+  },
+  {
     // Design-system guard: fonts come from TYPOGRAPHY / var(--font-*), never literals.
     files: ['src/**/*.{ts,tsx}'],
     ignores: ['src/styles/**', '**/*.test.{ts,tsx}'],

@@ -60,3 +60,37 @@ describe('useFocusTrap', () => {
     opener.remove();
   });
 });
+
+function RovingHarness() {
+  const ref = useRef<HTMLDivElement>(null);
+  useFocusTrap(ref, { autoFocus: false });
+  return (
+    <div ref={ref}>
+      <input aria-label="query" />
+      <div role="listbox" tabIndex={-1}>
+        <button tabIndex={-1}>option a</button>
+        <button tabIndex={-1}>option b</button>
+      </div>
+    </div>
+  );
+}
+
+describe('useFocusTrap with roving (tabindex=-1) descendants', () => {
+  it('ignores them as wrap boundaries: Tab and Shift+Tab never reach body or an option', () => {
+    render(<RovingHarness />);
+    const input = screen.getByLabelText('query');
+    input.focus();
+    fireEvent.keyDown(input, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(input);
+    fireEvent.keyDown(input, { key: 'Tab' });
+    expect(document.activeElement).toBe(input);
+  });
+
+  it('pulls focus from a non-tabbable inner node back into the Tab order', () => {
+    render(<RovingHarness />);
+    screen.getByText('option b').focus();
+    fireEvent.keyDown(document.activeElement as Element, { key: 'Tab' });
+    expect(document.activeElement).toBe(screen.getByLabelText('query'));
+    expect(document.activeElement).not.toBe(document.body);
+  });
+});

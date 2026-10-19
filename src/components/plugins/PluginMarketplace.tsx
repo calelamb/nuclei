@@ -23,7 +23,7 @@ import { PluginErrorCard } from './PluginErrorCard';
 import type { InstalledPlugin } from '../../plugins/types';
 
 import { TYPOGRAPHY, ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
-import { Button, EmptyState, Tabs, TextInput } from '../ui';
+import { Button, EmptyState, Tabs, TextInput, useConfirm } from '../ui';
 type Tab = 'installed' | 'panels';
 
 const FONT = TYPOGRAPHY.fontSans;
@@ -238,6 +238,7 @@ function PluginRow({
 }) {
   const colors = useThemeStore((s) => s.colors);
   const name = plugin.manifest.name;
+  const { confirm, confirmDialog } = useConfirm();
 
   return (
     <div
@@ -345,8 +346,18 @@ function PluginRow({
           icon={<Trash2 size={12} />}
           tone="danger"
           disabled={busy}
-          onClick={() => { if (window.confirm(`Uninstall "${name}"? It will be removed from Nuclei.`)) run(() => uninstallPlugin(name)); }}
+          onClick={async () => {
+            const ok = await confirm({
+              title: `Uninstall ${name}?`,
+              description: 'It will be removed from Nuclei.',
+              confirmLabel: 'Uninstall',
+              cancelLabel: 'Keep',
+              tone: 'danger',
+            });
+            if (ok) await run(() => uninstallPlugin(name));
+          }}
         />
+        {confirmDialog}
       </div>
     </div>
   );

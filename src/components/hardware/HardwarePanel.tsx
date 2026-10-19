@@ -1,4 +1,4 @@
-import { Badge, Button, EmptyState, IconButton, Select } from '../ui';
+import { Badge, Button, EmptyState, IconButton, Select, useConfirm } from '../ui';
 import { DesktopOnlyState } from './DesktopOnlyState';
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, RotateCcw, Rocket, Settings2, Trash2 } from 'lucide-react';
@@ -96,6 +96,7 @@ function panelStatus(status: ProviderStatus, inBrowser: boolean): ProviderStatus
 }
 
 export function HardwarePanel() {
+  const { confirm, confirmDialog } = useConfirm();
   const colors = useThemeStore((s) => s.colors);
   const providers = useHardwareStore((s) => s.providers);
   const backends = useHardwareStore((s) => s.backends);
@@ -135,6 +136,7 @@ export function HardwarePanel() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {confirmDialog}
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
         {/* ── Providers ── */}
         <Section title="Providers" defaultOpen>
@@ -149,7 +151,7 @@ export function HardwarePanel() {
             const configurable = status.kind === 'needs-setup' && providerNeedsToken(p.name);
             return (
             <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0', height: 32 }}>
-              <span title={label} style={{ flex: '0 0 auto', fontSize: 12, fontWeight: 600, color: colors.text, whiteSpace: 'nowrap', ...font }}>
+              <span style={{ flex: '0 0 auto', fontSize: 12, fontWeight: 600, color: colors.text, whiteSpace: 'nowrap', ...font }}>
                 {label}
               </span>
               <span style={{ flex: '1 1 0', minWidth: 0, display: 'flex', justifyContent: 'flex-end', overflow: 'hidden' }}>
@@ -286,7 +288,16 @@ export function HardwarePanel() {
           <JobTracker jobs={jobs} results={results} />
           {jobs.length > 0 && (
             <button className="nuclei-hover-danger"
-              onClick={() => { if (window.confirm('Clear all hardware jobs from the list?')) clearJobs(); }}
+              onClick={async () => {
+                const ok = await confirm({
+                  title: 'Clear all hardware jobs?',
+                  description: 'They are removed from the list.',
+                  confirmLabel: 'Clear',
+                  cancelLabel: 'Keep jobs',
+                  tone: 'danger',
+                });
+                if (ok) clearJobs();
+              }}
               style={{
                 display: 'flex',
                 alignItems: 'center',
