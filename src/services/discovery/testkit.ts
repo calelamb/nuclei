@@ -158,6 +158,8 @@ export interface FakeKernelOptions {
   programKey?: (program: string) => string;
   /** Echo `request_id` on sync replies like a current kernel (default true). */
   echoRequestIds?: boolean;
+  /** The evaluator catalogue `discovery_evaluators` answers with (default: just the toy evaluator). */
+  evaluators?: DiscoveryEvaluatorInfo[];
 }
 
 export function createFakeKernel(options: FakeKernelOptions = {}): FakeKernel {
@@ -224,7 +226,7 @@ export function createFakeKernel(options: FakeKernelOptions = {}): FakeKernel {
     send(message: KernelMessage) {
       sent.push(message);
       if (message.type === 'discovery_evaluators') {
-        setTimeout(() => emit({ type: 'discovery_evaluators_result', evaluators: [TOY_EVALUATOR], ...echo(message.request_id) }), 0);
+        setTimeout(() => emit({ type: 'discovery_evaluators_result', evaluators: options.evaluators ?? [TOY_EVALUATOR], ...echo(message.request_id) }), 0);
       } else if (message.type === 'discovery_evaluate') respond(message);
       else if (message.type === 'discovery_mutate') {
         const mutations = mutate(message.program, message.seed);

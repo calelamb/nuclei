@@ -40,6 +40,12 @@ export interface EvaluatorDescriptorDef {
   default_bins: number;
 }
 
+/** Where to install what an unavailable evaluator needs (Research catalog entry ids from `frameworks.rs`). */
+export interface DiscoveryInstallHint {
+  catalog_ids: string[];
+  hint: string;
+}
+
 export interface DiscoveryEvaluatorInfo {
   kind: DiscoveryEvaluatorKind;
   version: string;
@@ -51,6 +57,14 @@ export interface DiscoveryEvaluatorInfo {
   descriptors: EvaluatorDescriptorDef[];
   config_schema: Record<string, unknown>;
   default_config: Record<string, unknown>;
+  /**
+   * Additive (kernel 0.14.0): `false` when optional packages are not installed. Absent on older
+   * kernels, which means available.
+   */
+  available?: boolean;
+  /** Import names of the absent optional packages (for example `["stim", "pymatching"]`). */
+  missing?: string[];
+  install?: DiscoveryInstallHint;
 }
 
 export type GuardrailStatus = 'pass' | 'fail' | 'warn' | 'skipped';
