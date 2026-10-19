@@ -4,6 +4,7 @@ import { useExperimentUiStore } from '../../stores/experimentUiStore';
 import { useExperimentStore } from '../../services/experimentStore';
 import { formatRunLabel } from '../experiments/runsTableColumns';
 import { ChevronRight, MoreHorizontal } from 'lucide-react';
+import { isMemoryPath, MEMORY_PREFIX } from '../../hooks/useFileOps';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
 const MAX_VISIBLE_SEGMENTS = 3;
@@ -33,9 +34,29 @@ function BreadcrumbBar({ children, title }: { children: React.ReactNode; title?:
   );
 }
 
+/** An unsaved starter buffer has no folder trail: just say it is unsaved and name it. */
+function UnsavedCrumb({ name }: { name: string }) {
+  const colors = useThemeStore((s) => s.colors);
+  return (
+    <BreadcrumbBar>
+      <span style={{ fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, color: colors.textDim, whiteSpace: 'nowrap' }}>
+        Unsaved
+      </span>
+      <span aria-hidden="true" style={{ fontSize: 11, color: colors.textDim }}>·</span>
+      <span style={{ fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, color: colors.textMuted, whiteSpace: 'nowrap' }}>
+        {name}
+      </span>
+    </BreadcrumbBar>
+  );
+}
+
 export function Breadcrumbs() {
   const filePath = useEditorStore((s) => s.filePath);
   const colors = useThemeStore((s) => s.colors);
+
+  if (isMemoryPath(filePath)) {
+    return <UnsavedCrumb name={filePath!.slice(MEMORY_PREFIX.length) || 'untitled.py'} />;
+  }
 
   const allSegments = filePath
     ? filePath.split(/[\\/]/).filter(Boolean)
