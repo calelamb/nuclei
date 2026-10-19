@@ -9,6 +9,14 @@ on:
   # merges, so filtering to main left stacked PRs entirely unchecked.
   pull_request:
 
+# Kernel packages PRD 15 adds; each must reach 80 % line coverage (master 5.3).
+# A package is measured as soon as its directory exists, so a unit lands its
+# package and the gate starts applying with no workflow edit. Wave 5b (unit X)
+# appends here if a package is added.
+env:
+  PRD15_COVERAGE_PACKAGES: "surrogates noise qkernel symmetry deploy qec/learned"
+  PRD15_COVERAGE_FLOOR: "80"
+
 jobs:
   pytest:
     name: pytest (Python ${{ matrix.python-version }})
@@ -34,7 +42,9 @@ jobs:
         # circuits, so its tests need the real frameworks, not mocks.
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pytest-asyncio "websockets>=13,<17"
+          pip install pytest pytest-asyncio pytest-cov "websockets>=13,<17"
+          # PyYAML is a *test* dependency: the research-corpus goldens are YAML.
+          pip install pyyaml
           # keyring is used by the credential store; it's a small, fast dep.
           pip install keyring
           # Microsoft QDK (Q#) — the qsharp adapter tests run against the
@@ -53,7 +63,24 @@ jobs:
           pip install "pyarrow>=18,<26" "duckdb>=1.2,<2" "jsonschema>=4.23,<5"
 
       - name: Run kernel tests
-        run: pytest kernel/tests/ -v
+        run: |
+          cov_args=()
+          for pkg in $PRD15_COVERAGE_PACKAGES; do
+            if [ -d "kernel/$pkg" ]; then cov_args+=("--cov=kernel/$pkg"); fi
+          done
+          pytest kernel/tests/ -v "${cov_args[@]}"
+
+      - name: Coverage gate for the new PRD 15 packages
+        run: |
+          for pkg in $PRD15_COVERAGE_PACKAGES; do
+            if [ -d "kernel/$pkg" ]; then
+              echo "::group::coverage kernel/$pkg"
+              coverage report --include="kernel/$pkg/*" --skip-empty --fail-under="$PRD15_COVERAGE_FLOOR"
+              echo "::endgroup::"
+            else
+              echo "kernel/$pkg does not exist yet; not measured"
+            fi
+          done
 
       - name: Kernel auth on the websockets floor (13.1)
         # Installed apps keep whatever websockets their managed venv already
@@ -67,12 +94,13 @@ jobs:
             kernel/tests/test_docs_lab_fixtures.py -v
 
   # The packaged app's managed venv is built from kernel/requirements.txt ONLY. Stim, PyMatching,
-  # Sinter, PyArrow, DuckDB and jsonschema are optional Research-catalog installs, so PRD 14
-  # (Discovery Engine + Trainability Lab) must work -- or degrade to `missing_dependency` -- without
-  # them. This job installs exactly what the app ships (plus test runners) and proves it. Do NOT add
-  # the optional packages here; tests that need them use pytest.importorskip and skip.
+  # Sinter, PyArrow, DuckDB and jsonschema are optional Research-catalog installs, so the WHOLE
+  # kernel suite must pass -- or skip with an explicit reason -- without them (audit R-21: the job
+  # used to run only the PRD 14 files, which hid 11 collection errors and 6 failing docs fixtures).
+  # This job installs exactly what the app ships (plus test runners) and proves it. Do NOT add the
+  # optional packages here; tests that need them use pytest.importorskip and skip.
   pytest-minimal-venv:
-    name: PRD 14 without optional packages
+    name: whole kernel suite without optional packages
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -87,20 +115,154 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r kernel/requirements.txt
-          pip install pytest pytest-asyncio
+          pip install pytest pytest-asyncio pyyaml
 
       - name: Assert the optional packages are absent
         run: |
           python - <<'PY'
           import importlib.util, sys
-          present = [m for m in ("stim", "sinter", "pymatching", "pyarrow", "duckdb", "jsonschema")
+          present = [m for m in ("stim", "sinter", "pymatching", "pyarrow", "duckdb", "jsonschema", "qdk")
                      if importlib.util.find_spec(m) is not None]
           if present:
               sys.exit(f"optional packages leaked into the minimal venv: {present}")
           PY
 
-      - name: Run PRD 14 tests without the optional packages
-        run: pytest kernel/tests/test_discovery_optional_deps.py kernel/tests/test_trainability_*.py -v
+      - name: Run the whole kernel suite without the optional packages
+        run: pytest kernel/tests/ -v
+
+  # Qiskit 2.x is what a fresh desktop install gets (audit R-14: the catalog is unpinned while
+  # requirements.txt and CI were pinned <2). The whole suite -- physics markers included -- must
+  # also pass on Python 3.13 / Qiskit 2.x. Red until the R-C unit's Qiskit-2 fixes land.
+  pytest-qiskit2:
+    name: pytest (Python 3.13, Qiskit 2.x)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install test dependencies (Qiskit >=2,<3)
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-asyncio pyyaml "websockets>=13,<17" keyring
+          pip install "qdk>=1.29,<2" "numpy>=1.26,<3.0" "ruff>=0.6,<1.0"
+          pip install "qiskit>=2,<3" "qiskit-aer>=0.17,<1" "cirq-core>=1.4,<2"
+          pip install "stim>=1.14,<2" "sinter>=1.14,<2" "pymatching>=2.1,<3"
+          pip install "pyarrow>=18,<26" "duckdb>=1.2,<2" "jsonschema>=4.23,<5"
+          python -c "import qiskit; assert int(qiskit.__version__.split('.')[0]) >= 2, qiskit.__version__"
+
+      - name: Run kernel tests
+        run: pytest kernel/tests/ -v
+
+  # Research-corpus golden (gate G0): the 78-program scout corpus plus the resource gates, driven
+  # through the real authenticated WebSocket server in three environments. Expected statuses live
+  # in kernel/tests/research_corpus/*/expected.yaml; known failures are xfail(strict) tagged with
+  # their audit id, so a fix flips the build until the golden is updated. See research_corpus/loader.py.
+  corpus-minimal:
+    name: corpus golden (min, requirements.txt only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NUCLEI_CORPUS_ENV: min
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install ONLY the shipped kernel requirements plus test runners
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r kernel/requirements.txt
+          pip install pytest pytest-asyncio pyyaml
+
+      - name: Assert the optional packages are absent
+        run: |
+          python - <<'PY'
+          import importlib.util, sys
+          present = [m for m in ("stim", "sinter", "pymatching", "pyarrow", "duckdb", "jsonschema", "qdk")
+                     if importlib.util.find_spec(m) is not None]
+          if present:
+              sys.exit(f"optional packages leaked into the minimal venv: {present}")
+          PY
+
+      - name: Run the corpus
+        run: pytest kernel/tests/test_research_corpus.py -v -rxXs -p no:cacheprovider
+
+  corpus-app-env:
+    name: corpus golden (qk2, what the desktop app installs)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install Xvfb (the plt.show() gate needs a display)
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      # Creates a fresh `python -m venv`, installs KERNEL_CORE_DEPS and the unpinned catalog
+      # lists exactly as src-tauri/src/commands/frameworks.rs does, then runs the corpus in it.
+      - name: Corpus against the shell's own pip lists
+        run: scripts/check-app-env.sh
+
+  corpus-full:
+    name: corpus golden (full, Python 3.12 + optional stack)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NUCLEI_CORPUS_ENV: full
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Xvfb (the plt.show() gate needs a display)
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      - name: Install the full kernel stack
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-asyncio pyyaml "websockets>=13,<17" keyring
+          pip install "qdk>=1.29,<2" "numpy>=1.26,<3.0" "ruff>=0.6,<1.0"
+          pip install "qiskit>=1.2,<2" "qiskit-aer>=0.15,<1" "cirq-core>=1.4,<2"
+          pip install "stim>=1.14,<2" "sinter>=1.14,<2" "pymatching>=2.1,<3"
+          pip install "pyarrow>=18,<26" "duckdb>=1.2,<2" "jsonschema>=4.23,<5"
+
+      - name: Run the corpus
+        run: pytest kernel/tests/test_research_corpus.py -v -rxXs -p no:cacheprovider
+
+  # Ownership gate (master 5.3): no two units of a wave name the same file, and no spec ownership
+  # table contradicts the master's wave tables. Pure standard library.
+  wave-ownership:
+    name: PRD 15 wave file ownership
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Check the master plan and every spec's ownership table
+        run: python scripts/check-wave-ownership.py
 
   # Multiprocess sinter under Windows spawn semantics (PRD 10 risk 5 —
   # exercised now, not deferred to the release phase). Scoped to the QEC
