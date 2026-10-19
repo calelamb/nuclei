@@ -19,7 +19,8 @@ import sys
 import time
 
 root = os.environ['NUCLEI_QEC_DATA_PROJECT_ROOT']
-token = os.environ['NUCLEI_QEC_DATA_TOKEN']
+assert 'NUCLEI_QEC_DATA_TOKEN' not in os.environ, 'token must not be in the environment'
+token = sys.stdin.readline().strip()
 port = int(sys.argv[sys.argv.index('--port') + 1])
 with open(os.path.join(root, 'starts'), 'a', encoding='utf-8') as stream:
     stream.write('started\n')

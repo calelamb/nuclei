@@ -1,5 +1,5 @@
-use std::io::{BufRead, BufReader};
-use std::process::{Child, Command};
+use std::io::{BufRead, BufReader, Write};
+use std::process::{Child, Command, Stdio};
 use std::sync::{mpsc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -7,6 +7,7 @@ use tauri::{Manager, State};
 
 use super::kernel_legacy;
 use super::kernel_ownership as ownership;
+use super::qec_data::redact;
 
 // Canonical kernel port. The frontend connects here by hardcoded URL
 // (see src/config/kernel.ts), so our freshly-spawned kernel must own it.
@@ -16,6 +17,11 @@ use super::kernel_ownership as ownership;
 const KERNEL_PORT: u16 = 9742;
 
 const TOKEN_ENV: &str = "NUCLEI_KERNEL_TOKEN";
+// Carries no secret: tells the kernel to read the token from stdin. The token
+// is kept out of the environment because a process's initial environment block
+// stays readable by same-user processes (sysctl KERN_PROCARGS2, /proc).
+const TOKEN_STDIN_ENV: &str = "NUCLEI_KERNEL_TOKEN_STDIN";
+const RUNTIME_DIR_ENV: &str = "NUCLEI_RUNTIME_DIR";
 const STRICT_PORT_ENV: &str = "NUCLEI_KERNEL_STRICT_PORT";
 const DEV_ENV: &str = "NUCLEI_KERNEL_DEV";
 const INSECURE_ENV: &str = "NUCLEI_KERNEL_INSECURE_DEV";
@@ -47,6 +53,35 @@ impl KernelState {
             ownership::remove_owner_record(&dir);
         }
     }
+}
+
+/// Environment for the kernel child: stdin token mode, strict port, and no
+/// dev/test overrides in release builds (a stray `NUCLEI_KERNEL_DEV` would
+/// widen the allowed Origins and `NUCLEI_RUNTIME_DIR` would redirect the
+/// runtime file).
+fn configure_kernel_env(command: &mut Command, debug_build: bool) {
+    command
+        .env_remove(TOKEN_ENV)
+        .env(TOKEN_STDIN_ENV, "1")
+        .env(STRICT_PORT_ENV, "1")
+        .env_remove(INSECURE_ENV);
+    if debug_build {
+        command.env(DEV_ENV, "1");
+    } else {
+        command.env_remove(DEV_ENV).env_remove(RUNTIME_DIR_ENV);
+    }
+}
+
+/// Write `token\n` to the kernel's stdin and close it.
+fn deliver_token(stdin: Option<std::process::ChildStdin>, token: &str) -> std::io::Result<()> {
+    let mut stdin = stdin.ok_or_else(|| std::io::Error::other("kernel stdin is unavailable"))?;
+    write_token_line(&mut stdin, token)
+}
+
+fn write_token_line(writer: &mut impl Write, token: &str) -> std::io::Result<()> {
+    writer.write_all(token.as_bytes())?;
+    writer.write_all(b"\n")?;
+    writer.flush()
 }
 
 /// How long a freshly spawned kernel has to print its ready line (Python and
@@ -230,23 +265,29 @@ pub fn start_kernel(
         kernel_cwd.display()
     );
 
-    let mut child = Command::new(&python_path)
+    let mut command = Command::new(&python_path);
+    command
         .arg(kernel_script.to_str().unwrap())
         .current_dir(&kernel_cwd)
-        .env(TOKEN_ENV, &token)
-        .env(STRICT_PORT_ENV, "1")
-        .env_remove(INSECURE_ENV)
-        .envs(cfg!(debug_assertions).then_some((DEV_ENV, "1")))
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .map_err(|e| {
-            format!(
-                "Failed to start kernel: {} (cwd: {})",
-                e,
-                kernel_cwd.display()
-            )
-        })?;
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    configure_kernel_env(&mut command, cfg!(debug_assertions));
+    let mut child = command.spawn().map_err(|e| {
+        format!(
+            "Failed to start kernel: {} (cwd: {})",
+            e,
+            kernel_cwd.display()
+        )
+    })?;
+
+    // Hand the token over stdin and close it; it never enters the environment.
+    if let Err(e) = deliver_token(child.stdin.take(), &token) {
+        stop_child_gracefully(&mut child, KERNEL_STOP_GRACE);
+        return Err(format!(
+            "Could not pass the session token to the kernel: {e}"
+        ));
+    }
 
     // Drain kernel stdout + stderr into the Rust logger. Prior releases
     // piped both streams but never read them — so when Python crashed
@@ -257,10 +298,11 @@ pub fn start_kernel(
     // the next diagnostic round has something to work with.
     let (signal_tx, signal_rx) = mpsc::channel();
     if let Some(stdout) = child.stdout.take() {
+        let log_token = token.clone();
         thread::spawn(move || {
             let mut announced = false;
             for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-                log::info!("[kernel stdout] {}", line);
+                log::info!("[kernel stdout] {}", redact(&line, &log_token));
                 if !announced && is_ready_line(&line, KERNEL_PORT) {
                     announced = true;
                     let _ = signal_tx.send(StartupSignal::Ready);
@@ -270,9 +312,10 @@ pub fn start_kernel(
         });
     }
     if let Some(stderr) = child.stderr.take() {
+        let log_token = token.clone();
         thread::spawn(move || {
             for line in BufReader::new(stderr).lines().map_while(Result::ok) {
-                log::warn!("[kernel stderr] {}", line);
+                log::warn!("[kernel stderr] {}", redact(&line, &log_token));
             }
         });
     }
@@ -454,5 +497,67 @@ mod tests {
             child.wait().unwrap();
         }
         assert!(read_auth_token(&state).is_err());
+    }
+
+    fn env_of(command: &Command, key: &str) -> Option<Option<String>> {
+        command
+            .get_envs()
+            .find(|(k, _)| *k == std::ffi::OsStr::new(key))
+            .map(|(_, v)| v.map(|v| v.to_string_lossy().into_owned()))
+    }
+
+    #[test]
+    fn token_is_passed_over_stdin_never_in_the_environment() {
+        for debug in [true, false] {
+            let mut command = Command::new("true");
+            configure_kernel_env(&mut command, debug);
+            assert_eq!(env_of(&command, TOKEN_STDIN_ENV), Some(Some("1".into())));
+            // Explicitly removed so an inherited token cannot reach procargs.
+            assert_eq!(env_of(&command, TOKEN_ENV), Some(None));
+            assert_eq!(env_of(&command, STRICT_PORT_ENV), Some(Some("1".into())));
+            assert_eq!(env_of(&command, INSECURE_ENV), Some(None));
+        }
+    }
+
+    #[test]
+    fn release_builds_strip_dev_overrides_and_debug_builds_keep_dev_mode() {
+        let mut release = Command::new("true");
+        configure_kernel_env(&mut release, false);
+        assert_eq!(env_of(&release, DEV_ENV), Some(None));
+        assert_eq!(env_of(&release, RUNTIME_DIR_ENV), Some(None));
+
+        let mut debug = Command::new("true");
+        configure_kernel_env(&mut debug, true);
+        assert_eq!(env_of(&debug, DEV_ENV), Some(Some("1".into())));
+        assert_eq!(env_of(&debug, RUNTIME_DIR_ENV), None);
+    }
+
+    #[test]
+    fn token_line_is_newline_terminated() {
+        let mut out = Vec::new();
+        write_token_line(&mut out, "abc").unwrap();
+        assert_eq!(out, b"abc\n");
+    }
+
+    #[test]
+    fn deliver_token_feeds_a_real_child_over_stdin_and_closes_it() {
+        let mut child = Command::new("cat")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap();
+        deliver_token(child.stdin.take(), "s3cret-token").unwrap();
+        let out = child.wait_with_output().unwrap();
+        assert_eq!(String::from_utf8_lossy(&out.stdout), "s3cret-token\n");
+    }
+
+    #[test]
+    fn deliver_token_fails_without_a_stdin_handle() {
+        assert!(deliver_token(None, "t").is_err());
+    }
+
+    #[test]
+    fn kernel_logs_never_contain_the_token() {
+        assert_eq!(redact("auth=tok123 ok", "tok123"), "auth=[REDACTED] ok");
     }
 }

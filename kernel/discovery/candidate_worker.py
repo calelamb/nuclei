@@ -162,12 +162,39 @@ def _neuter_module(module: Any, owner: str, names: tuple[str, ...]) -> None:
                 pass
 
 
+def _neuter_ctypes_references() -> None:
+    """Unbind ``ctypes`` from numpy modules that cached it at import time.
+
+    ``numpy._core._internal.ctypes`` is the real module, so a candidate could
+    reach ``CDLL`` (and ``sysctl``/libc) through ``np.<...>._internal.ctypes``
+    even after ``sys.modules`` is scrubbed. numpy itself treats ``ctypes=None``
+    as "ctypes unavailable", so that is what its attributes become.
+    """
+    targets = [
+        module
+        for name in ("ctypes", "_ctypes")
+        if (module := sys.modules.get(name)) is not None
+    ]
+    if not targets:
+        return
+    for name, module in tuple(sys.modules.items()):
+        if module is None or not (name == "numpy" or name.startswith("numpy.")):
+            continue
+        for attr, value in tuple(vars(module).items()):
+            if any(value is target for target in targets):
+                try:
+                    setattr(module, attr, None)
+                except (AttributeError, TypeError):
+                    pass
+
+
 def install_import_blocker() -> None:
     # A heavy dependency imported BEFORE the blocker may still hold a reference to
     # ``subprocess``; dropping the sys.modules entry is not enough, so the live
     # module objects are neutered too.
     _neuter_module(sys.modules.get("subprocess"), "subprocess", _SUBPROCESS_ENTRY_POINTS)
     _neuter_module(sys.modules.get("_posixsubprocess"), "_posixsubprocess", ("fork_exec",))
+    _neuter_ctypes_references()
     for name in tuple(sys.modules):
         if _is_blocked_import(name):
             del sys.modules[name]

@@ -14,6 +14,9 @@ gates before any message reaches a handler:
    ``{"type": "authenticated", "proof": HMAC-SHA256(token, nonce)}`` (hex), so
    a client can tell the real kernel from a process squatting the port.
 
+The token comes from stdin (``NUCLEI_KERNEL_TOKEN_STDIN=1``, used by the
+desktop shell) or from ``NUCLEI_KERNEL_TOKEN`` (manual and dev runs).
+
 With no token configured the kernel refuses to start unless
 ``NUCLEI_KERNEL_INSECURE_DEV=1`` is set explicitly.
 """
@@ -32,9 +35,14 @@ import tempfile
 import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Mapping
+from typing import Any, Awaitable, Callable, Mapping, TextIO
 
 TOKEN_ENV = "NUCLEI_KERNEL_TOKEN"
+# "1" means the launcher writes the token as one line on stdin (it carries no
+# secret itself). The initial environment block of a process stays readable by
+# same-user processes (sysctl KERN_PROCARGS2, /proc/<pid>/environ), so the
+# desktop shell never puts the token there.
+TOKEN_STDIN_ENV = "NUCLEI_KERNEL_TOKEN_STDIN"
 INSECURE_ENV = "NUCLEI_KERNEL_INSECURE_DEV"
 DEV_ENV = "NUCLEI_KERNEL_DEV"
 STRICT_PORT_ENV = "NUCLEI_KERNEL_STRICT_PORT"
@@ -78,13 +86,34 @@ def build_config(*, token: str | None, insecure: bool, dev: bool) -> KernelAuthC
     return KernelAuthConfig(token=token, insecure=insecure, allowed_origins=origins)
 
 
-def config_from_env(env: Mapping[str, str] | None = None) -> KernelAuthConfig:
-    """Read the auth setup from the environment, failing closed."""
+def read_token_from_stdin(stream: TextIO | None = None) -> str | None:
+    """One line from ``stream`` (default stdin), stripped; None when empty."""
+    source = sys.stdin if stream is None else stream
+    try:
+        line = source.readline()
+    except (OSError, ValueError):
+        return None
+    return line.strip() or None
+
+
+def config_from_env(
+    env: Mapping[str, str] | None = None, stdin: TextIO | None = None
+) -> KernelAuthConfig:
+    """Read the auth setup from the environment (and stdin), failing closed."""
     env = os.environ if env is None else env
-    token = env.get(TOKEN_ENV) or None
+    if env.get(TOKEN_STDIN_ENV) == "1":
+        token = read_token_from_stdin(stdin)
+        if token is None:
+            raise AuthConfigError(
+                f"{TOKEN_STDIN_ENV}=1 but no token line arrived on stdin; "
+                "refusing to start an unauthenticated kernel."
+            )
+    else:
+        token = env.get(TOKEN_ENV) or None
     if env is os.environ:
         # Child processes (agent worker, user code) must not inherit the secret.
         os.environ.pop(TOKEN_ENV, None)
+        os.environ.pop(TOKEN_STDIN_ENV, None)
     insecure_flag = env.get(INSECURE_ENV, "")
     if insecure_flag not in ("", "0", "1"):
         raise AuthConfigError(f"{INSECURE_ENV} must be exactly 1 to enable insecure mode")
@@ -118,7 +147,7 @@ def config_from_env(env: Mapping[str, str] | None = None) -> KernelAuthConfig:
 def scrubbed_environment(env: Mapping[str, str] | None = None) -> dict[str, str]:
     """Copy of ``env`` without kernel auth variables, for child processes."""
     source = os.environ if env is None else env
-    return {k: v for k, v in source.items() if k not in (TOKEN_ENV, INSECURE_ENV)}
+    return {k: v for k, v in source.items() if k not in (TOKEN_ENV, TOKEN_STDIN_ENV, INSECURE_ENV)}
 
 
 def _request_headers(websocket: Any) -> Mapping[str, str]:
