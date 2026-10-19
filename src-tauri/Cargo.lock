@@ -1938,7 +1938,7 @@ checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
 
 [[package]]
 name = "nuclei"
-version = "0.13.0"
+version = "0.14.1"
 dependencies = [
  "cap-fs-ext",
  "cap-std",

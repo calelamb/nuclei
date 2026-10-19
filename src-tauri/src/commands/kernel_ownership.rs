@@ -231,9 +231,18 @@ mod tests {
     #[test]
     fn ignores_records_for_other_ports_and_self() {
         let cmd = |_| Some(KERNEL_CMD.to_string());
-        assert_eq!(stale_kernel_to_kill(Some(&record(7, 9999)), 9742, 1, cmd), None);
-        assert_eq!(stale_kernel_to_kill(Some(&record(1, 9742)), 9742, 1, cmd), None);
-        assert_eq!(stale_kernel_to_kill(Some(&record(0, 9742)), 9742, 1, cmd), None);
+        assert_eq!(
+            stale_kernel_to_kill(Some(&record(7, 9999)), 9742, 1, cmd),
+            None
+        );
+        assert_eq!(
+            stale_kernel_to_kill(Some(&record(1, 9742)), 9742, 1, cmd),
+            None
+        );
+        assert_eq!(
+            stale_kernel_to_kill(Some(&record(0, 9742)), 9742, 1, cmd),
+            None
+        );
     }
 
     #[test]
@@ -275,7 +284,11 @@ mod tests {
             calls >= 3
         });
         assert!(met && calls == 3);
-        assert!(!wait_until(Duration::from_millis(20), Duration::from_millis(5), || false));
+        assert!(!wait_until(
+            Duration::from_millis(20),
+            Duration::from_millis(5),
+            || false
+        ));
     }
 
     #[test]
@@ -304,7 +317,10 @@ mod tests {
             |_| true,
             Duration::from_secs(2),
         );
-        assert!(polls_after_kill.get() >= 4, "returned before the pid exited");
+        assert!(
+            polls_after_kill.get() >= 4,
+            "returned before the pid exited"
+        );
         assert_eq!(read_owner_record(dir.path()), None);
     }
 
