@@ -309,7 +309,7 @@ export function ExerciseBlock({
           {resetArmed ? 'Discard?' : 'Reset'}
         </Button>
         <span className="nuclei-sr-only" aria-live="polite">{resetArmed ? 'Press again to discard your edits' : ''}</span>
-        {ranCode !== null && hasExpectations && !isRunning && (
+        {(hasRun || (ranCode !== null && ranCode !== localCode)) && hasExpectations && !isRunning && (
           <CheckSolutionButton ready={hasRun} onCheck={checkSolution} />
         )}
         {hasRun && !hasExpectations && (

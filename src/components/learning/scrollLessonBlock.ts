@@ -7,6 +7,7 @@ export function scrollLessonBlock(index: number, behavior: ScrollBehavior): void
   const block = document.getElementById(`block-${index}`);
   const scroller = block?.closest<HTMLElement>('.lesson__scroll');
   if (!block || !scroller) return;
-  const top = block.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+  const margin = parseFloat(getComputedStyle(block).scrollMarginTop) || 0;
+  const top = block.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop - margin;
   scroller.scrollTo({ top, behavior });
 }

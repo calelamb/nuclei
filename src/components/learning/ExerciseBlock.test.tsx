@@ -215,6 +215,16 @@ describe('ExerciseBlock stale results and Reset focus (r7-learn-01, interaction-
     expect(document.querySelector('.exercise__output')?.getAttribute('data-stale')).toBe('true');
   });
 
+  it('shows no waiting Check solution after a run that errored', async () => {
+    render(<ExerciseBlock {...props} />);
+    await act(async () => { boot.resolveInit(); await Promise.resolve(); });
+    fireEvent.change(screen.getByLabelText('code'), { target: { value: 'print(' } });
+    fireEvent.click(screen.getByRole('button', { name: /^Run$/ }));
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { boot.onMessage({ type: 'python_result', success: false, error: 'SyntaxError: boom' }); });
+    expect(screen.queryByRole('button', { name: 'Check solution' })).toBeNull();
+  });
+
   it('lands focus on the editor after a confirmed Reset instead of <body>', () => {
     render(<ExerciseBlock {...props} />);
     fireEvent.change(screen.getByLabelText('code'), { target: { value: 'print(9)' } });

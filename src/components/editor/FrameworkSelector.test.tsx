@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, fireEvent, cleanup, screen, waitFor } from '@testing-library/react';
 import { FrameworkSelector } from './FrameworkSelector';
 import { PlatformProvider } from '../../platform/PlatformProvider';
+import { useProjectStore } from '../../stores/projectStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { STARTER_TEMPLATES } from '../../data/starterTemplates';
 import type { PlatformBridge } from '../../platform/bridge';
@@ -120,6 +121,24 @@ describe('FrameworkSelector — Q#', () => {
     expect(state.code).toBe(STARTER_TEMPLATES.qsharp);
     // Detached from the .py path — the buffer no longer matches that file.
     expect(state.filePath).toBeNull();
+  });
+});
+
+describe('FrameworkSelector — project tabs', () => {
+  afterEach(() => { cleanup(); useProjectStore.setState({ tabs: [], activeTabPath: null }); });
+
+  it('New Cirq file opens a new memory tab and leaves the open file tab untouched', () => {
+    useProjectStore.setState({ tabs: [], activeTabPath: null });
+    useProjectStore.getState().openTab({ path: '/p/bell.py', content: 'my work' });
+    useEditorStore.setState({ code: 'my work', isDirty: false, filePath: '/p/bell.py', framework: 'qiskit' });
+    renderSelector();
+    fireEvent.click(screen.getByLabelText('Framework'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New Cirq file' }));
+    const { tabs, activeTabPath } = useProjectStore.getState();
+    expect(tabs.find((t) => t.path === '/p/bell.py')?.content).toBe('my work');
+    expect(activeTabPath).toBe('memory://untitled-1.py');
+    expect(tabs.find((t) => t.path === activeTabPath)?.content).toBe(STARTER_TEMPLATES.cirq);
+    expect(useEditorStore.getState().code).toBe(STARTER_TEMPLATES.cirq);
   });
 });
 

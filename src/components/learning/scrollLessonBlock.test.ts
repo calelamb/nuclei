@@ -24,6 +24,13 @@ describe('scrollLessonBlock', () => {
     expect(block.scrollIntoView).not.toHaveBeenCalled();
   });
 
+  it('honours the block scroll-margin-top', () => {
+    const { scroller, block } = mount();
+    block.style.scrollMarginTop = '16px';
+    scrollLessonBlock(2, 'auto');
+    expect(scroller.scrollTo).toHaveBeenCalledWith({ top: 334, behavior: 'auto' });
+  });
+
   it('does nothing for a missing block', () => {
     const { scroller } = mount();
     scrollLessonBlock(9, 'auto');

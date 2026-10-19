@@ -4,6 +4,8 @@ import { useEditorStore } from '../../stores/editorStore';
 import { usePlatform } from '../../platform/PlatformProvider';
 import { kernelLanguageFor } from '../../types/quantum';
 import type { Framework } from '../../types/quantum';
+import { useProjectStore } from '../../stores/projectStore';
+import { MEMORY_PREFIX } from '../../hooks/useFileOps';
 import { STARTER_TEMPLATES, displayFrameworkName } from '../../data/starterTemplates';
 
 const FRAMEWORKS: Framework[] = ['qiskit', 'cirq', 'cuda-q', 'qsharp'];
@@ -51,7 +53,17 @@ export function FrameworkSelector({ compact = false }: { compact?: boolean } = {
    * for a name and can never overwrite the file that was open. The learner then types straight away.
    */
   const loadStarterAsUntitled = (f: Framework) => {
-    setFilePath(null);
+    const { tabs, openTab } = useProjectStore.getState();
+    if (tabs.length > 0) {
+      // Project mode: the active tab owns the buffer, so a starter must live in its own
+      // in-memory tab (saving asks for a name) rather than be written into the open file's tab.
+      const ext = f === 'qsharp' ? 'qs' : 'py';
+      let n = 1;
+      while (tabs.some((t) => t.path === `${MEMORY_PREFIX}untitled-${n}.${ext}`)) n += 1;
+      openTab({ path: `${MEMORY_PREFIX}untitled-${n}.${ext}`, content: STARTER_TEMPLATES[f] });
+    } else {
+      setFilePath(null);
+    }
     setCode(STARTER_TEMPLATES[f]);
     setFramework(f);
     requestEditorFocus();
