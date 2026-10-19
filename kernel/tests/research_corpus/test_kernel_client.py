@@ -135,3 +135,21 @@ def test_memory_cap_is_applied_where_prlimit_exists() -> None:
         assert Kernel(memory_limit_gb=None).memory_limited is False
     finally:
         k.stop()
+
+
+def test_module_launch_serves_the_same_kernel() -> None:
+    async def scenario(k: Kernel) -> str:
+        ws = await connect(k)
+        try:
+            frames, _ = await exchange(ws, {"type": "parse", "code": BELL, "language": "python"}, {"snapshot"}, 30)
+            return frames[-1]["type"]
+        finally:
+            await ws.close()
+
+    with Kernel(launch="module") as k:
+        assert asyncio.run(scenario(k)) == "snapshot"
+
+
+def test_unknown_launch_mode_is_rejected() -> None:
+    with pytest.raises(ValueError, match="launch must be"):
+        Kernel(launch="fork")

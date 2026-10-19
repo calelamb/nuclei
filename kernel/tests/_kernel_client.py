@@ -17,6 +17,9 @@ Safety rules baked in:
   window (``plt.show()``) can never appear on a developer's desktop.
 * On Linux the kernel runs under ``prlimit --as`` (default 8 GiB), so a
   runaway simulation fails with ``MemoryError`` instead of eating the box.
+* ``launch="module"`` (or ``NUCLEI_CORPUS_LAUNCH=module``) starts it as ``python -m
+  kernel.server`` instead of by script path, so the harness survives the move to the
+  module launch without an edit.
 * The kernel starts in its own process group; ``stop()`` kills the whole group,
   so user-code children (multiprocessing pools, worker subprocesses) die too.
 
@@ -104,8 +107,12 @@ class Kernel:
         memory_limit_gb: float | None = DEFAULT_MEMORY_LIMIT_GB,
         env: Mapping[str, str | None] | None = None,
         display: str | None = None,
+        launch: str | None = None,
     ) -> None:
         self.python = str(python or sys.executable)
+        self.launch = launch or os.environ.get("NUCLEI_CORPUS_LAUNCH", "script")
+        if self.launch not in ("script", "module"):
+            raise ValueError(f"launch must be 'script' or 'module', not {self.launch!r}")
         self.kernel_dir = Path(kernel_dir or REPO_KERNEL_DIR).resolve()
         self.memory_limit_gb = memory_limit_gb
         self.token = secrets.token_urlsafe(32)
@@ -121,10 +128,14 @@ class Kernel:
     def start(self, ready_timeout: float = 45.0) -> float:
         """Spawn the kernel and wait for its ready line. Returns boot seconds."""
         started = time.monotonic()
-        argv = [*_memory_wrapper(self.memory_limit_gb), self.python, str(self.kernel_dir / "server.py")]
+        # "script": `python <kernel_dir>/server.py` (how the desktop shell launches today);
+        # "module": `python -m kernel.server` from the kernel's parent (the post-R-B launch).
+        target = ["-m", "kernel.server"] if self.launch == "module" else [str(self.kernel_dir / "server.py")]
+        cwd = self.kernel_dir.parent if self.launch == "module" else self.kernel_dir
+        argv = [*_memory_wrapper(self.memory_limit_gb), self.python, *target]
         self._proc = subprocess.Popen(
             argv,
-            cwd=self.kernel_dir,
+            cwd=cwd,
             env=self._env,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
