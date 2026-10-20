@@ -15,6 +15,7 @@ import traceback
 from dataclasses import dataclass, field
 from typing import Any
 
+from kernel import run_context
 from kernel.trainability._errors import TrainabilityError, short_message
 from kernel.trainability.convert import from_object
 from kernel.trainability.ir import ParamCircuit
@@ -54,8 +55,21 @@ def _scoped_builtins(sink: io.StringIO) -> dict:
     return scoped
 
 
+def _worker_namespace(runtime, code: str, params: dict | None) -> tuple[dict, GateLineMap]:
+    """In a run worker: the program's execution is shared (loaded-circuit cache) with parse and the other consumers."""
+    program = runtime.load_program(code, params=dict(params or {}))
+    if program.error is not None:
+        wire = program.error["code"]
+        raise TrainabilityError(wire if wire == "compile_error" else "execution_error", program.error["message"])
+    return program.namespace, program.line_map
+
+
 def run_namespace(code: str, params: dict | None) -> tuple[dict, GateLineMap]:
     """Execute ``code`` with ``params`` injected; returns (namespace, lines)."""
+    runtime = run_context.current()
+    if runtime is not None:
+        return _worker_namespace(runtime, code, params)
+    run_context.assert_inprocess_exec_allowed("trainability _usercode.run_namespace")
     sink = io.StringIO()
     namespace: dict = {
         "__builtins__": _scoped_builtins(sink),

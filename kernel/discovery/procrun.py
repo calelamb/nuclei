@@ -79,25 +79,62 @@ def memory_limit_bytes() -> int:
     return megabytes * 1024 * 1024 if megabytes > 0 else DEFAULT_MEMORY_LIMIT_BYTES
 
 
-def group_rss_bytes(pgid: int) -> int:
-    """Total resident set size (bytes) of every process in ``pgid``; 0 if unknown.
+def group_scan(pgid: int) -> tuple[int, int]:
+    """``(process count, total RSS bytes)`` of every process in ``pgid``; ``(0, 0)`` if unknown.
 
-    ``ps`` is used because ``resource.getrusage`` cannot see running children and RLIMIT_AS
-    is not enforceable on macOS. One short ``ps`` call every ``MEMORY_POLL_SECONDS``.
+    The one group-RSS mechanism: the discovery sandbox and the run-worker pool both poll it.
+    ``resource.getrusage`` cannot see running children and RLIMIT_AS is not enforceable on macOS,
+    so Linux reads ``/proc`` directly (no fork per poll) and other POSIX systems run one short ``ps``.
     """
+    if sys.platform.startswith("linux"):
+        return _proc_scan(pgid)
+    return _ps_scan(pgid)
+
+
+def group_rss_bytes(pgid: int) -> int:
+    """Total resident set size (bytes) of every process in ``pgid``; 0 if unknown."""
+    return group_scan(pgid)[1]
+
+
+def _proc_scan(pgid: int) -> tuple[int, int]:
+    count = rss = 0
+    page = os.sysconf("SC_PAGE_SIZE")
+    try:
+        entries = os.listdir("/proc")
+    except OSError:
+        return 0, 0
+    for name in entries:
+        if not name.isdigit():
+            continue
+        try:
+            with open(f"/proc/{name}/stat", "rb") as handle:
+                stat = handle.read().rsplit(b")", 1)[1].split()
+            if int(stat[2]) != pgid:  # field 5 (pgrp) of the stat line
+                continue
+            with open(f"/proc/{name}/statm", "rb") as handle:
+                resident = int(handle.read().split()[1])
+        except (OSError, IndexError, ValueError):
+            continue
+        count += 1
+        rss += resident * page
+    return count, rss
+
+
+def _ps_scan(pgid: int) -> tuple[int, int]:  # pragma: no cover - macOS / BSD
     try:
         out = subprocess.run(
             ["ps", "-ax", "-o", "pgid=,rss="], capture_output=True, text=True, timeout=5, check=False,
             env=minimal_env(),
         ).stdout
     except (OSError, subprocess.SubprocessError):
-        return 0
-    total_kib = 0
+        return 0, 0
+    count = kib = 0
     for line in out.splitlines():
         parts = line.split()
         if len(parts) == 2 and parts[0] == str(pgid) and parts[1].isdigit():
-            total_kib += int(parts[1])
-    return total_kib * 1024
+            count += 1
+            kib += int(parts[1])
+    return count, kib * 1024
 
 
 class _Collector:

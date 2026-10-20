@@ -7,14 +7,15 @@ thread (``asyncio.to_thread``, like parse/execute); jobs run in a subprocess (se
 
 from __future__ import annotations
 
-import asyncio
 import importlib
 import logging
 import time
 from typing import Any
 
+from kernel import run_worker
 from kernel.lab_context import LabContext
 from kernel.lab_protocol import request_id_problem, with_request_id
+from kernel.run_ops import PREVIEW, worker_op
 from kernel.trainability._errors import TrainabilityError, normalize_error
 from kernel.trainability._settings import normalize_analyses, normalize_settings
 from kernel.trainability.inspect import inspect_code, load_for_lint, source_lines
@@ -86,6 +87,12 @@ def _job_id(msg: dict) -> str:
 # -------------------------------------------------------------- sync paths
 
 
+def _map_error(exc: BaseException) -> dict:
+    """Worker-side: any failure of a sync op becomes the Lab's error shape (``code``, ``message``, ``column?``)."""
+    return normalize_error(exc).to_payload()
+
+
+@worker_op("trainability_lint", lane=PREVIEW, cached=True, wall_s=30.0, error_mapper=_map_error)
 def _lint_sync(msg: dict) -> dict[str, Any]:
     code, language, params = _code(msg), _language(msg), _params(msg)
     started = time.monotonic()
@@ -104,20 +111,26 @@ def _lint_sync(msg: dict) -> dict[str, Any]:
     return {"type": "trainability_lint_result", "diagnostics": result["diagnostics"], "summary": result["summary"]}
 
 
+@worker_op("trainability_inspect", lane=PREVIEW, cached=True, wall_s=30.0, error_mapper=_map_error)
 def _inspect_sync(msg: dict) -> dict[str, Any]:
     payload = inspect_code(_code(msg), _params(msg), _language(msg))
     return {"type": "trainability_inspected", **payload}
 
 
 async def _run_sync(ctx: LabContext, fn, msg: dict) -> None:
-    """Run a sync request off the event loop; the reply and any error echo the request's ``request_id``."""
+    """Run a sync request in the preview worker (user code never runs in the kernel process); the
+    reply and any error echo the request's ``request_id``."""
     try:
         problem = request_id_problem(msg)
         if problem is not None:
             raise TrainabilityError("invalid_request", problem)
-        response = await asyncio.to_thread(fn, msg)
+        response = await run_worker.call_op(ctx, fn, msg)
     except TrainabilityError as err:
         response = error_envelope(err)
+    except run_worker.OpError as failure:
+        response = error_envelope(TrainabilityError(
+            failure.error.get("code", "analysis_failed"), failure.error.get("message", ""), failure.error.get("column")
+        ))
     except Exception as exc:
         response = error_envelope(normalize_error(exc))
     await ctx.send_json(with_request_id(response, msg))

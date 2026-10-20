@@ -9,16 +9,22 @@ import subprocess
 import sys
 import traceback
 from dataclasses import dataclass
+from typing import Any
 
-from kernel import auth
+from kernel import auth, framework_detect, run_context
 from kernel.models import CircuitSnapshot, KernelError, SimulationResult
-
-EXECUTION_TIMEOUT_SECONDS = 30
-_HAS_SIGNAL_ALARM = hasattr(__import__("signal"), "SIGALRM")
 
 # Quantum Debugger (dev tools Phase 3): frameworks with a statevector path, and
 # the caps that keep a per-step trace payload bounded.
 DEBUG_TRACE_FRAMEWORKS = {"qiskit", "cirq"}
+# Adapter failures that carry their own wire contract (R-A's ``kernel.adapters.errors``): the executor
+# passes ``code`` through and lifts the detail fields into the error frame instead of re-classifying.
+TYPED_ADAPTER_ERRORS = {
+    "unbound_parameters": ("parameters",),
+    "unsupported_instruction": ("instruction",),
+}
+# Frameworks whose circuit objects ``bind_parameters`` understands.
+BINDABLE_FRAMEWORKS = frozenset({"qiskit", "cirq"})
 MAX_DEBUG_QUBITS = 12
 MAX_DEBUG_GATES = 200
 
@@ -73,10 +79,7 @@ ADAPTER_SPECS = (
         framework="qsharp",
         module="kernel.adapters.qsharp_adapter",
         class_name="QsharpAdapter",
-        detect_pattern=re.compile(
-            r"^\s*(namespace\s+[\w.]+|operation\s+\w+\s*\(|import\s+Std|open\s+Microsoft\.Quantum)",
-            re.MULTILINE,
-        ),
+        detect_pattern=framework_detect.QSHARP_PATTERN,
         dependencies=("qdk",),
         source_mode=True,
     ),
@@ -84,28 +87,28 @@ ADAPTER_SPECS = (
         framework="qiskit",
         module="kernel.adapters.qiskit_adapter",
         class_name="QiskitAdapter",
-        detect_pattern=re.compile(r"from\s+qiskit\s+import|import\s+qiskit"),
+        detect_pattern=framework_detect.fallback_pattern("qiskit"),
         dependencies=("qiskit", "qiskit_aer"),
     ),
     AdapterSpec(
         framework="cirq",
         module="kernel.adapters.cirq_adapter",
         class_name="CirqAdapter",
-        detect_pattern=re.compile(r"import\s+cirq|from\s+cirq\s+import"),
+        detect_pattern=framework_detect.fallback_pattern("cirq"),
         dependencies=("cirq",),
     ),
     AdapterSpec(
         framework="cuda-q",
         module="kernel.adapters.cudaq_adapter",
         class_name="CudaqAdapter",
-        detect_pattern=re.compile(r"import\s+cudaq|from\s+cudaq\s+import|@cudaq\.kernel"),
+        detect_pattern=framework_detect.fallback_pattern("cuda-q"),
         dependencies=("cudaq",),
     ),
     AdapterSpec(
         framework="stim",
         module="kernel.adapters.stim_adapter",
         class_name="StimAdapter",
-        detect_pattern=re.compile(r"import\s+stim|from\s+stim\s+import"),
+        detect_pattern=framework_detect.fallback_pattern("stim"),
         dependencies=("stim",),
     ),
 )
@@ -122,16 +125,6 @@ STIM_SOURCE_SPEC = AdapterSpec(
     dependencies=("stim",),
     source_mode=True,
 )
-
-
-class ExecutionTimeout(Exception):
-    pass
-
-
-def _timeout_handler(signum, frame):
-    raise ExecutionTimeout(
-        f"Code execution timed out after {EXECUTION_TIMEOUT_SECONDS} seconds"
-    )
 
 
 def _short_error_message(error_text: str) -> str:
@@ -155,6 +148,19 @@ def _missing_dependency_message(framework: str, dependency: str) -> str:
     )
 
 
+@dataclass
+class _Located:
+    """Outcome of running a program and looking for its circuit (`Executor._locate`)."""
+
+    status: str  # "ok" | "none" (no framework) | "disallowed" (a framework the caller does not support)
+    spec: AdapterSpec | None = None
+    adapter: Any = None
+    circuit: Any = None
+    stdout: str = ""
+    stderr: str = ""
+    error: KernelError | None = None
+
+
 class Executor:
     def __init__(self, capture_limit_bytes: int | None = None):
         self._namespace: dict = {}
@@ -166,6 +172,10 @@ class Executor:
         # PRD 10 Phase A). Lets the qec_snapshot message re-derive the DEM
         # payload at a different edge cap without re-running user code.
         self._last_qec_circuit = None
+        # Extra result fields a run computed outside SimulationResult (R-4 `bound_at`).
+        self.result_extras: dict[str, Any] = {}
+        # The LoadedProgram of the most recent worker-mode run (figures, cache entry); None in-process.
+        self.program: Any = None
 
     def _new_capture(self) -> io.TextIOBase:
         if self._capture_limit_bytes is None:
@@ -187,45 +197,51 @@ class Executor:
         """
         self._metrics[str(name)] = float(value)
 
+    def _spec_named(self, framework: str | None) -> AdapterSpec | None:
+        return next((spec for spec in ADAPTER_SPECS if spec.framework == framework), None)
+
     def _detect_adapter_spec(self, code: str) -> AdapterSpec | None:
-        for spec in ADAPTER_SPECS:
-            if spec.detect_pattern.search(code):
-                return spec
-        return None
+        """The spec for the framework ``code`` imports (an override point for tests)."""
+        return self._spec_named(framework_detect.resolve_framework(code))
 
-    def _resolve_spec(self, code: str, language: str | None) -> AdapterSpec | None:
-        """Pick the adapter spec, honoring an explicit language hint.
+    def _candidate_specs(self, code: str, language: str | None) -> list[AdapterSpec]:
+        """Adapter specs for the frameworks ``code`` uses, most likely first.
 
-        The frontend knows the file type, so its hint beats regex detection:
-        "qsharp" routes straight to the Q# spec, "python" excludes
-        source-mode specs so Q#-looking text in Python strings or comments
-        can't hijack routing. No hint falls back to pure regex detection.
+        The frontend knows the file type, so its hint beats detection: "qsharp" routes straight to
+        the Q# spec, "stim" to raw `.stim` text, and "python" excludes source-mode specs so
+        Q#-looking text in Python strings or comments can't hijack routing. Detection itself is
+        AST-based (`kernel.framework_detect`).
         """
         if language == "qsharp":
-            return next(
-                (spec for spec in ADAPTER_SPECS if spec.framework == "qsharp"), None
-            )
+            spec = self._spec_named("qsharp")
+            return [spec] if spec is not None else []
         if language == "stim":
-            # Raw .stim interchange text — hint-only routing, source-mode
-            # style (stim.Circuit(text), no Python exec). PRD 10 D2.
-            return STIM_SOURCE_SPEC
-        if language == "python":
-            return next(
-                (
-                    spec
-                    for spec in ADAPTER_SPECS
-                    if not spec.source_mode and spec.detect_pattern.search(code)
-                ),
-                None,
-            )
-        return self._detect_adapter_spec(code)
+            return [STIM_SOURCE_SPEC]
+        detection = framework_detect.detect(code, language)
+        specs = [spec for fw in detection.candidates if (spec := self._spec_named(fw)) is not None]
+        # Third-party adapters registered in ADAPTER_SPECS (docs: "Write an adapter") keep routing
+        # through their own `detect_pattern`; they sit ahead of the built-ins, as registered.
+        builtin = {rule.framework for rule in framework_detect.RULES} | {"qsharp"}
+        specs = [
+            spec for spec in ADAPTER_SPECS
+            if spec.framework not in builtin and not spec.source_mode and spec.detect_pattern.search(code)
+        ] + specs
+        if language is None:
+            primary = self._detect_adapter_spec(code)
+            if primary is not None:
+                specs = [primary] + [s for s in specs if s.framework != primary.framework]
+        return specs
+
+    def _resolve_spec(self, code: str, language: str | None) -> AdapterSpec | None:
+        specs = self._candidate_specs(code, language)
+        return specs[0] if specs else None
 
     def resolve_framework(self, code: str, *, language: str | None = None) -> str | None:
         """Select an adapter without importing or executing generated source.
 
-        Selection uses the language hint and lexical patterns. It is a routing
-        correctness check, not package confinement: comments and dynamic
-        imports can intentionally differ from the selected adapter.
+        Selection uses the language hint and the program's parsed imports. It is a routing
+        correctness check, not package confinement: dynamic imports can intentionally differ
+        from the selected adapter.
         """
         spec = self._resolve_spec(code, language)
         return spec.framework if spec is not None else None
@@ -244,9 +260,28 @@ class Executor:
                 dependency=dependency,
             )
 
+    @staticmethod
+    def _typed_adapter_error(spec: AdapterSpec | None, exc: Exception) -> KernelError | None:
+        """The wire error for an adapter exception that declares its own ``code`` (else ``None``)."""
+        code = getattr(exc, "code", None)
+        fields = TYPED_ADAPTER_ERRORS.get(code) if isinstance(code, str) else None
+        if fields is None:
+            return None
+        extra = {"severity": getattr(exc, "severity", "error")}
+        for name in fields:
+            value = getattr(exc, name, None)
+            if value is not None:
+                extra[name] = list(value) if isinstance(value, (list, tuple, set)) else value
+        return KernelError(
+            code=code, message=str(exc), framework=spec.framework if spec else None, extra=extra,
+        )
+
     def _capability_error(
         self, spec: AdapterSpec | None, exc: Exception, fallback_code: str = "execution_error"
     ) -> KernelError:
+        typed = self._typed_adapter_error(spec, exc)
+        if typed is not None:
+            return typed
         dependency = getattr(exc, "name", None)
         if isinstance(exc, ImportError) or dependency:
             dependency = dependency or (spec.dependencies[0] if spec else None)
@@ -292,6 +327,9 @@ class Executor:
             dependency=dependency,
         )
 
+    def _kernel_error(self, error: dict) -> KernelError:
+        return KernelError.from_dict(error)
+
     def _run_code(
         self,
         code: str,
@@ -301,29 +339,41 @@ class Executor:
     ) -> tuple[str, str, KernelError | None]:
         """Execute user code and return (stdout, stderr, error).
 
-        stdout and stderr are captured separately so the frontend can
-        style them differently in the terminal. A Python-level exception
-        is surfaced as the KernelError (with stdout/stderr still returned
-        so the user sees what was printed before the failure).
+        In a run worker (the only place the kernel server runs user code) this loads the program
+        through `kernel.run_context`: a real `__main__` module, the project as cwd and `sys.path`,
+        the loaded-circuit cache, and output on the worker's own streams (so stdout/stderr come
+        back empty here). Elsewhere (the disposable agent worker, tests) it runs the program
+        in-process with the same `__name__`/`__file__` and a `SystemExit` guard.
 
-        Protocol v1.1 (PRD 09 Phase B), additive: `params` is ALWAYS
-        injected into the namespace as a dict (empty when not supplied),
-        so `params.get("theta", default)` is portable between casual runs
-        and experiment runs. `record_metric(name, value)` is always
-        injected too. When `seed` is given, Python's `random` and (if
-        installed) `numpy.random` are seeded before exec so user-side
-        randomness is captured by reproducible runs as well.
+        Protocol v1.1 (PRD 09 Phase B), additive: `params` is ALWAYS injected into the namespace
+        as a dict (empty when not supplied), so `params.get("theta", default)` is portable between
+        casual runs and experiment runs. `record_metric(name, value)` is always injected too. When
+        `seed` is given, Python's `random` and (if installed) `numpy.random` are seeded before
+        exec so user-side randomness is captured by reproducible runs as well.
         """
+        runtime = run_context.current()
+        if runtime is not None:
+            program = runtime.load_program(code, params=dict(params or {}), seed=seed)
+            self._namespace = program.namespace
+            self._metrics = dict(program.metrics)
+            self.program = program
+            return "", "", self._kernel_error(program.error) if program.error else None
+        run_context.assert_inprocess_exec_allowed("Executor._run_code")
+        return self._run_in_process(code, params=params, seed=seed)
+
+    def _run_in_process(
+        self, code: str, *, params: dict[str, float] | None, seed: int | None
+    ) -> tuple[str, str, KernelError | None]:
         import random
-        import signal
-        import threading
 
         stdout_capture = self._new_capture()
         stderr_capture = self._new_capture()
 
         self._reset_namespace()
-        self._namespace["params"] = dict(params) if params else {}
-        self._namespace["record_metric"] = self._record_metric
+        self._namespace.update(
+            {"__name__": "__main__", "__file__": run_context.UNSAVED_FILENAME,
+             "params": dict(params) if params else {}, "record_metric": self._record_metric}
+        )
 
         if seed is not None:
             random.seed(seed)
@@ -334,97 +384,132 @@ class Executor:
             except ImportError:
                 pass
 
-        # SIGALRM-based timeout only works from the main thread. The server
-        # now runs parse/execute inside `asyncio.to_thread`, so we fall back
-        # to running code without a timeout guard on worker threads. The WS
-        # heartbeat on the server still lets us detect a hung kernel.
-        use_signal_timeout = _HAS_SIGNAL_ALARM and threading.current_thread() is threading.main_thread()
+        def finished(error: KernelError | None = None):
+            return stdout_capture.getvalue(), stderr_capture.getvalue(), error
 
         try:
-            if use_signal_timeout:
-                old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
-                signal.alarm(EXECUTION_TIMEOUT_SECONDS)
-            try:
-                with contextlib.redirect_stdout(stdout_capture), contextlib.redirect_stderr(
-                    stderr_capture
-                ):
-                    exec(code, self._namespace)
-            finally:
-                if use_signal_timeout:
-                    signal.alarm(0)
-                    signal.signal(signal.SIGALRM, old_handler)
-            return stdout_capture.getvalue(), stderr_capture.getvalue(), None
-        except ExecutionTimeout as exc:
-            return stdout_capture.getvalue(), stderr_capture.getvalue(), KernelError(
-                code="timeout",
-                message=str(exc),
-            )
+            with contextlib.redirect_stdout(stdout_capture), contextlib.redirect_stderr(stderr_capture):
+                exec(code, self._namespace)
+            return finished()
         except (SyntaxError, IndentationError):
             tb = traceback.format_exc()
-            return stdout_capture.getvalue(), stderr_capture.getvalue(), KernelError(
-                code="compile_error",
-                message=_short_error_message(tb),
-                traceback=tb,
-            )
+            return finished(KernelError(code="compile_error", message=_short_error_message(tb), traceback=tb))
+        except (SystemExit, KeyboardInterrupt) as exc:
+            error = run_context._exit_error(exc if isinstance(exc, SystemExit) else SystemExit(1))
+            return finished(self._kernel_error(error))
         except Exception:
             tb = traceback.format_exc()
-            return stdout_capture.getvalue(), stderr_capture.getvalue(), KernelError(
-                code="execution_error",
-                message=_short_error_message(tb),
-                traceback=tb,
-            )
+            return finished(KernelError(code="execution_error", message=_short_error_message(tb), traceback=tb))
 
     def run_python(self, code: str) -> tuple[str, str, KernelError | None]:
         return self._run_code(code)
 
+    def _locate(
+        self,
+        code: str,
+        language: str | None,
+        specs: list[AdapterSpec],
+        *,
+        params: dict[str, float] | None = None,
+        seed: int | None = None,
+        allowed: frozenset[str] | None = None,
+    ) -> "_Located":
+        """Run `code` and find its circuit.
+
+        Adapters for the frameworks the program imports are tried first; a program that imports
+        none (a script whose sibling module builds the circuit) is run anyway when it imports
+        something non-stdlib, and its circuit is found by type (audit R-3).
+        """
+        usable = [s for s in specs if allowed is None or s.framework in allowed]
+        if specs and not usable:
+            return _Located("disallowed", specs[0])
+        if not specs and not framework_detect.detect(code, language).foreign_imports:
+            return _Located("none")
+        adapters: list[tuple[AdapterSpec, Any]] = []
+        load_error: KernelError | None = None
+        for spec in usable:
+            adapter, error = self._load_adapter(spec)
+            if adapter is not None:
+                adapters.append((spec, adapter))
+            elif load_error is None:
+                load_error = error
+        if usable and not adapters:
+            return _Located("ok", usable[0], error=load_error)
+
+        stdout, stderr, error = self._run_code(code, params=params, seed=seed)
+        primary = adapters[0] if adapters else (None, None)
+        if error:
+            if primary[0] is not None:
+                error = self._normalize_runtime_error(primary[0], error)
+                error.framework = primary[0].framework
+            return _Located("ok", primary[0], primary[1], stdout=stdout, stderr=stderr, error=error)
+        return self._find_circuit(adapters, allowed, stdout, stderr)
+
+    def _find_circuit(self, adapters, allowed, stdout: str, stderr: str) -> "_Located":
+        tried: set[str] = set()
+        for spec, adapter in adapters:
+            tried.add(spec.framework)
+            try:
+                circuit = adapter.find_circuit(self._namespace)
+            except Exception as exc:
+                return _Located("ok", spec, adapter, stdout=stdout, stderr=stderr,
+                                error=self._capability_error(spec, exc, "adapter_error"))
+            if circuit is not None:
+                return _Located("ok", spec, adapter, circuit, stdout, stderr)
+        framework = framework_detect.framework_by_type(self._namespace)
+        if framework is not None and framework not in tried and (allowed is None or framework in allowed):
+            spec = self._spec_named(framework)
+            adapter, load_error = self._load_adapter(spec) if spec is not None else (None, None)
+            if adapter is not None:
+                try:
+                    circuit = adapter.find_circuit(self._namespace)
+                except Exception as exc:
+                    return _Located("ok", spec, adapter, stdout=stdout, stderr=stderr,
+                                    error=self._capability_error(spec, exc, "adapter_error"))
+                return _Located("ok", spec, adapter, circuit, stdout, stderr)
+            if load_error is not None and not adapters:
+                return _Located("ok", spec, stdout=stdout, stderr=stderr, error=load_error)
+        if not adapters:
+            return _Located("none", stdout=stdout, stderr=stderr)
+        return _Located("ok", adapters[0][0], adapters[0][1], None, stdout, stderr)
+
+    def _unsupported_framework(self, loc: "_Located") -> KernelError:
+        return KernelError(code="unsupported_framework", message="No supported quantum framework detected in code.")
+
     def parse(
         self, code: str, *, language: str | None = None
     ) -> tuple[CircuitSnapshot | None, str, str, KernelError | None]:
-        spec = self._resolve_spec(code, language)
-        if spec is None:
-            return None, "", "", KernelError(
-                code="unsupported_framework",
-                message="No supported quantum framework detected in code.",
-            )
+        specs = self._candidate_specs(code, language)
+        if specs and specs[0].source_mode:
+            return self._parse_source(specs[0], code)
+        loc = self._locate(code, language, specs)
+        if loc.status == "none":
+            return None, loc.stdout, loc.stderr, self._unsupported_framework(loc)
+        if loc.error:
+            return None, loc.stdout, loc.stderr, loc.error
+        if loc.spec is not None and loc.spec.framework == "stim":
+            self._last_qec_circuit = loc.circuit
+        if loc.circuit is None:
+            return None, loc.stdout, loc.stderr, None
+        try:
+            snapshot = loc.adapter.extract_snapshot(loc.circuit)
+        except Exception as exc:
+            return None, loc.stdout, loc.stderr, self._capability_error(loc.spec, exc, "adapter_error")
+        return snapshot, loc.stdout, loc.stderr, None
 
+    def _parse_source(self, spec: AdapterSpec, code: str):
         adapter, adapter_error = self._load_adapter(spec)
         if adapter_error:
             return None, "", "", adapter_error
-
-        if spec.source_mode:
-            # Source-mode adapters own the whole pipeline — their source
-            # never reaches exec(). Their return shape matches ours exactly.
-            try:
-                outcome = adapter.parse_source(code)
-            except Exception as exc:
-                return None, "", "", self._capability_error(spec, exc, "adapter_error")
-            if spec.framework == "stim":
-                self._last_qec_circuit = getattr(adapter, "last_circuit", None)
-            return outcome
-
-        stdout, stderr, error = self._run_code(code)
-        if error:
-            error = self._normalize_runtime_error(spec, error)
-            error.framework = spec.framework
-            return None, stdout, stderr, error
-
+        # Source-mode adapters own the whole pipeline — their source never reaches exec().
+        # Their return shape matches ours exactly.
         try:
-            circuit = adapter.find_circuit(self._namespace)
+            outcome = adapter.parse_source(code)
         except Exception as exc:
-            return None, stdout, stderr, self._capability_error(spec, exc, "adapter_error")
-
+            return None, "", "", self._capability_error(spec, exc, "adapter_error")
         if spec.framework == "stim":
-            self._last_qec_circuit = circuit
-
-        if circuit is None:
-            return None, stdout, stderr, None
-
-        try:
-            snapshot = adapter.extract_snapshot(circuit)
-        except Exception as exc:
-            return None, stdout, stderr, self._capability_error(spec, exc, "adapter_error")
-
-        return snapshot, stdout, stderr, None
+            self._last_qec_circuit = getattr(adapter, "last_circuit", None)
+        return outcome
 
     def execute(
         self,
@@ -434,78 +519,109 @@ class Executor:
         language: str | None = None,
         params: dict[str, float] | None = None,
         seed: int | None = None,
+        parameter_values: dict | None = None,
+        simulation_method: str | None = None,
+        memory_limit_mb: int | None = None,
     ) -> tuple[SimulationResult | None, CircuitSnapshot | None, str, str, KernelError | None]:
         """Run the full pipeline: build the circuit, snapshot, simulate.
 
-        `params`/`seed` are optional (protocol v1.1 / PRD 09 Phase B),
-        additive over the v1 contract — omitting both reproduces the exact
-        v1 behavior. `params` is injected into the exec namespace (always a
-        dict, `{}` when omitted); `seed` requests reproducible sampling and
-        is forwarded to the adapter's `simulate`/`execute_source`, which
-        reports back via `SimulationResult.seed_honored`. Any
-        `record_metric(name, value)` calls the user's code made are merged
-        into the returned result's `metrics` (empty dict when none).
+        `params`/`seed` are optional (protocol v1.1 / PRD 09 Phase B), additive over the v1
+        contract — omitting both reproduces the exact v1 behavior. `params` is injected into the
+        exec namespace (always a dict, `{}` when omitted); `seed` requests reproducible sampling and
+        is forwarded to the adapter's `simulate`/`execute_source`, which reports back via
+        `SimulationResult.seed_honored`. Any `record_metric(name, value)` calls the user's code
+        made are merged into the returned result's `metrics` (empty dict when none).
+
+        PRD 15 R-B: `parameter_values` binds free circuit parameters first (R-4, `bound_at` goes to
+        `result_extras`); above 16 qubits the memory-estimate policy (`kernel.run_memory`, R-11)
+        either refuses with `too_many_qubits` before allocating or runs the lean path.
         """
-        spec = self._resolve_spec(code, language)
-        if spec is None:
-            return None, None, "", "", KernelError(
-                code="unsupported_framework",
-                message="No supported quantum framework detected in code.",
-            )
-
-        adapter, adapter_error = self._load_adapter(spec)
-        if adapter_error:
-            return None, None, "", "", adapter_error
-
-        if spec.source_mode:
-            try:
-                outcome = adapter.execute_source(code, shots, params=params, seed=seed)
-            except Exception as exc:
-                return None, None, "", "", self._capability_error(
-                    spec, exc, "execution_error"
-                )
-            if spec.framework == "stim":
-                self._last_qec_circuit = getattr(adapter, "last_circuit", None)
-            return outcome
-
-        stdout, stderr, error = self._run_code(code, params=params, seed=seed)
-        if error:
-            error = self._normalize_runtime_error(spec, error)
-            error.framework = spec.framework
-            return None, None, stdout, stderr, error
-
-        try:
-            circuit = adapter.find_circuit(self._namespace)
-        except Exception as exc:
-            return None, None, stdout, stderr, self._capability_error(spec, exc, "adapter_error")
-
+        self.result_extras = {}
+        specs = self._candidate_specs(code, language)
+        if specs and specs[0].source_mode:
+            return self._execute_source(specs[0], code, shots, params, seed)
+        loc = self._locate(code, language, specs, params=params, seed=seed)
+        if loc.status == "none":
+            return None, None, loc.stdout, loc.stderr, self._unsupported_framework(loc)
+        if loc.error:
+            return None, None, loc.stdout, loc.stderr, loc.error
+        spec, adapter, circuit = loc.spec, loc.adapter, loc.circuit
+        stdout, stderr = loc.stdout, loc.stderr
         if spec.framework == "stim":
             self._last_qec_circuit = circuit
-
         if circuit is None:
             return None, None, stdout, stderr, KernelError(
-                code="no_circuit",
-                message="No quantum circuit found in code.",
-                framework=spec.framework,
+                code="no_circuit", message="No quantum circuit found in code.", framework=spec.framework,
             )
-
         try:
             snapshot = adapter.extract_snapshot(circuit)
         except Exception as exc:
             return None, None, stdout, stderr, self._capability_error(spec, exc, "adapter_error")
 
+        circuit, bind_error = self._bind_parameters(circuit, parameter_values, spec)
+        if bind_error is not None:
+            return None, snapshot, stdout, stderr, bind_error
+        result, sim_error = self._simulate(spec, adapter, circuit, snapshot, shots, seed, simulation_method, memory_limit_mb)
+        if sim_error is not None:
+            return None, snapshot, stdout, stderr, sim_error
+        # Merge whatever the user's code recorded via record_metric — always present on the wire
+        # (empty dict when nothing was recorded).
+        return dataclasses.replace(result, metrics=dict(self._metrics)), snapshot, stdout, stderr, None
+
+    def _execute_source(self, spec: AdapterSpec, code: str, shots: int, params, seed):
+        adapter, adapter_error = self._load_adapter(spec)
+        if adapter_error:
+            return None, None, "", "", adapter_error
         try:
-            result = adapter.simulate(circuit, shots, seed=seed)
+            outcome = adapter.execute_source(code, shots, params=params, seed=seed)
         except Exception as exc:
-            return None, snapshot, stdout, stderr, self._capability_error(
-                spec, exc, "simulation_error"
+            return None, None, "", "", self._capability_error(spec, exc, "execution_error")
+        if spec.framework == "stim":
+            self._last_qec_circuit = getattr(adapter, "last_circuit", None)
+        return outcome
+
+    def _bind_parameters(self, circuit, parameter_values: dict | None, spec: AdapterSpec | None = None):
+        """R-4: bind free parameters via R-A's ``kernel.adapters.binding``.
+
+        Always consulted for Qiskit/Cirq circuits (also with no ``parameter_values``), so a circuit
+        that still has free parameters fails with the typed ``unbound_parameters`` info error rather
+        than an opaque simulator failure. Typed adapter errors keep their code/severity/detail.
+        """
+        framework = spec.framework if spec else None
+        if not parameter_values and framework not in BINDABLE_FRAMEWORKS:
+            return circuit, None
+        try:
+            from kernel.adapters.binding import bind_parameters
+        except ImportError:
+            if not parameter_values:
+                return circuit, None
+            return circuit, KernelError(
+                code="parameter_binding_unavailable",
+                message="This kernel build cannot bind circuit parameters (kernel.adapters.binding is missing).",
             )
+        try:
+            bound, bound_at = bind_parameters(circuit, parameter_values or None)
+        except Exception as exc:
+            return circuit, self._capability_error(spec, exc, "adapter_error")
+        if bound_at or parameter_values:
+            self.result_extras["bound_at"] = bound_at
+        return bound, None
 
-        # Merge whatever the user's code recorded via record_metric — always
-        # present on the wire (empty dict when nothing was recorded).
-        result = dataclasses.replace(result, metrics=dict(self._metrics))
+    def _simulate(self, spec, adapter, circuit, snapshot, shots, seed, method, memory_limit_mb):
+        from kernel import run_memory
 
-        return result, snapshot, stdout, stderr, None
+        plan = run_memory.plan_simulation(snapshot, spec.framework, method=method, memory_limit_mb=memory_limit_mb)
+        if plan.refused:
+            return None, run_memory.refusal_error(plan)
+        try:
+            if plan.mode in ("lean", "mps"):
+                return run_memory.simulate_lean(circuit, plan, shots, seed), None
+            result = adapter.simulate(circuit, shots, seed=seed)
+            if plan.mode == "adapter":
+                result = run_memory.shape_adapter_result(result, plan)
+            return result, None
+        except Exception as exc:
+            return None, self._capability_error(spec, exc, "simulation_error")
 
     def debug_trace(
         self,
@@ -521,36 +637,22 @@ class Executor:
         a kernel round-trip per step. Qiskit/Cirq only (statevector-simulable);
         bounded by a qubit and gate cap so the trace payload stays small.
         """
-        spec = self._resolve_spec(code, language)
-        if spec is None or spec.framework not in DEBUG_TRACE_FRAMEWORKS:
-            return None, "", "", KernelError(
-                code="debug_unsupported_framework",
-                message="The Quantum Debugger currently supports Qiskit and Cirq circuits.",
-                framework=spec.framework if spec else None,
-            )
-
-        adapter, adapter_error = self._load_adapter(spec)
-        if adapter_error:
-            return None, "", "", adapter_error
-
-        stdout, stderr, error = self._run_code(code)
-        if error:
-            error = self._normalize_runtime_error(spec, error)
-            error.framework = spec.framework
-            return None, stdout, stderr, error
-
-        try:
-            circuit = adapter.find_circuit(self._namespace)
-        except Exception as exc:
-            return None, stdout, stderr, self._capability_error(spec, exc, "adapter_error")
-
+        unsupported = KernelError(
+            code="debug_unsupported_framework",
+            message="The Quantum Debugger currently supports Qiskit and Cirq circuits.",
+        )
+        specs = self._candidate_specs(code, language)
+        loc = self._locate(code, language, specs, allowed=frozenset(DEBUG_TRACE_FRAMEWORKS))
+        if loc.status in ("none", "disallowed"):
+            unsupported.framework = loc.spec.framework if loc.spec else None
+            return None, loc.stdout, loc.stderr, unsupported
+        if loc.error:
+            return None, loc.stdout, loc.stderr, loc.error
+        spec, adapter, circuit, stdout, stderr = loc.spec, loc.adapter, loc.circuit, loc.stdout, loc.stderr
         if circuit is None:
             return None, stdout, stderr, KernelError(
-                code="no_circuit",
-                message="No quantum circuit found in code.",
-                framework=spec.framework,
+                code="no_circuit", message="No quantum circuit found in code.", framework=spec.framework,
             )
-
         try:
             snapshot = adapter.extract_snapshot(circuit)
         except Exception as exc:
@@ -575,11 +677,7 @@ class Executor:
         except Exception as exc:
             return None, stdout, stderr, self._capability_error(spec, exc, "simulation_error")
 
-        payload = {
-            "framework": spec.framework,
-            "qubit_count": snapshot.qubit_count,
-            "steps": steps,
-        }
+        payload = {"framework": spec.framework, "qubit_count": snapshot.qubit_count, "steps": steps}
         return payload, stdout, stderr, None
 
     def lint(
@@ -678,10 +776,12 @@ class Executor:
         code: str | None = None,
         language: str | None = None,
         max_edges: int | None = None,
+        circuit_text: str | None = None,
     ) -> tuple[dict | None, KernelError | None]:
         """Build the `qec_snapshot` payload (protocol v1.2 / PRD 10 Phase A).
 
-        Two forms:
+        `circuit_text` (PRD 15 R-B) rebuilds the payload from stim text the server remembered from
+        the connection's last parse/execute — no program is run. Otherwise two forms:
         - With `code`: stateless — build the circuit fresh (raw .stim text
           parses cheaply; Python stim code re-runs through exec, which is
           documented as having side effects, exactly like `parse`).
@@ -695,7 +795,19 @@ class Executor:
         cap = MAX_DEM_EDGES if max_edges is None else max(1, int(max_edges))
 
         circuit = self._last_qec_circuit
-        if code is not None:
+        if circuit_text is not None:
+            try:
+                import stim
+
+                circuit = stim.Circuit(circuit_text)
+            except ImportError:
+                return None, KernelError(
+                    code="missing_dependency", message=_missing_dependency_message("stim", "stim"),
+                    framework="stim", dependency="stim",
+                )
+            except Exception as exc:
+                return None, self._capability_error(None, exc, "adapter_error")
+        elif code is not None:
             spec = self._resolve_spec(code, language)
             if spec is None or spec.framework != "stim":
                 return None, KernelError(
@@ -786,8 +898,8 @@ class Executor:
             dependency = exc.name or "qiskit"
             return None, stdout, stderr, KernelError(
                 code="missing_dependency",
-                message=_missing_dependency_message(spec.framework, dependency),
-                framework=spec.framework,
+                message=_missing_dependency_message("qiskit", dependency),
+                framework="qiskit",
                 dependency=dependency,
             )
 
@@ -804,7 +916,7 @@ class Executor:
                 code="adapter_error",
                 message=_short_error_message(tb),
                 traceback=tb,
-                framework=spec.framework,
+                framework="qiskit",
             )
 
         gate_counts: dict[str, int] = {}
@@ -833,37 +945,21 @@ class Executor:
         Returns ``(adapter, circuit, stdout, stderr, error)``. On any failure
         ``error`` is a KernelError and ``circuit`` is None.
         """
-        spec = self._resolve_spec(code, language)
-        if spec is None or spec.framework != "qiskit":
-            return None, None, "", "", KernelError(
+        specs = self._candidate_specs(code, language)
+        loc = self._locate(code, language, specs, allowed=frozenset({"qiskit"}))
+        if loc.status in ("none", "disallowed"):
+            return None, None, loc.stdout, loc.stderr, KernelError(
                 code="transpile_unsupported_framework",
                 message="Transpilation preview currently supports Qiskit circuits.",
-                framework=spec.framework if spec else None,
+                framework=loc.spec.framework if loc.spec else None,
             )
-
-        adapter, adapter_error = self._load_adapter(spec)
-        if adapter_error:
-            return None, None, "", "", adapter_error
-
-        stdout, stderr, error = self._run_code(code)
-        if error:
-            error = self._normalize_runtime_error(spec, error)
-            error.framework = spec.framework
-            return None, None, stdout, stderr, error
-
-        try:
-            circuit = adapter.find_circuit(self._namespace)
-        except Exception as exc:
-            return None, None, stdout, stderr, self._capability_error(spec, exc, "adapter_error")
-
-        if circuit is None:
-            return None, None, stdout, stderr, KernelError(
-                code="no_circuit",
-                message="No quantum circuit found in code.",
-                framework=spec.framework,
+        if loc.error:
+            return None, None, loc.stdout, loc.stderr, loc.error
+        if loc.circuit is None:
+            return None, None, loc.stdout, loc.stderr, KernelError(
+                code="no_circuit", message="No quantum circuit found in code.", framework=loc.spec.framework,
             )
-
-        return adapter, circuit, stdout, stderr, None
+        return loc.adapter, loc.circuit, loc.stdout, loc.stderr, None
 
     def transpile_explore(
         self,

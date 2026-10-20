@@ -1,0 +1,127 @@
+# PRD 15 unit R-B: one program per user-code exec path hazard (design note
+# docs/research/PRD_15/R_EXECUTION_MODEL.md section 7). Entries state what the kernel SHOULD do;
+# `xfail` entries are known failures flipped as each step of the implementation lands.
+schema: 1
+programs:
+  rb01-sibling-import:
+    parse: ok
+    execute: ok
+    options: {request: {project_root: "$PROJECT", file_path: "$PROJECT/main.py"}}
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 3, depth: 4, gates: 6}
+  rb02-relative-data-read:
+    parse: ok
+    execute: ok
+    options: {request: {project_root: "$PROJECT", file_path: "$PROJECT/main.py"}}
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 2, depth: 3, gates: 4}
+  rb03-while-true:
+    parse: error:timeout
+    execute: error:timeout
+    healthy_after: true
+    options: {timeout: 20, request: {limits: {wall_s: 3}}}
+  rb04-os-exit:
+    parse: error:worker_died
+    execute: error:worker_died
+    healthy_after: true
+    options: {timeout: 20}
+  rb05-sys-exit:
+    parse: error:user_exit
+    execute: error:user_exit
+    healthy_after: true
+    options: {timeout: 20}
+  rb06-exit-builtin:
+    parse: error:user_exit
+    execute: error:user_exit
+    healthy_after: true
+    options: {timeout: 20}
+  rb07-quit-builtin:
+    parse: error:user_exit
+    execute: error:user_exit
+    healthy_after: true
+    options: {timeout: 20}
+  rb08-main-guard:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 2, depth: 3, gates: 4}
+  rb09-file-relative:
+    parse: ok
+    execute: ok
+    options: {request: {project_root: "$PROJECT", file_path: "$PROJECT/main.py"}}
+  rb10-run-dir-write:
+    parse: ok
+    execute: ok
+    options: {request: {project_root: "$PROJECT", file_path: "$PROJECT/main.py"}}
+  rb11-sibling-kernel:
+    parse: ok
+    execute: ok
+    options: {request: {project_root: "$PROJECT", file_path: "$PROJECT/main.py"}}
+  rb12-sibling-noise:
+    parse: ok
+    execute: ok
+    options: {request: {project_root: "$PROJECT", file_path: "$PROJECT/main.py"}}
+  rb13-sibling-models:
+    parse: ok
+    execute: ok
+    options: {request: {project_root: "$PROJECT", file_path: "$PROJECT/main.py"}}
+  rb14-sibling-symmetry:
+    parse: ok
+    execute: ok
+    options: {request: {project_root: "$PROJECT", file_path: "$PROJECT/main.py"}}
+  rb15-pool-map:
+    parse: ok
+    execute: ok
+    options: {request: {project_root: "$PROJECT", file_path: "$PROJECT/main.py"}}
+  rb16-plt-show:
+    parse: ok
+    execute: ok
+    max_seconds: 2
+    options: {display: true, timeout: 20}
+  rb17-print-100k:
+    parse: ok
+    execute: ok
+    max_frame_bytes: 400000
+    options: {timeout: 60}
+  rb18-ghz-30:
+    parse: ok
+    execute: error:too_many_qubits
+    # cold start: the first Run after a kernel launch waits ~1.3 s for its warm run worker; the warm
+    # bound (under 1 s) is asserted by test_executor_run_path.py::test_n30_too_many_qubits_fast.
+    max_seconds: 3
+    options: {needs_memory_limit: true, phases: [execute]}
+  rb19-ghz-24-sampled:
+    parse: ok
+    execute: ok
+    max_frame_bytes: 4000000
+    options: {needs_memory_limit: true, timeout: 120}
+    facts:
+      result: {probabilities: 2, measured: 1024, bloch: 0, state_vector: 0}
+  rb20-efficientsu2-only-import:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 2, depth: 3, gates: 4}
+  rb21-from-qiskit-aer:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 2, depth: 3, gates: 4}
+  rb22-cirq-contrib:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: cirq, qubit_count: 2}
+  rb23-queued-parses:
+    parse: ok
+    execute: ok
+    max_seconds: 3.5
+    options: {queued_parses: 5, phases: [execute], timeout: 60}
+  rb24-efficientsu2-18-measured:
+    # Review r1: the lean path (above 16 qubits) used to hand the untranspiled library block to Aer.
+    parse: ok
+    execute: ok
+    options: {timeout: 60}
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 18}
+      result: {measured: 1024, bloch: 0, state_vector: 0}

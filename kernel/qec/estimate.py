@@ -88,13 +88,14 @@ def _qiskit_code_to_qasm3(code: str) -> tuple[str | None, KernelError | None]:
             framework="qiskit",
             dependency=exc.name or "qiskit",
         )
-    namespace: dict = {"__builtins__": __builtins__}
-    try:
-        exec(code, namespace)  # noqa: S102 — user's own circuit, same as execute
-    except Exception as exc:
-        first = str(exc).strip().splitlines()[-1] if str(exc).strip() else type(exc).__name__
-        return None, KernelError(code="execution_error", message=first, framework="qiskit")
-    circuits = [v for v in namespace.values() if isinstance(v, QuantumCircuit)]
+    from kernel.executor import Executor
+
+    executor = Executor()
+    _stdout, _stderr, run_error = executor._run_code(code)  # a run-worker program load, never in-process exec
+    if run_error is not None:
+        run_error.framework = "qiskit"
+        return None, run_error
+    circuits = [v for v in executor._namespace.values() if isinstance(v, QuantumCircuit)]
     if not circuits:
         return None, KernelError(
             code="no_circuit",
