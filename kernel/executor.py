@@ -26,6 +26,17 @@ TYPED_ADAPTER_ERRORS = {
 # Frameworks whose circuit objects ``bind_parameters`` understands.
 BINDABLE_FRAMEWORKS = frozenset({"qiskit", "cirq"})
 MAX_DEBUG_QUBITS = 12
+
+
+def _stand_in_snapshot(framework: str, circuit) -> CircuitSnapshot:
+    """Just enough of a snapshot (width only) for the memory policy when the real one failed."""
+    count = getattr(circuit, "num_qubits", None)
+    if not isinstance(count, int):
+        try:
+            count = len(circuit.all_qubits())
+        except Exception:  # noqa: BLE001 - width is advisory; 0 plans a plain full run
+            count = 0
+    return CircuitSnapshot(framework=framework, qubit_count=count, classical_bit_count=0, depth=0, gates=[])
 MAX_DEBUG_GATES = 200
 
 # Editor lint/format (dev tools Phase 4): ruff runs fast, but bound it anyway.
@@ -174,6 +185,8 @@ class Executor:
         self._last_qec_circuit = None
         # Extra result fields a run computed outside SimulationResult (R-4 `bound_at`).
         self.result_extras: dict[str, Any] = {}
+        # Why the last run's circuit diagram is missing ("snapshot unavailable: ..."), else None (R-13).
+        self.snapshot_error: str | None = None
         # The LoadedProgram of the most recent worker-mode run (figures, cache entry); None in-process.
         self.program: Any = None
 
@@ -537,6 +550,7 @@ class Executor:
         either refuses with `too_many_qubits` before allocating or runs the lean path.
         """
         self.result_extras = {}
+        self.snapshot_error = None
         specs = self._candidate_specs(code, language)
         if specs and specs[0].source_mode:
             return self._execute_source(specs[0], code, shots, params, seed)
@@ -553,15 +567,14 @@ class Executor:
             return None, None, stdout, stderr, KernelError(
                 code="no_circuit", message="No quantum circuit found in code.", framework=spec.framework,
             )
-        try:
-            snapshot = adapter.extract_snapshot(circuit)
-        except Exception as exc:
-            return None, None, stdout, stderr, self._capability_error(spec, exc, "adapter_error")
+        # R-13: a diagram that cannot be drawn never blocks the run; the reason travels as `snapshot_error`.
+        snapshot, self.snapshot_error = adapter.try_extract_snapshot(circuit, expand_blocks=False)
+        plan_snapshot = snapshot if snapshot is not None else _stand_in_snapshot(spec.framework, circuit)
 
         circuit, bind_error = self._bind_parameters(circuit, parameter_values, spec)
         if bind_error is not None:
             return None, snapshot, stdout, stderr, bind_error
-        result, sim_error = self._simulate(spec, adapter, circuit, snapshot, shots, seed, simulation_method, memory_limit_mb)
+        result, sim_error = self._simulate(spec, adapter, circuit, plan_snapshot, shots, seed, simulation_method, memory_limit_mb)
         if sim_error is not None:
             return None, snapshot, stdout, stderr, sim_error
         # Merge whatever the user's code recorded via record_metric — always present on the wire

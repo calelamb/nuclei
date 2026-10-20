@@ -1,7 +1,16 @@
 # R-A (PRD 15 Wave 0b) closes R-1, R-2 and R-13 for the scout programs below: no-measurement
 # circuits return exact probabilities, library/composite gates are transpiled before Aer, and
 # the snapshot adapter is total. The scout/ entries keep their goldens; only the xfail goes.
-# R-4 (q04/q10/c03) stays xfail here: R-B wires the unbound_parameters code into the execute path.
+# Wave 0b integration: R-B's execute path now carries R-A's typed unbound_parameters error and its
+# EfficientSU2/TwoLocal/ZZFeatureMap/RealAmplitudes programs (q09-q13) run, so the merged unit closes
+# R-2 and R-4 for every scout program (R-B's own overrides no longer re-add them).
+c03-param-sympy-unresolved: {xfail: null}
+q04-param-unbound-ansatz: {xfail: null}
+q09-EfficientSU2-bound-measure_all: {xfail: null}
+q10-EfficientSU2-unbound: {xfail: null}
+q11-TwoLocal-bound: {xfail: null}
+q12-ZZFeatureMap-bound: {xfail: null}
+q13-RealAmplitudes-bound: {xfail: null}
 c02-bell-NO-measure: {xfail: null}
 c08-user-simulate-print: {xfail: null}
 c14-cirq-pauli-sum-expectation: {xfail: null}

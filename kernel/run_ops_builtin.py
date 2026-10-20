@@ -107,6 +107,8 @@ def execute_op(runtime: Any, args: dict) -> tuple[dict, dict | None]:
         "snapshot": snapshot.to_dict() if snapshot else None, "result": data,
         "run_dir": runtime.request.run_dir if runtime.request else None,
     }
+    if executor.snapshot_error:
+        reply["snapshot_error"] = executor.snapshot_error
     if snapshot is not None and snapshot.framework == "stim" and error is None:
         reply.update(_qec_sidecar(executor))
     return reply, _wire(error)

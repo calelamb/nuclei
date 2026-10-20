@@ -380,8 +380,11 @@ class RunRoutes:
             return
         reply = result.reply or {}
         error = result.error
-        if reply.get("snapshot") or (error and error.get("code") in SNAPSHOT_ERROR_CODES):
-            self._send({"type": "snapshot", "data": reply.get("snapshot")}, run_id)
+        if reply.get("snapshot") or reply.get("snapshot_error") or (error and error.get("code") in SNAPSHOT_ERROR_CODES):
+            frame = {"type": "snapshot", "data": reply.get("snapshot")}
+            if reply.get("snapshot_error"):
+                frame["snapshot_error"] = reply["snapshot_error"]
+            self._send(frame, run_id)
         self._remember_stim(reply)
         if reply.get("qec") is not None and not error:
             self._send({"type": "qec_snapshot", "data": reply["qec"]}, run_id)

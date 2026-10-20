@@ -20,14 +20,3 @@ g01-30-qubit-ghz:
 g02-22-qubit-ghz: {xfail: null}
 g03-plt-show-with-display: {xfail: null}
 g04-slow-program-queued-parses: {xfail: null}
-# R-3 is closed (parse works); the rest of these entries is R-A's (R-2 library gates, R-4 unbound parameters).
-q09-EfficientSU2-bound-measure_all:
-  xfail: {id: R-2, reason: "detection now works; the library gate reaches Aer untranspiled", current: {parse: ok, execute: 'error:simulation_error'}}
-q10-EfficientSU2-unbound:
-  xfail: {id: R-4, reason: "detection now works; the unbound ansatz surfaces as simulation_error, not unbound_parameters", current: {parse: ok, execute: 'error:simulation_error'}}
-q11-TwoLocal-bound:
-  xfail: {id: R-2, reason: "detection now works; the library gate reaches Aer untranspiled", current: {parse: ok, execute: 'error:simulation_error'}}
-q12-ZZFeatureMap-bound:
-  xfail: {id: R-2, reason: "detection now works; the library gate reaches Aer untranspiled", current: {parse: ok, execute: 'error:simulation_error'}}
-q13-RealAmplitudes-bound:
-  xfail: {id: R-2, reason: "detection now works; the library gate reaches Aer untranspiled", current: {parse: ok, execute: 'error:simulation_error'}}

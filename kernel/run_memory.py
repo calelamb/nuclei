@@ -188,28 +188,14 @@ def _empirical(counts: dict[str, int], shots: int) -> dict[str, float]:
 
 
 def _aer_runner():
-    """``(prepare, run)`` for Aer: R-A's helpers when merged, else a plain ``optimization_level=0`` transpile.
+    """``(prepare, run)`` for Aer: R-A's helpers, so the lean path (above 16 qubits) behaves exactly like the adapter path.
 
     Aer only accepts its own basis, so a circuit holding ``EfficientSU2``/``TwoLocal``/``QFT`` blocks
-    must be rewritten into it first (audit R-2).  The lean path (above 16 qubits) must behave exactly
-    like the adapter path at 16 qubits or fewer, so it goes through the same helper.
+    must be rewritten into it first (audit R-2).
     """
-    try:
-        from kernel.adapters._qiskit_aer import prepare_for_aer, run_on_aer
+    from kernel.adapters._qiskit_aer import prepare_for_aer, run_on_aer
 
-        return prepare_for_aer, run_on_aer
-    except ImportError:
-        pass
-
-    def prepare(circuit, backend):
-        from qiskit import transpile
-
-        return transpile(circuit, backend, optimization_level=0)
-
-    def run(backend, circuit, shots):
-        return backend.run(circuit, shots=shots).result()
-
-    return prepare, run
+    return prepare_for_aer, run_on_aer
 
 
 def _qiskit_sampled(circuit, shots: int, seed: int | None, mps: bool) -> dict[str, int]:
