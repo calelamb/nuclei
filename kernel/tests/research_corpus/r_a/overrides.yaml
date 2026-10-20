@@ -1,0 +1,19 @@
+# R-A (PRD 15 Wave 0b) closes R-1, R-2 and R-13 for the scout programs below: no-measurement
+# circuits return exact probabilities, library/composite gates are transpiled before Aer, and
+# the snapshot adapter is total. The scout/ entries keep their goldens; only the xfail goes.
+# R-4 (q04/q10/c03) stays xfail here: R-B wires the unbound_parameters code into the execute path.
+c02-bell-NO-measure: {xfail: null}
+c08-user-simulate-print: {xfail: null}
+c14-cirq-pauli-sum-expectation: {xfail: null}
+q02-bell-NO-measure: {xfail: null}
+q05-param-bound-nomeasure: {xfail: null}
+q06-QFT-append-measure: {xfail: null}
+q07-QFT-inverse-NO-measure: {xfail: null}
+q14-Statevector-only: {xfail: null}
+q15-Estimator-V2-energy: {xfail: null}
+q20-if_test-dynamic: {xfail: null}
+q25-initialize: {xfail: null}
+q26-unitary-gate: {xfail: null}
+q27-PauliEvolution-trotter: {xfail: null}
+q28-gate-zoo-snapshot: {xfail: null}
+q36-experiment-no-measure-metrics: {xfail: null}

@@ -32,6 +32,8 @@
           "measurements": { "00": 136, "11": 120 },
           "bloch_coords": "<any>",
           "execution_time_ms": "<any>",
+          "measurements_source": "sampled",
+          "probabilities_exact": true,
           "shot_count": 256,
           "metrics": { "theta": 0.7854 },
           "seed_honored": true
@@ -72,6 +74,8 @@
           "measurements": { "00": 136, "11": 120 },
           "bloch_coords": "<any>",
           "execution_time_ms": "<any>",
+          "measurements_source": "sampled",
+          "probabilities_exact": true,
           "shot_count": 256,
           "metrics": { "theta": 0.7854 },
           "seed_honored": true

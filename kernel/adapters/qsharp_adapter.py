@@ -550,7 +550,9 @@ class QsharpAdapter(FrameworkAdapter):
     def find_circuit(self, namespace: dict):
         raise NotImplementedError("QsharpAdapter is source-mode; use parse_source")
 
-    def extract_snapshot(self, circuit_obj) -> CircuitSnapshot:
+    def extract_snapshot(
+        self, circuit_obj, *, expand_blocks: bool = False
+    ) -> CircuitSnapshot:
         raise NotImplementedError("QsharpAdapter is source-mode; use parse_source")
 
     def simulate(self, circuit_obj, shots: int) -> SimulationResult:

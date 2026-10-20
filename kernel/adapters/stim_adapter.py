@@ -62,7 +62,9 @@ class StimAdapter(FrameworkAdapter):
 
     # ───────── snapshot mapping (moment/TICK-based) ─────────
 
-    def extract_snapshot(self, circuit_obj) -> CircuitSnapshot:
+    def extract_snapshot(
+        self, circuit_obj, *, expand_blocks: bool = False
+    ) -> CircuitSnapshot:
         import stim
 
         gates: list[Gate] = []

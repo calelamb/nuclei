@@ -1,0 +1,54 @@
+# PRD 15 R-A: adapter research paths (R-1 no-measure, R-2 library gates, R-13 total snapshots).
+# Programs here are the positive goldens; the scout xfails they close are flipped in overrides.yaml.
+schema: 1
+programs:
+  ra-qiskit-nomeasure-bell:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 2, depth: 2, gates: 2}
+      result: {probabilities: 2, measured: 0, bloch: 2, state_vector: 4}
+  ra-cirq-nomeasure-bell:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: cirq, qubit_count: 2, depth: 2, gates: 2}
+      result: {probabilities: 2, measured: 0, bloch: 2, state_vector: 4}
+  ra-qiskit-library-blocks-nomeasure:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 3, depth: 6, gates: 6}
+      result: {probabilities: 8, measured: 0, bloch: 3, state_vector: 8}
+  ra-qiskit-ansatz-bound-measured:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 2, depth: 2, gates: 3}
+      result: {measured: 1024, bloch: 2, state_vector: 4}
+  ra-qiskit-initialize-nomeasure:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 2, depth: 2, gates: 2}
+      result: {probabilities: 4, measured: 0, bloch: 2, state_vector: 4}
+  ra-qiskit-unitary-if-test:
+    parse: ok
+    execute: ok
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 2, depth: 3, gates: 4}
+      result: {measured: 1024, bloch: 2, state_vector: 4}
+  ra-qiskit-metrics-nomeasure:
+    parse: ok
+    execute: ok
+    options:
+      params: {theta: 1.1}
+      seed: 9
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 1, depth: 1, gates: 1}
+      result:
+        probabilities: 2
+        measured: 0
+        bloch: 1
+        state_vector: 2
+        seed_honored: true
