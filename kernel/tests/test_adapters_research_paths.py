@@ -361,6 +361,19 @@ def test_unsupported_instruction_names_the_gate():
     assert "mystery_gate" in str(caught.value)
 
 
+def test_unsupported_instruction_nested_in_a_composite_gate_is_named():
+    from qiskit import QuantumCircuit
+    from qiskit.circuit import Gate
+
+    inner = QuantumCircuit(1)
+    inner.append(Gate("mystery", 1, []), [0])
+    qc = QuantumCircuit(1)
+    qc.append(inner.to_gate(), [0])
+    with pytest.raises(UnsupportedInstructionError) as caught:
+        _qiskit().simulate(qc, SHOTS)
+    assert caught.value.instruction == "mystery"
+
+
 def test_transpile_failure_that_names_no_instruction_is_not_blamed_on_one(monkeypatch):
     # A `name='...'` repr can be a register or parameter; only a real instruction
     # name may be reported as unsupported_instruction.

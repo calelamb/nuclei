@@ -19,6 +19,8 @@ from kernel.adapters.errors import UnsupportedInstructionError
 _DIRECTIVES = frozenset({"measure", "barrier", "reset", "delay", "store"})
 _UNKNOWN_INSTRUCTION = re.compile(r"unknown instruction:\s*([^\s'\"]+)")
 _SYNTHESIS_FAILURE = re.compile(r"name='([^']+)'")
+# Qiskit 2.x: `HighLevelSynthesis is unable to synthesize "mystery"`.
+_SYNTHESIS_FAILURE_V2 = re.compile(r"unable to synthesize \"([^\"]+)\"")
 # Operations whose result is one random trajectory rather than a fixed state.
 _NON_DETERMINISTIC = frozenset({"measure", "reset", "kraus", "quantum_channel", "superop"})
 
@@ -34,6 +36,22 @@ def _walk(circuit):
 
 def has_measurements(circuit) -> bool:
     return any(op.name == "measure" for op in _walk(circuit))
+
+
+def _instruction_names(circuit, depth: int = 0) -> frozenset[str]:
+    """Every instruction name in `circuit`, through control-flow blocks and gate definitions."""
+    names: set[str] = set()
+    for op in _walk(circuit):
+        names.add(op.name)
+        if depth > 4:
+            continue
+        try:
+            definition = op.definition
+        except Exception:
+            continue
+        if definition is not None:
+            names |= _instruction_names(definition, depth + 1)
+    return frozenset(names)
 
 
 def _contains_reset(op, depth: int = 0) -> bool:
@@ -106,7 +124,7 @@ def _named_in_message(error: Exception, known: frozenset[str] | None = None) -> 
     the original error through.
     """
     text = str(error)
-    for pattern in (_UNKNOWN_INSTRUCTION, _SYNTHESIS_FAILURE):
+    for pattern in (_UNKNOWN_INSTRUCTION, _SYNTHESIS_FAILURE, _SYNTHESIS_FAILURE_V2):
         for found in pattern.finditer(text):
             candidate = found.group(1)
             if known is None or candidate in known:
@@ -121,7 +139,7 @@ def prepare_for_aer(circuit, backend) -> Any:
     try:
         return transpile(circuit, backend, optimization_level=0)
     except Exception as exc:
-        known = frozenset(op.name for op in _walk(circuit))
+        known = _instruction_names(circuit)
         culprit = _named_in_message(exc, known)
         if culprit is None:
             culprit = _find_unsupported(circuit, backend)
@@ -135,7 +153,7 @@ def run_on_aer(backend, circuit, shots: int):
     try:
         return backend.run(circuit, shots=shots).result()
     except Exception as exc:
-        known = frozenset(op.name for op in _walk(circuit))
+        known = _instruction_names(circuit)
         culprit = _named_in_message(exc, known) if "unknown instruction" in str(exc) else None
         if culprit is None:
             raise
