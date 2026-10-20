@@ -27,6 +27,7 @@ from kernel.trainability._decompose import (
     cirq_decompose_once,
     decompose_enabled,
     is_composite_cirq,
+    pauli_evolution_note,
     qiskit_leaves,
     too_deep,
 )
@@ -205,6 +206,9 @@ def from_qiskit(circuit: Any, line_map: GateLineMap | None = None, *, decompose:
             deepest = max(deepest, depth)
         if deepest:
             state.log.record(op.name, deepest)
+            note = pauli_evolution_note(op)
+            if note and note not in b.notes:
+                b.notes.append(note)
     b.note_dropped("measurement", state.n_meas)
     b.note_dropped("barrier", state.n_barrier)
     b.notes.extend(state.log.notes())

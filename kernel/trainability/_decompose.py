@@ -26,6 +26,7 @@ __all__ = [
     "decompose_enabled",
     "is_composite_cirq",
     "is_composite_qiskit",
+    "pauli_evolution_note",
     "qiskit_leaves",
 ]
 
@@ -84,6 +85,40 @@ def too_deep(name: str) -> IrError:
 
 
 # ------------------------------------------------------------------ Qiskit
+
+
+def pauli_evolution_note(op: Any) -> str | None:
+    """Honesty note for a ``PauliEvolutionGate`` whose synthesis only approximates ``exp(-i t H)``.
+
+    The IR analyses the gate's own synthesized definition (default: one-rep Lie-Trotter). That is exact
+    when every Pauli term commutes with every other, so no note is needed; otherwise the analysed circuit
+    is a Trotterised approximation of the exact evolution (Qiskit 2.x ``Statevector`` evolves it exactly),
+    and saying so is the contract. Returns ``None`` when no note is due.
+    """
+    if getattr(op, "name", "") != "PauliEvolution":
+        return None
+    operators = op.operator if isinstance(op.operator, list) else [op.operator]
+    try:
+        if _all_terms_commute(operators):
+            return None
+    except Exception:  # noqa: BLE001 - unknown structure: say so rather than claim exactness
+        pass
+    synthesis = getattr(op, "synthesis", None)
+    name = type(synthesis).__name__ if synthesis is not None else "LieTrotter"
+    reps = getattr(synthesis, "reps", 1)
+    label = getattr(op, "label", None) or "PauliEvolutionGate"
+    shown = f"'{label}'" if label != "PauliEvolutionGate" else "'PauliEvolutionGate'"
+    return (
+        f"PauliEvolutionGate {shown} decomposed with {name} synthesis (reps={reps}); "
+        "terms do not commute, so the analysed circuit approximates exp(-i t H)"
+    )
+
+
+def _all_terms_commute(operators: list[Any]) -> bool:
+    from qiskit.quantum_info import SparsePauliOp
+
+    terms = [pauli for o in operators for pauli in SparsePauliOp(o).paulis]
+    return all(a.commutes(b) for i, a in enumerate(terms) for b in terms[i + 1 :])
 
 
 def is_composite_qiskit(op: Any) -> bool:

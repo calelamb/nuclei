@@ -93,12 +93,54 @@ def test_entangling_zz_feature_map_with_free_data_keeps_the_nonlinear_parameter_
     assert err.value.code == "nonlinear_parameter"
 
 
-def test_pauli_evolution_gate_with_a_symbolic_time():
+def _assert_matches_synthesis(qc, seed=3):
+    """The IR reproduces the circuit with each gate replaced by its OWN synthesized definition.
+
+    Qiskit 1.x ``Statevector`` evolved a ``PauliEvolutionGate`` through that definition; Qiskit 2.x evolves
+    it exactly, so the major-independent reference for non-commuting terms is the decomposed circuit.
+    """
+    ir = from_qiskit(qc)
+    rng = np.random.default_rng(seed)
+    names = [p.name for p in qc.parameters]
+    assert ir.parameters == names
+    values = rng.uniform(-np.pi, np.pi, len(names))
+    bound = qc.assign_parameters(dict(zip(qc.parameters, values)))
+    assert same_up_to_phase(reference_state(ir, values), Statevector(bound.decompose(reps=2)).data)
+    return ir
+
+
+def test_pauli_evolution_gate_with_commuting_terms_is_exact_with_a_symbolic_time():
+    t = Parameter("t")
+    qc = QuantumCircuit(3)
+    qc.append(PauliEvolutionGate(SparsePauliOp(["ZZI", "IZZ", "ZIZ"], [0.5, -0.3, 0.2]), time=t), [0, 1, 2])
+    ir = assert_matches_statevector(qc)  # exact evolution on both majors
+    assert ir.parameters == ["t"]
+    assert not any("approximates" in n for n in ir.notes)
+
+
+def test_pauli_evolution_gate_with_non_commuting_terms_is_flagged_as_trotterised():
     t = Parameter("t")
     qc = QuantumCircuit(3)
     qc.append(PauliEvolutionGate(SparsePauliOp(["ZZI", "IXX", "YIZ"], [0.5, -0.3, 0.2]), time=t), [0, 1, 2])
-    ir = assert_matches_statevector(qc)
+    ir = _assert_matches_synthesis(qc)
     assert ir.parameters == ["t"]
+    notes = [n for n in ir.notes if "PauliEvolutionGate" in n and "approximates" in n]
+    assert len(notes) == 1
+    assert "Lie" in notes[0] and "reps=1" in notes[0] and "do not commute" in notes[0]
+
+
+def test_pauli_evolution_gate_honours_its_own_synthesis_reps():
+    from qiskit.synthesis import LieTrotter
+
+    t = Parameter("t")
+    op = SparsePauliOp(["ZZI", "IXX", "YIZ"], [0.5, -0.3, 0.2])
+    qc = QuantumCircuit(3)
+    qc.append(PauliEvolutionGate(op, time=t, synthesis=LieTrotter(reps=3)), [0, 1, 2])
+    ir = _assert_matches_synthesis(qc)
+    assert any("reps=3" in n for n in ir.notes)
+    one = QuantumCircuit(3)
+    one.append(PauliEvolutionGate(op, time=t), [0, 1, 2])
+    assert len(ir.gates) > len(from_qiskit(one).gates), "reps=3 must emit more gates than reps=1"
 
 
 def test_decomposition_level_is_reported_in_notes():
