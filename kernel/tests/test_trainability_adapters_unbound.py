@@ -84,11 +84,11 @@ def test_qiskit_bound_snapshot_has_no_symbols_key():
     assert snap.to_dict()["gates"][1]["params"] == [0.2]
 
 
-def test_qiskit_simulating_unbound_is_simulation_error_with_spec_message():
+def test_qiskit_simulating_unbound_is_unbound_parameters_with_spec_message():
     pytest.importorskip("qiskit_aer")
     result, snap, _, _, err = Executor().execute(QISKIT_UNBOUND, 10)
     assert result is None and snap is not None
-    assert err.code == "simulation_error"  # R-B switches the code to unbound_parameters
+    assert err.code == "unbound_parameters" and err.to_dict()["severity"] == "info"  # R-B wired the typed code (Wave 0b)
     assert "free parameter" in err.message and "nothing to simulate" in err.message
 
 
@@ -105,11 +105,11 @@ def test_cirq_unbound_snapshot():
     assert gates[3]["params"] == [0.0] and gates[3]["symbols"] == ["t"]
 
 
-def test_cirq_simulating_unbound_is_simulation_error_with_spec_message():
+def test_cirq_simulating_unbound_is_unbound_parameters_with_spec_message():
     pytest.importorskip("cirq")
     result, snap, _, _, err = Executor().execute(CIRQ_UNBOUND, 10)
     assert result is None and snap is not None
-    assert err.code == "simulation_error"  # R-B switches the code to unbound_parameters
+    assert err.code == "unbound_parameters" and err.to_dict()["severity"] == "info"  # R-B wired the typed code (Wave 0b)
     assert "free parameter" in err.message and "nothing to simulate" in err.message
 
 

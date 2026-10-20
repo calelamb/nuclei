@@ -28,6 +28,17 @@ BINDABLE_FRAMEWORKS = frozenset({"qiskit", "cirq"})
 MAX_DEBUG_QUBITS = 12
 
 
+def _try_snapshot(adapter, circuit):
+    """``adapter.try_extract_snapshot``, tolerating duck-typed third-party adapters that lack it."""
+    try_extract = getattr(adapter, "try_extract_snapshot", None)
+    if try_extract is not None:
+        return try_extract(circuit, expand_blocks=False)
+    try:
+        return adapter.extract_snapshot(circuit), None
+    except Exception as exc:  # noqa: BLE001 - a missing diagram must not stop the run
+        return None, f"snapshot unavailable: {exc}"
+
+
 def _stand_in_snapshot(framework: str, circuit) -> CircuitSnapshot:
     """Just enough of a snapshot (width only) for the memory policy when the real one failed."""
     count = getattr(circuit, "num_qubits", None)
@@ -568,7 +579,7 @@ class Executor:
                 code="no_circuit", message="No quantum circuit found in code.", framework=spec.framework,
             )
         # R-13: a diagram that cannot be drawn never blocks the run; the reason travels as `snapshot_error`.
-        snapshot, self.snapshot_error = adapter.try_extract_snapshot(circuit, expand_blocks=False)
+        snapshot, self.snapshot_error = _try_snapshot(adapter, circuit)
         plan_snapshot = snapshot if snapshot is not None else _stand_in_snapshot(spec.framework, circuit)
 
         circuit, bind_error = self._bind_parameters(circuit, parameter_values, spec)
