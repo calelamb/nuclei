@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import importlib.util
+
 import pytest
 
 pytest.importorskip("qiskit")
@@ -48,6 +50,8 @@ def test_static_equals_exec(name: str) -> None:
         "from qiskit import QuantumCircuit\nif True:\n    qc = QuantumCircuit(1)\n",
         "from qiskit import QuantumCircuit\nqc = QuantumCircuit(1)\nqc.h(0)\nqc.data.clear()\n",
         "import qiskit\nqc = qiskit.QuantumCircuit(1)\nqc.__class__.__init__ = None\n",
+        "from qiskit import QuantumCircuit, transpile\nqc = QuantumCircuit(1)\nqc.h(0)\ntqc = transpile(qc, basis_gates=['rz', 'sx'])\n",
+        "from qiskit import QuantumCircuit\nqc = QuantumCircuit(1)\nqc.h(0)\nfig = qc.draw('mpl')\n",
         "x = (",
     ],
 )
@@ -66,3 +70,24 @@ def test_static_needs_the_library_to_be_loaded(monkeypatch) -> None:
 
     monkeypatch.delitem(sys.modules, "cirq", raising=False)
     assert try_static("import cirq\nc = cirq.Circuit()\n") is None
+
+
+def _corpus_programs():
+    if importlib.util.find_spec("yaml") is None:  # PyYAML is a test-only dependency
+        return []
+    from kernel.tests.research_corpus import loader
+
+    return [case for case in loader.load_cases("full") if case.language == "python" and case.project_dir is None]
+
+
+@pytest.mark.parametrize("case", _corpus_programs(), ids=lambda c: f"{c.unit}:{c.id}")
+def test_static_equals_exec_on_the_corpus(case) -> None:
+    """Wherever the static path applies to a corpus program, it must show exactly what a real run shows."""
+    static = try_static(case.code)
+    if static is None:
+        pytest.skip("outside the static subset")
+    executor = Executor()
+    snapshot, _o, _e, error = executor.parse(case.code)
+    assert error is None, f"{case.id}: the real run fails ({error.code}) but the static path built a circuit"
+    adapter, _err = executor._load_adapter(executor._spec_named(static.framework))
+    assert adapter.extract_snapshot(static.circuit).to_dict() == snapshot.to_dict()

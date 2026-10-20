@@ -29,7 +29,7 @@ CONSTRUCTORS = frozenset({"range", "rect", "square", "from_diagram"})
 MATH_NAMES = frozenset({"sin", "cos", "tan", "sqrt", "exp", "log", "arccos", "arcsin", "arctan", "acos", "asin", "atan", "radians"})
 SAFE_BUILTINS = {"range": range, "float": float, "int": int, "abs": abs, "min": min, "max": max, "len": len}
 SINK_NAMES = frozenset({
-    "print", "AerSimulator", "get_backend", "transpile", "run", "result", "get_counts", "get_statevector",
+    "print", "AerSimulator", "get_backend", "run", "result", "get_counts", "get_statevector",
     "Simulator", "simulate", "histogram", "draw", "plot_histogram", "show", "sample",
 })
 BINARY = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv,
@@ -114,7 +114,7 @@ class _Interpreter:
     @staticmethod
     def _is_sink(node: ast.expr) -> bool:
         calls = [n for n in ast.walk(node) if isinstance(n, ast.Call)]
-        return bool(calls) and all(_callee_name(c.func) in SINK_NAMES for c in calls)
+        return bool(calls) and all(_callee_name(c.func) in SINK_NAMES and not _needs_real_run(c) for c in calls)
 
     # -- expressions ---------------------------------------------------------
 
@@ -227,6 +227,14 @@ class _Interpreter:
         if module.startswith("cirq") and (name in CIRQ_OPS or _is_cirq_gate(target)):
             return True
         return name in CIRQ_OPS and _is_cirq_gate(target)
+
+
+def _needs_real_run(call: ast.Call) -> bool:
+    """``qc.draw('mpl')`` and friends need optional libraries: only a real run can say whether they work."""
+    if _callee_name(call.func) != "draw":
+        return False
+    only_text = len(call.args) == 1 and isinstance(call.args[0], ast.Constant) and call.args[0].value == "text"
+    return bool(call.args or call.keywords) and not only_text
 
 
 def _callee_name(func: ast.expr) -> str | None:
