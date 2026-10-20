@@ -9,7 +9,7 @@ import { useLayoutStore, type LayoutPreset } from './layoutStore';
 
 describe('useLayoutStore', () => {
   beforeEach(() => {
-    useLayoutStore.setState({ preset: 'clean', histogramChipDismissed: false, overrides: {} });
+    useLayoutStore.setState({ preset: 'clean', histogramChipDismissed: false, histogramExpanded: false, overrides: {} });
   });
 
   it("defaults to preset 'clean'", () => {
@@ -30,6 +30,14 @@ describe('useLayoutStore', () => {
     useLayoutStore.getState().dismissHistogramChip();
     useLayoutStore.getState().resetRunArtifacts();
     expect(useLayoutStore.getState().histogramChipDismissed).toBe(false);
+  });
+
+  it('expands and collapses the histogram without rewriting the preset', () => {
+    useLayoutStore.getState().setHistogramExpanded(true);
+    expect(useLayoutStore.getState().histogramExpanded).toBe(true);
+    expect(useLayoutStore.getState().preset).toBe('clean');
+    useLayoutStore.getState().setHistogramExpanded(false);
+    expect(useLayoutStore.getState().histogramExpanded).toBe(false);
   });
 
   describe('panel overrides (PRD 11 Phase A)', () => {
@@ -63,6 +71,26 @@ describe('useLayoutStore', () => {
       useLayoutStore.getState().setPanelOverride('bloch', false);
       useLayoutStore.getState().hydrateOverrides({ terminal: false, circuit: true });
       expect(useLayoutStore.getState().overrides).toEqual({ terminal: false, circuit: true });
+    });
+  });
+
+  describe('togglePanel (visibility-aware)', () => {
+    it('shows a currently hidden panel on the first toggle', () => {
+      useLayoutStore.getState().togglePanel('terminal', false);
+      expect(useLayoutStore.getState().overrides).toEqual({ terminal: true });
+    });
+
+    it('hides a currently visible panel on the first toggle', () => {
+      useLayoutStore.getState().togglePanel('bloch', true);
+      expect(useLayoutStore.getState().overrides).toEqual({ bloch: false });
+    });
+
+    it('alternates when the caller reports the resolved visibility each time', () => {
+      const { togglePanel } = useLayoutStore.getState();
+      togglePanel('terminal', false);
+      togglePanel('terminal', true);
+      togglePanel('terminal', false);
+      expect(useLayoutStore.getState().overrides).toEqual({ terminal: true });
     });
   });
 });

@@ -279,35 +279,6 @@ must not be named `Main`** — qdk's compiler itself rejects a parameterized
 Reproducibility guarantees and honest limits (hardware noise, unseedable
 backends, the `dirty` git flag): `docs-site/src/content/docs/research/reproducibility.mdx`.
 
-## Kernel Protocol v2 (Authentication, breaking)
-
-Every kernel connection authenticates; there is no anonymous mode outside
-`NUCLEI_KERNEL_INSECURE_DEV=1` (throwaway local use).
-
-- **Handshake:** the first frame must be `{"type":"authenticate","token":...}`;
-  the kernel replies `{"type":"authenticated"}`. Token source: `NUCLEI_KERNEL_TOKEN`
-  or the 0600 runtime file `~/.nuclei/runtime/kernel.json`
-  (`NUCLEI_RUNTIME_DIR` overrides the directory). The desktop shell generates a
-  token per launch and hands it to the webview through the `kernel_auth_token` command.
-- **Refusals:** a foreign `Origin` or non-loopback `Host` gets HTTP 403 on the
-  upgrade (`process_request`); a missing or wrong token gets close code 4401.
-- **Server:** `kernel/auth.py` (`secure_handler`, `make_process_request`,
-  runtime file) wraps `server._handle_connection`. Serve with
-  `websockets.asyncio.server.serve` (13.x floor, `kernel/requirements.txt`):
-  bare `websockets.serve` is the legacy API before 14 and its `process_request`
-  hook has a different signature.
-- **Clients:** every frontend socket goes through `src/services/kernelSocket.ts`
-  (`openKernelConnection`): editor (`useKernel`), `createKernelSession`, and the
-  Lab (`src/services/lab/labSession.ts`). Never call `new WebSocket(` against the
-  kernel directly. DEV-only: `?labKernel=ws://host:port&labKernelToken=<token>`.
-- **Subprocesses never get the token:** `lab_proc.minimal_env` strips it and the
-  kernel pops it from its own environment at startup; candidate sandboxes cannot
-  read the runtime file (`kernel/tests/test_lab_token_isolation.py`).
-- **Tests:** in-process fakes use `kernel/tests/_auth_harness.py`
-  (`StreamingWS`, `serve_authenticated`), which runs the production auth gate.
-  `kernel/tests/test_kernel_auth.py` holds the cross-site regression (403 / 4401 /
-  `run_python` unreachable). CI re-runs the auth suites on `websockets==13.1`.
-
 ## Kernel Protocol v1.1
 
 Additive-only extensions to the `execute` message and one new message type,
@@ -365,83 +336,13 @@ threshold/Λ analysis, a noise model library over `noise/*.noise.yaml`
 `qecScaffold.ts`. Docs: `docs-site/src/content/docs/research/qec-studio.mdx`,
 `campaigns.mdx`, `noise-models.mdx`, `resource-estimation.mdx`.
 
-## Kernel Protocol v1.3 (Quantum AI Lab)
-
-Additive-only; routed by `kernel/server.py` on the `trainability_` and
-`discovery_` prefixes with a per-connection `LabContext` (`kernel/lab_context.py`;
-closing the socket cancels the connection's jobs). Replies are flat; errors are
-`{type: "error", phase: "trainability"|"discovery", code, message, job_id?|run_id?|candidate_id?|path?|column?}`.
-
-- **Trainability:** `trainability_inspect` / `_lint` (sync, lint budget 0.35 s),
-  `trainability_start` (client `job_id`; `_started` → `_progress` ≤10/s →
-  `_partial` per analysis → `_result` with `provenance`), `_cancel`. Jobs run in
-  a subprocess (`job_worker.py`): 2 per connection, 4 global, 20 min.
-- **Discovery:** `discovery_evaluators`, `discovery_evaluate` (→ `_accepted`,
-  later `discovery_evaluation`; stages `screen|full|confirm`), `discovery_cancel`,
-  `discovery_mutate` (AST baseline). Errors: `invalid_request`, `invalid_config`,
-  `unknown_evaluator`, `discovery_busy`, `mutation_failed`, `discovery_internal`.
-- **Red Queen:** `discovery_audit` (→ `_accepted`, `_result`) and `_audit_cancel`
-  (`kernel/discovery/audits/`).
-- **Conjectures:** `discovery_conjecture_schema` / `_test` (→ `_started`,
-  `_progress`, `_evidence`, `_result`) / `_cancel` (`kernel/discovery/conjecture/`).
-
-Every example in `docs-site/src/content/docs/kernel-api/messages-lab.mdx` is a
-fixture replayed against the real handlers: sync ones as `docs-site/fixtures/lab_*`
-(`test_docs_fixtures.py`), streams as `docs-site/fixtures/lab/*.stream.json`
-(`test_docs_lab_fixtures.py`).
-
-## Trainability Lab
-
-Research rail view `trainability` (the "Microscope"; `src/components/trainability/`,
-`src/stores/trainabilityStore.ts`, `src/services/trainability/`). Kernel:
-`kernel/trainability/` — parameterized circuit IR (`ir.py`, converters from Qiskit/
-Cirq with `source_line` tracing), a compiled batched simulator, the exact **Pauli
-Propagation Engine** (`pauliprop.py`, to 128 qubits; `exact` vs `bounded` truncation
-intervals vs bootstrap CIs for sampling), `lie.py` (DLA closure, dimension-match
-classification, Ragone variance prediction), `scaling.py` (verdict: barren_plateau
-if exponential wins by ΔAIC≥2 and β lower CI>0.1; polynomial; else inconclusive,
-always for <4 distinct n), expressibility/entanglement/landscape, and `lint.py`
-(TRN001–TRN007). Statevector paths cap at 20 qubits. `⌘⇧↵` runs analyses (`⌘↵`
-stays the global run). Verdict rail logic: `verdict.ts`; the **Trainability
-Certificate** (`certificate.ts`) writes `experiments/<stem>.trainability.{json,md}`
-with provenance. Dirac gets `buildTrainabilityContext` in Research mode only.
-Docs: `research/trainability-lab.mdx`.
-
-## Discovery Engine
-
-Research rail view `discovery` (`src/components/discovery/`, `src/stores/discoveryStore.ts`,
-`src/services/discovery/`; kernel `kernel/discovery/`). LLM-guided evolutionary
-search over `*.discovery.yaml` (schema 1, zod in `src/types/discovery.ts`): per-island
-MAP-Elites archives, SEARCH/REPLACE edits inside `# EVOLVE-BLOCK-*`, ensemble mutator
-(breadth `claude-haiku-5-5`, depth `claude-opus-5-5`, tiers in `services/discovery/models.ts`),
-cascade `screen→full→confirm`, champion re-evaluated on fresh seeds. Candidates run
-in a sandbox (`isolation.py`: `sandbox-exec` / `bwrap` / process); a **separate trusted
-scorer** computes every number. **Honest limit: `sandbox-exec` blocks network and
-writes outside a scratch dir and denies file reads except an allow-list (interpreter/venv,
-`kernel/`, system libs, scratch); file metadata stays readable. `bwrap` binds only needed paths
-read-only (untested on Linux); `process` isolation blocks nothing at the OS level. Every
-evaluation carries `isolation_detail.reads` (`restricted`/`unrestricted`); the UI never claims
-restricted unless it reports so.** Evaluators: `qec_memory`,
-`state_synthesis`, `vqe_ground_state`, `trainability_frontier` (Frontier: exact PPE
-scaling + estimation-hardness probe; its honesty text is in `services/discovery/honesty.ts`).
-**Red Queen** (`mutator.kind: red_queen`): evolves candidates the evaluator scores well
-but the independent audit (`audits/`) rejects; exploits saved under `exploits/` and
-exported to `kernel/tests/fixtures/exploits/` (replayed; `known_hole` = strict xfail).
-**Conjecture Engine** (`services/conjecture/`, `conjectureStore.ts`): Opus proposes
-≤5 schema-validated conjectures from an archive digest, the kernel tests them on
-held-out circuits (verdict supported/refuted/inconclusive, interval-aware), ledger in
-`conjectures.{json,md}`. Status chips + mode-switch guard cover discovery runs,
-trainability jobs and conjecture tests; `buildDiscoveryContext` is injected into Dirac
-in Research mode only. On disk: `experiments/<name>/discovery/<runId>/{run.json,candidates/,exploits/,champion.py}`.
-Docs: `research/discovery-engine.mdx`. Specs: `docs/research/PRD_14_QUANTUM_AI_LAB.md` + `PRD_14_ADDENDUM.md`.
-
 ## Workspace Navigation
 
 The left-rail `activeView` lives in `src/stores/navigationStore.ts` (lifted out
 of PanelLayout). The command palette (`src/components/commandPalette/`) is
 registry-driven — a Go-to per rail view, a Toggle per panel — with a
 palette↔registry parity test. Shortcuts: `⌘⇧M` (switch workspace mode),
-`⌘1..9` (Nth top-rail view, mode-aware), `⌘⇧↵` (run Trainability Lab analyses). Binding table:
+`⌘1..9` (Nth top-rail view, mode-aware). Binding table:
 `docs-site/src/content/docs/research/navigating-the-workspace.mdx`.
 
 ## PRD Series (Research Direction)
@@ -461,9 +362,6 @@ defines:
 - **PRD 12** — Dirac research agent (an agentic Dirac that designs and
   launches experiments autonomously; PRD 09 only injects experiment context
   into Dirac, no tools/autonomy).
-- **PRD 14** — Quantum AI Lab: the Trainability Lab (Microscope) and the Discovery
-  Engine (evolutionary search with trusted evaluators, Frontier evaluator, Red Queen
-  mode, Conjecture Engine). Protocol v1.3.
 
 ## Development Phases
 

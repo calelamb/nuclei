@@ -82,8 +82,8 @@ describe('CodeLatticePanel', () => {
     expect(container.querySelector('svg')).toBeTruthy();
     expect(getByLabelText('Tick scrubber')).toBeTruthy();
     // data (circles) + measure (rects) both present.
-    expect(container.querySelectorAll('circle').length).toBeGreaterThan(0);
-    expect(container.querySelectorAll('rect').length).toBeGreaterThan(0);
+    expect(container.querySelectorAll('[data-lattice-node="data"]').length).toBeGreaterThan(0);
+    expect(container.querySelectorAll('[data-lattice-node="measure"]').length).toBeGreaterThan(0);
   });
 
   it('hides gracefully (empty state) when the circuit has no qubit coords (repetition code)', () => {
@@ -101,10 +101,42 @@ describe('QecTimelinePanel', () => {
     expect(container.querySelector('svg')).toBeTruthy();
     // The bottom detector track label is present.
     expect(getByText('det')).toBeTruthy();
-    // Dashed hazard rects exist for noise ops.
-    const dashed = Array.from(container.querySelectorAll('rect')).filter(
-      (r) => r.getAttribute('stroke-dasharray'),
-    );
-    expect(dashed.length).toBeGreaterThan(0);
+    // Noise ops are amber dots (not squeezed text boxes).
+    expect(container.querySelectorAll('svg circle').length).toBeGreaterThan(0);
+    // Gate labels are Stim mnemonics at a readable size, never truncated names.
+    const sizes = Array.from(container.querySelectorAll('svg text')).map((t) => Number(t.getAttribute('font-size')));
+    expect(Math.min(...sizes)).toBeGreaterThanOrEqual(10);
+    const labels = Array.from(container.querySelectorAll('svg text')).map((t) => t.textContent);
+    // CNOTs are a control dot joined to a target circle-plus, not a labelled box.
+    expect(labels).not.toContain('CX');
+    expect(container.querySelectorAll('svg path').length).toBeGreaterThan(0);
+    expect(labels).not.toContain('Res');
+    expect(labels).not.toContain('Mea');
+  });
+
+  it('draws parallel CNOTs of one tick in separate sub-columns so each pair stays readable', () => {
+    setStim(surfQec, surfSnap);
+    const { container } = render(<QecTimelinePanel />);
+    const spans = Array.from(container.querySelectorAll('svg g > path')).map((path) => {
+      const line = (path.parentElement as Element).querySelector('line') as SVGLineElement;
+      const ys = [Number(line.getAttribute('y1')), Number(line.getAttribute('y2'))].sort((a, b) => a - b);
+      return { x: Number(line.getAttribute('x1')), lo: ys[0], hi: ys[1] };
+    });
+    expect(spans.length).toBeGreaterThan(6);
+    for (let i = 0; i < spans.length; i += 1) {
+      for (let j = i + 1; j < spans.length; j += 1) {
+        const a = spans[i];
+        const b = spans[j];
+        const sameColumn = Math.abs(a.x - b.x) < 1;
+        const rowsOverlap = a.lo <= b.hi && b.lo <= a.hi;
+        expect(sameColumn && rowsOverlap, `CNOT ${i} and ${j} share a column and wire span`).toBe(false);
+      }
+    }
+  });
+
+  it('scrolls sideways as a focusable labelled region instead of clipping silently', () => {
+    setStim(surfQec, surfSnap);
+    const { getByRole } = render(<QecTimelinePanel />);
+    expect(getByRole('region', { name: 'Timeline, scrolls sideways' }).getAttribute('tabindex')).toBe('0');
   });
 });

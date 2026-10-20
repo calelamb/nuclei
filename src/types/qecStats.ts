@@ -1,4 +1,5 @@
 import type { QecCampaignStatsRow } from './qec';
+import { parseSinterCsvDetailed, splitCsvLine } from './sinterCsv';
 
 /**
  * PRD 10 Phase E — QEC campaign analysis.
@@ -13,67 +14,16 @@ import type { QecCampaignStatsRow } from './qec';
 
 // ─────────────────────────── sinter CSV ───────────────────────────
 
-const SINTER_HEADER_COLS = [
-  'shots', 'errors', 'discards', 'seconds', 'decoder', 'strong_id', 'json_metadata', 'custom_counts',
-];
-
-/** Split one CSV line honoring quoted fields with doubled-quote escaping —
- * sinter embeds JSON (full of commas + quotes) in the json_metadata field. */
-export function splitCsvLine(line: string): string[] {
-  const out: string[] = [];
-  let field = '';
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i += 1) {
-    const ch = line[i];
-    if (inQuotes) {
-      if (ch === '"') {
-        if (line[i + 1] === '"') { field += '"'; i += 1; } // escaped quote
-        else inQuotes = false;
-      } else field += ch;
-    } else if (ch === '"') inQuotes = true;
-    else if (ch === ',') { out.push(field); field = ''; }
-    else field += ch;
-  }
-  out.push(field);
-  return out;
-}
+export { splitCsvLine };
 
 /**
- * Parse sinter's native stats.csv into rows. Tolerant of the leading
- * whitespace sinter pads its numeric columns with. Rows that don't parse are
- * skipped (never throws) — a partial/corrupt CSV still yields what it can.
+ * Parse sinter's native stats.csv into rows, aggregating duplicate strong_id
+ * rows exactly like `sinter.read_stats_from_csv_files`. Never throws: rows
+ * that don't parse are skipped. Use `parseSinterCsvDetailed` (sinterCsv.ts)
+ * when the problems need to be shown to the user.
  */
 export function parseSinterCsv(text: string): QecCampaignStatsRow[] {
-  const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
-  if (lines.length === 0) return [];
-  const header = splitCsvLine(lines[0]).map((c) => c.trim());
-  // Only accept a genuine sinter header; otherwise bail (empty).
-  const looksLikeHeader = SINTER_HEADER_COLS.every((c) => header.includes(c));
-  const dataLines = looksLikeHeader ? lines.slice(1) : [];
-  const idx = (name: string) => header.indexOf(name);
-
-  const rows: QecCampaignStatsRow[] = [];
-  for (const line of dataLines) {
-    const cells = splitCsvLine(line);
-    try {
-      const meta = cells[idx('json_metadata')]?.trim();
-      const customRaw = cells[idx('custom_counts')]?.trim();
-      const row: QecCampaignStatsRow = {
-        shots: Number(cells[idx('shots')]?.trim()),
-        errors: Number(cells[idx('errors')]?.trim()),
-        discards: Number(cells[idx('discards')]?.trim()),
-        seconds: Number(cells[idx('seconds')]?.trim()),
-        decoder: cells[idx('decoder')]?.trim() ?? '',
-        strong_id: cells[idx('strong_id')]?.trim() ?? '',
-        json_metadata: meta ? JSON.parse(meta) : {},
-        custom_counts: customRaw ? JSON.parse(customRaw) : {},
-      };
-      if (Number.isFinite(row.shots) && Number.isFinite(row.errors)) rows.push(row);
-    } catch {
-      /* skip malformed row */
-    }
-  }
-  return rows;
+  return parseSinterCsvDetailed(text).rows;
 }
 
 // ─────────────────────────── Logical error rate ───────────────────────────
@@ -148,11 +98,15 @@ export interface ThresholdSeries {
   distance: number | null;
   decoder: string;
   /** Points sorted by ascending noise parameter. */
-  points: Array<{ noise: number; rate: Rate }>;
+  points: Array<{ noise: number; rate: Rate; errors?: number; kept?: number }>;
 }
 
 /** Group stats into log-log threshold series: one per (label × distance ×
- * decoder), each a noise-sorted list of LER±CI points. */
+ * decoder), each a noise-sorted list of LER±CI points.
+ *
+ * @deprecated Legacy Wilson/label grouping that can pool distinct experiments.
+ * The figure uses `likelihoodSeries` in src/lib/qecFit.ts (experiment-aware,
+ * discard-aware). Kept only for the legacy unit tests. */
 export function thresholdSeries(rows: QecCampaignStatsRow[], z = 1.96): ThresholdSeries[] {
   const groups = new Map<string, ThresholdSeries>();
   for (const row of rows) {
@@ -181,6 +135,10 @@ export interface LambdaFit {
 }
 
 /**
+ * @deprecated Two-point ratio without an interval that drops ratios <= 1; use
+ * `lambdaEstimates` in src/lib/qecFit.ts (log-linear regression with
+ * uncertainty, >= 3 distances). Kept only for the legacy unit tests.
+ *
  * Fit Λ, the error-suppression factor: at each noise point, the ratio of the
  * logical error rate between successive distances (smaller / larger). Λ > 1
  * means adding distance suppresses errors (below threshold). Reports the
@@ -243,39 +201,6 @@ export function projectedDistanceForTarget(
   if (baseRate <= target) return baseDistance;
   const steps = Math.ceil(Math.log(baseRate / target) / Math.log(lambda));
   return baseDistance + step * steps;
-}
-
-// ─────────────────────────── Decoder workbench ───────────────────────────
-
-export interface DecoderWorkbenchRow {
-  decoder: string;
-  shots: number;
-  errors: number;
-  rate: Rate;
-  /** Wall-seconds per shot (sinter's timing), the decode-speed comparison. */
-  secondsPerShot: number;
-}
-
-/** Aggregate a campaign's rows per decoder for the honest side-by-side
- * comparison: pooled LER±CI, total shots/errors, and decode time per shot. */
-export function decoderWorkbench(rows: QecCampaignStatsRow[], z = 1.96): DecoderWorkbenchRow[] {
-  const agg = new Map<string, { shots: number; errors: number; seconds: number }>();
-  for (const row of rows) {
-    const a = agg.get(row.decoder) ?? { shots: 0, errors: 0, seconds: 0 };
-    a.shots += row.shots;
-    a.errors += row.errors;
-    a.seconds += row.seconds;
-    agg.set(row.decoder, a);
-  }
-  return [...agg.entries()]
-    .map(([decoder, a]) => ({
-      decoder,
-      shots: a.shots,
-      errors: a.errors,
-      rate: wilsonInterval(a.errors, a.shots, z),
-      secondsPerShot: a.shots > 0 ? a.seconds / a.shots : 0,
-    }))
-    .sort((x, y) => x.decoder.localeCompare(y.decoder));
 }
 
 // ─────────────────────────── Export ───────────────────────────

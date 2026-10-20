@@ -13,7 +13,15 @@ export default defineConfig({
   base: '/docs',
   integrations: [
     starlight({
-      title: 'NUCLEI Docs',
+      title: 'Nuclei',
+      // Brand mark (ket |n>). Starlight renders it as <img>, so currentColor
+      // would not inherit: ship fixed ink / near-white stroke variants per theme.
+      logo: {
+        light: './src/assets/nuclei-mark.svg',
+        dark: './src/assets/nuclei-mark-dark.svg',
+        alt: 'Nuclei',
+        replacesTitle: false,
+      },
       description:
         'Developer and researcher documentation for Nuclei — the open-source quantum computing IDE.',
       favicon: '/favicon.svg',
@@ -31,9 +39,9 @@ export default defineConfig({
         starlightLinksValidator(),
       ],
       components: {
-        // Default the docs to the light blue-white theme on first visit to
-        // match the v0.5.0 redesign (marketing site is light-only). Keeps the
-        // full auto/light/dark picker; user choice still persists.
+        // Default the docs to the light paper theme on first visit to match
+        // the research-first "textbook" marketing site. Keeps the full
+        // auto/light/dark picker; user choice still persists.
         ThemeProvider: './src/components/ThemeProvider.astro',
       },
       social: [
@@ -41,21 +49,18 @@ export default defineConfig({
       ],
       customCss: [
         // Self-hosted fonts (no render-blocking Google Fonts requests).
-        // Blue-brand redesign (v0.5.0): Space Grotesk display, IBM Plex Sans
-        // body, JetBrains Mono code.
-        '@fontsource/space-grotesk/400.css',
-        '@fontsource/space-grotesk/500.css',
-        '@fontsource/space-grotesk/600.css',
-        '@fontsource/space-grotesk/700.css',
-        '@fontsource/ibm-plex-sans/300.css',
-        '@fontsource/ibm-plex-sans/400.css',
-        '@fontsource/ibm-plex-sans/500.css',
-        '@fontsource/ibm-plex-sans/600.css',
-        '@fontsource/ibm-plex-sans/700.css',
+        // Textbook look: Newsreader headings, Hanken Grotesk body/UI,
+        // JetBrains Mono code.
+        '@fontsource/newsreader/400.css',
+        '@fontsource/newsreader/500.css',
+        '@fontsource/newsreader/600.css',
+        '@fontsource/newsreader/400-italic.css',
+        '@fontsource/hanken-grotesk/400.css',
+        '@fontsource/hanken-grotesk/500.css',
+        '@fontsource/hanken-grotesk/600.css',
         '@fontsource/jetbrains-mono/400.css',
         '@fontsource/jetbrains-mono/500.css',
         '@fontsource/jetbrains-mono/600.css',
-        '@fontsource/jetbrains-mono/700.css',
         // Nuclei theme overrides.
         './src/styles/nuclei.css',
       ],
@@ -67,6 +72,7 @@ export default defineConfig({
             'introduction/architecture',
             'introduction/install-and-build',
             'introduction/desktop-vs-web',
+            'introduction/kernel-troubleshooting',
           ],
         },
         {
@@ -78,6 +84,7 @@ export default defineConfig({
             'research/qec-studio',
             'research/qec-workbench',
             'research/qec-data-import',
+            'research/plot-a-sinter-csv',
             'research/trainability-lab',
             'research/discovery-engine',
             'research/campaigns',
@@ -91,6 +98,7 @@ export default defineConfig({
           items: [
             'developer-tools/transpiler-explorer',
             'developer-tools/quantum-debugger',
+            'developer-tools/mcp-agent',
           ],
         },
         {

@@ -50,7 +50,7 @@ export function useActiveTabSync() {
         // text has no lexical signature the kernel could detect, so the
         // first parse must go out as language "stim".
         if (fw !== 'stim') useEditorStore.getState().setFramework('stim');
-      } else if (fw === 'qsharp') {
+      } else if (fw === 'qsharp' || fw === 'stim') {
         useEditorStore.getState().setFramework(useEditorStore.getState().lastPythonFramework);
       }
     } else {

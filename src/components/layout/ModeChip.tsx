@@ -1,10 +1,13 @@
-import { useState, useRef, useLayoutEffect, useEffect } from 'react';
-import { createPortal } from 'react-dom';
-import { GraduationCap, FlaskConical, Check } from 'lucide-react';
+import { modeChipHoverTint, modeChipTint } from './modeChipTint';
+import './modeChip.css';
+import { GraduationCap, FlaskConical } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useWorkspaceStore, type WorkspaceMode } from '../../stores/workspaceStore';
 import { useModeSwitchStore } from '../../stores/modeSwitchStore';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
+import { Menu, Tooltip, type MenuEntry } from '../ui';
+import { shortcutLabel } from '../../config/keybindings';
 /**
  * PRD 11 Phase B — the mode chip.
  *
@@ -14,150 +17,80 @@ import { useModeSwitchStore } from '../../stores/modeSwitchStore';
  * `modeSwitchStore.requestSwitch`, which confirms first if a sweep/campaign
  * is running (and never cancels it).
  *
- * The accent is Dirac purple for Research, quantum teal for Learn — reusing
- * the existing palette tokens rather than inventing colours.
+ * The accent is the Research blue for Research and quantum teal for Learn.
+ * Purple is reserved for Dirac. Teal text/icons use `accentText` (AA on every
+ * surface); the raw `accent` only tints the fill and border.
+ *
+ * The menu is the shared `ui/Menu`, so it behaves exactly like the Level menu:
+ * it opens on the checked mode and roves with the arrow keys.
  */
 
-const MODE_META: Record<WorkspaceMode, { label: string; icon: typeof GraduationCap }> = {
-  learn: { label: 'LEARN', icon: GraduationCap },
-  research: { label: 'RESEARCH', icon: FlaskConical },
+const MODE_META: Record<WorkspaceMode, { label: string; menuLabel: string; icon: typeof GraduationCap }> = {
+  learn: { label: 'LEARN', menuLabel: 'Learn quantum computing', icon: GraduationCap },
+  research: { label: 'RESEARCH', menuLabel: 'Research workspace', icon: FlaskConical },
 };
+const MODES: ReadonlyArray<WorkspaceMode> = ['learn', 'research'];
 
 export function ModeChip() {
   const colors = useThemeStore((s) => s.colors);
   const mode = useWorkspaceStore((s) => s.mode);
   const requestSwitch = useModeSwitchStore((s) => s.requestSwitch);
-  const [open, setOpen] = useState(false);
-  const [menuPos, setMenuPos] = useState<{ left: number; bottom: number } | null>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
 
-  const accent = mode === 'research' ? colors.dirac : colors.accent;
+  const accent = mode === 'research' ? colors.modeResearch : colors.accent;
+  const accentText = mode === 'research' ? colors.modeResearch : colors.accentText;
   const meta = MODE_META[mode];
   const Icon = meta.icon;
 
-  useLayoutEffect(() => {
-    if (!open) return;
-    const btn = buttonRef.current;
-    if (!btn) return;
-    const r = btn.getBoundingClientRect();
-    // Anchored above the chip (status bar sits at the window bottom).
-    setMenuPos({ left: r.left, bottom: window.innerHeight - r.top + 4 });
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDocMouseDown = (e: MouseEvent) => {
-      if (
-        !menuRef.current?.contains(e.target as Node) &&
-        !buttonRef.current?.contains(e.target as Node)
-      ) {
-        setOpen(false);
-      }
+  const entries: MenuEntry[] = MODES.map((m) => {
+    const MIcon = MODE_META[m].icon;
+    const tint = m === 'research' ? colors.modeResearch : colors.accentText;
+    return {
+      id: m,
+      label: MODE_META[m].menuLabel,
+      icon: <MIcon size={14} color={tint} strokeWidth={2} />,
+      checked: m === mode,
+      onSelect: () => requestSwitch(m),
     };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', onDocMouseDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDocMouseDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
+  });
 
-  const pick = (target: WorkspaceMode) => {
-    setOpen(false);
-    requestSwitch(target);
-  };
-
-  const menu = menuPos && (
-    <div
-      ref={menuRef}
-      role="menu"
-      aria-label="Switch workspace mode"
-      style={{
-        position: 'fixed',
-        left: menuPos.left,
-        bottom: menuPos.bottom,
-        minWidth: 180,
-        background: colors.bgElevated,
-        border: `1px solid ${colors.border}`,
-        borderRadius: 8,
-        boxShadow: '0 6px 24px rgba(0,0,0,0.28)',
-        padding: 4,
-        zIndex: 1000,
-        fontFamily: "'Geist Sans', sans-serif",
-      }}
-    >
-      {(['learn', 'research'] as WorkspaceMode[]).map((m) => {
-        const mMeta = MODE_META[m];
-        const MIcon = mMeta.icon;
-        const isCurrent = m === mode;
-        const mAccent = m === 'research' ? colors.dirac : colors.accent;
-        return (
+  return (
+    <Menu
+      label="Switch workspace mode"
+      placement="top-start"
+      minWidth={200}
+      entries={entries}
+      trigger={(p) => (
+        <Tooltip label="Switch workspace mode" shortcut={shortcutLabel('switch-workspace')} placement="above">
           <button
-            key={m}
-            role="menuitemradio"
-            aria-checked={isCurrent}
-            onClick={() => pick(m)}
+            {...p}
+            className="mode-chip"
+            aria-label="Switch workspace mode"
+            data-tour-target="mode-chip"
+            data-focus-id="mode-chip"
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 8,
-              width: '100%',
-              padding: '7px 10px',
-              background: 'transparent',
-              border: 'none',
-              borderRadius: 6,
+              gap: 5,
+              height: 20,
+              padding: '0 8px',
+              ['--mode-chip-accent' as string]: accent,
+              ['--mode-chip-rest' as string]: modeChipTint(accent),
+              ['--mode-chip-hover' as string]: modeChipHoverTint(accent),
+              border: `1px solid ${accent}`,
+              borderRadius: 4,
               cursor: 'pointer',
-              color: colors.text,
-              fontSize: 12,
-              textAlign: 'left',
+              color: accentText,
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: 0.5,
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = `${mAccent}18`; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
           >
-            <MIcon size={13} color={mAccent} strokeWidth={2} />
-            <span style={{ flex: 1 }}>{m === 'research' ? 'Research workspace' : 'Learn quantum computing'}</span>
-            {isCurrent && <Check size={13} color={mAccent} />}
+            <Icon size={12} strokeWidth={2.2} />
+            {meta.label}
           </button>
-        );
-      })}
-    </div>
-  );
-
-  return (
-    <>
-      <button
-        ref={buttonRef}
-        onClick={() => setOpen((o) => !o)}
-        title="Switch workspace mode"
-        aria-label="Switch workspace mode"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        data-tour-target="mode-chip"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 5,
-          height: 16,
-          padding: '0 7px',
-          background: `${accent}1f`,
-          border: `1px solid ${accent}`,
-          borderRadius: 4,
-          cursor: 'pointer',
-          color: accent,
-          fontSize: 10,
-          fontWeight: 700,
-          letterSpacing: 0.5,
-          fontFamily: "'Geist Sans', sans-serif",
-        }}
-      >
-        <Icon size={11} strokeWidth={2.2} />
-        {meta.label}
-      </button>
-      {open && createPortal(menu, document.body)}
-    </>
+        </Tooltip>
+      )}
+    />
   );
 }

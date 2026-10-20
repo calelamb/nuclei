@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useQecJobStore } from '../../../stores/qecJobStore';
+import { useResearchSelectionStore } from '../../../stores/researchSelectionStore';
 import type { QecImportClient } from './QecImportWizard';
 import { QecImportWizard } from './QecImportWizard';
 
@@ -62,7 +63,7 @@ function goNext(): void {
 }
 
 async function reachMapping(): Promise<void> {
-  await screen.findByText('2.00 KiB');
+  await screen.findByText('2 KB');
   goNext();
   fireEvent.click(screen.getByRole('radio', { name: /Tabular/ }));
   goNext();
@@ -83,10 +84,63 @@ async function reachImportStage(): Promise<void> {
   goNext();
 }
 
+describe('<QecImportWizard /> finishing and defaults (qec-r-07/08/15/19)', () => {
+  it('preselects the top supported adapter and names it in plain words', async () => {
+    render(<QecImportWizard source="captures/capture.dets" client={nativeClient('sinter-csv')} />);
+    await screen.findByText('2 KB');
+    goNext();
+    const radio = screen.getByRole<HTMLInputElement>('radio', { name: /Sinter-csv/ });
+    expect(radio.checked).toBe(true);
+    expect(screen.getByText('sinter CSV · 100% confidence')).toBeTruthy();
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Next stage' }).disabled).toBe(false);
+  });
+
+  it('shows why Import is unavailable on the Import stage, not before', async () => {
+    render(<QecImportWizard source="captures/capture.parquet" client={client()} />);
+    await reachImportStage();
+    fireEvent.click(screen.getByRole('button', { name: 'Previous stage' }));
+    fireEvent.change(screen.getByLabelText('Session ID'), { target: { value: '' } });
+    expect(screen.queryByText(/Import unavailable:/)).toBeNull();
+    goNext();
+  });
+
+  it('offers Re-validate after a pass', async () => {
+    render(<QecImportWizard source="captures/capture.parquet" client={client()} />);
+    await reachMapping();
+    goNext();
+    goNext();
+    fireEvent.click(screen.getByRole('button', { name: 'Validate mapping' }));
+    await screen.findByText('Validation passed');
+    expect(screen.queryByRole('button', { name: 'Validate mapping' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Re-validate' })).toBeTruthy();
+  });
+
+  it('completes: every step done, singular counts, Close and Show session replace Import data', async () => {
+    const close = vi.fn();
+    const fake = client();
+    vi.mocked(fake.startImport).mockImplementation(async (_input, onEvent) => {
+      onEvent?.({ type: 'job_started', requestId: 'import-1', jobId: 'import-1', jobKind: 'import', sourcePolicy: 'copy' });
+      return { type: 'job_complete', requestId: 'import-1', jobId: 'import-1', recordsWritten: 1, partitionsWritten: 1, sourcePolicy: 'copy' };
+    });
+    const view = render(<QecImportWizard source="captures/capture.parquet" client={fake} onClose={close} />);
+    await reachImportStage();
+    fireEvent.click(screen.getByRole('button', { name: 'Import data' }));
+    await screen.findByText('1 record written');
+    expect(screen.getByText(/1 canonical partition · Original preserved/)).toBeTruthy();
+    expect(view.container.querySelectorAll('.qec-import-steps li[data-complete="true"]')).toHaveLength(7);
+    expect(screen.queryByRole('button', { name: 'Import data' })).toBeNull();
+    // The Import button that had focus is gone; focus moves to Show session so Escape and Tab still work (qec-r-28).
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Show session' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Show session' }));
+    expect(close).toHaveBeenCalledOnce();
+    expect(useResearchSelectionStore.getState().present.primary).toMatchObject({ kind: 'session', sessionId: 'capture-session' });
+  });
+});
+
 describe('<QecImportWizard />', () => {
   it('shows only actual native Stim width requirements', async () => {
     render(<QecImportWizard source="captures/capture.dets" client={nativeClient('stim-results')} />);
-    await screen.findByText('2.00 KiB');
+    await screen.findByText('2 KB');
     goNext();
     fireEvent.click(screen.getByRole('radio', { name: /Stim-results/ }));
     goNext();
@@ -108,15 +162,16 @@ describe('<QecImportWizard />', () => {
 
   it('presents native sinter columns without invented mapping options', async () => {
     render(<QecImportWizard source="campaign/stats.csv" client={nativeClient('sinter-csv')} />);
-    await screen.findByText('2.00 KiB');
+    await screen.findByText('2 KB');
     goNext();
     fireEvent.click(screen.getByRole('radio', { name: /Sinter-csv/ }));
     goNext();
 
-    expect(screen.getByText(/sinter defines campaign-point fields/i)).toBeTruthy();
+    expect(screen.getByText(/nothing to map/i)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Add field mapping' })).toBeNull();
     expect(screen.queryByRole('group', { name: /Scientific meaning/i })).toBeNull();
-    fireEvent.click(screen.getByLabelText('Mapping reviewed'));
+    // Nothing to map means nothing to review: no checkbox, and Next is already open.
+    expect(screen.queryByLabelText('Mapping reviewed')).toBeNull();
     expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Next stage' }).disabled).toBe(false);
   });
 
@@ -124,11 +179,15 @@ describe('<QecImportWizard />', () => {
     const fake = client();
     render(<QecImportWizard source="captures/capture.parquet" client={fake} />);
 
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Import data' }).disabled).toBe(true);
-    expect(screen.getByText(/Import unavailable:/).textContent).toMatch(/probe/i);
-    await screen.findByText('2.00 KiB');
+    // One primary per stage: Next while building the mapping, Import data only on the last stage (qec-r-27).
+    expect(screen.queryByRole('button', { name: 'Import data' })).toBeNull();
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Next stage' }).className).toContain('nuclei-btn--primary');
+    // The reason is shown on the Import stage only, never on stage 1 before anything was chosen.
+    expect(screen.queryByText(/Import unavailable:/)).toBeNull();
+    await screen.findByText('2 KB');
     expect(screen.getByText('Copy-only import')).toBeTruthy();
-    expect(screen.getByText('a'.repeat(64))).toBeTruthy();
+    expect(screen.getByText('a'.repeat(12))).toBeTruthy();
+    expect(screen.queryByText('a'.repeat(64))).toBeNull();
 
     goNext();
     fireEvent.click(screen.getByRole('radio', { name: /Tabular/ }));
@@ -184,7 +243,7 @@ describe('<QecImportWizard />', () => {
       ],
     });
     render(<QecImportWizard source="captures/capture.parquet" client={fake} />);
-    await screen.findByText('2.00 KiB');
+    await screen.findByText('2 KB');
     goNext();
     fireEvent.click(screen.getByRole('radio', { name: /Tabular/ }));
     goNext();
@@ -197,11 +256,12 @@ describe('<QecImportWizard />', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Validate mapping' }));
 
     const alert = await screen.findByRole('alert');
-    expect(alert.textContent).toMatch(/Quarantine required/);
+    expect(alert.textContent).toMatch(/Fix before importing/);
     expect(alert.textContent).toMatch(/Detector width must be explicit/);
     expect(screen.getByText(/18 source rows remain preserved/)).toBeTruthy();
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Import data' }).disabled).toBe(true);
-    await waitFor(() => expect(document.activeElement?.textContent).toMatch(/Detector width/));
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Next stage' }).disabled).toBe(true);
+    await waitFor(() => expect(document.activeElement?.getAttribute('aria-label')).toMatch(/Review detector_count mapping/));
+    expect(document.activeElement?.textContent).toBe('Review mapping');
   });
 
   it('ignores stale validation completion after the mapping is invalidated', async () => {
@@ -264,7 +324,7 @@ describe('<QecImportWizard />', () => {
     await screen.findByText('Validation passed');
     view.rerender(<QecImportWizard source="captures/second.parquet" client={fake} />);
     expect(await screen.findByRole('heading', { name: 'Source' })).toBeTruthy();
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Import data' }).disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Import data' })).toBeNull();
   });
 
   it('focuses stage headings and the first quarantine correction action', async () => {
@@ -293,7 +353,7 @@ describe('<QecImportWizard />', () => {
       results: [{ adapterId: 'tabular', adapterVersion: '1', supported: true, sourceKind: 'parquet', confidence: 0.8, sourceSha256: 'a'.repeat(64), details: { delimiter: 'comma', reason: 'Sinter columns detected' } }],
     });
     render(<QecImportWizard source="captures/capture.parquet" client={fake} />);
-    await screen.findByText('2.00 KiB');
+    await screen.findByText('2 KB');
     goNext();
     expect(screen.getByText(/delimiter: comma/)).toBeTruthy();
     expect(screen.getByText(/Sinter columns detected/)).toBeTruthy();
@@ -324,6 +384,39 @@ describe('<QecImportWizard />', () => {
     expect(view.container.querySelector('.lucide-loader-circle')).toBeNull();
   });
 
+  it('shows one spinning loader and the tray\'s short copyable job id while an import runs (qec-r-57/59)', async () => {
+    const fake = client();
+    vi.mocked(fake.startImport).mockImplementation(async (_input, onEvent) => {
+      onEvent?.({ type: 'job_started', requestId: 'import-run-0001', jobId: 'import-run-0001', jobKind: 'import', sourcePolicy: 'copy' });
+      return new Promise(() => undefined);
+    });
+    const view = render(<QecImportWizard source="captures/capture.parquet" client={fake} />);
+    await reachImportStage();
+    fireEvent.click(screen.getByRole('button', { name: 'Import data' }));
+    await screen.findByRole('progressbar');
+    const loaders = Array.from(view.container.querySelectorAll('.lucide-loader-circle, .lucide-loader-2'));
+    expect(loaders).toHaveLength(1);
+    expect(loaders[0].classList.contains('nuclei-spin')).toBe(true);
+    expect(screen.queryByText('import-run-0001')).toBeNull();
+    expect(screen.getByText('import-r')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Copy job id import-r' })).toBeTruthy();
+  });
+
+  it('keeps focus inside the dialog while the import runs and hides Back (rq-r3-04)', async () => {
+    const fake = client();
+    vi.mocked(fake.startImport).mockImplementation(async (_input, onEvent) => {
+      onEvent?.({ type: 'job_started', requestId: 'import-run', jobId: 'import-run', jobKind: 'import', sourcePolicy: 'copy' });
+      return new Promise(() => undefined);
+    });
+    const view = render(<QecImportWizard source="captures/capture.parquet" client={fake} />);
+    await reachImportStage();
+    fireEvent.click(screen.getByRole('button', { name: 'Import data' }));
+    const progress = await screen.findByRole('progressbar');
+    await waitFor(() => expect(document.activeElement).toBe(progress));
+    expect(view.container.contains(document.activeElement)).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Previous stage' })).toBeNull();
+  });
+
   it.each([
     ['cancelled', 'Import cancelled', undefined],
     ['failed', 'Import failed', 'Canonical write failed.'],
@@ -347,5 +440,83 @@ describe('<QecImportWizard />', () => {
     expect(screen.queryByRole('progressbar')).toBeNull();
     expect(view.container.querySelector('.lucide-loader-circle')).toBeNull();
     if (status === 'failed') expect(screen.getByRole('alert').textContent).toContain('Canonical write failed.');
+  });
+
+  it('reopening for an already-imported source starts at stage 1 with the normal footer', async () => {
+    useQecJobStore.setState({ jobs: { 'old-job': {
+      id: 'old-job', kind: 'import', status: 'complete', message: 'Import complete',
+      source: 'captures/capture.parquet', adapterId: 'x', sessionId: 'old-session', sessionKind: 'hardware_import',
+      sourceHash: 'a', provenanceId: 'p', sourceByteSize: 1, projectRoot: '/project',
+    } as never } });
+    render(<QecImportWizard source="captures/capture.parquet" client={client()} onClose={() => undefined} />);
+    await screen.findByText('2 KB');
+    expect(screen.getByRole('button', { name: 'Next stage' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Show session' })).toBeNull();
+  });
+});
+
+describe('<QecImportWizard /> Destination step (qec-r-92)', () => {
+  async function reachDestination(): Promise<void> {
+    await reachMapping();
+    goNext();
+    goNext();
+    fireEvent.click(screen.getByRole('button', { name: 'Validate mapping' }));
+    await screen.findByText('Validation passed');
+    goNext();
+  }
+
+  it('opens clean with a suggested session id, no error, and Next enabled', async () => {
+    render(<QecImportWizard source="captures/repetition-d3.parquet" client={client()} />);
+    await reachDestination();
+    const input = screen.getByLabelText<HTMLInputElement>('Session ID');
+    expect(input.value).toMatch(/^repetition-d3-\d{4}-\d{2}-\d{2}$/);
+    expect(input.getAttribute('aria-invalid')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Next stage' }).disabled).toBe(false);
+    expect(screen.getByText(`${input.value}`, { selector: 'code' })).toBeTruthy();
+  });
+
+  it('complains only after the person edits the field, describing the error without role=alert', async () => {
+    render(<QecImportWizard source="captures/repetition-d3.parquet" client={client()} />);
+    await reachDestination();
+    const input = screen.getByLabelText<HTMLInputElement>('Session ID');
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: '' } });
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(screen.queryByRole('alert')).toBeNull();
+    const describedBy = input.getAttribute('aria-describedby');
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy ?? '')?.textContent).toBe('Choose a destination session ID');
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Next stage' }).disabled).toBe(true);
+    for (const char of 'my-run') fireEvent.change(input, { target: { value: input.value + char } });
+    expect(input.value).toBe('my-run');
+    expect(input.getAttribute('aria-invalid')).toBeNull();
+  });
+
+  it('selects the suggested id on first focus only, so a later click can place the caret', async () => {
+    render(<QecImportWizard source="captures/repetition-d3.parquet" client={client()} />);
+    await reachDestination();
+    const input = screen.getByLabelText<HTMLInputElement>('Session ID');
+    fireEvent.focus(input);
+    expect([input.selectionStart, input.selectionEnd]).toEqual([0, input.value.length]);
+    input.setSelectionRange(3, 3);
+    fireEvent.focus(input);
+    expect([input.selectionStart, input.selectionEnd]).toEqual([3, 3]);
+  });
+
+  it('rejects ids the engine would refuse before the Import step', async () => {
+    render(<QecImportWizard source="captures/repetition-d3.parquet" client={client()} />);
+    await reachDestination();
+    const input = screen.getByLabelText<HTMLInputElement>('Session ID');
+    fireEvent.change(input, { target: { value: 'my capture 1' } });
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Next stage' }).disabled).toBe(true);
+  });
+
+  it('keeps the <session-id> placeholder token in one element when the id is empty', async () => {
+    render(<QecImportWizard source="captures/repetition-d3.parquet" client={client()} />);
+    await reachDestination();
+    fireEvent.change(screen.getByLabelText('Session ID'), { target: { value: '' } });
+    expect(screen.getByText('<session-id>', { selector: 'code' })).toBeTruthy();
   });
 });

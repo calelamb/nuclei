@@ -8,7 +8,6 @@ import {
   thresholdSeries,
   lambdaFit,
   projectedDistanceForTarget,
-  decoderWorkbench,
   statsPointsToCsv,
 } from './qecStats';
 import type { QecCampaignStatsRow } from './qec';
@@ -134,18 +133,6 @@ describe('projectedDistanceForTarget', () => {
   });
   it('returns null when Λ ≤ 1 (unreachable)', () => {
     expect(projectedDistanceForTarget(3, 0.04, 1, 0.005)).toBeNull();
-  });
-});
-
-describe('decoderWorkbench', () => {
-  it('aggregates per decoder with pooled CI + decode time per shot', () => {
-    const wb = decoderWorkbench(parseSinterCsv(campaignCsv));
-    expect(wb.map((w) => w.decoder).sort()).toEqual(['fusion_blossom', 'pymatching']);
-    for (const w of wb) {
-      expect(w.shots).toBe(80000); // 2 distances × 2 noise × 20000 per decoder
-      expect(w.rate.lo).toBeLessThanOrEqual(w.rate.p);
-      expect(w.secondsPerShot).toBeGreaterThan(0);
-    }
   });
 });
 

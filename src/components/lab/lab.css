@@ -358,7 +358,7 @@
 }
 
 .lab-pill svg { flex-shrink: 0; }
-.lab-pill--quantum { background: var(--lab-quantum-soft); color: var(--color-accent-quantum); }
+.lab-pill--quantum { background: var(--lab-quantum-soft); color: var(--color-accent-quantum-text); }
 .lab-pill--dirac { background: var(--lab-dirac-soft); color: var(--lab-dirac-ink); }
 .lab-pill--success { background: var(--lab-success-soft); color: var(--color-success); }
 .lab-pill--warning { background: var(--lab-warning-soft); color: var(--color-warning); }
@@ -542,7 +542,7 @@
   height: 40px;
   border-radius: 12px;
   background: var(--lab-quantum-soft);
-  color: var(--color-accent-quantum);
+  color: var(--color-accent-quantum-text);
   margin-bottom: var(--space-1);
 }
 
@@ -641,7 +641,7 @@ textarea.lab-input { height: auto; padding: 8px 10px; resize: vertical; line-hei
   border-bottom: 1px dotted color-mix(in srgb, currentColor 50%, transparent);
 }
 
-.lab-citation:hover { color: var(--color-accent-quantum); }
+.lab-citation:hover { color: var(--color-accent-quantum-text); }
 
 /* ── Tooltip ─────────────────────────────────────────────────────────── */
 

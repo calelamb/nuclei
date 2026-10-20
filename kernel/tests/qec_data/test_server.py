@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
-from websockets.exceptions import ConnectionClosedError
+from websockets.exceptions import ConnectionClosed, ConnectionClosedError
 from websockets.legacy.client import WebSocketClientProtocol, connect
 
 from kernel.qec_data.catalog import QecCatalog
@@ -286,7 +286,10 @@ async def test_inbound_frame_above_cap_is_closed(
     async with connect(qec_data_server.url, max_size=None) as websocket:
         await websocket.send(json.dumps({"type": "authenticate", "token": TOKEN}))
         await websocket.recv()
-        await websocket.send("x" * (MAX_FRAME_BYTES + 1))
+        try:
+            await websocket.send("x" * (MAX_FRAME_BYTES + 1))
+        except (ConnectionClosed, OSError):
+            pass  # the server may reset the socket before the send completes
         with pytest.raises(ConnectionClosedError) as closed:
             await websocket.recv()
         assert closed.value.code == 1009

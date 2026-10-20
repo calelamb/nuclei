@@ -22,7 +22,7 @@ function row(d: number, p: number, errors: number, shots = 100000): QecCampaignS
     shots,
     errors,
     seconds: 1,
-    json_metadata: { label: `d=${d}`, d, p, decoder: 'pymatching' },
+    json_metadata: { label: 'surface', d, p, decoder: 'pymatching' },
   } as QecCampaignStatsRow;
 }
 
@@ -34,6 +34,26 @@ const SNAPSHOT = {
 
 describe('buildQecContext', () => {
   const noiseModel = BUILT_IN_NOISE_MODELS.find((m) => m.name === 'uniform_depolarizing')!;
+
+  it('states Λ units and, with known rounds, uses per-round Λ like the panel default', () => {
+    const withRounds = (r: QecCampaignStatsRow, rounds: number): QecCampaignStatsRow =>
+      ({ ...r, json_metadata: { ...(r.json_metadata as object), rounds } }) as QecCampaignStatsRow;
+    const base = { campaignName: SPEC.name, spec: SPEC, noiseModel, snapshot: SNAPSHOT, circuit: null, running: false };
+    const perRound = buildQecContext({ ...base, rows: [withRounds(row(3, 0.001, 100), 3), withRounds(row(5, 0.001, 10), 5), withRounds(row(7, 0.001, 1), 7)] });
+    expect(perRound).toMatch(/Error suppression[\s\S]*per round/);
+    const perShot = buildQecContext({ ...base, rows: [row(3, 0.001, 100), row(5, 0.001, 10), row(7, 0.001, 1)] });
+    expect(perShot).toMatch(/Error suppression[\s\S]*per shot/);
+  });
+
+  it('never hands Dirac a raw float for p', () => {
+    const p = 0.00035999999999999997;
+    const text = buildQecContext({
+      campaignName: SPEC.name, spec: SPEC, noiseModel, snapshot: SNAPSHOT, circuit: null, running: false,
+      rows: [row(3, p, 100), row(5, p, 10), row(7, p, 1)],
+    });
+    expect(text).not.toMatch(/0\.0003599/);
+    expect(text).toContain('p=3.6×10⁻⁴');
+  });
 
   it('summarizes the campaign, noise model, DEM, and rows', () => {
     const text = buildQecContext({
@@ -52,7 +72,8 @@ describe('buildQecContext', () => {
     expect(text).toContain('40 pairwise edges + 8 boundary edges');
     expect(text).toContain('Campaign results (3 of 3 rows)');
     // Λ present because distances 3/5/7 suppress errors at fixed p.
-    expect(text).toContain('Λ=');
+    expect(text).toContain('Λ = ');
+    expect(text).toContain('interval not meaningful'); // exact 3-point fit has zero residual: no interval printed
   });
 
   it('caps injected rows and says how many were dropped', () => {

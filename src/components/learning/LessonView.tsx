@@ -1,5 +1,5 @@
-import { useRef, useEffect } from 'react';
-import { useThemeStore } from '../../stores/themeStore';
+import { useRef, useEffect, useState } from 'react';
+import { useLearnSectionStore } from './learnSectionStore';
 import { useLearnStore } from '../../stores/learnStore';
 import { getTrack } from '../../data/lessons/tracks';
 import { TextBlock } from './TextBlock';
@@ -11,6 +11,11 @@ import { ConceptCard } from './ConceptCard';
 import { InteractiveBlochSphere } from './InteractiveBlochSphere';
 import type { Lesson, ContentBlock } from '../../data/lessons/types';
 import { ArrowLeft, ChevronLeft, ChevronRight, CheckCircle } from 'lucide-react';
+import { Badge, Button, IconButton } from '../ui';
+import { LESSON_LEVEL_TONE } from './levelTone';
+import { scrollLessonBlock } from './scrollLessonBlock';
+import { recallLessonBlock, rememberLessonBlock } from './lessonPosition';
+import './lessonView.css';
 
 function ContentBlockRenderer({ block }: { block: ContentBlock }) {
   switch (block.type) {
@@ -21,7 +26,7 @@ function ContentBlockRenderer({ block }: { block: ContentBlock }) {
     case 'demo':
       return <InteractiveDemo code={block.code} framework={block.framework} description={block.description} explorationPrompt={block.explorationPrompt} />;
     case 'exercise':
-      return <ExerciseBlock id={block.id} title={block.title} description={block.description} starterCode={block.starterCode} framework={block.framework} expectedProbabilities={block.expectedProbabilities} expectedMeasurements={block.expectedMeasurements} tolerancePercent={block.tolerancePercent} hints={block.hints} successMessage={block.successMessage} />;
+      return <ExerciseBlock id={block.id} title={block.title} description={block.description} starterCode={block.starterCode} framework={block.framework} expectedProbabilities={block.expectedProbabilities} expectedMeasurements={block.expectedMeasurements} expectedOutput={block.expectedOutput} requiredCode={block.requiredCode} tolerancePercent={block.tolerancePercent} hints={block.hints} successMessage={block.successMessage} />;
     case 'quiz':
       return <QuizBlock questions={block.questions} />;
     case 'concept-card':
@@ -38,15 +43,32 @@ interface LessonViewProps {
   trackId: string;
 }
 
+const EDGE_PX = 8;
+
+/** Scroll to a restored block and hand it keyboard focus, so the next Tab continues from where the reader was. */
+function landOnBlock(index: number): void {
+  scrollLessonBlock(index, 'auto');
+  if (index > 0) document.getElementById(`block-${index}`)?.focus({ preventScroll: true });
+}
+
+/** Scroll fraction (0..1) plus the block to force current at either end of the lesson, else null. */
+function readPosition(scrollTop: number, scrollHeight: number, clientHeight: number, blockCount: number) {
+  const max = scrollHeight - clientHeight;
+  const next = max > 0 ? Math.min(1, Math.max(0, scrollTop / max)) : 0;
+  if (scrollTop < EDGE_PX) return { next: 0, block: 0 };
+  if (max > 0 && max - scrollTop < EDGE_PX && blockCount > 0) return { next: 1, block: blockCount - 1 };
+  return { next, block: null };
+}
+
 export function LessonView({ lesson, trackId }: LessonViewProps) {
-  const colors = useThemeStore((s) => s.colors);
-  const shadow = useThemeStore((s) => s.shadow);
   const clearCurrentLesson = useLearnStore((s) => s.clearCurrentLesson);
   const setCurrentLesson = useLearnStore((s) => s.setCurrentLesson);
   const setCurrentBlockIndex = useLearnStore((s) => s.setCurrentBlockIndex);
   const currentBlockIndex = useLearnStore((s) => s.currentBlockIndex);
   const completedLessons = useLearnStore((s) => s.completedLessons);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const setReturnTo = useLearnSectionStore((s) => s.setReturnTo);
 
   const track = getTrack(trackId);
   const lessons = track?.lessons ?? [];
@@ -54,17 +76,46 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
   const prevLesson = currentIndex > 0 ? lessons[currentIndex - 1] : null;
   const nextLesson = currentIndex < lessons.length - 1 ? lessons[currentIndex + 1] : null;
   const isCompleted = completedLessons.includes(lesson.id);
+  const completedInTrack = lessons.filter((l) => completedLessons.includes(l.id)).length;
   const blockCount = lesson.contentBlocks.length;
 
-  // New lesson: jump to top and reset the reading position.
+  // New lesson: land on its heading (so keyboard and screen-reader users start here, not on <body>),
+  // then either return to a remembered reading position or jump to the top.
   useEffect(() => {
+    titleRef.current?.focus({ preventScroll: true });
+    const { restore, setRestore } = useLearnSectionStore.getState();
+    if (restore && restore.lessonId === lesson.id) {
+      setCurrentBlockIndex(restore.blockIndex);
+      // Cleared only after the scroll lands, so a StrictMode remount (cleanup cancels the frame) can retry.
+      const frame = requestAnimationFrame(() => {
+        landOnBlock(restore.blockIndex);
+        setRestore(null);
+      });
+      return () => cancelAnimationFrame(frame);
+    }
+    // No glossary hop to return to: resume where this lesson was last read (rail/mode round trip, reload).
+    const remembered = recallLessonBlock(lesson.id, lesson.contentBlocks.length);
+    if (remembered !== null) {
+      setCurrentBlockIndex(remembered);
+      const frame = requestAnimationFrame(() => landOnBlock(remembered));
+      return () => cancelAnimationFrame(frame);
+    }
     scrollRef.current?.scrollTo(0, 0);
     setCurrentBlockIndex(0);
-  }, [lesson.id, setCurrentBlockIndex]);
+    return undefined;
+  }, [lesson.id, lesson.contentBlocks.length, setCurrentBlockIndex]);
+
+  const setSection = useLearnSectionStore((s) => s.setSection);
+  const leaveToTracks = () => {
+    setSection('tracks');
+    setReturnTo({ trackId, lessonId: lesson.id, blockIndex: currentBlockIndex });
+    clearCurrentLesson();
+  };
 
   // Scroll-spy: mark the topmost visible block as current so the nav sidebar's
-  // outline follows the reader. A trigger line near the top of the viewport
-  // (rootMargin) decides which block "counts" as active.
+  // outline follows the reader. A thin band about 30% down
+  // the reader (rootMargin) decides which block "counts" as active, so a block is current once it
+  // is mostly on screen rather than while only its tail is still visible.
   useEffect(() => {
     const root = scrollRef.current;
     if (!root) return;
@@ -78,181 +129,120 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
           if (e.isIntersecting) visible.add(idx);
           else visible.delete(idx);
         }
-        if (visible.size > 0) setCurrentBlockIndex(Math.min(...visible));
+        // At the very top the first block is current, whatever the band happens to catch.
+        if (root.scrollTop < EDGE_PX) return;
+        if (visible.size > 0) {
+          const block = Math.min(...visible);
+          setCurrentBlockIndex(block);
+          rememberLessonBlock(lesson.id, block);
+        }
       },
-      { root, rootMargin: '0px 0px -65% 0px', threshold: 0 },
+      { root, rootMargin: '-30% 0px -60% 0px', threshold: 0 },
     );
     els.forEach((el) => io.observe(el));
     return () => io.disconnect();
   }, [lesson.id, setCurrentBlockIndex]);
 
-  const difficultyColor = {
-    'absolute-beginner': colors.info,
-    beginner: colors.success,
-    intermediate: colors.warning,
-    advanced: colors.error,
-  }[lesson.difficulty];
-
-  const readProgress = blockCount > 0 ? Math.min(1, (currentBlockIndex + 1) / blockCount) : 0;
+  // Reading progress is the scroll position itself, so it is 0 at the top and 1 at the bottom.
+  const [readProgress, setReadProgress] = useState(0);
+  useEffect(() => {
+    const root = scrollRef.current;
+    if (!root) return;
+    const sync = (e?: Event) => {
+      const { next, block } = readPosition(root.scrollTop, root.scrollHeight, root.clientHeight, blockCount);
+      setReadProgress(next);
+      // The initial pass only reads progress; a remembered position owns the current block.
+      if (e && block !== null) {
+        setCurrentBlockIndex(block);
+        rememberLessonBlock(lesson.id, block);
+      }
+    };
+    sync();
+    root.addEventListener('scroll', sync, { passive: true });
+    return () => root.removeEventListener('scroll', sync);
+  }, [lesson.id, blockCount, setCurrentBlockIndex]);
 
   return (
-    <div style={{
-      flex: 1,
-      minHeight: 0,
-      display: 'flex',
-      flexDirection: 'column',
-      overflow: 'hidden',
-      background: colors.bg,
-    }}>
-      {/* Top bar: breadcrumb + position + prev/next */}
-      <div style={{
-        flexShrink: 0,
-        display: 'flex',
-        alignItems: 'center',
-        padding: '0 16px',
-        height: 44,
-        gap: 10,
-        borderBottom: `1px solid ${colors.border}`,
-        background: colors.bgPanel,
-      }}>
-        <button
-          onClick={clearCurrentLesson}
-          title="Back to all tracks"
-          style={{
-            display: 'flex', alignItems: 'center', gap: 4,
-            background: 'transparent', border: 'none',
-            color: colors.textMuted, cursor: 'pointer',
-            fontSize: 12, fontFamily: "'Geist Sans', sans-serif",
-            padding: '4px 8px', borderRadius: 4,
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = colors.text; e.currentTarget.style.background = colors.bgElevated; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = colors.textMuted; e.currentTarget.style.background = 'transparent'; }}
-        >
-          <ArrowLeft size={14} />
+    <div className="lesson">
+      <div className="lesson__bar">
+        <Button size="sm" variant="ghost" icon={<ArrowLeft size={14} aria-hidden="true" />} onClick={leaveToTracks} title="Back to all tracks">
           Tracks
-        </button>
+        </Button>
 
-        {/* Breadcrumb */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0, fontFamily: "'Geist Sans', sans-serif" }}>
-          <span style={{ color: colors.textDim, fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200 }}>
-            {track?.title}
-          </span>
-          <ChevronRight size={12} color={colors.textDim} style={{ flexShrink: 0 }} />
-          <span style={{ color: colors.text, fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {lesson.title}
-          </span>
-          {isCompleted && <CheckCircle size={14} color={colors.success} style={{ flexShrink: 0 }} />}
+        <div className="lesson__crumbs">
+          <span className="lesson__crumb-track" title={track?.title}>{track?.title}</span>
+          <ChevronRight className="lesson__crumb-sep" size={12} aria-hidden="true" />
+          <span className="lesson__crumb-title" title={lesson.title}>{lesson.title}</span>
+          {isCompleted && <CheckCircle className="lesson__done" size={14} aria-label="Completed" />}
         </div>
 
-        <span style={{ color: colors.textDim, fontSize: 11, fontFamily: "'Geist Sans', sans-serif", whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
-          Lesson {currentIndex + 1} / {lessons.length}
-        </span>
+        <span className="lesson__position">Lesson {currentIndex + 1} / {lessons.length}</span>
 
-        <div style={{ display: 'flex', gap: 4 }}>
-          <button
-            onClick={() => prevLesson && setCurrentLesson(trackId, prevLesson.id)}
+        <div className="lesson__steps">
+          <IconButton
+            variant="secondary"
+            size="sm"
+            aria-label={prevLesson ? `Previous lesson: ${prevLesson.title}` : 'No previous lesson'}
             disabled={!prevLesson}
-            title={prevLesson ? `Previous: ${prevLesson.title}` : 'No previous lesson'}
-            style={navBtn(colors, !!prevLesson)}
+            onClick={() => prevLesson && setCurrentLesson(trackId, prevLesson.id)}
           >
             <ChevronLeft size={14} />
-          </button>
-          <button
-            onClick={() => nextLesson && setCurrentLesson(trackId, nextLesson.id)}
+          </IconButton>
+          <IconButton
+            variant="secondary"
+            size="sm"
+            aria-label={nextLesson ? `Next lesson: ${nextLesson.title}` : 'No next lesson'}
             disabled={!nextLesson}
-            title={nextLesson ? `Next: ${nextLesson.title}` : 'No next lesson'}
-            style={navBtn(colors, !!nextLesson)}
+            onClick={() => nextLesson && setCurrentLesson(trackId, nextLesson.id)}
           >
             <ChevronRight size={14} />
-          </button>
+          </IconButton>
         </div>
       </div>
 
-      {/* Within-lesson reading progress */}
-      <div style={{ flexShrink: 0, height: 2, background: colors.border }}>
-        <div style={{ width: `${readProgress * 100}%`, height: '100%', background: colors.accent, transition: 'width 200ms ease' }} />
+      <div className="lesson__progress" role="progressbar" aria-label="Reading progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(readProgress * 100)}>
+        <div className="lesson__progress-fill" style={{ width: `${readProgress * 100}%` }} />
       </div>
 
-      {/* Scrollable content */}
-      <div
-        ref={scrollRef}
-        style={{
-          flex: 1,
-          minHeight: 0,
-          overflowY: 'auto',
-          padding: '24px 32px 64px',
-        }}
-      >
-        {/* Lesson header */}
-        <div style={{ marginBottom: 24, maxWidth: 760 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-            <span style={{
-              padding: '2px 8px', borderRadius: 4,
-              background: `${difficultyColor}18`, color: difficultyColor,
-              fontSize: 11, fontWeight: 600, fontFamily: "'Geist Sans', sans-serif",
-              textTransform: 'capitalize',
-            }}>
+      <div ref={scrollRef} className="lesson__scroll">
+        <header className="lesson__header">
+          <div className="lesson__meta">
+            <Badge tone={LESSON_LEVEL_TONE[lesson.difficulty]} style={{ textTransform: 'capitalize' }}>
               {lesson.difficulty.replace('-', ' ')}
-            </span>
-            <span style={{ color: colors.textDim, fontSize: 11, fontFamily: "'Geist Sans', sans-serif" }}>
-              ~{lesson.estimatedMinutes} min
-            </span>
+            </Badge>
+            <span>~{lesson.estimatedMinutes} min</span>
           </div>
-          <h1 style={{ color: colors.text, fontSize: 28, fontWeight: 700, fontFamily: "'Geist Sans', sans-serif", margin: 0, lineHeight: 1.2 }}>
-            {lesson.title}
-          </h1>
-          <p style={{ color: colors.textMuted, fontSize: 15, fontFamily: "'Geist Sans', sans-serif", margin: '8px 0 0', lineHeight: 1.5 }}>
-            {lesson.description}
-          </p>
-        </div>
+          <h1 ref={titleRef} tabIndex={-1} className="lesson__title">{lesson.title}</h1>
+          <p className="lesson__lede">{lesson.description}</p>
+        </header>
 
-        {/* Content blocks */}
         {lesson.contentBlocks.map((block, i) => (
-          <div key={i} id={`block-${i}`} data-block-index={i} style={{ marginBottom: 8, scrollMarginTop: 16, maxWidth: 760 }}>
+          <div key={`${lesson.id}:${i}`} id={`block-${i}`} data-block-index={i} className="lesson__block" tabIndex={-1}>
             <ContentBlockRenderer block={block} />
           </div>
         ))}
 
-        {/* Next lesson prompt */}
-        {nextLesson && (
-          <div style={{
-            marginTop: 32, maxWidth: 760, padding: 20,
-            background: colors.bgElevated, border: `1px solid ${colors.border}`,
-            borderRadius: 12, display: 'flex', alignItems: 'center',
-            justifyContent: 'space-between', boxShadow: shadow.sm,
-          }}>
-            <div>
-              <div style={{ color: colors.textDim, fontSize: 12, fontFamily: "'Geist Sans', sans-serif", marginBottom: 4 }}>
-                Up next
+        {(nextLesson || isCompleted) && (
+          <div className={isCompleted ? 'lesson__next lesson__next--done' : 'lesson__next'} data-complete={isCompleted}>
+            <div className="lesson__next-text">
+              <div className="lesson__next-kicker">
+                {isCompleted ? (
+                  <>
+                    <CheckCircle className="lesson__next-check" size={14} aria-hidden="true" />
+                    Lesson complete · {completedInTrack} of {lessons.length}
+                  </>
+                ) : 'Up next'}
               </div>
-              <div style={{ color: colors.text, fontSize: 15, fontWeight: 500, fontFamily: "'Geist Sans', sans-serif" }}>
-                {nextLesson.title}
-              </div>
+              {nextLesson && <div className="lesson__next-title">{isCompleted ? `Up next: ${nextLesson.title}` : nextLesson.title}</div>}
             </div>
-            <button
-              onClick={() => setCurrentLesson(trackId, nextLesson.id)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6, padding: '8px 20px',
-                background: colors.accent, color: '#fff', border: 'none', borderRadius: 8,
-                fontSize: 13, fontWeight: 600, fontFamily: "'Geist Sans', sans-serif",
-                cursor: 'pointer', boxShadow: shadow.sm,
-              }}
-            >
-              Next Lesson <ChevronRight size={16} />
-            </button>
+            {nextLesson && (
+              <Button variant="primary" size="lg" onClick={() => setCurrentLesson(trackId, nextLesson.id)}>
+                Next lesson <ChevronRight size={16} aria-hidden="true" />
+              </Button>
+            )}
           </div>
         )}
       </div>
     </div>
   );
-}
-
-function navBtn(colors: { border: string; textMuted: string; textDim: string }, enabled: boolean): React.CSSProperties {
-  return {
-    display: 'flex', alignItems: 'center',
-    background: 'transparent', border: `1px solid ${colors.border}`,
-    borderRadius: 4, padding: '3px 6px',
-    color: enabled ? colors.textMuted : colors.textDim,
-    cursor: enabled ? 'pointer' : 'default',
-  };
 }

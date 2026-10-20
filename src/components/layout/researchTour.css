@@ -1,0 +1,24 @@
+/* Research tour: spotlight, scrim and card, all from tokens so both themes read the same. */
+.research-tour { position: fixed; inset: 0; z-index: 1200; pointer-events: none; }
+.research-tour__catcher { position: absolute; inset: 0; pointer-events: auto; background: transparent; }
+.research-tour__catcher--dim { background: var(--color-scrim); }
+.research-tour__spot {
+  position: fixed; border: 2px solid var(--color-mode-research); border-radius: var(--radius-soft);
+  box-shadow: 0 0 0 9999px var(--color-scrim); pointer-events: none;
+}
+.research-tour__card {
+  position: fixed; max-width: 80vw; padding: var(--space-4); pointer-events: auto;
+  background: var(--color-surface-raised); border: 1px solid var(--color-border-strong); border-radius: var(--radius-round);
+  box-shadow: var(--shadow-lg); font-family: var(--font-sans);
+}
+.research-tour__arrow {
+  position: absolute; width: 10px; height: 10px; background: var(--color-surface-raised); transform: rotate(45deg);
+}
+.research-tour__arrow--down { bottom: -6px; left: 18px; border-right: 1px solid var(--color-border-strong); border-bottom: 1px solid var(--color-border-strong); }
+.research-tour__arrow--left { left: -6px; border-left: 1px solid var(--color-border-strong); border-bottom: 1px solid var(--color-border-strong); }
+.research-tour__meta { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); }
+.research-tour__eyebrow { font-size: var(--font-size-caption); font-weight: var(--font-weight-bold); letter-spacing: 0.5px; color: var(--color-mode-research); text-transform: uppercase; }
+.research-tour__count { font-size: var(--font-size-caption); color: var(--color-text-tertiary); }
+.research-tour__title { font-size: var(--font-size-body); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); margin-bottom: var(--space-2); }
+.research-tour__body { font-size: var(--font-size-code); line-height: 1.5; color: var(--color-text-secondary); margin-bottom: var(--space-4); }
+.research-tour__actions { display: flex; align-items: center; gap: var(--space-2); }

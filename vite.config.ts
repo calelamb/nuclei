@@ -2,8 +2,10 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { cssDeclarationOrder } from './src/build/cssDeclarationOrder'
+import { isWebBuildTarget } from './src/build/resolveBuildTarget'
 
-const isWeb = process.env.BUILD_TARGET === 'web';
+const isWeb = isWebBuildTarget(process.env, process.argv);
 const pkgPath = fileURLToPath(new URL('./package.json', import.meta.url));
 const pkgVersion = JSON.parse(readFileSync(pkgPath, 'utf8')).version as string;
 // Web IDE is deployed at getnuclei.dev/try alongside the landing page,
@@ -13,11 +15,14 @@ const basePath = process.env.VITE_BASE_PATH ?? (isWeb ? '/try/' : '/');
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), cssDeclarationOrder()],
   base: basePath,
   // For web builds, output to dist-web; for Tauri, output to dist
   build: {
     outDir: isWeb ? 'dist-web' : 'dist',
+    // Explicit floors so lightningcss emits both `-webkit-backdrop-filter` (Safari < 18) and the plain property.
+    // (cssDeclarationOrder() fixes the other half: the minifier dropped the plain one, so dialog scrims lost their blur.)
+    cssTarget: ['chrome111', 'edge111', 'firefox114', 'safari16.4'],
     rollupOptions: {
       output: {
         manualChunks(id) {

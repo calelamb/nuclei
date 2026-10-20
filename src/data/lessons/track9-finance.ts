@@ -191,15 +191,16 @@ Q = np.zeros((n, n))
 # TODO: Find optimal portfolio by brute force
 print("Optimal conservative portfolio: ???")`,
         framework: 'qiskit',
-        expectedProbabilities: {},
+        requiredCode: ['risk_aversion\\s*=\\s*2(\\.0+)?(?!\\d)'],
+        expectedOutput: ['Optimal conservative portfolio:.*(101|Tech.*Bonds|Bonds.*Tech)'],
         tolerancePercent: 5,
         hints: [
           'Set risk_aversion = 2.0 to heavily penalize volatile assets.',
           'Build Q = risk_aversion * cov - diag(returns) + budget penalty terms.',
-          'The conservative portfolio should pick Energy + Bonds (lower volatility).',
+          'Bonds has the lowest volatility, so expect it in the portfolio. Check which asset pairs best with it.',
         ],
         successMessage:
-          'With high risk aversion, the optimizer avoids Tech despite its higher return. Risk dominates the cost function.',
+          'With high risk aversion the optimizer anchors on Bonds, the lowest-volatility asset, and pairs it with Tech because their covariance is negative, which offsets risk.',
       },
       {
         type: 'quiz',
@@ -714,7 +715,8 @@ distances = {(0,1): 2, (0,2): 5, (1,2): 3}
 print("Route A->B->C->A distance = ???")
 print("Route A->C->B->A distance = ???")`,
         framework: 'qiskit',
-        expectedProbabilities: {},
+        requiredCode: ['\\.rz\\(', '\\.rx\\('],
+        expectedOutput: ['A->B->C->A distance\\s*=\\s*10\\b', 'A->C->B->A distance\\s*=\\s*10\\b'],
         tolerancePercent: 5,
         hints: [
           'Route A->B->C->A = d(A,B) + d(B,C) + d(C,A) = 2 + 3 + 5 = 10.',

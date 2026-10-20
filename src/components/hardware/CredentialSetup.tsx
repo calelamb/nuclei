@@ -1,3 +1,4 @@
+import { Button } from '../ui';
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
@@ -6,6 +7,7 @@ import type { HardwareProviderType } from '../../types/hardware';
 import { getHardware } from '../../App';
 import { useEscapeToClose } from '../../hooks/useEscapeToClose';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface CredentialSetupProps {
   provider: HardwareProviderType;
   onClose: () => void;
@@ -92,8 +94,8 @@ const PROVIDER_CONFIG: Record<
       'Azure Quantum aggregates Quantinuum, IonQ, Rigetti, Pasqal, and IQM. Requires an Azure subscription and a Quantum workspace.',
     fields: [
       { key: 'subscription_id', label: 'Subscription ID', placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' },
-      { key: 'resource_group', label: 'Resource Group', placeholder: 'MyQuantumRG' },
-      { key: 'workspace_name', label: 'Workspace Name', placeholder: 'my-workspace' },
+      { key: 'resource_group', label: 'Resource group', placeholder: 'MyQuantumRG' },
+      { key: 'workspace_name', label: 'Workspace name', placeholder: 'my-workspace' },
       { key: 'location', label: 'Location', placeholder: 'eastus' },
     ],
     helpText: 'Create a workspace at portal.azure.com.',
@@ -146,7 +148,7 @@ export function CredentialSetup({ provider, onClose }: CredentialSetupProps) {
   });
 
   const font: React.CSSProperties = {
-    fontFamily: "'Geist Sans', sans-serif",
+    fontFamily: TYPOGRAPHY.fontSans,
   };
 
   const handleSave = () => {
@@ -245,19 +247,11 @@ export function CredentialSetup({ provider, onClose }: CredentialSetupProps) {
           </p>
 
           {config.fields.map((field) => (
-            <div key={field.key} style={{ marginBottom: 12 }}>
+            <div className="nuclei-focus-accent" key={field.key} style={{ marginBottom: 12 }}>
               <label
                 htmlFor={`credential-${provider}-${field.key}`}
-                style={{
-                  display: 'block',
-                  fontSize: 10,
-                  fontWeight: 600,
-                  color: colors.textMuted,
-                  textTransform: 'uppercase',
-                  letterSpacing: 0.5,
-                  marginBottom: 4,
-                  ...font,
-                }}
+                className="nuclei-overline"
+                style={{ display: 'block', marginBottom: 4 }}
               >
                 {field.label}
               </label>
@@ -277,15 +271,8 @@ export function CredentialSetup({ provider, onClose }: CredentialSetupProps) {
                   border: `1px solid ${colors.border}`,
                   borderRadius: 4,
                   color: colors.text,
-                  outline: 'none',
                   boxSizing: 'border-box',
                   ...font,
-                }}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = colors.accent;
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = colors.border;
                 }}
               />
             </div>
@@ -294,7 +281,7 @@ export function CredentialSetup({ provider, onClose }: CredentialSetupProps) {
           {config.helpText && (
             <p
               style={{
-                fontSize: 10,
+                fontSize: 11,
                 color: colors.textDim,
                 margin: '0 0 12px',
                 ...font,
@@ -305,7 +292,7 @@ export function CredentialSetup({ provider, onClose }: CredentialSetupProps) {
                   href={config.helpUrl}
                   target="_blank"
                   rel="noreferrer"
-                  style={{ color: colors.accent, cursor: 'pointer' }}
+                  style={{ color: colors.accentText, cursor: 'pointer' }}
                 >
                   {config.helpText}
                 </a>
@@ -341,23 +328,7 @@ export function CredentialSetup({ provider, onClose }: CredentialSetupProps) {
           >
             Cancel
           </button>
-          <button
-            onClick={handleSave}
-            disabled={!allFilled}
-            style={{
-              padding: '6px 14px',
-              fontSize: 11,
-              fontWeight: 600,
-              borderRadius: 4,
-              border: 'none',
-              background: allFilled ? colors.accent : colors.borderStrong,
-              color: allFilled ? '#fff' : colors.textDim,
-              cursor: allFilled ? 'pointer' : 'not-allowed',
-              ...font,
-            }}
-          >
-            Save
-          </button>
+          <Button variant="primary" size="sm" onClick={handleSave} disabled={!allFilled}>Save</Button>
         </div>
       </div>
     </div>

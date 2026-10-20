@@ -16,20 +16,21 @@ key distribution.
 
 | Index | Name | State |
 |-------|------|-------|
-| 0 | \`|\\u03A6\\u207A\\u27E9\` | \`(|00\\u27E9 + |11\\u27E9) / \\u221A2\` |
-| 1 | \`|\\u03A6\\u207B\\u27E9\` | \`(|00\\u27E9 - |11\\u27E9) / \\u221A2\` |
-| 2 | \`|\\u03A8\\u207A\\u27E9\` | \`(|01\\u27E9 + |10\\u27E9) / \\u221A2\` |
-| 3 | \`|\\u03A8\\u207B\\u27E9\` | \`(|01\\u27E9 - |10\\u27E9) / \\u221A2\` |
+| 0 | \`|Φ⁺⟩\` | \`(|00⟩ + |11⟩) / √2\` |
+| 1 | \`|Φ⁻⟩\` | \`(|00⟩ - |11⟩) / √2\` |
+| 2 | \`|Ψ⁺⟩\` | \`(|01⟩ + |10⟩) / √2\` |
+| 3 | \`|Ψ⁻⟩\` | \`(|01⟩ - |10⟩) / √2\` |
 
 ### Your Task
 
 Given a \`bell_index\` (0 through 3), construct the corresponding Bell state on a
-two-qubit circuit. After measurement, the probability distribution must match the
-expected outcome for that state.
+two-qubit circuit. After measurement, the prepared state must match
+the target state, including its relative phase.
 
-> **Note:** \`|\\u03A6\\u207A\\u27E9\` and \`|\\u03A6\\u207B\\u27E9\` produce the same measurement
+> **Note:** \`|Φ⁺⟩\` and \`|Φ⁻⟩\` produce the same measurement
 > probabilities (\`{00: 0.5, 11: 0.5}\`) but differ in relative phase. The same is
-> true for the \`|\\u03A8\\u27E9\` pair. This challenge validates measurement distributions only.`,
+> true for the \`|Ψ⟩\` pair. This challenge grades the prepared state, phase included, so matching counts
+> alone is not enough: each case reports its fidelity with the target state.`,
 
   constraints: [
     'Use exactly 2 qubits and 2 classical bits',
@@ -58,7 +59,7 @@ expected outcome for that state.
       label: 'Phi+',
       description: 'bell_index=0: produce |Phi+> = (|00> + |11>) / sqrt(2)',
       params: { bell_index: 0 },
-      validation: { type: 'state_fidelity' },
+      validation: { type: 'state_fidelity', expected_probabilities: { '00': 0.5, '11': 0.5 } },
       hidden: false,
       weight: 0.25,
     },
@@ -67,7 +68,7 @@ expected outcome for that state.
       label: 'Phi-',
       description: 'bell_index=1: produce |Phi-> = (|00> - |11>) / sqrt(2)',
       params: { bell_index: 1 },
-      validation: { type: 'state_fidelity' },
+      validation: { type: 'state_fidelity', expected_probabilities: { '00': 0.5, '11': 0.5 } },
       hidden: false,
       weight: 0.25,
     },
@@ -76,7 +77,7 @@ expected outcome for that state.
       label: 'Psi+',
       description: 'bell_index=2: produce |Psi+> = (|01> + |10>) / sqrt(2)',
       params: { bell_index: 2 },
-      validation: { type: 'state_fidelity' },
+      validation: { type: 'state_fidelity', expected_probabilities: { '01': 0.5, '10': 0.5 } },
       hidden: false,
       weight: 0.25,
     },
@@ -85,7 +86,7 @@ expected outcome for that state.
       label: 'Psi-',
       description: 'bell_index=3: produce |Psi-> = (|01> - |10>) / sqrt(2)',
       params: { bell_index: 3 },
-      validation: { type: 'state_fidelity' },
+      validation: { type: 'state_fidelity', expected_probabilities: { '01': 0.5, '10': 0.5 } },
       hidden: false,
       weight: 0.25,
     },

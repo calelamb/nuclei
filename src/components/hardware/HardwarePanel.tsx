@@ -1,17 +1,25 @@
-import { useState, useCallback } from 'react';
-import { ChevronDown, ChevronRight, Play, Trash2 } from 'lucide-react';
+import { Badge, Button, EmptyState, IconButton, Select, useConfirm } from '../ui';
+import { DesktopOnlyState } from './DesktopOnlyState';
+import { useState } from 'react';
+import { ChevronDown, ChevronRight, RotateCcw, Rocket, Settings2, Trash2 } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useHardwareStore } from '../../stores/hardwareStore';
 import { hasActiveJobForBackend } from '../../lib/hardwareJobs';
+import './launchPortal.css';
+import { useFrameworksStore } from '../../stores/frameworksStore';
+import { usePlatform } from '../../platform/PlatformProvider';
+import { ProviderStatusBadge } from './ProviderStatusBadge';
+import { providerNeedsToken, providerStatus, sortProvidersForDisplay, type ProviderStatus } from './launchGating';
 import { useEditorStore } from '../../stores/editorStore';
+import { retryKernel } from '../../lib/kernelControl';
 import { useSimulationStore } from '../../stores/simulationStore';
-import { BackendSelector } from './BackendSelector';
 import { JobTracker } from './JobTracker';
 import { ConnectivityMap } from './ConnectivityMap';
 import { ResultsComparison } from './ResultsComparison';
 import { CredentialSetup } from './CredentialSetup';
-import type { HardwareProviderType, BackendInfo } from '../../types/hardware';
+import type { HardwareProviderType } from '../../types/hardware';
 
+import { ICON_SIZE, ICON_STROKE, TYPOGRAPHY } from '../../styles/tokens';
 /* ── Section (local copy matching SettingsPanel pattern) ── */
 
 function Section({
@@ -44,17 +52,7 @@ function Section({
         }}
       >
         <Icon size={12} />
-        <span
-          style={{
-            fontSize: 10,
-            fontWeight: 600,
-            textTransform: 'uppercase',
-            letterSpacing: 0.5,
-            fontFamily: "'Geist Sans', sans-serif",
-          }}
-        >
-          {title}
-        </span>
+        <span className="nuclei-overline" style={{ color: 'inherit' }}>{title}</span>
       </button>
       <div
         style={{
@@ -84,53 +82,22 @@ const PROVIDER_LABELS: Record<HardwareProviderType, string> = {
   simulator: 'Local Simulator',
 };
 
-// Providers whose kernel adapters are stubs (raise NotImplementedError)
-const STUB_PROVIDERS: ReadonlySet<HardwareProviderType> = new Set(['google', 'xanadu', 'dwave']);
-
-/* ── Mock backends for demo ── */
-
-const MOCK_BACKENDS: BackendInfo[] = [
-  {
-    name: 'ibm_brisbane',
-    provider: 'ibm',
-    qubitCount: 127,
-    connectivity: [
-      [0, 1], [1, 2], [2, 3], [3, 4],
-      [0, 5], [5, 6], [6, 7], [7, 8],
-    ],
-    queueLength: 12,
-    averageErrorRate: 0.0032,
-    gateSet: ['CX', 'ID', 'RZ', 'SX', 'X'],
-    status: 'online',
-  },
-  {
-    name: 'ibm_osaka',
-    provider: 'ibm',
-    qubitCount: 127,
-    connectivity: [
-      [0, 1], [1, 2], [2, 3],
-      [0, 4], [4, 5], [5, 6],
-    ],
-    queueLength: 3,
-    averageErrorRate: 0.0028,
-    gateSet: ['CX', 'ID', 'RZ', 'SX', 'X'],
-    status: 'online',
-  },
-  {
-    name: 'aer_simulator',
-    provider: 'simulator',
-    qubitCount: 32,
-    connectivity: [],
-    queueLength: 0,
-    averageErrorRate: 0,
-    gateSet: ['All'],
-    status: 'online',
-  },
-];
-
 /* ── Main HardwarePanel ── */
 
+const PANEL_SHORT_LABELS: Readonly<Record<string, string>> = {
+  'Connect to enable': 'Connect',
+  "Kernel didn't start": "Didn't start",
+};
+
+/** The narrow panel needs shorter status words than the Launch dialog so a row fits on one line. */
+function panelStatus(status: ProviderStatus, inBrowser: boolean): ProviderStatus {
+  if (inBrowser) return { ...status, label: 'In your browser' };
+  const label = PANEL_SHORT_LABELS[status.label];
+  return label ? { ...status, label } : status;
+}
+
 export function HardwarePanel() {
+  const { confirm, confirmDialog } = useConfirm();
   const colors = useThemeStore((s) => s.colors);
   const providers = useHardwareStore((s) => s.providers);
   const backends = useHardwareStore((s) => s.backends);
@@ -138,53 +105,27 @@ export function HardwarePanel() {
   const jobs = useHardwareStore((s) => s.jobs);
   const results = useHardwareStore((s) => s.results);
   const showCredentialSetup = useHardwareStore((s) => s.showCredentialSetup);
-  const setBackends = useHardwareStore((s) => s.setBackends);
   const selectBackend = useHardwareStore((s) => s.selectBackend);
-  const addJob = useHardwareStore((s) => s.addJob);
   const clearJobs = useHardwareStore((s) => s.clearJobs);
   const setShowCredentialSetup = useHardwareStore((s) => s.setShowCredentialSetup);
+  const openLaunch = useHardwareStore((s) => s.openLaunch);
 
-  const code = useEditorStore((s) => s.code);
-  const shots = useSimulationStore((s) => s.shots);
   const simResult = useSimulationStore((s) => s.result);
+  const isWeb = usePlatform().getPlatform() === 'web';
+  const cudaqInstalled = useFrameworksStore((s) => s.status?.installed.includes('cuda-q') ?? false);
+  const kernelStatus = useEditorStore((s) => s.kernelStatus);
+  const statusFor = (p: { name: HardwareProviderType; connected: boolean }) =>
+    providerStatus({ provider: p.name, connected: p.connected, isWeb, cudaqInstalled, kernelStatus });
 
+  const hasAction = (p: { name: HardwareProviderType; connected: boolean }) => {
+    const kind = statusFor(p).kind;
+    return kind === 'unavailable' || (kind === 'needs-setup' && providerNeedsToken(p.name));
+  };
+  const anyRowHasAction = providers.some(hasAction);
   const anyConnected = providers.some((p) => p.connected);
 
-  // Populate backends from connected providers (use mocks for now)
-  const availableBackends =
-    backends.length > 0
-      ? backends
-      : MOCK_BACKENDS.filter((b) =>
-          providers.some((p) => p.name === b.provider && p.connected)
-        );
-
-  // If store backends are empty but we have mocks, set them
-  if (backends.length === 0 && availableBackends.length > 0) {
-    // Use setTimeout to avoid setState during render
-    setTimeout(() => setBackends(availableBackends), 0);
-  }
-
+  const availableBackends = backends;
   const selectedBackendInfo = availableBackends.find((b) => b.name === selectedBackend);
-
-  const handleRunOnHardware = useCallback(() => {
-    if (!selectedBackend || !code) return;
-    // Don't queue a duplicate if this backend already has an in-flight job —
-    // otherwise repeated clicks fabricate a new job each time.
-    if (hasActiveJobForBackend(jobs, selectedBackend)) return;
-
-    const job = {
-      id: `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      provider: selectedBackendInfo?.provider ?? 'simulator',
-      backend: selectedBackend,
-      submittedAt: new Date().toISOString(),
-      status: 'queued' as const,
-      queuePosition: selectedBackendInfo?.queueLength ?? null,
-      shots,
-    };
-
-    addJob(job);
-  }, [selectedBackend, code, selectedBackendInfo, shots, addJob, jobs]);
-
   const backendBusy = hasActiveJobForBackend(jobs, selectedBackend ?? null);
 
   // Get simulator probabilities for comparison
@@ -196,93 +137,70 @@ export function HardwarePanel() {
     : null;
 
   const font: React.CSSProperties = {
-    fontFamily: "'Geist Sans', sans-serif",
+    fontFamily: TYPOGRAPHY.fontSans,
   };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {confirmDialog}
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
         {/* ── Providers ── */}
         <Section title="Providers" defaultOpen>
-          {providers.map((p) => (
-            <div
-              key={p.name}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '5px 0',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div
-                  style={{
-                    width: 7,
-                    height: 7,
-                    borderRadius: '50%',
-                    background: p.connected ? colors.success : colors.textDim,
-                    flexShrink: 0,
-                  }}
-                />
-                <span style={{ fontSize: 11, color: colors.text, ...font }}>
-                  {PROVIDER_LABELS[p.name]}
-                </span>
-              </div>
-
-              {!p.connected && p.name !== 'simulator' && STUB_PROVIDERS.has(p.name) && (
-                <span
-                  style={{
-                    fontSize: 9,
-                    color: colors.textDim,
-                    fontStyle: 'italic',
-                    ...font,
-                  }}
-                >
-                  Coming Soon
-                </span>
-              )}
-
-              {!p.connected && p.name !== 'simulator' && !STUB_PROVIDERS.has(p.name) && (
-                <button
-                  onClick={() => setShowCredentialSetup(p.name)}
-                  style={{
-                    fontSize: 10,
-                    color: colors.accent,
-                    background: 'transparent',
-                    border: `1px solid ${colors.accent}40`,
-                    borderRadius: 3,
-                    padding: '2px 8px',
-                    cursor: 'pointer',
-                    ...font,
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = `${colors.accent}15`;
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'transparent';
-                  }}
-                >
-                  Configure
-                </button>
-              )}
-
-              {p.connected && (
-                <span style={{ fontSize: 10, color: colors.success, ...font }}>
-                  Connected
-                </span>
-              )}
+          {isWeb && (
+            <DesktopOnlyState title="Hardware runs need the desktop app">
+              Connect providers and track job queues in Nuclei for macOS, Windows or Linux.
+            </DesktopOnlyState>
+          )}
+          {sortProvidersForDisplay(providers, (p) => statusFor(p).kind).map((p) => {
+            const status = statusFor(p);
+            const label = PROVIDER_LABELS[p.name];
+            const configurable = status.kind === 'needs-setup' && providerNeedsToken(p.name);
+            return (
+            <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0', height: 32 }}>
+              <span style={{ flex: '0 1 auto', minWidth: 0, fontSize: 12, fontWeight: 600, color: colors.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', ...font }}>
+                {label}
+              </span>
+              <span data-testid="provider-badge-cell" style={{ flex: '0 0 auto', marginLeft: 'auto', display: 'flex', justifyContent: 'flex-end' }}>
+                <ProviderStatusBadge status={panelStatus(status, isWeb && p.name === 'simulator')} />
+              </span>
+              {/* When any row has an action every row reserves the 24px slot so status badges share one right edge. */}
+              {anyRowHasAction && <span className="hw-provider-action" data-testid="provider-action-slot">
+                {status.kind === 'unavailable' && (
+                  <IconButton size="sm" aria-label="Retry" tooltip={{ label: 'Retry starting the kernel', placement: 'above' }} onClick={retryKernel}>
+                    <RotateCcw aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />
+                  </IconButton>
+                )}
+                {configurable && (
+                  <IconButton size="sm" aria-label={`Configure ${label}`} tooltip={{ label: `Configure ${label}`, placement: 'above' }} onClick={() => setShowCredentialSetup(p.name)}>
+                    <Settings2 aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />
+                  </IconButton>
+                )}
+              </span>}
             </div>
-          ))}
+            );
+          })}
         </Section>
 
         {/* ── Backend Selection ── */}
-        {anyConnected && (
+        {anyConnected && !isWeb && (
           <Section title="Backend" defaultOpen>
-            <BackendSelector
-              backends={availableBackends}
-              selected={selectedBackend}
-              onSelect={selectBackend}
-            />
+            {availableBackends.length === 0 && (
+              <EmptyState title="No live backends yet">
+                Backends and queue lengths appear here once the kernel lists them for a connected provider.
+              </EmptyState>
+            )}
+            {availableBackends.length > 0 && <Select
+              aria-label="Backend"
+              value={selectedBackend ?? ''}
+              onChange={(e) => selectBackend(e.target.value)}
+            >
+              <option value="" disabled>Select backend…</option>
+              {availableBackends.map((b) => (
+                <option key={b.name} value={b.name}>
+                  {`${b.name} · ${PROVIDER_LABELS[b.provider]} · ${b.qubitCount}q${b.status === 'online' ? '' : ' (offline)'}`}
+                </option>
+              ))}
+            </Select>}
 
             {/* Selected backend detail card */}
             {selectedBackendInfo && (
@@ -302,61 +220,36 @@ export function HardwarePanel() {
                     marginBottom: 8,
                   }}
                 >
-                  <span style={{ fontSize: 12, fontWeight: 600, color: colors.text, ...font }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: colors.text, whiteSpace: 'nowrap', ...font }}>
                     {selectedBackendInfo.name}
                   </span>
-                  <span
-                    style={{
-                      fontSize: 9,
-                      fontWeight: 600,
-                      textTransform: 'uppercase',
-                      padding: '1px 5px',
-                      borderRadius: 3,
-                      background:
-                        selectedBackendInfo.status === 'online'
-                          ? `${colors.success}20`
-                          : `${colors.error}20`,
-                      color:
-                        selectedBackendInfo.status === 'online'
-                          ? colors.success
-                          : colors.error,
-                      ...font,
-                    }}
-                  >
+                  <Badge tone={selectedBackendInfo.status === 'online' ? 'success' : 'danger'} style={{ textTransform: 'uppercase' }}>
                     {selectedBackendInfo.status}
-                  </span>
+                  </Badge>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px' }}>
                   <div>
-                    <div style={{ fontSize: 9, color: colors.textDim, textTransform: 'uppercase', ...font }}>
-                      Qubits
-                    </div>
+                    <div className="nuclei-overline">Qubits</div>
                     <div style={{ fontSize: 12, color: colors.text, fontWeight: 600, ...font }}>
                       {selectedBackendInfo.qubitCount}
                     </div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 9, color: colors.textDim, textTransform: 'uppercase', ...font }}>
-                      Queue
-                    </div>
+                    <div className="nuclei-overline">Queue</div>
                     <div style={{ fontSize: 12, color: colors.text, fontWeight: 600, ...font }}>
                       {selectedBackendInfo.queueLength}
                     </div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 9, color: colors.textDim, textTransform: 'uppercase', ...font }}>
-                      Error Rate
-                    </div>
+                    <div className="nuclei-overline">Error rate</div>
                     <div style={{ fontSize: 12, color: colors.text, fontWeight: 600, ...font }}>
                       {(selectedBackendInfo.averageErrorRate * 100).toFixed(2)}%
                     </div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 9, color: colors.textDim, textTransform: 'uppercase', ...font }}>
-                      Provider
-                    </div>
-                    <div style={{ fontSize: 12, color: colors.accent, fontWeight: 600, ...font }}>
+                    <div className="nuclei-overline">Provider</div>
+                    <div style={{ fontSize: 12, color: colors.accentText, fontWeight: 600, ...font }}>
                       {PROVIDER_LABELS[selectedBackendInfo.provider]}
                     </div>
                   </div>
@@ -364,71 +257,28 @@ export function HardwarePanel() {
 
                 {/* Gate set pills */}
                 <div style={{ marginTop: 8 }}>
-                  <div
-                    style={{
-                      fontSize: 9,
-                      color: colors.textDim,
-                      textTransform: 'uppercase',
-                      marginBottom: 4,
-                      ...font,
-                    }}
-                  >
-                    Gate Set
-                  </div>
+                  <div className="nuclei-overline" style={{ marginBottom: 4 }}>Gate set</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
                     {selectedBackendInfo.gateSet.map((gate) => (
-                      <span
-                        key={gate}
-                        style={{
-                          fontSize: 9,
-                          padding: '1px 6px',
-                          borderRadius: 3,
-                          background: `${colors.accent}15`,
-                          color: colors.accent,
-                          fontFamily: "'JetBrains Mono', monospace",
-                        }}
-                      >
+                      <Badge key={gate} tone="accent" style={{ fontFamily: TYPOGRAPHY.fontMono }}>
                         {gate}
-                      </span>
+                      </Badge>
                     ))}
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Run button */}
-            <button
-              onClick={handleRunOnHardware}
-              disabled={!selectedBackend || backendBusy}
-              title={backendBusy ? 'This backend already has a job in the queue' : undefined}
-              style={{
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
-                marginTop: 10,
-                padding: '8px 0',
-                borderRadius: 4,
-                border: 'none',
-                background: selectedBackend && !backendBusy ? colors.accent : colors.borderStrong,
-                color: selectedBackend && !backendBusy ? '#fff' : colors.textDim,
-                fontSize: 11,
-                fontWeight: 600,
-                cursor: selectedBackend && !backendBusy ? 'pointer' : 'not-allowed',
-                transition: 'opacity 0.15s',
-                ...font,
-              }}
-              onMouseEnter={(e) => {
-                if (selectedBackend && !backendBusy) e.currentTarget.style.opacity = '0.85';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.opacity = '1';
-              }}
+            {/* Launching goes through the Launch dialog, which talks to the kernel; the panel never fabricates a job. */}
+            <Button
+              variant="primary"
+              style={{ width: '100%', marginTop: 10 }}
+              onClick={() => openLaunch()}
+              disabled={backendBusy}
+              icon={<Rocket size={12} />}
             >
-              <Play size={12} />
-              {backendBusy ? 'Job in queue' : 'Run on Hardware'}
-            </button>
+              {backendBusy ? 'Job in queue' : 'Run on hardware'}
+            </Button>
           </Section>
         )}
 
@@ -446,8 +296,17 @@ export function HardwarePanel() {
         <Section title="Jobs" defaultOpen={jobs.length > 0}>
           <JobTracker jobs={jobs} results={results} />
           {jobs.length > 0 && (
-            <button
-              onClick={() => { if (window.confirm('Clear all hardware jobs from the list?')) clearJobs(); }}
+            <button className="nuclei-hover-danger"
+              onClick={async () => {
+                const ok = await confirm({
+                  title: 'Clear all hardware jobs?',
+                  description: 'They are removed from the list.',
+                  confirmLabel: 'Clear',
+                  cancelLabel: 'Keep jobs',
+                  tone: 'danger',
+                });
+                if (ok) clearJobs();
+              }}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -456,7 +315,7 @@ export function HardwarePanel() {
                 width: '100%',
                 marginTop: 8,
                 padding: '5px 0',
-                fontSize: 10,
+                fontSize: 11,
                 color: colors.textDim,
                 background: 'transparent',
                 border: `1px solid ${colors.border}`,
@@ -464,23 +323,15 @@ export function HardwarePanel() {
                 cursor: 'pointer',
                 ...font,
               }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = colors.error;
-                e.currentTarget.style.color = colors.error;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = colors.border;
-                e.currentTarget.style.color = colors.textDim;
-              }}
             >
-              <Trash2 size={10} />
-              Clear Jobs
+              <Trash2 size={12} />
+              Clear jobs
             </button>
           )}
         </Section>
 
         {/* ── Results Comparison ── */}
-        <Section title="Sim vs Hardware">
+        <Section title="Sim vs hardware">
           <ResultsComparison
             simulatorResult={simProbabilities}
             hardwareResult={hwProbabilities}

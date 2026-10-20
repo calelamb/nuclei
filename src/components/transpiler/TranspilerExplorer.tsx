@@ -1,5 +1,9 @@
 import { type CSSProperties } from 'react';
-import { Shuffle, Loader2, HelpCircle } from 'lucide-react';
+import { Shuffle, Loader2, HelpCircle, AlertTriangle } from 'lucide-react';
+import { Button, EmptyState, Tooltip } from '../ui';
+import { retryKernel } from '../../lib/kernelControl';
+import { DesktopOnlyState } from '../hardware/DesktopOnlyState';
+import { isWebBuild } from '../../platform/buildTarget';
 import { useThemeStore, type ThemeColors } from '../../stores/themeStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useTranspileStore } from '../../stores/transpileStore';
@@ -13,6 +17,7 @@ import {
   formatAddedGates,
 } from './transpileMath';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const DOCS = 'https://getnuclei.dev/docs/developer-tools/transpiler-explorer/';
 
 /**
@@ -33,32 +38,38 @@ export function TranspilerExplorer() {
 
   return (
     <div style={shell(colors)}>
-      <div style={toolbar(colors)}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600 }}>
-          <Shuffle size={14} /> Transpiler Explorer
-        </span>
+      <div className="nuclei-pane-header">
+        <h1 data-nav-landing="" tabIndex={-1} style={{ display: 'flex', alignItems: 'center', gap: 7, margin: 0, fontSize: 13, fontWeight: 600 }}>
+          <Shuffle size={14} aria-hidden="true" /> Transpiler Explorer
+        </h1>
         <div style={{ flex: 1 }} />
-        <a href={DOCS} target="_blank" rel="noreferrer" title="Transpiler Explorer docs" style={iconBtn(colors)}>
-          <HelpCircle size={13} />
-        </a>
+        <Tooltip label="Transpiler Explorer docs" placement="below">
+          <a href={DOCS} target="_blank" rel="noreferrer" aria-label="Transpiler docs" style={iconBtn(colors)}>
+            <HelpCircle size={14} />
+          </a>
+        </Tooltip>
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 16 }}>
-        {!isQiskit ? (
-          <Centered colors={colors}
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 16, paddingInline: 'max(16px, calc((100% - 1280px) / 2))' }}>
+        {isWebBuild() ? (
+          <DesktopOnlyState title="Transpiler Explorer runs in the desktop app">
+            The browser build doesn't include Qiskit's pass manager.
+          </DesktopOnlyState>
+        ) : !isQiskit ? (
+          <Centered
             title="Transpiler Explorer needs Qiskit"
             body={`The active buffer is ${framework}. Qiskit is the only framework with an introspectable compiler, so the pass-by-pass view is Qiskit-only.`}
           />
         ) : pending ? (
-          <Centered colors={colors}
+          <Centered
             icon={<Loader2 size={20} style={{ animation: 'nuclei-spin 800ms linear infinite' }} />}
             title="Transpiling…"
             body="Running the preset pass manager and capturing each pass."
           />
         ) : error ? (
-          <div style={errorBox(colors)}>{error}</div>
+          <TranspileError message={error} />
         ) : !result ? (
-          <Centered colors={colors}
+          <Centered
             title="Choose a target and Transpile"
             body="Pick a target device and optimization level in the sidebar, then Transpile to see what the compiler does to this circuit — before vs. after, pass by pass."
           />
@@ -139,23 +150,23 @@ function PassRow({ pass, index }: { pass: TranspilePass; index: number }) {
       border: `1px solid ${entangling ? colors.accent : colors.border}`,
       background: entangling ? `${colors.accent}12` : 'transparent',
     }}>
-      <span style={{ width: 20, textAlign: 'right', fontSize: 11, color: colors.textDim, fontFamily: "'Geist Mono', monospace" }}>
+      <span style={{ width: 20, textAlign: 'right', fontSize: 11, color: colors.textDim, fontFamily: TYPOGRAPHY.fontMono }}>
         {index}
       </span>
-      <span style={{ flex: 1, fontSize: 12.5, color: colors.text, fontWeight: entangling ? 600 : 400 }}>
+      <span style={{ flex: 1, fontSize: 13, color: colors.text, fontWeight: entangling ? 600 : 400 }}>
         {pass.name}
         {entangling && (
-          <span style={{ marginLeft: 8, fontSize: 10.5, color: colors.accent, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          <span className="nuclei-overline" style={{ marginLeft: 8, color: colors.accentText }}>
             routing
           </span>
         )}
       </span>
-      <span style={{ fontSize: 11.5, fontFamily: "'Geist Mono', monospace", color: colors.textMuted }}>
+      <span style={{ fontSize: 12, fontFamily: TYPOGRAPHY.fontMono, color: colors.textMuted }}>
         {formatAddedGates(pass)}
       </span>
       <span style={{
-        width: 40, textAlign: 'right', fontSize: 11.5, fontFamily: "'Geist Mono', monospace",
-        color: net > 0 ? colors.accent : net < 0 ? colors.textDim : colors.textMuted,
+        width: 40, textAlign: 'right', fontSize: 12, fontFamily: TYPOGRAPHY.fontMono,
+        color: net > 0 ? colors.accentText : net < 0 ? colors.textDim : colors.textMuted,
       }}>
         {formatSigned(net)}
       </span>
@@ -183,12 +194,12 @@ function MetricStrip({
         const tone = deltaTone(delta.before, delta.after);
         return (
           <span key={label} style={{ display: 'flex', alignItems: 'baseline', gap: 4, fontSize: 12 }}>
-            <span style={{ fontFamily: "'Geist Mono', monospace", fontWeight: 600, color: colors.text }}>{value}</span>
-            <span style={{ fontSize: 10.5, color: colors.textDim, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{label}</span>
+            <span style={{ fontFamily: TYPOGRAPHY.fontMono, fontWeight: 600, color: colors.text }}>{value}</span>
+            <span className="nuclei-overline">{label}</span>
             {showDelta && (
               <span style={{
-                fontSize: 10.5, fontFamily: "'Geist Mono', monospace",
-                color: tone === 'increase' ? colors.accent : colors.textDim,
+                fontSize: 11, fontFamily: TYPOGRAPHY.fontMono,
+                color: tone === 'increase' ? colors.accentText : colors.textDim,
               }}>
                 {formatSigned(delta.after - delta.before)}
               </span>
@@ -203,7 +214,7 @@ function MetricStrip({
 function Side({ colors, caption, children }: { colors: ThemeColors; caption: string; children: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-      <div style={{ fontSize: 11, color: colors.textDim, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+      <div className="nuclei-overline" style={{ marginBottom: 6 }}>
         {caption}
       </div>
       <div style={{ border: `1px solid ${colors.border}`, borderRadius: 6, padding: 8, background: colors.bg }}>
@@ -213,33 +224,16 @@ function Side({ colors, caption, children }: { colors: ThemeColors; caption: str
   );
 }
 
-function Centered({ colors, icon, title, body }: {
-  colors: ThemeColors; icon?: React.ReactNode; title: string; body: string;
+function Centered({ icon, title, body, action }: {
+  icon?: React.ReactNode; title: string; body: string; action?: React.ReactNode;
 }) {
-  return (
-    <div style={{
-      height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
-      justifyContent: 'center', textAlign: 'center', gap: 8, padding: 24,
-      color: colors.textMuted,
-    }}>
-      {icon && <div style={{ color: colors.accent }}>{icon}</div>}
-      <div style={{ fontSize: 14, fontWeight: 600, color: colors.text }}>{title}</div>
-      <div style={{ fontSize: 12.5, maxWidth: 420, lineHeight: 1.5 }}>{body}</div>
-    </div>
-  );
+  return <EmptyState icon={icon} title={title} action={action}>{body}</EmptyState>;
 }
 
 function shell(colors: ThemeColors): CSSProperties {
   return {
     height: '100%', display: 'flex', flexDirection: 'column',
-    background: colors.bg, color: colors.text, fontFamily: "'Geist Sans', sans-serif",
-  };
-}
-
-function toolbar(colors: ThemeColors): CSSProperties {
-  return {
-    display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
-    borderBottom: `1px solid ${colors.border}`, flexShrink: 0,
+    background: colors.bg, color: colors.text, fontFamily: TYPOGRAPHY.fontSans,
   };
 }
 
@@ -251,17 +245,30 @@ function iconBtn(colors: ThemeColors): CSSProperties {
   };
 }
 
-function errorBox(colors: ThemeColors): CSSProperties {
-  return {
-    border: `1px solid ${colors.error}`, borderRadius: 6, padding: '10px 12px',
-    fontSize: 12.5, color: colors.error, lineHeight: 1.45,
-  };
+/** A failed transpile: the message in body colour, with Retry when the engine itself is down. */
+function TranspileError({ message }: { message: string }) {
+  const colors = useThemeStore((s) => s.colors);
+  const engineDown = useEditorStore((s) => s.kernelStatus === 'failed' || s.kernelStatus === 'idle');
+  return (
+    <div
+      role="alert"
+      style={{
+        display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 12px',
+        background: colors.bgElevated, border: `1px solid ${colors.border}`,
+        borderLeft: `3px solid ${colors.error}`, borderRadius: 6,
+        fontSize: 13, color: colors.text, lineHeight: 1.45,
+      }}
+    >
+      <AlertTriangle size={14} color={colors.error} style={{ marginTop: 2, flexShrink: 0 }} />
+      <span style={{ flex: 1, minWidth: 0 }}>{message}</span>
+      {engineDown && <Button size="sm" variant="secondary" onClick={retryKernel}>Retry</Button>}
+    </div>
+  );
 }
 
 function sectionHead(colors: ThemeColors): CSSProperties {
   return {
-    fontSize: 12, fontWeight: 600, color: colors.text, marginBottom: 8,
-    textTransform: 'uppercase', letterSpacing: '0.04em',
+    fontSize: 13, fontWeight: 600, color: colors.text, marginBottom: 8,
   };
 }
 
@@ -269,6 +276,6 @@ function chip(colors: ThemeColors): CSSProperties {
   return {
     display: 'inline-block', margin: '0 3px', padding: '1px 6px', borderRadius: 4,
     border: `1px solid ${colors.border}`, background: colors.bg, color: colors.textMuted,
-    fontSize: 10.5, fontFamily: "'Geist Mono', monospace",
+    fontSize: 11, fontFamily: TYPOGRAPHY.fontMono,
   };
 }

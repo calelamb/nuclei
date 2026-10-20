@@ -1,6 +1,6 @@
-import { Database, FileCode2, FlaskConical, FolderInput, FolderTree, LoaderCircle, TriangleAlert } from 'lucide-react';
+import { Database, ExternalLink, FileCode2, FlaskConical, FolderInput, FolderTree, LoaderCircle, PanelLeftClose, PanelLeftOpen, TriangleAlert } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import type { ReactElement } from 'react';
+import { useEffect, useRef, type KeyboardEvent, type ReactElement, type Ref } from 'react';
 import { resolveQecPanels } from '../../../layout/qecPanelRegistry';
 import { useQecStudyStore, type QecStudyValidationError } from '../../../services/qecStudyStore';
 import { useQecStudyUiStore } from '../../../stores/qecStudyUiStore';
@@ -12,38 +12,57 @@ import { useResearchSelectionStore } from '../../../stores/researchSelectionStor
 import type { QecStudy, QecStudySource, QecWorkspacePreset } from '../../../types/qecStudy';
 import type { QecSession } from '../../../types/qecData';
 import { QecPanelPinButton } from './QecPanelPinButton';
+import { Badge, IconButton } from '../../ui';
+import { isOpenableSource, useOpenSource } from './useOpenSource';
+import { ICON_SIZE, ICON_STROKE } from '../../../styles/tokens';
+import { countLabel } from '../import/qecImportModel';
 
 const SOURCE_ICONS: Readonly<Record<QecStudySource['kind'], LucideIcon>> = {
   stim: FileCode2, python: FileCode2, dem: Database,
   experiment: FlaskConical, noise: Database, session: Database,
 };
 
-function SourcesHeading(): ReactElement {
+function SourcesToggle({ collapsed, onToggle, toggleRef }: SourcesToggleProps): ReactElement {
+  const label = collapsed ? 'Show sources' : 'Hide sources';
+  return (
+    <IconButton ref={toggleRef} aria-label={label} aria-expanded={!collapsed} tooltip={{ label, placement: collapsed ? 'right' : 'below' }} onClick={onToggle}>
+      {collapsed ? <PanelLeftOpen aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} /> : <PanelLeftClose aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} />}
+    </IconButton>
+  );
+}
+
+function SourcesHeading({ collapsed, onToggle, toggleRef }: SourcesToggleProps): ReactElement {
   return (
     <header className="qec-zone-heading">
       <div><span className="qec-zone-heading__eyebrow">Study workspace</span><h2>Sources / Data</h2></div>
-      <FolderTree aria-hidden="true" size={18} strokeWidth={1.7} />
+      <SourcesToggle collapsed={collapsed} onToggle={onToggle} toggleRef={toggleRef} />
     </header>
   );
 }
 
+interface SourcesToggleProps { collapsed: boolean; onToggle(): void; toggleRef?: Ref<HTMLButtonElement> }
+
 function LoadingStudies(): ReactElement {
-  return <div className="qec-zone-empty" role="status" aria-label="Loading QEC Studies"><LoaderCircle aria-hidden="true" size={24} /><strong>Loading Studies…</strong><span>Parsing and validating Study manifests.</span></div>;
+  return <div className="qec-zone-empty" role="status" aria-label="Loading QEC Studies"><LoaderCircle aria-hidden="true" size={20} /><strong>Loading Studies…</strong><span>Parsing and validating Study manifests.</span></div>;
 }
 
 function EmptyStudies(): ReactElement {
-  return <div className="qec-zone-empty"><FolderTree aria-hidden="true" size={24} /><strong>No Studies found</strong><span>Create a Study manifest in the studies folder to organize QEC sources and evidence.</span></div>;
+  const projectRoot = useProjectStore((state) => state.projectRoot);
+  const body = projectRoot
+    ? 'Create a Study manifest in the studies folder to organize QEC sources and evidence.'
+    : 'Open a project folder to create Studies. Analyze works without one: drop a sinter stats CSV there.';
+  return <div className="qec-zone-empty"><FolderTree aria-hidden="true" size={20} /><strong>No Studies found</strong><span>{body}</span></div>;
 }
 
 function ChooseStudy(): ReactElement {
-  return <div className="qec-zone-empty"><FlaskConical aria-hidden="true" size={24} /><strong>Choose a Study</strong><span>Use the Study control in the research bar to inspect its referenced sources.</span></div>;
+  return <div className="qec-zone-empty"><FlaskConical aria-hidden="true" size={20} /><strong>Choose a Study</strong><span>Use the Study control in the research bar to inspect its referenced sources.</span></div>;
 }
 
 function ValidationDetails({ errors }: { errors: readonly QecStudyValidationError[] }): ReactElement {
   return (
     <section className="qec-study-errors" role="alert" aria-label="Study validation issues">
       <header>
-        <TriangleAlert aria-hidden="true" size={17} />
+        <TriangleAlert aria-hidden="true" size={16} />
         <div><strong>Study manifests need attention</strong><span>Fix these fields and save the files to retry validation.</span></div>
       </header>
       <ul>{errors.map((entry) => (
@@ -71,7 +90,7 @@ function StudyOverview({ study }: { study: QecStudy }): ReactElement {
   );
 }
 
-function SourceFileRow({ source }: { source: QecStudySource }): ReactElement {
+function SourceFileRow({ source, onOpen }: { source: QecStudySource; onOpen: (source: QecStudySource) => void }): ReactElement {
   const selected = useResearchSelectionStore((state) => state.present.primary);
   const select = useResearchSelectionStore((state) => state.selectPrimary);
   const Icon = SOURCE_ICONS[source.kind];
@@ -81,30 +100,54 @@ function SourceFileRow({ source }: { source: QecStudySource }): ReactElement {
   const jobProjectRoot = useQecJobStore((state) => state.projectRoot);
   const setTrayCollapsed = useQecWorkbenchStore((state) => state.setTrayCollapsed);
   const importButtonId = `qec-import-${source.id.replaceAll(/[^a-zA-Z0-9_-]/g, '-')}`;
+  const openable = isOpenableSource(source);
   const launchImport = (): void => {
     if (!projectRoot || jobProjectRoot !== projectRoot) return;
     openImport(projectRoot, source.path, importButtonId);
     setTrayCollapsed(false);
   };
+  const selectSource = (): void => select({ kind: 'source', id: source.id }, 'user');
+  const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>): void => {
+    if (event.key !== 'Enter' || !openable) return;
+    event.preventDefault();
+    selectSource();
+    onOpen(source);
+  };
   return (
-    <div className="qec-source-row-shell" aria-current={current ? 'true' : undefined}>
-      <button type="button" className="qec-source-row" onClick={() => select({ kind: 'source', id: source.id }, 'user')}>
+    <div className="qec-source-row-shell" aria-current={current ? 'true' : undefined} data-openable={openable ? 'true' : undefined}>
+      <button
+        type="button"
+        className="qec-source-row"
+        title={openable ? 'Double-click or press Enter to open in the editor' : undefined}
+        onClick={selectSource}
+        onDoubleClick={openable ? () => onOpen(source) : undefined}
+        onKeyDown={onKeyDown}
+      >
         <Icon aria-hidden="true" size={16} />
         <span><strong>{source.id}</strong><small className="qec-mono">{source.path}</small></span>
-        <span className="qec-source-row__kind">{source.kind}</span>
+        <Badge className="qec-source-row__kind">{source.kind}</Badge>
       </button>
-      <button id={importButtonId} type="button" className="qec-source-row__import" aria-label={`Import ${source.id}`} title={projectRoot ? 'Import into canonical QEC data' : 'Open a project before importing QEC data'} disabled={!projectRoot || jobProjectRoot !== projectRoot} onClick={launchImport}>
-        <FolderInput aria-hidden="true" size={16} />
-      </button>
+      <span className="qec-source-row__actions">
+        {openable && (
+          <IconButton aria-label={`Open ${source.id}`} title="Open in the editor" onClick={() => onOpen(source)}>
+            <ExternalLink aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} />
+          </IconButton>
+        )}
+        <IconButton id={importButtonId} className="qec-source-row__import" aria-label={`Import ${source.id}`} title={projectRoot ? 'Import into canonical QEC data' : 'Open a project before importing QEC data'} disabled={!projectRoot || jobProjectRoot !== projectRoot} onClick={launchImport}>
+          <FolderInput aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} />
+        </IconButton>
+      </span>
     </div>
   );
 }
 
 function ReferencedFiles({ sources }: { sources: readonly QecStudySource[] }): ReactElement {
+  const { open, error } = useOpenSource();
   return (
     <section className="qec-source-group" aria-labelledby="study-sources-heading">
       <h3 id="study-sources-heading">Referenced files</h3>
-      {sources.length > 0 ? sources.map((source) => <SourceFileRow key={source.id} source={source} />) : <p className="qec-source-group__empty">No files referenced by this Study.</p>}
+      {error && <p className="qec-source-group__empty qec-source-group__error" role="alert">{error}</p>}
+      {sources.length > 0 ? sources.map((source) => <SourceFileRow key={source.id} source={source} onOpen={(entry) => { void open(entry); }} />) : <p className="qec-source-group__empty">No files referenced by this Study.</p>}
     </section>
   );
 }
@@ -166,7 +209,7 @@ function SourceInstruments({ preset }: { preset: QecWorkspacePreset }): ReactEle
       {panels.map((panel) => (
         <div className="qec-source-instrument" key={panel.id}>
           <span className="qec-source-instrument__mark" aria-hidden="true" />
-          <span>{panel.title}</span><span className="qec-mono">ready</span><QecPanelPinButton panel={panel} />
+          <span>{panel.title}</span><span className="qec-source-instrument__state">ready</span><QecPanelPinButton panel={panel} />
         </div>
       ))}
     </section>
@@ -190,23 +233,48 @@ function SourcesFooter({ count, issueCount, active }: { count: number; issueCoun
   const statusClass = issueCount > 0 ? 'qec-status qec-status--warning' : active
     ? 'qec-status qec-status--ready'
     : 'qec-status qec-status--neutral';
-  return <footer className="qec-sources__footer"><span>{count} referenced files</span><span className={statusClass}>{status}</span></footer>;
+  return <footer className="qec-sources__footer"><span>{count} {count === 1 ? 'file' : 'files'}</span><span className={statusClass}>{status}</span></footer>;
 }
 
 function validationIssueCount(errors: readonly QecStudyValidationError[]): number {
   return errors.reduce((total, entry) => total + entry.errors.length, 0);
 }
 
-export function QecSourcesPanel(): ReactElement {
+/**
+ * The pressed toggle unmounts (the rail and the full panel are different trees), so hand keyboard
+ * focus to whichever toggle is mounted next instead of dropping it to <body>.
+ */
+function useToggleFocus(collapsed: boolean, onToggle: () => void): { toggleRef: Ref<HTMLButtonElement>; toggle: () => void } {
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const pending = useRef(false);
+  useEffect(() => {
+    if (!pending.current) return;
+    pending.current = false;
+    toggleRef.current?.focus();
+  }, [collapsed]);
+  return { toggleRef, toggle: () => { pending.current = true; onToggle(); } };
+}
+
+export function QecSourcesPanel({ collapsed = false, onToggle = () => undefined }: Partial<SourcesToggleProps> = {}): ReactElement {
+  const { toggleRef, toggle } = useToggleFocus(collapsed, onToggle);
   const studies = useQecStudyStore((state) => state.studies);
   const errors = useQecStudyStore((state) => state.validationErrors);
   const loading = useQecStudyStore((state) => state.loading);
   const activeStudyId = useQecStudyUiStore((state) => state.activeStudyId);
   const preset = useQecWorkbenchStore((state) => state.preset);
   const study = studies.find((entry) => entry.study.id === activeStudyId)?.study ?? null;
+  if (collapsed) {
+    return (
+      <nav className="qec-sources qec-sources--rail" aria-label="QEC sources and data">
+        <SourcesToggle collapsed onToggle={toggle} toggleRef={toggleRef} />
+        <FolderTree aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} className="qec-sources__rail-icon" />
+        <span className="qec-sources__rail-count qec-mono" aria-label={countLabel(study?.sources.length ?? 0, 'file')}>{study?.sources.length ?? 0}</span>
+      </nav>
+    );
+  }
   return (
     <nav className="qec-sources" aria-label="QEC sources and data">
-      <SourcesHeading />
+      <SourcesHeading collapsed={false} onToggle={toggle} toggleRef={toggleRef} />
       {loading ? <LoadingStudies /> : <SourcesContent study={study} preset={preset} errors={errors} hasStudies={studies.length > 0} />}
       {!loading && <SourcesFooter count={study?.sources.length ?? 0} issueCount={validationIssueCount(errors)} active={study !== null} />}
     </nav>

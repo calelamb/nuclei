@@ -1,0 +1,6 @@
+{
+  "type": "qec_explain",
+  "request_id": "explain-1",
+  "analysis": "nondeterministic",
+  "circuit_text": "R 0\nH 0\nM 0\nDETECTOR rec[-1]\n"
+}

@@ -1,0 +1,6 @@
+# nuclei-mcp: stdio MCP server for AI agents (kernel/nuclei_mcp, run with
+# `python -m nuclei_mcp` from kernel/). Independent of the desktop app and the
+# WebSocket kernel, so not part of kernel/requirements.txt (the packaged app's
+# managed venv). Also needs the QEC toolchain: stim, sinter, pymatching.
+mcp==2.3.0
+scipy>=1.11,<2

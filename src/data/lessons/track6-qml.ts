@@ -540,6 +540,8 @@ x_test = 1.0
 probs = three_class_model(x_test, params)
 print(f"x={x_test}: P(00)={probs[0]:.3f}, P(01)={probs[1]:.3f}, P(10)={probs[2]:.3f}")`,
         framework: 'qiskit',
+        requiredCode: ['\\.ry\\(\\s*x', '\\.ry\\(\\s*params\\[', '\\.cx\\('],
+        expectedOutput: ['P\\(00\\)='],
         tolerancePercent: 5,
         hints: [
           'Encode data: qc.ry(x, 0) and qc.ry(x * 0.7, 1)',

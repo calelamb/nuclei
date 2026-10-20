@@ -6,6 +6,8 @@ import type { AgentRunUi } from '../../stores/agentRunStore';
 import { useEditorStore } from '../../stores/editorStore';
 import type { JournalEntry, PatchTransaction } from '../../services/agent/types';
 
+import { Button } from '../ui';
+import { TYPOGRAPHY } from '../../styles/tokens';
 const RUNNING_STATES = new Set(['planning', 'working', 'paused']);
 
 function stateLabel(state: AgentRunUi['state']): string {
@@ -80,7 +82,7 @@ function TimelineRow({ text }: { text: string }) {
     <div
       style={{
         fontSize: 11,
-        fontFamily: "'JetBrains Mono', monospace",
+        fontFamily: TYPOGRAPHY.fontMono,
         color: colors.textMuted,
         padding: '2px 0',
         overflow: 'hidden',
@@ -129,7 +131,7 @@ function PatchRow({ tx }: { tx: PatchTransaction }) {
       <span
         style={{
           fontSize: 11,
-          fontFamily: "'JetBrains Mono', monospace",
+          fontFamily: TYPOGRAPHY.fontMono,
           color: colors.text,
           flex: 1,
           overflow: 'hidden',
@@ -140,32 +142,18 @@ function PatchRow({ tx }: { tx: PatchTransaction }) {
         {tx.path}
       </span>
       {tx.rolledBack ? (
-        <span style={{ fontSize: 10, color: colors.textDim, fontFamily: "'Geist Sans', sans-serif" }}>
+        <span style={{ fontSize: 11, color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans }}>
           Rolled back
         </span>
       ) : blocked ? (
         <span
           title="Undo your own edits to this file first, then roll back."
-          style={{ fontSize: 10, color: colors.warning, fontFamily: "'Geist Sans', sans-serif" }}
+          style={{ fontSize: 11, color: colors.warning, fontFamily: TYPOGRAPHY.fontSans }}
         >
           File changed — can’t roll back
         </span>
       ) : (
-        <button
-          onClick={handleRollback}
-          style={{
-            padding: '2px 8px',
-            fontSize: 10,
-            fontFamily: "'Geist Sans', sans-serif",
-            background: colors.border,
-            color: colors.text,
-            border: 'none',
-            borderRadius: 4,
-            cursor: 'pointer',
-          }}
-        >
-          Rollback
-        </button>
+        <Button size="sm" variant="secondary" onClick={handleRollback}>Rollback</Button>
       )}
     </div>
   );
@@ -209,7 +197,7 @@ export function AgentRunCard({ run, isRunning, onStop }: AgentRunCardProps) {
             fontSize: 12,
             fontWeight: 600,
             color: colors.text,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             flex: 1,
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -221,14 +209,14 @@ export function AgentRunCard({ run, isRunning, onStop }: AgentRunCardProps) {
         </span>
         <span
           style={{
-            fontSize: 10,
+            fontSize: 11,
             fontWeight: 600,
             padding: '2px 8px',
             borderRadius: 999,
             background: `${badgeColor}18`,
             color: badgeColor,
             border: `1px solid ${badgeColor}40`,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
           {stateLabel(run.state)}
@@ -237,9 +225,9 @@ export function AgentRunCard({ run, isRunning, onStop }: AgentRunCardProps) {
 
       <div
         style={{
-          fontSize: 10,
+          fontSize: 11,
           color: colors.textDim,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}
       >
         {run.iterations} tool call{run.iterations === 1 ? '' : 's'}
@@ -275,7 +263,7 @@ export function AgentRunCard({ run, isRunning, onStop }: AgentRunCardProps) {
           style={{
             fontSize: 11,
             color: colors.textMuted,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             lineHeight: 1.4,
           }}
         >
@@ -284,22 +272,7 @@ export function AgentRunCard({ run, isRunning, onStop }: AgentRunCardProps) {
       )}
 
       {canStop && (
-        <button
-          onClick={onStop}
-          style={{
-            alignSelf: 'flex-start',
-            padding: '4px 12px',
-            fontSize: 11,
-            fontFamily: "'Geist Sans', sans-serif",
-            background: colors.error,
-            color: '#fff',
-            border: 'none',
-            borderRadius: 6,
-            cursor: 'pointer',
-          }}
-        >
-          Stop
-        </button>
+        <Button size="sm" variant="danger" className="dirac-run-stop" onClick={onStop}>Stop</Button>
       )}
     </div>
   );

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { Package, Trash2, RefreshCw, FolderOpen, Plus, Palette } from 'lucide-react';
+import { Package, Trash2, RefreshCw, FolderOpen, Plus, Palette, Check } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import {
   usePluginStore,
@@ -16,13 +16,17 @@ import {
 } from '../../plugins/pluginLoader';
 import { scaffoldPlugin } from '../../services/pluginScaffold';
 import { loadBridge } from '../../platform/PlatformProvider';
+import { DesktopOnlyState } from '../hardware/DesktopOnlyState';
+import { isWebBuild } from '../../platform/buildTarget';
 import { PluginPanelHost } from './PluginPanelHost';
 import { PluginErrorCard } from './PluginErrorCard';
 import type { InstalledPlugin } from '../../plugins/types';
 
+import { TYPOGRAPHY, ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
+import { Button, EmptyState, Tabs, TextInput, useConfirm } from '../ui';
 type Tab = 'installed' | 'panels';
 
-const FONT = "'Geist Sans', sans-serif";
+const FONT = TYPOGRAPHY.fontSans;
 
 /* ── Small building blocks ───────────────────────────────── */
 
@@ -32,47 +36,41 @@ function ActionButton({
   onClick,
   disabled,
   tone = 'default',
+  size = 'md',
+  block = false,
 }: {
+  size?: 'sm' | 'md';
+  /** Full width of its container, for stacked panel actions. */
+  block?: boolean;
   label: string;
   icon: React.ReactNode;
   onClick: () => void;
   disabled?: boolean;
   tone?: 'default' | 'accent' | 'danger';
 }) {
-  const colors = useThemeStore((s) => s.colors);
-  const color =
-    tone === 'accent' ? colors.accent : tone === 'danger' ? colors.error : colors.textMuted;
+  const variant = tone === 'accent' ? 'primary' : tone === 'danger' ? 'danger' : 'secondary';
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 4,
-        fontSize: 10,
-        fontWeight: 500,
-        fontFamily: FONT,
-        color,
-        background: 'transparent',
-        border: `1px solid ${color}40`,
-        borderRadius: 4,
-        padding: '3px 8px',
-        cursor: disabled ? 'default' : 'pointer',
-        opacity: disabled ? 0.5 : 1,
-        flexShrink: 0,
-      }}
-    >
-      {icon}
+    <Button size={size} variant={variant} onClick={onClick} disabled={disabled} icon={icon} style={block ? { width: '100%' } : undefined}>
       {label}
-    </button>
+    </Button>
   );
 }
 
 /* ── Root ────────────────────────────────────────────────── */
 
 export function PluginMarketplace() {
-  const colors = useThemeStore((s) => s.colors);
+  // Plugins are loaded from a local folder, which the browser build cannot open.
+  if (isWebBuild()) {
+    return (
+      <DesktopOnlyState title="Plugins run in the desktop app">
+        Plugins are local folders of user-authored code, which the browser build cannot load.
+      </DesktopOnlyState>
+    );
+  }
+  return <DesktopPluginMarketplace />;
+}
+
+function DesktopPluginMarketplace() {
   const plugins = usePluginStore((s) => s.plugins);
 
   const [tab, setTab] = useState<Tab>('installed');
@@ -129,13 +127,14 @@ export function PluginMarketplace() {
       <div
         style={{
           display: 'flex',
+          flexDirection: 'column',
           gap: 6,
           padding: '10px 12px 8px',
           flexShrink: 0,
-          flexWrap: 'wrap',
         }}
       >
         <ActionButton
+          block
           label="Load plugin…"
           icon={<FolderOpen size={12} />}
           onClick={handleLoad}
@@ -143,6 +142,7 @@ export function PluginMarketplace() {
           tone="accent"
         />
         <ActionButton
+          block
           label="Create plugin…"
           icon={<Plus size={12} />}
           onClick={() => {
@@ -156,35 +156,19 @@ export function PluginMarketplace() {
       {/* Inline create form */}
       {creating && (
         <div style={{ display: 'flex', gap: 6, padding: '0 12px 8px', flexShrink: 0 }}>
-          <input
+          <TextInput
             value={newName}
             autoFocus
+            size="sm"
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !busy) handleCreate();
             }}
             placeholder="plugin name"
             aria-label="New plugin name"
-            style={{
-              flex: 1,
-              minWidth: 0,
-              padding: '5px 8px',
-              fontSize: 12,
-              fontFamily: FONT,
-              background: colors.bg,
-              border: `1px solid ${colors.border}`,
-              borderRadius: 4,
-              color: colors.text,
-              outline: 'none',
-            }}
-            onFocus={(e) => {
-              e.currentTarget.style.borderColor = colors.accent;
-            }}
-            onBlur={(e) => {
-              e.currentTarget.style.borderColor = colors.border;
-            }}
           />
           <ActionButton
+            size="sm"
             label="Choose folder…"
             icon={<FolderOpen size={12} />}
             onClick={handleCreate}
@@ -197,31 +181,15 @@ export function PluginMarketplace() {
       {error && <PluginErrorCard title="Plugin error" message={error} />}
 
       {/* Tab bar */}
-      <div style={{ display: 'flex', borderBottom: `1px solid ${colors.border}`, flexShrink: 0 }}>
-        {(['installed', 'panels'] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            style={{
-              flex: 1,
-              padding: '8px 0',
-              fontSize: 11,
-              fontWeight: 600,
-              fontFamily: FONT,
-              textTransform: 'uppercase',
-              letterSpacing: 0.5,
-              border: 'none',
-              borderBottom: `2px solid ${tab === t ? colors.accent : 'transparent'}`,
-              background: 'transparent',
-              color: tab === t ? colors.accent : colors.textMuted,
-              cursor: 'pointer',
-              transition: 'color 0.15s, border-color 0.15s',
-            }}
-          >
-            {t === 'installed' ? `Installed (${plugins.length})` : 'Panels'}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        aria-label="Plugin views"
+        value={tab}
+        onChange={setTab}
+        options={[
+          { value: 'installed', label: `Installed (${plugins.length})` },
+          { value: 'panels', label: 'Panels' },
+        ]}
+      />
 
       {/* Content */}
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
@@ -242,30 +210,11 @@ function InstalledTab({
   busy: boolean;
   run: (fn: () => Promise<void>) => Promise<void>;
 }) {
-  const colors = useThemeStore((s) => s.colors);
-
   if (plugins.length === 0) {
     return (
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: 32,
-          gap: 12,
-          textAlign: 'center',
-        }}
-      >
-        <Package size={32} color={colors.textDim} strokeWidth={1} />
-        <span style={{ fontSize: 12, color: colors.textDim, fontFamily: FONT }}>
-          No plugins installed
-        </span>
-        <span style={{ fontSize: 11, color: colors.textDim, fontFamily: FONT }}>
-          Load one from a folder or create your own. Plugins are local, user-authored code — there
-          is no remote marketplace.
-        </span>
-      </div>
+      <EmptyState icon={<Package size={ICON_SIZE.lg} strokeWidth={ICON_STROKE} />} title="No plugins installed">
+        Load one from a folder or create your own. Plugins are local, user-authored code. There is no remote marketplace.
+      </EmptyState>
     );
   }
 
@@ -289,6 +238,7 @@ function PluginRow({
 }) {
   const colors = useThemeStore((s) => s.colors);
   const name = plugin.manifest.name;
+  const { confirm, confirmDialog } = useConfirm();
 
   return (
     <div
@@ -317,7 +267,7 @@ function PluginRow({
         </span>
         <span
           style={{
-            fontSize: 9,
+            fontSize: 11,
             color: colors.textDim,
             background: colors.bg,
             padding: '1px 4px',
@@ -331,7 +281,7 @@ function PluginRow({
       </div>
 
       {plugin.manifest.author && (
-        <span style={{ fontSize: 10, color: colors.textMuted, fontFamily: FONT }}>
+        <span style={{ fontSize: 11, color: colors.textMuted, fontFamily: FONT }}>
           by {plugin.manifest.author}
         </span>
       )}
@@ -347,9 +297,9 @@ function PluginRow({
           <span
             key={cap}
             style={{
-              fontSize: 9,
-              fontFamily: "'Geist Mono', monospace",
-              color: colors.accentLight,
+              fontSize: 11,
+              fontFamily: TYPOGRAPHY.fontMono,
+              color: colors.accentText,
               background: `${colors.accent}12`,
               padding: '1px 5px',
               borderRadius: 3,
@@ -363,9 +313,9 @@ function PluginRow({
       {plugin.status === 'error' && plugin.error && (
         <span
           style={{
-            fontSize: 10,
+            fontSize: 11,
             color: colors.error,
-            fontFamily: "'Geist Mono', monospace",
+            fontFamily: TYPOGRAPHY.fontMono,
             wordBreak: 'break-word',
           }}
         >
@@ -376,7 +326,7 @@ function PluginRow({
       <div style={{ display: 'flex', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
         <ActionButton
           label={plugin.enabled ? 'Disable' : 'Enable'}
-          icon={<Package size={11} />}
+          icon={<Package size={12} />}
           disabled={busy}
           onClick={() =>
             run(async () => {
@@ -387,17 +337,27 @@ function PluginRow({
         />
         <ActionButton
           label="Reload"
-          icon={<RefreshCw size={11} />}
+          icon={<RefreshCw size={12} />}
           disabled={busy || !plugin.source}
           onClick={() => run(async () => void (await reloadPlugin(name)))}
         />
         <ActionButton
           label="Uninstall"
-          icon={<Trash2 size={11} />}
+          icon={<Trash2 size={12} />}
           tone="danger"
           disabled={busy}
-          onClick={() => { if (window.confirm(`Uninstall "${name}"? It will be removed from Nuclei.`)) run(() => uninstallPlugin(name)); }}
+          onClick={async () => {
+            const ok = await confirm({
+              title: `Uninstall ${name}?`,
+              description: 'It will be removed from Nuclei.',
+              confirmLabel: 'Uninstall',
+              cancelLabel: 'Keep',
+              tone: 'danger',
+            });
+            if (ok) await run(() => uninstallPlugin(name));
+          }}
         />
+        {confirmDialog}
       </div>
     </div>
   );
@@ -406,11 +366,11 @@ function PluginRow({
 function StatusPill({ status }: { status: InstalledPlugin['status'] }) {
   const colors = useThemeStore((s) => s.colors);
   const tone =
-    status === 'active' ? colors.success : status === 'error' ? colors.error : colors.textDim;
+    status === 'active' ? colors.successText : status === 'error' ? colors.error : colors.textDim;
   return (
     <span
       style={{
-        fontSize: 9,
+        fontSize: 11,
         fontWeight: 600,
         textTransform: 'uppercase',
         letterSpacing: 0.3,
@@ -473,18 +433,7 @@ function PanelsTab() {
             }}
           >
             <Palette size={12} color={colors.textMuted} />
-            <span
-              style={{
-                fontSize: 10,
-                fontWeight: 600,
-                textTransform: 'uppercase',
-                letterSpacing: 0.5,
-                color: colors.textMuted,
-                fontFamily: FONT,
-              }}
-            >
-              Themes
-            </span>
+            <span className="nuclei-overline">Themes</span>
             {overlayActive && (
               <button
                 onClick={() => {
@@ -493,7 +442,7 @@ function PanelsTab() {
                 }}
                 style={{
                   marginLeft: 'auto',
-                  fontSize: 10,
+                  fontSize: 11,
                   fontFamily: FONT,
                   color: colors.textMuted,
                   background: 'transparent',
@@ -518,24 +467,17 @@ function PanelsTab() {
                   <span style={{ fontSize: 12, color: colors.text, fontFamily: FONT, flex: 1 }}>
                     {theme.name}
                   </span>
-                  <button
+                  <Button
+                    size="sm"
+                    icon={active ? <Check size={12} aria-hidden="true" /> : undefined}
+                    style={active ? { color: colors.successText } : undefined}
                     onClick={() => {
                       applyPluginTheme(theme.colors);
                       setAppliedTheme(`${theme.pluginName}:${theme.name}`);
                     }}
-                    style={{
-                      fontSize: 10,
-                      fontFamily: FONT,
-                      color: active ? colors.success : colors.accent,
-                      background: 'transparent',
-                      border: `1px solid ${(active ? colors.success : colors.accent)}40`,
-                      borderRadius: 4,
-                      padding: '2px 8px',
-                      cursor: 'pointer',
-                    }}
                   >
                     {active ? 'Applied' : 'Apply'}
-                  </button>
+                  </Button>
                 </div>
               );
             })}

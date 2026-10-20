@@ -1,36 +1,25 @@
+import { focusAfterUnmount } from '../../hooks/focusAfterUnmount';
+import { scheduleLandingFocus } from '../onboarding/focusLanding';
 import { useMemo } from 'react';
-import {
-  CheckCircle2,
-  Circle,
-  Dot,
-  PanelLeftClose,
-  PanelLeft,
-  BookOpen,
-  Play,
-  Code,
-  HelpCircle,
-  MessageSquare,
-  Layers,
-  type LucideIcon,
-} from 'lucide-react';
-import { useThemeStore } from '../../stores/themeStore';
+import { CheckCircle2, Circle, CircleDot, PanelLeftClose, PanelLeft, Network, Flag, Library, PlayCircle } from 'lucide-react';
 import { useLearnStore } from '../../stores/learnStore';
 import { getTrack } from '../../data/lessons/tracks';
 import type { ContentBlock } from '../../data/lessons/types';
+import { IconButton } from '../ui';
+import { blockMeta, blockOutlineLabel } from './lessonOutline';
+import { LEARN_SECTION_LABELS, useLearnSectionStore, type LearnSection } from './learnSectionStore';
+import { scrollLessonBlock } from './scrollLessonBlock';
+import './lessonNav.css';
 
-const BLOCK_META: Record<string, { icon: LucideIcon; label: string }> = {
-  text: { icon: BookOpen, label: 'Read' },
-  video: { icon: Play, label: 'Watch' },
-  demo: { icon: Code, label: 'Demo' },
-  exercise: { icon: HelpCircle, label: 'Exercise' },
-  quiz: { icon: MessageSquare, label: 'Quiz' },
-  'concept-card': { icon: Layers, label: 'Concept' },
-  'interactive-bloch': { icon: Layers, label: 'Bloch sphere' },
-};
+const SHOW_LABEL = 'Show lesson navigation';
+const HIDE_LABEL = 'Hide lesson navigation';
 
-function scrollToBlock(index: number) {
-  document.getElementById(`block-${index}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
+const SECTION_LINKS: ReadonlyArray<{ section: LearnSection; icon: typeof Network }> = [
+  { section: 'concepts', icon: Network },
+  { section: 'capstones', icon: Flag },
+  { section: 'glossary', icon: Library },
+  { section: 'videos', icon: PlayCircle },
+];
 
 /**
  * The in-lesson navigation column (PRD-less polish): answers "where am I?"
@@ -47,130 +36,103 @@ export function LessonNavSidebar({
   collapsed: boolean;
   onToggleCollapsed: () => void;
 }) {
-  const colors = useThemeStore((s) => s.colors);
   const currentTrackId = useLearnStore((s) => s.currentTrackId);
   const currentLessonId = useLearnStore((s) => s.currentLessonId);
   const currentBlockIndex = useLearnStore((s) => s.currentBlockIndex);
   const completedLessons = useLearnStore((s) => s.completedLessons);
   const setCurrentLesson = useLearnStore((s) => s.setCurrentLesson);
+  const clearCurrentLesson = useLearnStore((s) => s.clearCurrentLesson);
+  const setSection = useLearnSectionStore((s) => s.setSection);
+  const setReturnTo = useLearnSectionStore((s) => s.setReturnTo);
 
   const track = currentTrackId ? getTrack(currentTrackId) : undefined;
   const lessons = useMemo(() => track?.lessons ?? [], [track]);
   const currentLesson = lessons.find((l) => l.id === currentLessonId);
   const completedInTrack = lessons.filter((l) => completedLessons.includes(l.id)).length;
 
+  // Hide and Show are different elements: when the pressed one has focus, hand focus to its counterpart.
+  const toggleKeepingFocus = (counterpart: string) => {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active.closest('.lnav')) {
+      focusAfterUnmount(active, [`.lnav button[aria-label="${counterpart}"]`]);
+    }
+    onToggleCollapsed();
+  };
+
   if (!track) return null;
 
   if (collapsed) {
     return (
-      <div
-        style={{
-          width: 40, flexShrink: 0, borderRight: `1px solid ${colors.border}`,
-          background: colors.bgPanel, display: 'flex', flexDirection: 'column',
-          alignItems: 'center', paddingTop: 8,
-        }}
-      >
-        <button
-          onClick={onToggleCollapsed}
-          title="Show lesson navigation"
-          aria-label="Show lesson navigation"
-          style={iconBtn(colors)}
-        >
+      <div className="lnav lnav--collapsed">
+        <IconButton aria-label={SHOW_LABEL} onClick={() => toggleKeepingFocus(HIDE_LABEL)}>
           <PanelLeft size={16} />
-        </button>
+        </IconButton>
       </div>
     );
   }
 
+  const percent = lessons.length ? (completedInTrack / lessons.length) * 100 : 0;
+
   return (
-    <div
-      style={{
-        width: 260, flexShrink: 0, borderRight: `1px solid ${colors.border}`,
-        background: colors.bgPanel, display: 'flex', flexDirection: 'column',
-        overflow: 'hidden', fontFamily: "'Geist Sans', sans-serif",
-      }}
-    >
-      {/* Track (epic) header */}
-      <div style={{ padding: '12px 12px 10px', borderBottom: `1px solid ${colors.border}`, flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', color: colors.accent }}>
-              Track
-            </div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: colors.text, marginTop: 2, lineHeight: 1.25 }}>
-              {track.title}
-            </div>
+    <nav className="lnav" aria-label="Lesson navigation">
+      <div className="lnav__head">
+        <div className="lnav__head-row">
+          <div className="lnav__head-text">
+            <div className="lnav__eyebrow">Track</div>
+            <div className="lnav__track">{track.title}</div>
           </div>
-          <button onClick={onToggleCollapsed} title="Hide lesson navigation" aria-label="Hide lesson navigation" style={iconBtn(colors)}>
-            <PanelLeftClose size={15} />
-          </button>
+          <IconButton size="sm" aria-label={HIDE_LABEL} onClick={() => toggleKeepingFocus(SHOW_LABEL)}>
+            <PanelLeftClose size={16} />
+          </IconButton>
         </div>
-        {/* Track progress */}
-        <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ flex: 1, height: 4, borderRadius: 2, background: colors.border, overflow: 'hidden' }}>
-            <div style={{ width: `${lessons.length ? (completedInTrack / lessons.length) * 100 : 0}%`, height: '100%', background: colors.accent, transition: 'width 300ms ease' }} />
+        <div className="lnav__progress">
+          <div className="lnav__bar" role="progressbar" aria-label="Track progress" aria-valuemin={0} aria-valuemax={lessons.length} aria-valuenow={completedInTrack}>
+            <div className="lnav__bar-fill" style={{ width: `${percent}%` }} />
           </div>
-          <span style={{ fontSize: 10.5, color: colors.textDim, fontVariantNumeric: 'tabular-nums' }}>
-            {completedInTrack}/{lessons.length}
-          </span>
+          <span className="lnav__count">{completedInTrack}/{lessons.length}</span>
         </div>
       </div>
 
-      {/* Lesson list + current-lesson outline */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '6px 0' }}>
+      <div className="lnav__list">
         {lessons.map((lesson, i) => {
           const isCurrent = lesson.id === currentLessonId;
           const isDone = completedLessons.includes(lesson.id);
+          const title = `${i + 1}. ${lesson.title}`;
           return (
             <div key={lesson.id}>
               <button
+                type="button"
+                className="lnav__lesson"
+                aria-current={isCurrent ? 'true' : undefined}
+                title={title}
                 onClick={() => setCurrentLesson(track.id, lesson.id)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left',
-                  padding: '7px 12px', background: isCurrent ? `${colors.accent}14` : 'transparent',
-                  border: 'none', borderLeft: `2px solid ${isCurrent ? colors.accent : 'transparent'}`,
-                  cursor: 'pointer', color: isCurrent ? colors.text : colors.textMuted,
-                  fontWeight: isCurrent ? 600 : 400,
-                }}
-                onMouseEnter={(e) => { if (!isCurrent) e.currentTarget.style.background = colors.bgElevated; }}
-                onMouseLeave={(e) => { if (!isCurrent) e.currentTarget.style.background = 'transparent'; }}
               >
                 {isDone ? (
-                  <CheckCircle2 size={15} style={{ color: colors.success, flexShrink: 0 }} />
+                  <CheckCircle2 size={16} className="lnav__icon lnav__icon--done" />
                 ) : isCurrent ? (
-                  <Dot size={15} style={{ color: colors.accent, flexShrink: 0 }} />
+                  <CircleDot size={14} className="lnav__icon lnav__icon--current" />
                 ) : (
-                  <Circle size={13} style={{ color: colors.textDim, flexShrink: 0 }} />
+                  <Circle size={14} className="lnav__icon lnav__icon--todo" />
                 )}
-                <span style={{ flex: 1, fontSize: 12.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {i + 1}. {lesson.title}
-                </span>
+                <span className="lnav__label">{title}</span>
               </button>
 
-              {/* Outline of the current lesson's blocks (scroll-spy) */}
               {isCurrent && currentLesson && currentLesson.contentBlocks.length > 1 && (
-                <div style={{ padding: '2px 0 6px' }}>
+                <div className="lnav__outline">
                   {currentLesson.contentBlocks.map((block: ContentBlock, bi) => {
-                    const meta = BLOCK_META[block.type] ?? { icon: BookOpen, label: block.type };
-                    const Icon = meta.icon;
-                    const active = bi === currentBlockIndex;
+                    const Icon = blockMeta(block).icon;
+                    const label = blockOutlineLabel(block);
                     return (
                       <button
                         key={bi}
-                        onClick={() => scrollToBlock(bi)}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: 7, width: '100%', textAlign: 'left',
-                          padding: '4px 12px 4px 34px', background: 'transparent', border: 'none',
-                          cursor: 'pointer', color: active ? colors.accent : colors.textDim,
-                          fontWeight: active ? 600 : 400,
-                        }}
-                        onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = colors.textMuted; }}
-                        onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = colors.textDim; }}
+                        type="button"
+                        className="lnav__outline-item"
+                        aria-current={bi === currentBlockIndex ? 'true' : undefined}
+                        title={label}
+                        onClick={() => scrollLessonBlock(bi, 'smooth')}
                       >
-                        <Icon size={11} style={{ flexShrink: 0 }} />
-                        <span style={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {meta.label}
-                        </span>
+                        <Icon size={12} className="lnav__icon" />
+                        <span className="lnav__label">{label}</span>
                       </button>
                     );
                   })}
@@ -180,13 +142,28 @@ export function LessonNavSidebar({
           );
         })}
       </div>
-    </div>
-  );
-}
 
-function iconBtn(colors: { textMuted: string }): React.CSSProperties {
-  return {
-    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 4,
-    background: 'transparent', border: 'none', color: colors.textMuted, cursor: 'pointer',
-  };
+      <div className="lnav__foot" role="group" aria-label="More ways to learn">
+        {SECTION_LINKS.map(({ section, icon: Icon }) => (
+          <button
+            key={section}
+            type="button"
+            className="lnav__foot-link"
+            onClick={() => {
+              if (currentTrackId && currentLessonId) {
+                setReturnTo({ trackId: currentTrackId, lessonId: currentLessonId, blockIndex: currentBlockIndex });
+              }
+              setSection(section);
+              clearCurrentLesson();
+              // The lesson (and the link that was focused) is gone; land on the chooser heading.
+              scheduleLandingFocus();
+            }}
+          >
+            <Icon size={12} aria-hidden="true" />
+            {LEARN_SECTION_LABELS[section]}
+          </button>
+        ))}
+      </div>
+    </nav>
+  );
 }

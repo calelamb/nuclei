@@ -1,3 +1,4 @@
+import { Button, IconButton } from '../ui';
 import { useState, useMemo, type ReactNode } from 'react';
 import {
   ChevronDown, ChevronRight, Users, BookOpen, TrendingUp,
@@ -8,6 +9,7 @@ import { useEducatorStore, type Assignment } from '../../stores/educatorStore';
 import { AssignmentCreator } from './AssignmentCreator';
 import { ProgressReport } from './ProgressReport';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 /* ── Collapsible Section (matches SettingsPanel pattern) ── */
 
 function Section({ title, icon: Icon, defaultOpen = false, children }: {
@@ -30,8 +32,8 @@ function Section({ title, icon: Icon, defaultOpen = false, children }: {
         <Chevron size={12} />
         {Icon && <Icon size={12} />}
         <span style={{
-          fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
-          letterSpacing: 0.5, fontFamily: "'Geist Sans', sans-serif",
+          fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
+          letterSpacing: 0.5, fontFamily: TYPOGRAPHY.fontSans,
         }}>
           {title}
         </span>
@@ -53,7 +55,7 @@ function Section({ title, icon: Icon, defaultOpen = false, children }: {
 
 export function ClassroomPanel() {
   const colors = useThemeStore((s) => s.colors);
-  const font = "'Geist Sans', sans-serif";
+  const font = TYPOGRAPHY.fontSans;
 
   const isEducator = useEducatorStore((s) => s.isEducator);
   const classroomName = useEducatorStore((s) => s.classroomName);
@@ -99,19 +101,7 @@ export function ClassroomPanel() {
         }}>
           Enable educator mode to manage classrooms, create assignments, and track student progress.
         </span>
-        <button
-          onClick={() => setEducatorMode(true)}
-          style={{
-            fontSize: 11, fontWeight: 500, fontFamily: font,
-            padding: '7px 16px', borderRadius: 4,
-            border: 'none',
-            background: colors.accent,
-            color: '#fff',
-            cursor: 'pointer',
-          }}
-        >
-          Enable Educator Mode
-        </button>
+        <Button variant="primary" onClick={() => setEducatorMode(true)}>Enable Educator Mode</Button>
       </div>
     );
   }
@@ -165,18 +155,10 @@ export function ClassroomPanel() {
                   flex: 1, padding: '4px 8px', fontSize: 13, fontWeight: 600,
                   fontFamily: font, background: colors.bg,
                   border: `1px solid ${colors.accent}`,
-                  borderRadius: 4, color: colors.text, outline: 'none',
+                  borderRadius: 4, color: colors.text,
                 }}
               />
-              <button
-                onClick={handleNameSave}
-                style={{
-                  background: 'transparent', border: 'none', cursor: 'pointer',
-                  color: colors.accent, padding: 4, display: 'flex',
-                }}
-              >
-                <Check size={14} />
-              </button>
+              <IconButton size="sm" aria-label="Save classroom name" onClick={handleNameSave}><Check size={14} /></IconButton>
             </>
           ) : (
             <>
@@ -186,15 +168,7 @@ export function ClassroomPanel() {
               }}>
                 {classroomName || 'Untitled Classroom'}
               </span>
-              <button
-                onClick={() => { setNameInput(classroomName); setEditingName(true); }}
-                style={{
-                  background: 'transparent', border: 'none', cursor: 'pointer',
-                  color: colors.textDim, padding: 4, display: 'flex',
-                }}
-              >
-                <Edit2 size={12} />
-              </button>
+              <IconButton size="sm" aria-label="Rename classroom" tooltip={{ label: 'Rename classroom' }} onClick={() => { setNameInput(classroomName); setEditingName(true); }}><Edit2 size={12} /></IconButton>
             </>
           )}
         </div>
@@ -205,7 +179,7 @@ export function ClassroomPanel() {
           borderBottom: `1px solid ${colors.border}`,
         }}>
           {[
-            { label: 'Students', value: students.length, icon: Users, color: colors.accent },
+            { label: 'Students', value: students.length, icon: Users, color: colors.accentText },
             { label: 'Assignments', value: assignments.length, icon: BookOpen, color: colors.info },
             { label: 'Avg Completion', value: `${avgCompletion}%`, icon: TrendingUp, color: colors.success },
           ].map((stat, i) => (
@@ -214,11 +188,11 @@ export function ClassroomPanel() {
               alignItems: 'center', padding: '8px 4px', gap: 2,
               borderRight: i < 2 ? `1px solid ${colors.border}` : 'none',
             }}>
-              <stat.icon size={13} color={stat.color} />
+              <stat.icon size={14} color={stat.color} />
               <span style={{ fontSize: 14, fontWeight: 700, color: colors.text }}>
                 {stat.value}
               </span>
-              <span style={{ fontSize: 9, color: colors.textDim, textTransform: 'uppercase', letterSpacing: 0.3 }}>
+              <span style={{ fontSize: 11, color: colors.textDim, textTransform: 'uppercase', letterSpacing: 0.3 }}>
                 {stat.label}
               </span>
             </div>
@@ -246,18 +220,16 @@ export function ClassroomPanel() {
                   }}>
                     {st.name}
                   </div>
-                  <div style={{ fontSize: 10, color: colors.textDim, marginTop: 1 }}>
+                  <div style={{ fontSize: 11, color: colors.textDim, marginTop: 1 }}>
                     {st.exercisesCompleted.length} exercises &middot; {formatDate(st.lastActive)}
                   </div>
                 </div>
-                <button
+                <button className="nuclei-hover-danger"
                   onClick={() => removeStudent(st.id)}
                   style={{
                     background: 'transparent', border: 'none', cursor: 'pointer',
                     color: colors.textDim, padding: 4, display: 'flex', borderRadius: 3,
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.color = colors.error; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.color = colors.textDim; }}
                 >
                   <Trash2 size={12} />
                 </button>
@@ -265,7 +237,7 @@ export function ClassroomPanel() {
             ))}
 
             {/* Add student row */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+            <div className="nuclei-focus-accent" style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
               <input
                 value={newStudentName}
                 onChange={(e) => setNewStudentName(e.target.value)}
@@ -274,27 +246,10 @@ export function ClassroomPanel() {
                 style={{
                   flex: 1, padding: '5px 8px', fontSize: 11, fontFamily: font,
                   background: colors.bg, border: `1px solid ${colors.border}`,
-                  borderRadius: 4, color: colors.text, outline: 'none',
+                  borderRadius: 4, color: colors.text,
                 }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = colors.accent; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = colors.border; }}
               />
-              <button
-                onClick={handleAddStudent}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 3,
-                  fontSize: 10, fontWeight: 500, fontFamily: font,
-                  padding: '5px 8px', borderRadius: 4,
-                  border: 'none',
-                  background: colors.accent,
-                  color: '#fff',
-                  cursor: 'pointer',
-                  flexShrink: 0,
-                }}
-              >
-                <Plus size={11} />
-                Add
-              </button>
+              <Button size="sm" variant="primary" onClick={handleAddStudent} icon={<Plus size={12} />}>Add</Button>
             </div>
           </div>
         </Section>
@@ -320,48 +275,24 @@ export function ClassroomPanel() {
                   }}>
                     {a.title}
                   </div>
-                  <div style={{ fontSize: 10, color: colors.textDim, marginTop: 1 }}>
+                  <div style={{ fontSize: 11, color: colors.textDim, marginTop: 1 }}>
                     {a.exerciseIds.length} exercises
                     {a.dueDate && <> &middot; Due {formatDate(a.dueDate)}</>}
                   </div>
                 </div>
-                <button
+                <button className="nuclei-hover-danger"
                   onClick={() => removeAssignment(a.id)}
                   style={{
                     background: 'transparent', border: 'none', cursor: 'pointer',
                     color: colors.textDim, padding: 4, display: 'flex', borderRadius: 3,
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.color = colors.error; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.color = colors.textDim; }}
                 >
                   <Trash2 size={12} />
                 </button>
               </div>
             ))}
 
-            <button
-              onClick={() => setShowCreator(true)}
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                gap: 4, marginTop: 8,
-                width: '100%', padding: '6px 0', borderRadius: 4,
-                border: `1px dashed ${colors.border}`,
-                background: 'transparent',
-                color: colors.textMuted, fontSize: 11, fontFamily: font,
-                cursor: 'pointer',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = colors.accent;
-                e.currentTarget.style.color = colors.accent;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = colors.border;
-                e.currentTarget.style.color = colors.textMuted;
-              }}
-            >
-              <Plus size={12} />
-              Create Assignment
-            </button>
+            <Button style={{ marginTop: 8, width: '100%' }} onClick={() => setShowCreator(true)} icon={<Plus size={12} />}>Create Assignment</Button>
           </div>
         </Section>
 
@@ -373,25 +304,7 @@ export function ClassroomPanel() {
 
       {/* Footer: disable educator mode */}
       <div style={{ padding: 12, borderTop: `1px solid ${colors.border}`, flexShrink: 0 }}>
-        <button
-          onClick={() => setEducatorMode(false)}
-          style={{
-            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            gap: 6, padding: '6px 0', border: `1px solid ${colors.border}`,
-            borderRadius: 4, background: 'transparent', color: colors.textMuted,
-            fontSize: 11, cursor: 'pointer', fontFamily: font,
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.borderColor = colors.error;
-            e.currentTarget.style.color = colors.error;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = colors.border;
-            e.currentTarget.style.color = colors.textMuted;
-          }}
-        >
-          Disable Educator Mode
-        </button>
+        <Button className="nuclei-hover-danger" style={{ width: '100%' }} onClick={() => setEducatorMode(false)}>Disable Educator Mode</Button>
       </div>
 
       {/* Assignment creator modal */}

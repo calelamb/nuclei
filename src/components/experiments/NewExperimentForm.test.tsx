@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, cleanup, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, cleanup, fireEvent, waitFor, act, screen } from '@testing-library/react';
 import { parse as parseYaml } from 'yaml';
 import { NewExperimentForm } from './NewExperimentForm';
 import { useProjectStore } from '../../stores/projectStore';
@@ -9,13 +9,14 @@ import { useHardwareStore } from '../../stores/hardwareStore';
 
 const mkdirMock = vi.hoisted(() => vi.fn(async () => {}));
 const writeTextFileMock = vi.hoisted(() => vi.fn(async () => {}));
+const existsMock = vi.hoisted(() => vi.fn<(path: string) => Promise<boolean>>(async () => false));
 
 vi.mock('@tauri-apps/plugin-fs', () => ({
   mkdir: mkdirMock,
   writeTextFile: writeTextFileMock,
   readDir: vi.fn(async () => []),
   readTextFile: vi.fn(async () => ''),
-  exists: vi.fn(async () => false),
+  exists: existsMock,
   watch: vi.fn(async () => () => {}),
 }));
 
@@ -51,6 +52,8 @@ describe('NewExperimentForm', () => {
     useHardwareStore.setState({ backends: [] });
     mkdirMock.mockClear();
     writeTextFileMock.mockClear();
+    existsMock.mockReset();
+    existsMock.mockResolvedValue(false);
   });
 
   afterEach(() => {
@@ -101,11 +104,11 @@ describe('NewExperimentForm', () => {
     fireEvent.change(getByLabelText('Notes (optional)'), { target: { value: 'H2 ansatz sweep' } });
     fireEvent.click(getByText('Add'));
 
-    const nameInput = document.querySelector('input[placeholder="theta"]') as HTMLInputElement;
+    const nameInput = document.querySelector('input[aria-label="Parameter name"]') as HTMLInputElement;
     fireEvent.change(nameInput, { target: { value: 'theta' } });
-    const valuesSelect = nameInput.parentElement!.querySelector('select') as HTMLSelectElement;
+    const valuesSelect = nameInput.closest('[data-sweep-row]')!.querySelector('select') as HTMLSelectElement;
     fireEvent.change(valuesSelect, { target: { value: 'values' } });
-    const valuesInput = nameInput.parentElement!.querySelector('input[placeholder="0, 1, 2"]') as HTMLInputElement;
+    const valuesInput = nameInput.closest('[data-sweep-row]')!.querySelector('input[placeholder="0, 1, 2"]') as HTMLInputElement;
     fireEvent.change(valuesInput, { target: { value: '0, 1, 2' } });
 
     fireEvent.click(getByText('Create experiment'));
@@ -125,10 +128,10 @@ describe('NewExperimentForm', () => {
     fireEvent.change(getByLabelText('Entry file'), { target: { value: 'run.py' } });
     fireEvent.click(getByText('Add'));
 
-    const nameInput = document.querySelector('input[placeholder="theta"]') as HTMLInputElement;
+    const nameInput = document.querySelector('input[aria-label="Parameter name"]') as HTMLInputElement;
     fireEvent.change(nameInput, { target: { value: 'theta' } });
     const [startInput, stopInput] = Array.from(
-      nameInput.parentElement!.querySelectorAll('input[placeholder="start"], input[placeholder="stop"]'),
+      nameInput.closest('[data-sweep-row]')!.querySelectorAll('input[placeholder="start"], input[placeholder="stop"]'),
     ) as HTMLInputElement[];
     fireEvent.change(startInput, { target: { value: '0' } });
     fireEvent.change(stopInput, { target: { value: '1000' } }); // step defaults to 0.1 -> >500 points
@@ -156,5 +159,142 @@ describe('NewExperimentForm', () => {
       useExperimentStore.setState({ experiments: [{ ...EXISTING, spec: { ...EXISTING.spec, shots: 9999 } }] });
     });
     expect((getByLabelText('Shots') as HTMLInputElement).value).toBe('256');
+  });
+
+  it('does not show validation errors before the user has touched anything (research-22)', () => {
+    const { queryByText, container } = render(
+      <NewExperimentForm projectRoot="/proj" onClose={vi.fn()} />,
+    );
+    expect(container.querySelector('ul')).toBeNull();
+    expect(queryByText(/Too small/)).toBeNull();
+    expect(container.textContent).toContain('1 point (no sweep)');
+  });
+
+  it('shows human copy for a missing entry file once the field was touched (research-22)', () => {
+    const { getByLabelText, getByText, queryByText } = render(
+      <NewExperimentForm projectRoot="/proj" onClose={vi.fn()} />,
+    );
+    fireEvent.change(getByLabelText('Name'), { target: { value: 'x' } });
+    expect(queryByText(/Choose the file to run/)).toBeNull();
+    fireEvent.change(getByLabelText('Entry file'), { target: { value: 'a' } });
+    fireEvent.change(getByLabelText('Entry file'), { target: { value: '' } });
+    expect(getByText(/Choose the file to run/)).toBeTruthy();
+    expect(queryByText(/Too small/)).toBeNull();
+  });
+
+  it('titles the edit form with the experiment name (research-01)', () => {
+    const { getByText } = render(
+      <NewExperimentForm projectRoot="/proj" existing={EXISTING} onClose={vi.fn()} />,
+    );
+    expect(getByText('Edit theta-sweep')).toBeTruthy();
+  });
+
+  it('asks before discarding unsaved edits on Close, in an in-app dialog (research-01, research-r-07)', async () => {
+    const onClose = vi.fn();
+    const nativeConfirm = vi.spyOn(window, 'confirm');
+    const { getByLabelText, getByText, findByRole, queryByRole } = render(
+      <NewExperimentForm projectRoot="/proj" existing={EXISTING} onClose={onClose} />,
+    );
+    fireEvent.click(getByText('Close'));
+    expect(onClose).toHaveBeenCalledTimes(1); // clean form closes silently
+    fireEvent.change(getByLabelText('Shots'), { target: { value: '5' } });
+    fireEvent.click(getByText('Close'));
+    const dialog = await findByRole('alertdialog', { name: 'Discard your unsaved changes?' });
+    expect(dialog).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+    await waitFor(() => expect(queryByRole('alertdialog')).toBeNull());
+    expect(onClose).toHaveBeenCalledTimes(1); // user declined
+    fireEvent.click(getByText('Close'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Discard' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(2));
+    expect(nativeConfirm).not.toHaveBeenCalled();
+    nativeConfirm.mockRestore();
+  });
+
+  it('blocks a new experiment whose name collides with an existing one (LR-01)', () => {
+    useExperimentStore.setState({ experiments: [EXISTING] });
+    const { getByLabelText, getByText, getByRole } = render(
+      <NewExperimentForm projectRoot="/proj" onClose={vi.fn()} />,
+    );
+    fireEvent.change(getByLabelText('Name'), { target: { value: 'Theta Sweep' } });
+    fireEvent.change(getByLabelText('Entry file'), { target: { value: 'other.py' } });
+    expect(getByRole('alert').textContent).toMatch(/already exists/i);
+    // The message sits under the Name field and is wired to it (research-r-08).
+    const nameInput = getByLabelText('Name');
+    expect(nameInput.getAttribute('aria-invalid')).toBe('true');
+    expect(document.getElementById(nameInput.getAttribute('aria-describedby') ?? '')).toBe(getByRole('alert'));
+    expect(nameInput.parentElement?.contains(getByRole('alert'))).toBe(true);
+    const submit = getByText('Create experiment') as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    fireEvent.click(submit);
+    expect(writeTextFileMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses to write over a file that exists on disk but is not yet in the store (LR-01)', async () => {
+    existsMock.mockResolvedValue(true);
+    const { getByLabelText, getByText, findByText } = render(
+      <NewExperimentForm projectRoot="/proj" onClose={vi.fn()} />,
+    );
+    fireEvent.change(getByLabelText('Name'), { target: { value: 'fresh' } });
+    fireEvent.change(getByLabelText('Entry file'), { target: { value: 'run.py' } });
+    fireEvent.click(getByText('Create experiment'));
+    expect(await findByText(/already exists/i)).toBeTruthy();
+    expect(writeTextFileMock).not.toHaveBeenCalled();
+  });
+
+  it('still lets an existing experiment be saved under its own name (LR-01)', async () => {
+    useExperimentStore.setState({ experiments: [EXISTING] });
+    const { getByText } = render(
+      <NewExperimentForm projectRoot="/proj" existing={EXISTING} onClose={vi.fn()} />,
+    );
+    fireEvent.click(getByText('Save changes'));
+    await waitFor(() => expect(writeTextFileMock).toHaveBeenCalledTimes(1));
+    expect(existsMock).not.toHaveBeenCalled();
+  });
+
+  it('flags unnamed sweep rows instead of silently ignoring them (research-r-09)', () => {
+    const { getByText, getAllByText } = render(
+      <NewExperimentForm projectRoot="/proj" onClose={vi.fn()} />,
+    );
+    fireEvent.click(getByText('Add'));
+    fireEvent.click(getByText('Add'));
+    expect(getAllByText('Name this parameter to include it in the sweep.')).toHaveLength(2);
+    expect(getByText(/2 parameters unnamed/)).toBeTruthy();
+    expect(document.querySelector('input[placeholder="theta"]')).toBeNull();
+  });
+
+  describe('focus (research-r-06)', () => {
+    it('takes focus on the Name field when it opens', () => {
+      const { getByLabelText } = render(<NewExperimentForm projectRoot="/proj" onClose={vi.fn()} />);
+      expect(document.activeElement).toBe(getByLabelText('Name'));
+    });
+
+    it('returns focus to the control that opened it when it closes', async () => {
+      const opener = document.createElement('button');
+      document.body.appendChild(opener);
+      opener.focus();
+      const onClose = vi.fn();
+      const { getByText } = render(<NewExperimentForm projectRoot="/proj" onClose={onClose} />);
+      fireEvent.click(getByText('Close'));
+      expect(onClose).toHaveBeenCalledTimes(1);
+      await waitFor(() => expect(document.activeElement).toBe(opener));
+      opener.remove();
+    });
+
+    it('closes a pristine form on Escape', () => {
+      const onClose = vi.fn();
+      const { getByLabelText } = render(<NewExperimentForm projectRoot="/proj" onClose={onClose} />);
+      fireEvent.keyDown(getByLabelText('Name'), { key: 'Escape' });
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not discard edits on Escape: it moves focus to Close instead', () => {
+      const onClose = vi.fn();
+      const { getByLabelText, getByText } = render(<NewExperimentForm projectRoot="/proj" onClose={onClose} />);
+      fireEvent.change(getByLabelText('Name'), { target: { value: 'half-typed' } });
+      fireEvent.keyDown(getByLabelText('Name'), { key: 'Escape' });
+      expect(onClose).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(getByText('Close').closest('button'));
+    });
   });
 });

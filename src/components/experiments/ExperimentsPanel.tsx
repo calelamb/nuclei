@@ -1,15 +1,24 @@
-import { useEffect, useState } from 'react';
-import { Pencil, FlaskConical } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Pencil, FlaskConical, Plus, Waves } from 'lucide-react';
+import { isWebBuild } from '../../platform/buildTarget';
+import { useNavigationStore } from '../../stores/navigationStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useExperimentStore, type DiscoveredExperiment } from '../../services/experimentStore';
 import { useExperimentUiStore } from '../../stores/experimentUiStore';
 import { createTauriExperimentFs } from '../../services/experimentFs';
 import { campaignTaskCount, expandGrid } from '../../types/experiment';
+import { describeLastRun } from './runDetailFormat';
 import { NewExperimentForm } from './NewExperimentForm';
+import { BrokenExperimentCard } from './BrokenExperimentCard';
 import { NewQecExperimentMenu } from './NewQecExperimentMenu';
 import { NoiseModelLibrary } from './NoiseModelLibrary';
 import { RunButton } from './RunButton';
+import { RunFeedback } from './RunFeedback';
+import { TYPOGRAPHY, ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
+import { Button, EmptyState, IconButton, useConfirm } from '../ui';
+import { DesktopOnlyState } from '../hardware/DesktopOnlyState';
+import './experiments.css';
 
 /**
  * PRD 09 Phase D (D1) — Research-mode left-rail Experiments panel. Replaces
@@ -19,13 +28,12 @@ import { RunButton } from './RunButton';
  * `NewExperimentForm` for creating (or editing) an experiment.
  */
 
-function formatLastRun(experiment: DiscoveredExperiment, runsByExperiment: Record<string, { manifest: { started_at: string } }[]>): string {
-  const runs = runsByExperiment[experiment.fileName];
-  if (!runs || runs.length === 0) return 'never run';
+/** The experiment list never collapses below this, however tall the open form is. */
+const LIST_MIN_HEIGHT = 120;
+
+function formatLastRun(experiment: DiscoveredExperiment, runsByExperiment: Record<string, { manifest: { started_at: string } }[]>): ReturnType<typeof describeLastRun> {
   // Runs are stored newest-first by directory name.
-  const latest = runs[0].manifest.started_at;
-  const date = new Date(latest);
-  return Number.isNaN(date.getTime()) ? latest : date.toLocaleString();
+  return describeLastRun(runsByExperiment[experiment.fileName]?.[0]?.manifest.started_at);
 }
 
 function gridSizeLabel(experiment: DiscoveredExperiment): string {
@@ -43,16 +51,30 @@ function gridSizeLabel(experiment: DiscoveredExperiment): string {
   }
 }
 
+function WebExperimentsEmptyState() {
+  const setActiveView = useNavigationStore((s) => s.setActiveView);
+  return (
+    <DesktopOnlyState
+      title="Experiments live in the desktop app"
+      alternative={<Button size="sm" onClick={() => setActiveView('qec')}>Open QEC Workbench</Button>}
+    >
+      Experiments are parameter sweeps saved as files in a project folder. In the browser you can still analyse QEC data and edit and simulate circuits.
+    </DesktopOnlyState>
+  );
+}
+
 function ExperimentRow({
   experiment,
   projectRoot,
   lastRun,
+  selected,
   onSelect,
   onEdit,
 }: {
   experiment: DiscoveredExperiment;
   projectRoot: string;
-  lastRun: string;
+  lastRun: { label: string; title: string; summary: string };
+  selected: boolean;
   onSelect(): void;
   onEdit(): void;
 }) {
@@ -61,43 +83,48 @@ function ExperimentRow({
 
   return (
     <div
+      className="nuclei-experiment-row"
+      data-testid={`experiment-row-${experiment.fileName}`}
+      aria-current={selected ? 'true' : undefined}
       onClick={onSelect}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => { if (e.key === 'Enter') onSelect(); }}
-      style={{
-        padding: '8px 10px', borderBottom: `1px solid ${colors.border}`,
-        cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 4,
-      }}
-      onMouseEnter={(e) => { e.currentTarget.style.background = colors.bgElevated; }}
-      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ color: colors.text, fontSize: 12, fontWeight: 600, fontFamily: "'Geist Sans', sans-serif", flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {spec.name}
-        </span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <button
-          onClick={(e) => { e.stopPropagation(); onEdit(); }}
-          title="Edit experiment"
-          aria-label={`Edit ${spec.name}`}
-          style={{ background: 'transparent', border: 'none', color: colors.textDim, cursor: 'pointer', display: 'flex' }}
+          type="button"
+          className="nuclei-experiment-row__name"
+          onClick={(e) => { e.stopPropagation(); onSelect(); }}
+          title={`Open ${spec.name}`}
         >
-          <Pencil size={12} />
+          {spec.name}
         </button>
+        <IconButton
+          size="sm"
+          aria-label={`Edit ${spec.name}`}
+          tooltip={{ label: 'Edit experiment' }}
+          onClick={(e) => { e.stopPropagation(); onEdit(); }}
+        >
+          <Pencil size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />
+        </IconButton>
       </div>
-      <div style={{ color: colors.textDim, fontSize: 10, fontFamily: "'Fira Code', monospace" }}>
-        {spec.type === 'qec_campaign'
-          ? `${'generate' in spec.source ? spec.source.generate.code : spec.source.entry} · ${spec.noise.model} · ${spec.decoders.join('+')}`
-          : `${spec.entry} · ${spec.backend.provider}/${spec.backend.target}`}
+      <div style={{ color: colors.textDim, fontSize: 11, fontFamily: TYPOGRAPHY.fontMono, display: 'flex', flexDirection: 'column' }}>
+        {/* One fact per line: a wrapped " · " separator would dangle at the end of the first line. */}
+        {(spec.type === 'qec_campaign'
+          ? [`${'generate' in spec.source ? spec.source.generate.code : spec.source.entry}`, `${spec.noise.model} · ${spec.decoders.join('+')}`]
+          : [spec.entry, [spec.backend.provider, spec.backend.target].filter(Boolean).join('/')]
+        ).filter(Boolean).map((line) => <span key={line} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{line}</span>)}
       </div>
-      <div style={{ color: colors.textDim, fontSize: 10, fontFamily: "'Geist Sans', sans-serif" }}>
+      <div
+        className="nuclei-experiment-row__meta"
+        title={lastRun.title}
+        style={{ color: colors.textDim, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans }}
+      >
         {spec.type === 'qec_campaign'
-          ? `campaign · ${gridSizeLabel(experiment)} task${gridSizeLabel(experiment) === '1' ? '' : 's'} · last run: ${lastRun}`
-          : `${gridSizeLabel(experiment)} point${gridSizeLabel(experiment) === '1' ? '' : 's'} · last run: ${lastRun}`}
+          ? `campaign · ${gridSizeLabel(experiment)} task${gridSizeLabel(experiment) === '1' ? '' : 's'} · ${lastRun.summary}`
+          : `${gridSizeLabel(experiment)} point${gridSizeLabel(experiment) === '1' ? '' : 's'} · ${lastRun.summary}`}
       </div>
       {spec.type !== 'qec_campaign' && (
         <div onClick={(e) => e.stopPropagation()}>
-          <RunButton experiment={experiment} projectRoot={projectRoot} pointCount={Number(gridSizeLabel(experiment)) || 0} />
+          <RunButton experiment={experiment} projectRoot={projectRoot} pointCount={Number(gridSizeLabel(experiment)) || 0} variant="ghost" />
         </div>
       )}
     </div>
@@ -115,10 +142,31 @@ export function ExperimentsPanel() {
   const startWatching = useExperimentStore((s) => s.startWatching);
   const stopWatching = useExperimentStore((s) => s.stopWatching);
   const selectExperiment = useExperimentUiStore((s) => s.selectExperiment);
+  const selectedFileName = useExperimentUiStore((s) => s.selectedExperimentFileName);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<DiscoveredExperiment | undefined>(undefined);
   const [noiseLibOpen, setNoiseLibOpen] = useState(false);
+  const formDirtyRef = useRef(false);
+
+  /** Opens the form on `target` (undefined = blank), asking first if the open form has unsaved edits. */
+  const { confirm, confirmDialog } = useConfirm();
+  const openForm = async (target: DiscoveredExperiment | undefined) => {
+    const switching = formOpen && (editing?.fileName ?? 'new') !== (target?.fileName ?? 'new');
+    if (switching && formDirtyRef.current) {
+      const discard = await confirm({
+        title: 'Discard your unsaved changes?',
+        description: 'This form has edits that have not been saved.',
+        confirmLabel: 'Discard',
+        cancelLabel: 'Keep editing',
+        tone: 'danger',
+      });
+      if (!discard) return;
+    }
+    formDirtyRef.current = false;
+    setEditing(target);
+    setFormOpen(true);
+  };
 
   useEffect(() => {
     if (!projectRoot) return;
@@ -139,10 +187,13 @@ export function ExperimentsPanel() {
     }
   }, [projectRoot, experiments, scanRuns]);
 
+  if (isWebBuild()) return <WebExperimentsEmptyState />;
+  const listEmpty = experiments.length === 0 && validationErrors.length === 0;
+
   if (!projectRoot) {
     return (
-      <div style={{ padding: 16, color: colors.textDim, fontSize: 12, fontFamily: "'Geist Sans', sans-serif", textAlign: 'center' }}>
-        <FlaskConical size={20} style={{ opacity: 0.4, marginBottom: 8 }} />
+      <div style={{ padding: 16, color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, textAlign: 'center' }}>
+        <FlaskConical size={ICON_SIZE.lg} strokeWidth={ICON_STROKE} style={{ opacity: 0.6, marginBottom: 8 }} />
         <div>Open a folder to start experimenting.</div>
       </div>
     );
@@ -150,35 +201,36 @@ export function ExperimentsPanel() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ padding: '8px 10px', display: 'flex', gap: 6, justifyContent: 'flex-end', borderBottom: `1px solid ${colors.border}` }}>
-        <button
-          onClick={() => setNoiseLibOpen(true)}
-          style={{
-            padding: '4px 10px', background: 'transparent', border: `1px solid ${colors.border}`,
-            borderRadius: 4, color: colors.textMuted, cursor: 'pointer', fontSize: 11, fontWeight: 600,
-            fontFamily: "'Geist Sans', sans-serif",
-          }}
-        >
-          Noise models
-        </button>
+      <div style={{ padding: '8px 10px', display: 'flex', gap: 6, alignItems: 'center', justifyContent: listEmpty ? 'flex-end' : undefined, borderBottom: `1px solid ${colors.border}` }}>
+        {/* While the list is empty the empty state carries the one New experiment action. */}
+        {!listEmpty && (
+          <Button
+            variant="secondary"
+            className="nuclei-experiment-new"
+            aria-pressed={formOpen && editing === undefined}
+            onClick={() => { void openForm(undefined); }}
+            style={{ flex: 1, minWidth: 0 }}
+            icon={<Plus size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} aria-hidden="true" />}
+          >
+            New experiment
+          </Button>
+        )}
         <NewQecExperimentMenu projectRoot={projectRoot} />
-        <button
-          onClick={() => { setEditing(undefined); setFormOpen((v) => !v); }}
-          style={{
-            padding: '4px 10px', background: 'transparent', border: `1px solid ${colors.accent}`,
-            borderRadius: 4, color: colors.accent, cursor: 'pointer', fontSize: 11, fontWeight: 600,
-            fontFamily: "'Geist Sans', sans-serif",
-          }}
-        >
-          + New experiment
-        </button>
+        <IconButton variant="secondary" aria-label="Noise models" tooltip={{ label: 'Noise models', placement: 'below' }} onClick={() => setNoiseLibOpen(true)}>
+          <Waves size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />
+        </IconButton>
       </div>
+      <RunFeedback compact />
 
-      <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-        {experiments.length === 0 && validationErrors.length === 0 && (
-          <div style={{ padding: 16, color: colors.textDim, fontSize: 12, fontFamily: "'Geist Sans', sans-serif" }}>
-            No experiments yet. Create one to declare a parameter sweep.
-          </div>
+      <div style={{ flex: 1, minHeight: LIST_MIN_HEIGHT, overflow: 'auto' }}>
+        {listEmpty && (
+          <EmptyState
+            icon={<FlaskConical size={ICON_SIZE.lg} strokeWidth={ICON_STROKE} />}
+            title="No experiments yet"
+            action={<Button size="sm" variant="primary" onClick={() => { void openForm(undefined); }}>New experiment</Button>}
+          >
+            An experiment declares a parameter sweep over your circuit.
+          </EmptyState>
         )}
 
         {experiments.map((experiment) => (
@@ -187,41 +239,33 @@ export function ExperimentsPanel() {
             experiment={experiment}
             projectRoot={projectRoot}
             lastRun={formatLastRun(experiment, runsByExperiment)}
+            selected={selectedFileName === experiment.fileName}
             onSelect={() => selectExperiment(experiment.fileName)}
-            onEdit={() => { setEditing(experiment); setFormOpen(true); }}
+            onEdit={() => { void openForm(experiment); }}
           />
         ))}
 
         {validationErrors.map((err) => (
-          <div
-            key={err.fileName}
-            role="alert"
-            style={{
-              margin: 8, padding: 10, border: `1px solid ${colors.error}`, borderRadius: 6,
-              background: `${colors.error}12`,
-            }}
-          >
-            <div style={{ color: colors.error, fontSize: 11, fontWeight: 600, marginBottom: 4, fontFamily: "'Fira Code', monospace" }}>
-              {err.fileName}
-            </div>
-            <ul style={{ margin: 0, paddingLeft: 16, color: colors.textMuted, fontSize: 10 }}>
-              {err.errors.map((msg) => <li key={msg}>{msg}</li>)}
-            </ul>
-          </div>
+          <BrokenExperimentCard key={err.fileName} projectRoot={projectRoot} fileName={err.fileName} errors={err.errors} />
         ))}
       </div>
 
       {formOpen && (
+        <div className="nuclei-experiment-form-region">
         <NewExperimentForm
+          key={editing?.fileName ?? 'new'}
           projectRoot={projectRoot}
           existing={editing}
-          onClose={() => { setFormOpen(false); setEditing(undefined); }}
+          dirtyRef={formDirtyRef}
+          onClose={() => { formDirtyRef.current = false; setFormOpen(false); setEditing(undefined); }}
         />
+        </div>
       )}
 
       {noiseLibOpen && (
         <NoiseModelLibrary projectRoot={projectRoot} onClose={() => setNoiseLibOpen(false)} />
       )}
+      {confirmDialog}
     </div>
   );
 }

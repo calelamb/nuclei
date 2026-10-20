@@ -1,4 +1,5 @@
 import { Circle } from 'lucide-react';
+import { TYPOGRAPHY } from '../../styles/tokens';
 import { useThemeStore } from '../../stores/themeStore';
 import { useLabActivityStore } from '../../stores/labActivityStore';
 import { useModeSwitchStore } from '../../stores/modeSwitchStore';
@@ -49,9 +50,9 @@ function Chip({ label, detail, title, tone, live, onClick }: ChipProps) {
       title={title}
       aria-label={title}
       style={{
-        display: 'flex', alignItems: 'center', gap: 4, color, fontSize: 10, minWidth: 0,
+        display: 'flex', alignItems: 'center', gap: 4, color, fontSize: 11, minWidth: 0,
         background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
       }}
     >
       <Circle size={5} fill={color} stroke="none" style={{ flexShrink: 0, ...(live ? { animation: 'nuclei-heartbeat 1.5s ease infinite' } : {}) }} />

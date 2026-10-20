@@ -1,197 +1,216 @@
-import { useMemo, useRef } from 'react';
-import { Download } from 'lucide-react';
+import { useDeferredValue, useMemo, type ReactNode } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useQecCampaignStore } from '../../stores/qecCampaignStore';
-import { PanelHeader } from '../layout/PanelHeader';
+import { QecPanelHeader } from './QecPanelHeader';
 import { QecEmptyState } from './QecEmptyState';
+import { QecCsvDropZone } from './QecCsvDropZone';
+import { isWebBuild } from '../../platform/buildTarget';
+import { QecLambdaReadout } from './QecLambdaReadout';
+import { QecUnitsToggle } from './QecUnitsToggle';
+import { useQecUnits } from '../../hooks/useQecUnits';
+import { Button } from '../ui';
+import { QecPlotView } from './QecPlotView';
+import { ScrollFade } from './ScrollFade';
+import { useElementSize } from '../../hooks/useElementSize';
+import { buildPlotModel } from '../../lib/qecPlotModel';
+import { MIN_PLOT_W, plotBox, READOUT_WIDTH } from '../../lib/qecPlotLayout';
+import { figureFooterLines, lambdaLine } from '../../lib/qecFigureText';
 import {
-  thresholdSeries,
-  lambdaFit,
-  projectedDistanceForTarget,
-  statsPointsToCsv,
-  type ThresholdSeries,
-} from '../../types/qecStats';
+  DEFAULT_MAX_LIKELIHOOD_FACTOR,
+  lambdaEstimates,
+  likelihoodSeries,
+  qecFigureMetadata,
+  whiskerConvention,
+} from '../../lib/qecFit';
+import { PRINT_COLORS, renderFigureSvg } from '../../lib/qecSvgExport';
+import { qecRatesToCsv } from '../../lib/qecExport';
 import { downloadCsv, downloadSvg } from '../../services/experimentExport';
+import './qecAnalysis.css';
+import { QEC_PLOT_CSV_DOCS } from '../../config/docsLinks';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const DOCS = 'https://getnuclei.dev/docs/research/qec-studio/';
-const TARGET_LER = 1e-6;
-const PLOT = { x0: 46, y0: 12, x1: 288, y1: 150 }; // inner plot rect
+const PLOT_ONLY_PAD = 24;
+/** Below this panel width the title would be squeezed out, so the units toggle moves below the header and both labelled exports stay. */
+const COMPACT_HEADER_WIDTH = 620;
+/** Height of the units toggle row that sits above the figure in a compact header. */
+const UNITS_ROW_HEIGHT = 40;
+
+function ExportButton({ label, title, ariaLabel, onClick }: {
+  label: string; title: string; ariaLabel: string; onClick: () => void;
+}) {
+  return <Button size="sm" onClick={onClick} title={title} aria-label={ariaLabel}>{label}</Button>;
+}
 
 /**
- * PRD 10 Phase E — the threshold / Λ panel. Logical error rate per shot vs
- * the noise parameter on log-log axes, one series per (label × distance),
- * colored by decoder, with Wilson CI whiskers. Reports the fitted Λ (error-
- * suppression factor between successive distances) per decoder and a projected
- * code distance to reach a target logical error rate. Exports SVG + CSV.
+ * Logical error vs physical error. Logical error rate (per shot, or per round
+ * when the campaign records rounds) against the noise parameter on log-log
+ * axes. Colour encodes distance, marker shape the decoder, dash the
+ * experiment; whiskers are sinter's likelihood-ratio interval. Λ is estimated
+ * by log-linear regression of LER vs distance at each p (>= 3 distances) and
+ * shown with its interval. No threshold p_th is estimated, so none is claimed.
+ * Exports SVG + CSV; the SVG embeds a <metadata> block naming the estimators,
+ * CI method and units.
  */
-export function ThresholdPanel() {
+/** Which half of the figure to show: both side by side, only the plot, or only the Λ readout. */
+export type ThresholdPart = 'all' | 'plot' | 'lambda';
+
+/** `bare` drops the title bar from the empty state: before data loads the bar would only repeat the empty state's heading. */
+export function ThresholdPanel({ part = 'all', tabs, bare = false }: { part?: ThresholdPart; tabs?: ReactNode; bare?: boolean } = {}) {
   const colors = useThemeStore((s) => s.colors);
+  const mode = useThemeStore((s) => s.mode);
   const rowsByStrongId = useQecCampaignStore((s) => s.rowsByStrongId);
-  const rows = useMemo(() => Object.values(rowsByStrongId), [rowsByStrongId]);
-  const svgRef = useRef<SVGSVGElement>(null);
+  const liveRows = useMemo(() => Object.values(rowsByStrongId), [rowsByStrongId]);
+  // A mapping change on a big file recomputes every series and fit: keep the
+  // controls responsive and show the new plot when it is ready.
+  const rows = useDeferredValue(liveRows);
+  const updating = rows !== liveRows;
+  const [areaRef, area] = useElementSize<HTMLDivElement>();
 
-  const series = useMemo(() => thresholdSeries(rows), [rows]);
-  const fits = useMemo(() => lambdaFit(rows), [rows]);
+  const { units, roundsKnown, setRequested } = useQecUnits();
+  const { series, excluded, invalid, noKept } = useMemo(() => likelihoodSeries(rows, { units }), [rows, units]);
+  const lambdas = useMemo(() => lambdaEstimates(rows, { units }), [rows, units]);
+  const csvImport = useQecCampaignStore((s) => s.csvImport);
+  const campaignName = useQecCampaignStore((s) => s.campaignName);
+  const meta = useMemo(
+    () => qecFigureMetadata(units, DEFAULT_MAX_LIKELIHOOD_FACTOR, lambdas, {
+      file: csvImport?.sourceName ?? campaignName, rows,
+    }),
+    [units, lambdas, rows, csvImport, campaignName],
+  );
+  const metadata = useMemo(() => JSON.stringify(meta), [meta]);
+  const hasDiscards = useMemo(() => rows.some((r) => r.discards > 0), [rows]);
+  const model = useMemo(() => buildPlotModel(series, mode, colors.textMuted, units), [series, mode, colors.textMuted, units]);
 
-  const domain = useMemo(() => computeLogDomain(series), [series]);
+  // Rows folded together as replicates have no single source row to quote, so
+  // the CSV export only quotes the file's own metadata for unmerged data.
+  const originals = useMemo(
+    () => (csvImport && rows.length === csvImport.rows.length ? new Map(csvImport.rows.map((r) => [r.strong_id, r])) : undefined),
+    [csvImport, rows.length],
+  );
+  const emptyBody = csvImport
+    ? 'Nothing to plot yet: choose the column that holds the physical error rate p under Edit mapping.'
+    : isWebBuild()
+      ? 'See logical error rate vs physical error, per distance.'
+      : 'Run a QEC campaign over a noise sweep, or load existing results, to see logical error rate vs physical error, per distance.';
 
+  const exportSvg = () => {
+    if (!model) return;
+    // Paper style: white page, dark text, light-palette series colours,
+    // whatever the app theme. Λ detail lives in <metadata>, not on the figure.
+    const printModel = buildPlotModel(series, 'light', PRINT_COLORS.textMuted, units);
+    if (!printModel) return;
+    const svg = renderFigureSvg({
+      model: printModel, metadata, title: meta.title, footerLines: figureFooterLines(lambdas),
+      description: [`${meta.units} versus physical error p, log-log. ${meta.ci_method}.`, ...lambdas.map(lambdaLine)].join('\n'),
+    });
+    downloadSvg(svg, 'logical-error-vs-p.svg');
+  };
+
+  const compact = area.width > 0 && area.width < COMPACT_HEADER_WIDTH;
   const header = (
-    <PanelHeader
-      title="Threshold / Λ"
+    <QecPanelHeader
+      title={part === 'lambda' ? 'Error suppression Λ' : 'Logical error vs p'}
       helpHref={DOCS}
       actions={
-        series.length > 0 ? (
-          <div style={{ display: 'flex', gap: 6 }}>
-            <ExportButton label="SVG" onClick={() => svgRef.current && downloadSvg(svgRef.current, 'threshold.svg')} colors={colors} />
-            <ExportButton label="CSV" onClick={() => downloadCsv(statsPointsToCsv(rows), 'threshold.csv')} colors={colors} />
-          </div>
-        ) : undefined
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {tabs}
+          {model && roundsKnown && !compact && <QecUnitsToggle units={units} onChange={setRequested} />}
+          {model && part !== 'lambda' && (
+            <>
+              <ExportButton
+                label="SVG" onClick={exportSvg}
+                title="Export the plot as a print-ready SVG (white background)" ariaLabel="Export plot as SVG"
+              />
+              <ExportButton
+                label="CSV" onClick={() => downloadCsv(qecRatesToCsv(rows, { units, originals }), 'logical-error-vs-p.csv')}
+                title="Export the plotted rates as CSV" ariaLabel="Export plot data (CSV)"
+              />
+            </>
+          )}
+        </div>
       }
     />
   );
 
-  if (series.length === 0 || !domain) {
+  if (!model) {
+    const unplottable = series.length > 0;
     return (
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg }}>
-        {header}
+        {!bare && header}
         <QecEmptyState
-          title="No campaign results yet"
-          body="Run a QEC campaign over a noise sweep to see logical error rate vs physical error, per distance."
-          docsHref={DOCS}
-        />
+          title={csvImport || unplottable ? 'No plottable points' : 'No campaign results yet'}
+          body={unplottable
+            ? 'Every point has p = 0 or a zero rate, which cannot be placed on log-log axes.'
+            : emptyBody}
+          docsHref={QEC_PLOT_CSV_DOCS}
+          align={bare ? 'top' : 'center'}
+        >
+          {!csvImport && <QecCsvDropZone />}
+        </QecEmptyState>
       </div>
     );
   }
 
   const decoders = [...new Set(series.map((s) => s.decoder))].sort();
-  const decoderColor = (d: string) =>
-    [colors.dirac, colors.accent, colors.success, colors.warning][decoders.indexOf(d) % 4];
-
-  const sx = (noise: number) =>
-    PLOT.x0 + ((Math.log10(noise) - domain.xMin) / (domain.xMax - domain.xMin)) * (PLOT.x1 - PLOT.x0);
-  const sy = (ler: number) => {
-    const v = Math.log10(Math.max(ler, domain.yFloor));
-    return PLOT.y1 - ((v - domain.yMin) / (domain.yMax - domain.yMin)) * (PLOT.y1 - PLOT.y0);
-  };
+  // Plot alone: the readout's column is not reserved, so the plot takes the full width and the full height.
+  const unitsRow = roundsKnown && compact ? UNITS_ROW_HEIGHT : 0;
+  const fullBox = plotBox({ width: area.width, height: area.height > 0 ? area.height - unitsRow : 0 }, { fill: part === 'plot' });
+  const box = part === 'plot' && fullBox.layout === 'row'
+    ? { layout: 'stack' as const, plotW: Math.max(MIN_PLOT_W, area.width - PLOT_ONLY_PAD), plotH: fullBox.plotH }
+    : fullBox;
+  const readoutBody = (
+    <>
+      <QecLambdaReadout decoders={decoders} estimates={lambdas} rows={rows} units={units} colors={colors} hideTitle={part === 'lambda'} />
+      <div style={{ fontSize: 11, color: colors.textMuted, marginTop: 6, lineHeight: 1.45 }}>
+        {`Whiskers: sinter ${whiskerConvention()}, `}
+        {hasDiscards ? 'on shots − discards. ' : 'on shots. '}
+        {excluded > 0 && `${excluded} row(s) without known rounds are hidden in per-round view. `}
+        {invalid > 0 && `${invalid} malformed row(s) (errors exceed kept shots) skipped. `}
+        {noKept > 0 && `${noKept} row(s) with every shot discarded skipped. `}
+        No threshold p_th is estimated.
+      </div>
+    </>
+  );
+  const readoutFont = TYPOGRAPHY.fontSans;
+  const readout = part === 'plot' ? null : box.layout === 'row' && part === 'all' ? (
+    <ScrollFade style={{ fontFamily: readoutFont, width: READOUT_WIDTH, flex: 'none', maxHeight: box.plotH }}>
+      {readoutBody}
+    </ScrollFade>
+  ) : (
+    <div style={{ fontFamily: readoutFont, padding: '0 12px' }}>{readoutBody}</div>
+  );
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg }}>
       {header}
-      <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-        <svg ref={svgRef} viewBox="0 0 300 168" style={{ width: '100%', height: 'auto', display: 'block' }}>
-          {/* axes */}
-          <line x1={PLOT.x0} y1={PLOT.y0} x2={PLOT.x0} y2={PLOT.y1} stroke={colors.border} strokeWidth={0.6} />
-          <line x1={PLOT.x0} y1={PLOT.y1} x2={PLOT.x1} y2={PLOT.y1} stroke={colors.border} strokeWidth={0.6} />
-          {/* y decade gridlines + labels */}
-          {domain.yTicks.map((t) => (
-            <g key={`y${t}`}>
-              <line x1={PLOT.x0} y1={sy(10 ** t)} x2={PLOT.x1} y2={sy(10 ** t)} stroke={colors.border} strokeWidth={0.25} strokeOpacity={0.5} />
-              <text x={PLOT.x0 - 4} y={sy(10 ** t) + 2.5} fontSize={6.5} fill={colors.textDim} textAnchor="end" fontFamily="'Fira Code', monospace">
-                1e{t}
-              </text>
-            </g>
-          ))}
-          {domain.xTicks.map((t) => (
-            <text key={`x${t}`} x={sx(10 ** t)} y={PLOT.y1 + 8} fontSize={6.5} fill={colors.textDim} textAnchor="middle" fontFamily="'Fira Code', monospace">
-              1e{t}
-            </text>
-          ))}
-          <text x={(PLOT.x0 + PLOT.x1) / 2} y={166} fontSize={7} fill={colors.textDim} textAnchor="middle">physical error p</text>
-          {/* series */}
-          {series.map((s) => {
-            const color = decoderColor(s.decoder);
-            const pts = s.points.map((p) => ({ x: sx(p.noise), y: sy(p.rate.p), lo: sy(p.rate.lo), hi: sy(p.rate.hi) }));
-            return (
-              <g key={s.key}>
-                <polyline
-                  points={pts.map((p) => `${p.x},${p.y}`).join(' ')}
-                  fill="none" stroke={color} strokeWidth={0.9}
-                  strokeDasharray={(s.distance ?? 0) % 2 === 1 ? undefined : '3 2'}
-                />
-                {pts.map((p, i) => (
-                  <g key={i}>
-                    <line x1={p.x} y1={p.hi} x2={p.x} y2={p.lo} stroke={color} strokeWidth={0.5} strokeOpacity={0.7} />
-                    <circle cx={p.x} cy={p.y} r={1.4} fill={color} />
-                  </g>
-                ))}
-              </g>
-            );
-          })}
-        </svg>
-        {/* legend + Λ + projection */}
-        <div style={{ padding: '4px 12px 10px', fontFamily: "'Geist Sans', sans-serif" }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 8 }}>
-            {decoders.map((d) => (
-              <span key={d} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: colors.textMuted }}>
-                <span style={{ width: 10, height: 2, background: decoderColor(d) }} /> {d}
-              </span>
-            ))}
-            <span style={{ fontSize: 9, color: colors.textDim }}>solid = odd distance · dashed = even</span>
+      <div ref={areaRef} style={{ flex: 1, minHeight: 0, overflow: 'auto', position: 'relative' }}>
+        {updating && (
+          <div
+            role="status"
+            style={{
+              position: 'absolute', top: 6, right: 12, zIndex: 3, padding: '3px 8px', borderRadius: 'var(--radius-xs)', fontSize: 11,
+              background: colors.bgElevated, color: colors.textMuted, border: `1px solid ${colors.border}`,
+              animation: 'nuclei-fade-in 120ms ease 150ms backwards', fontFamily: TYPOGRAPHY.fontSans,
+            }}
+          >
+            Updating plot…
           </div>
-          {fits.map((f) => {
-            const anySeries = series.find((s) => s.decoder === f.decoder && s.distance !== null);
-            const base = anySeries?.points[0];
-            const projected =
-              f.lambda !== null && anySeries?.distance != null && base
-                ? projectedDistanceForTarget(anySeries.distance, base.rate.p, f.lambda, TARGET_LER)
-                : null;
-            return (
-              <div key={f.decoder} style={{ fontSize: 11, color: colors.text, marginBottom: 2 }}>
-                <strong style={{ color: decoderColor(f.decoder) }}>{f.decoder}</strong>: Λ ={' '}
-                {f.lambda !== null ? f.lambda.toFixed(2) : '—'}
-                {projected !== null && (
-                  <span style={{ color: colors.textDim }}> · ~d{projected} for {TARGET_LER.toExponential(0)} LER</span>
-                )}
-              </div>
-            );
-          })}
+        )}
+        {roundsKnown && compact && (
+          <div style={{ padding: '6px 12px 8px' }}><QecUnitsToggle units={units} onChange={setRequested} /></div>
+        )}
+        <div style={{ display: 'flex', flexDirection: box.layout === 'row' ? 'row' : 'column', gap: 12, alignItems: 'flex-start', padding: box.layout === 'row' ? '4px 12px 8px 0' : '4px 0 10px' }}>
+          {part !== 'lambda' && (
+            <QecPlotView
+              model={model} colors={colors} width={box.plotW} height={box.plotH}
+              metadata={metadata} title={meta.title}
+              description={`${meta.units} versus physical error p, log-log. ${meta.ci_method}.`}
+            />
+          )}
+          {readout}
         </div>
       </div>
     </div>
   );
-}
-
-function ExportButton({ label, onClick, colors }: { label: string; onClick: () => void; colors: ReturnType<typeof useThemeStore.getState>['colors'] }) {
-  return (
-    <button
-      onClick={onClick}
-      title={`Export ${label}`}
-      aria-label={`Export ${label}`}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 4, background: 'transparent',
-        border: `1px solid ${colors.border}`, borderRadius: 4, color: colors.textMuted,
-        cursor: 'pointer', fontSize: 11, padding: '4px 8px', fontFamily: "'Geist Sans', sans-serif",
-      }}
-    >
-      <Download size={12} /> {label}
-    </button>
-  );
-}
-
-/** Log-domain bounds + decade ticks for the log-log axes. Returns null when
- * there is nothing plottable. */
-function computeLogDomain(series: ThresholdSeries[]) {
-  const noises: number[] = [];
-  const lers: number[] = [];
-  for (const s of series) {
-    for (const p of s.points) {
-      if (p.noise > 0) noises.push(p.noise);
-      if (p.rate.hi > 0) lers.push(p.rate.hi);
-      if (p.rate.p > 0) lers.push(p.rate.p);
-    }
-  }
-  if (noises.length === 0 || lers.length === 0) return null;
-  const yFloor = 1e-7;
-  const xMin = Math.floor(Math.log10(Math.min(...noises)));
-  const xMax = Math.ceil(Math.log10(Math.max(...noises)));
-  const yMin = Math.floor(Math.log10(Math.max(Math.min(...lers), yFloor)));
-  const yMax = Math.ceil(Math.log10(Math.max(...lers)));
-  const range = (a: number, b: number) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
-  return {
-    xMin, xMax: Math.max(xMax, xMin + 1),
-    yMin, yMax: Math.max(yMax, yMin + 1),
-    yFloor,
-    xTicks: range(xMin, Math.max(xMax, xMin + 1)),
-    yTicks: range(yMin, Math.max(yMax, yMin + 1)),
-  };
 }

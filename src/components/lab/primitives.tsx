@@ -337,7 +337,7 @@ export function LabSegmented<T extends string>({
             className="lab-segmented__item"
             onClick={() => onChange(item.id)}
           >
-            {Icon && <Icon size={13} aria-hidden />}
+            {Icon && <Icon size={14} aria-hidden />}
             {item.label}
             {item.badge !== undefined && item.badge !== null && <span className="lab-segmented__badge">{item.badge}</span>}
           </button>

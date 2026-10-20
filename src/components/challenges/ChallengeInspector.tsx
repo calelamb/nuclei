@@ -5,37 +5,9 @@ import {
   type InspectionView,
 } from '../../stores/challengeModeStore';
 
-function TabButton({
-  active,
-  label,
-  onClick,
-}: {
-  active: boolean;
-  label: string;
-  onClick: () => void;
-}) {
-  const colors = useThemeStore((s) => s.colors);
-
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        padding: '6px 10px',
-        background: 'transparent',
-        border: 'none',
-        borderBottom: active ? `2px solid ${colors.accent}` : '2px solid transparent',
-        color: active ? colors.text : colors.textMuted,
-        fontSize: 11,
-        fontWeight: active ? 600 : 500,
-        fontFamily: "'Geist Sans', sans-serif",
-        cursor: 'pointer',
-      }}
-    >
-      {label}
-    </button>
-  );
-}
-
+import { Tabs } from '../ui';
+import './challenges.css';
+import { TYPOGRAPHY } from '../../styles/tokens';
 export function ChallengeInspector() {
   const colors = useThemeStore((s) => s.colors);
   const inspection = useChallengeModeStore((s) => s.inspection);
@@ -58,9 +30,9 @@ export function ChallengeInspector() {
         justifyContent: 'center',
         color: colors.textDim,
         fontSize: 12,
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
       }}>
-        Run inspection to inspect a visible case.
+        Press Inspect to see the selected case's output here.
       </div>
     );
   }
@@ -84,20 +56,20 @@ export function ChallengeInspector() {
         background: colors.bgPanel,
         flexShrink: 0,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          {visibleViews.map((view) => (
-            <TabButton
-              key={view}
-              active={activeView === view}
-              label={view === 'bloch' ? 'Bloch' : view === 'output' && !hasQuantumOutput ? 'Return Output' : view[0].toUpperCase() + view.slice(1)}
-              onClick={() => setInspectionView(view)}
-            />
-          ))}
-        </div>
+        <Tabs
+          aria-label="Inspection view"
+          value={activeView}
+          onChange={setInspectionView}
+          options={visibleViews.map((view) => ({
+            value: view,
+            label: view === 'bloch' ? 'Bloch' : view === 'output' && !hasQuantumOutput ? 'Return output' : view[0].toUpperCase() + view.slice(1),
+          }))}
+          className="cinsp__tabs"
+        />
         <div style={{
           color: colors.textMuted,
           fontSize: 11,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}>
           Inspecting {inspection.label}
         </div>
@@ -112,7 +84,7 @@ export function ChallengeInspector() {
             background: `${colors.error}12`,
             color: colors.text,
             fontSize: 12,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             marginBottom: 14,
             lineHeight: 1.5,
           }}>
@@ -125,7 +97,7 @@ export function ChallengeInspector() {
             <div style={{
               color: colors.textMuted,
               fontSize: 12,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}>
               {inspection.snapshot
                 ? `${inspection.snapshot.qubit_count} qubits • depth ${inspection.snapshot.depth} • ${inspection.snapshot.gates.length} gates`
@@ -142,9 +114,9 @@ export function ChallengeInspector() {
                 background: colors.bgPanel,
                 color: colors.text,
                 fontSize: 12,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
               }}>
-                <strong style={{ color: colors.accent }}>{gate.type}</strong>
+                <strong style={{ color: colors.accentText }}>{gate.type}</strong>
                 <span>Targets: {gate.targets.join(', ') || '—'}</span>
                 <span>Controls: {gate.controls.join(', ') || '—'}</span>
                 <span>Layer {gate.layer}</span>
@@ -162,7 +134,7 @@ export function ChallengeInspector() {
                   justifyContent: 'space-between',
                   color: colors.textMuted,
                   fontSize: 12,
-                  fontFamily: "'Geist Sans', sans-serif",
+                  fontFamily: TYPOGRAPHY.fontSans,
                   marginBottom: 4,
                 }}>
                   <span>|{state}⟩</span>
@@ -203,7 +175,7 @@ export function ChallengeInspector() {
                   color: colors.text,
                   fontSize: 13,
                   fontWeight: 600,
-                  fontFamily: "'Geist Sans', sans-serif",
+                  fontFamily: TYPOGRAPHY.fontSans,
                   marginBottom: 10,
                 }}>
                   Qubit {index}
@@ -214,7 +186,7 @@ export function ChallengeInspector() {
                   gap: 6,
                   color: colors.textMuted,
                   fontSize: 12,
-                  fontFamily: "'Geist Mono', monospace",
+                  fontFamily: TYPOGRAPHY.fontMono,
                 }}>
                   <span>x</span><span>{coord.x.toFixed(3)}</span>
                   <span>y</span><span>{coord.y.toFixed(3)}</span>
@@ -233,7 +205,7 @@ export function ChallengeInspector() {
             background: colors.bgPanel,
             color: colors.text,
             fontSize: 12,
-            fontFamily: "'Geist Mono', 'JetBrains Mono', monospace",
+            fontFamily: TYPOGRAPHY.fontMono,
             whiteSpace: 'pre-wrap',
             lineHeight: 1.6,
           }}>

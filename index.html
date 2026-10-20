@@ -23,9 +23,10 @@
         navigator.serviceWorker.register(new URL('sw.js', document.baseURI).href).catch(() => {});
       }
 
-      // Vercel Web Analytics — inject only in the web build, never in Tauri
-      // desktop where Vercel's injected assets don't exist.
-      if (!window.__TAURI_INTERNALS__) {
+      // Vercel Web Analytics — only on the production host. The script exists solely
+      // behind Vercel's edge, so dev, preview and e2e servers would log a 404 on
+      // every load, and Tauri desktop has no such asset at all.
+      if (!window.__TAURI_INTERNALS__ && /(^|\.)getnuclei\.dev$/.test(location.hostname)) {
         var va = document.createElement('script');
         va.defer = true;
         va.src = '/_vercel/insights/script.js';

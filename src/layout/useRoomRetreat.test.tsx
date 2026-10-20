@@ -1,0 +1,90 @@
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { act, cleanup, renderHook } from '@testing-library/react';
+import { useRoomRetreat } from './useRoomRetreat';
+import { consumeDiracClaimedRoom } from '../hooks/sidebarFoldReason';
+import { useDiracPanelStore } from '../stores/diracPanelStore';
+import { useNavigationStore } from '../stores/navigationStore';
+
+function setViewport(width: number) {
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+}
+
+beforeEach(() => {
+  setViewport(900);
+  useDiracPanelStore.setState({ isOpen: true, width: 320, autoCollapsed: false });
+  useNavigationStore.setState({ activeView: null, autoCollapsedView: null });
+});
+afterEach(cleanup);
+
+describe('useRoomRetreat (sidebar opened by hand while Dirac is open)', () => {
+  it('folds Dirac to its rail when the sidebar would squeeze the editor under 420 px', () => {
+    const { rerender } = renderHook((p: { sidebarOpen: boolean }) =>
+      useRoomRetreat({ sidebarWidth: 240, vizWanted: false, canCollapseSidebar: true, sidebarOpen: p.sidebarOpen }),
+    { initialProps: { sidebarOpen: false } });
+    expect(useDiracPanelStore.getState().isOpen).toBe(true);
+    act(() => { useNavigationStore.setState({ activeView: 'files' }); });
+    rerender({ sidebarOpen: true });
+    expect(useDiracPanelStore.getState().isOpen).toBe(false);
+  });
+
+  it('keeps the sidebar the user just opened: folding Dirac for it must not fold the sidebar straight back out', () => {
+    const { rerender } = renderHook((p: { sidebarOpen: boolean }) =>
+      useRoomRetreat({ sidebarWidth: 240, vizWanted: true, canCollapseSidebar: true, sidebarOpen: p.sidebarOpen }),
+    { initialProps: { sidebarOpen: false } });
+    act(() => { useNavigationStore.setState({ activeView: 'files' }); });
+    rerender({ sidebarOpen: true });
+    expect(useDiracPanelStore.getState().isOpen).toBe(false);
+    expect(useNavigationStore.getState().activeView).toBe('files');
+  });
+
+  it('leaves Dirac alone when everything fits', () => {
+    setViewport(1440);
+    const { rerender } = renderHook((p: { sidebarOpen: boolean }) =>
+      useRoomRetreat({ sidebarWidth: 240, vizWanted: false, canCollapseSidebar: true, sidebarOpen: p.sidebarOpen }),
+    { initialProps: { sidebarOpen: false } });
+    rerender({ sidebarOpen: true });
+    expect(useDiracPanelStore.getState().isOpen).toBe(true);
+  });
+
+  it('does not fold Dirac on first render when the sidebar is already open (the Dirac-keyed retreat owns that case)', () => {
+    renderHook(() => useRoomRetreat({ sidebarWidth: 240, vizWanted: false, canCollapseSidebar: true, sidebarOpen: true }));
+    expect(useDiracPanelStore.getState().isOpen).toBe(true);
+  });
+});
+
+describe('useRoomRetreat (window shrinks while Dirac is about to auto-fold)', () => {
+  it('plans the room for the folded Dirac, so the open sidebar is not unmounted and remounted on the way', () => {
+    setViewport(1100);
+    // The resize handler has not yet folded Dirac: its last seen band was wide.
+    useDiracPanelStore.setState({ isOpen: true, width: 340, autoCollapsed: false, lastNarrow: false });
+    useNavigationStore.setState({ activeView: 'settings', autoCollapsedView: null });
+    renderHook(() => useRoomRetreat({ sidebarWidth: 300, vizWanted: false, canCollapseSidebar: true, sidebarOpen: true }));
+    expect(useNavigationStore.getState().activeView).toBe('settings');
+  });
+});
+
+describe('useRoomRetreat (fold reason)', () => {
+  it('records that Dirac opening, not a resize, folded the sidebar', () => {
+    setViewport(1440);
+    consumeDiracClaimedRoom();
+    useDiracPanelStore.setState({ isOpen: false, width: 420, autoCollapsed: false });
+    useNavigationStore.setState({ activeView: 'settings', autoCollapsedView: null });
+    renderHook(() => useRoomRetreat({ sidebarWidth: 600, vizWanted: true, canCollapseSidebar: true, sidebarOpen: true }));
+    expect(useNavigationStore.getState().activeView).toBe('settings');
+    act(() => { useDiracPanelStore.setState({ isOpen: true }); });
+    expect(useNavigationStore.getState().activeView).toBeNull();
+    expect(consumeDiracClaimedRoom()).toBe(true);
+  });
+
+  it('does not record Dirac when a plain resize folds the sidebar', () => {
+    setViewport(1440);
+    consumeDiracClaimedRoom();
+    useDiracPanelStore.setState({ isOpen: true, width: 420, autoCollapsed: false });
+    useNavigationStore.setState({ activeView: 'settings', autoCollapsedView: null });
+    renderHook(() => useRoomRetreat({ sidebarWidth: 280, vizWanted: true, canCollapseSidebar: true, sidebarOpen: true }));
+    act(() => { setViewport(900); window.dispatchEvent(new Event('resize')); });
+    expect(useNavigationStore.getState().activeView).toBeNull();
+    expect(consumeDiracClaimedRoom()).toBe(false);
+  });
+});

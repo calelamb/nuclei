@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { deriveColumns, filterByStatus, getRunValue, sortRuns } from './runsTableColumns';
+import {
+  columnDecimals, columnDisplayLabel, deriveColumns, filterByStatus, formatRunLabel, getRunValue, isNumericColumn, metricLabel, sortRuns, sweepAxesSummary,
+} from './runsTableColumns';
 import type { RunManifest, RunRecord } from '../../types/experiment';
 
 function manifest(overrides: Partial<RunManifest>): RunManifest {
@@ -111,5 +113,89 @@ describe('filterByStatus', () => {
   it('filters down to a single status', () => {
     const failed = filterByStatus(RUNS, 'failed');
     expect(failed.map((r) => r.dir)).toEqual(['run-b']);
+  });
+});
+
+describe('columnDecimals', () => {
+  it('uses the max decimals needed across rows, capped at 4', () => {
+    const runs = [
+      record('a', { params: { theta: 6.2 } }),
+      record('b', { params: { theta: 6 } }),
+      record('c', { params: { theta: 5.123456 } }),
+    ];
+    const theta = deriveColumns(runs)[0];
+    expect(columnDecimals(runs, theta)).toBe(4);
+    expect(columnDecimals(runs.slice(0, 2), theta)).toBe(1);
+  });
+
+  it('is 0 for an all-integer column', () => {
+    const runs = [record('a', { params: { theta: 1 } }), record('b', { params: { theta: 2 } })];
+    expect(columnDecimals(runs, deriveColumns(runs)[0])).toBe(0);
+  });
+});
+
+describe('formatRunLabel', () => {
+  it('renders timestamped run dirs as date, time and short id', () => {
+    const started = new Date(2026, 9, 15, 8, 21, 50).toISOString();
+    expect(formatRunLabel('20261015-142150-a458', started)).toBe('Oct 15 08:21:50 · a458');
+  });
+
+  it('treats the dir timestamp as UTC when no start time is given', () => {
+    const d = new Date(Date.UTC(2026, 9, 15, 14, 21, 50));
+    const pad = (n: number) => String(n).padStart(2, '0');
+    expect(formatRunLabel('20261015-142150-a458')).toBe(
+      `Oct ${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())} · a458`,
+    );
+  });
+
+  it('falls back to the raw dir name for other shapes', () => {
+    expect(formatRunLabel('run-a')).toBe('run-a');
+  });
+});
+
+describe('isNumericColumn', () => {
+  it('right-aligns params, metrics and numeric fields but not status or seed_honored', () => {
+    expect(isNumericColumn({ key: 'theta', label: 'theta', kind: 'param' })).toBe(true);
+    expect(isNumericColumn({ key: 'duration_ms', label: 'd', kind: 'field' })).toBe(true);
+    expect(isNumericColumn({ key: 'status', label: 's', kind: 'field' })).toBe(false);
+    expect(isNumericColumn({ key: 'seed_honored', label: 's', kind: 'field' })).toBe(false);
+  });
+});
+
+describe('metricLabel', () => {
+  it('spells every metric one way: sentence case, spaces for underscores', () => {
+    expect(metricLabel('counts_entropy')).toBe('Counts entropy');
+    expect(metricLabel('top_state_probability')).toBe('Top state probability');
+    expect(metricLabel('energy')).toBe('Energy');
+    expect(metricLabel('fidelity')).toBe('Fidelity');
+  });
+});
+
+describe('columnDisplayLabel', () => {
+  it('labels metrics with metricLabel, keeps swept parameters verbatim and fixed fields as authored', () => {
+    expect(columnDisplayLabel({ key: 'counts_entropy', label: 'counts_entropy', kind: 'metric' })).toBe('Counts entropy');
+    expect(columnDisplayLabel({ key: 'max_depth', label: 'max_depth', kind: 'param' })).toBe('max_depth');
+    expect(columnDisplayLabel({ key: 'status', label: 'Status', kind: 'field' })).toBe('Status');
+  });
+});
+
+describe('deriveColumns with a declared sweep', () => {
+  it('shows a swept parameter column before any run exists', () => {
+    const cols = deriveColumns([], ['depth']);
+    expect(cols[0]).toEqual({ key: 'depth', label: 'depth', kind: 'param' });
+  });
+
+  it('does not duplicate a declared parameter once runs carry it', () => {
+    const cols = deriveColumns([record('a', { params: { depth: 2 } })], ['depth']);
+    expect(cols.filter((c) => c.key === 'depth')).toHaveLength(1);
+  });
+});
+
+describe('sweepAxesSummary', () => {
+  it('lists each swept parameter with its value count', () => {
+    expect(sweepAxesSummary({ depth: { values: [1, 2, 3, 4] }, theta: { range: [0, 1, 0.5] } } as never)).toBe('depth × 4, theta × 3');
+  });
+  it('is empty without a sweep', () => {
+    expect(sweepAxesSummary(undefined)).toBe('');
   });
 });

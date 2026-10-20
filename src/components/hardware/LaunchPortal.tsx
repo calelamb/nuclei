@@ -1,3 +1,4 @@
+import { Button, Tooltip, useConfirm } from '../ui';
 import { useState, useCallback, useRef } from 'react';
 import { Rocket, Upload, FileCode, CheckCircle2, XCircle, Loader2, Clock, X } from 'lucide-react';
 import { useHardwareStore } from '../../stores/hardwareStore';
@@ -5,30 +6,17 @@ import { useEditorStore } from '../../stores/editorStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { ProviderLogo } from './ProviderLogo';
-import { getHardware } from '../../App';
-import { providerAllowsQsharp, QSHARP_GATE_TOOLTIP } from './launchGating';
+import { PortalProviderCard } from './PortalProviderCard';
+import { PROVIDERS, type ProviderMeta } from './launchProviders';
+import { useFrameworksStore } from '../../stores/frameworksStore';
+import { getExecute, getHardware } from '../../App';
+import { usePlatform } from '../../platform/PlatformProvider';
+import { providerAllowsQsharp, providerStatus, sortProvidersForDisplay, QSHARP_GATE_TOOLTIP, type ProviderStatus } from './launchGating';
 import type { HardwareProviderType } from '../../types/hardware';
 
-interface ProviderPortalMeta {
-  name: HardwareProviderType;
-  label: string;
-  tagline: string;
-  disabled?: boolean;
-}
-
-const PORTAL_PROVIDERS: ProviderPortalMeta[] = [
-  { name: 'ibm', label: 'IBM Quantum', tagline: 'Superconducting · free tier' },
-  { name: 'ionq', label: 'IonQ', tagline: 'Trapped ion · all-to-all' },
-  { name: 'quantinuum', label: 'Quantinuum', tagline: 'Highest fidelity · H1/H2' },
-  { name: 'braket', label: 'AWS Braket', tagline: 'IonQ · Rigetti · QuEra · IQM · OQC · Pasqal' },
-  { name: 'azure', label: 'Azure Quantum', tagline: 'Quantinuum · IonQ · Rigetti · Pasqal · IQM' },
-  { name: 'nvidia', label: 'NVIDIA CUDA-Q', tagline: 'GPU simulator · up to 34 qubits' },
-  { name: 'simulator', label: 'Local Simulator', tagline: 'Instant · no account' },
-  { name: 'google', label: 'Google Quantum AI', tagline: 'Research access only', disabled: true },
-  { name: 'xanadu', label: 'Xanadu', tagline: 'Photonic · different model', disabled: true },
-  { name: 'dwave', label: 'D-Wave', tagline: 'Annealer · different model', disabled: true },
-];
-
+import './launchPortal.css';
+import { TYPOGRAPHY } from '../../styles/tokens';
+import { shortcutLabel } from '../../config/keybindings';
 function fmtElapsed(startIso: string): string {
   const ms = Date.now() - new Date(startIso).getTime();
   if (ms < 1000) return 'just now';
@@ -40,8 +28,15 @@ function fmtElapsed(startIso: string): string {
 }
 
 export function LaunchPortal() {
+  const { confirm, confirmDialog } = useConfirm();
   const colors = useThemeStore((s) => s.colors);
+  const isWeb = usePlatform().getPlatform() === 'web';
+  const launchShortcut = shortcutLabel('launch');
   const jobs = useHardwareStore((s) => s.jobs);
+  const providerList = useHardwareStore((s) => s.providers);
+  const cudaqInstalled = useFrameworksStore((s) => s.status?.installed.includes('cuda-q') ?? false);
+  const kernelStatus = useEditorStore((s) => s.kernelStatus);
+  const connected = new Set(providerList.filter((p) => p.connected).map((p) => p.name));
   const results = useHardwareStore((s) => s.results);
   const openLaunch = useHardwareStore((s) => s.openLaunch);
   const selectProvider = useHardwareStore((s) => s.selectProvider);
@@ -108,11 +103,21 @@ export function LaunchPortal() {
   const qsharpBlocks = (provider: HardwareProviderType) =>
     framework === 'qsharp' && !providerAllowsQsharp(provider);
 
-  const handlePickProvider = (p: ProviderPortalMeta) => {
-    if (p.disabled || qsharpBlocks(p.name)) return;
-    selectProvider(p.name);
+  const handlePickProvider = (name: HardwareProviderType, status: ProviderStatus) => {
+    if (status.kind === 'coming-soon' || qsharpBlocks(name)) return;
+    // The browser build has no hardware path: the simulator card runs the circuit right here.
+    if (isWeb && name === 'simulator') {
+      getExecute()?.();
+      return;
+    }
+    // Desktop-only providers open the launcher at its provider step, where the Download note lives (one Esc closes it).
+    selectProvider(isWeb ? null : name);
     openLaunch();
   };
+
+  const statusFor = (p: ProviderMeta) =>
+    providerStatus({ provider: p.name, connected: connected.has(p.name), isWeb, cudaqInstalled, kernelStatus });
+  const orderedProviders = sortProvidersForDisplay(PROVIDERS, (p) => statusFor(p).kind);
 
   const openLaunchBlank = () => {
     selectProvider(null);
@@ -129,31 +134,7 @@ export function LaunchPortal() {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
-      {/* Header */}
-      <div
-        style={{
-          padding: '10px 12px',
-          borderBottom: `1px solid ${colors.border}`,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-        }}
-      >
-        <Rocket size={14} style={{ color: colors.accent }} />
-        <span
-          style={{
-            fontSize: 11,
-            fontWeight: 600,
-            textTransform: 'uppercase',
-            letterSpacing: 0.5,
-            color: colors.textMuted,
-            fontFamily: "'Geist Sans', sans-serif",
-          }}
-        >
-          Launch
-        </span>
-      </div>
-
+      {confirmDialog}
       {/* Drop zone */}
       <div style={{ padding: 12 }}>
         <div
@@ -176,21 +157,21 @@ export function LaunchPortal() {
           style={{
             border: `1.5px dashed ${dragActive ? colors.accent : colors.border}`,
             background: dragActive ? `${colors.accent}08` : colors.bgElevated,
-            borderRadius: 10,
+            borderRadius: 'var(--radius-round)',
             padding: 14,
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             gap: 8,
             cursor: 'pointer',
-            transition: 'border-color 120ms ease, background 120ms ease',
-            fontFamily: "'Geist Sans', sans-serif",
+            transition: 'border-color var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard)',
+            fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
-          <Upload size={18} style={{ color: dragActive ? colors.accent : colors.textMuted }} />
+          <Upload size={16} style={{ color: dragActive ? colors.accentText : colors.textMuted }} />
           <div style={{ fontSize: 11, color: colors.text, textAlign: 'center', lineHeight: 1.5 }}>
-            Drop a <code style={{ fontFamily: "'JetBrains Mono', monospace", color: colors.accentLight }}>.py</code>{' '}
-            or <code style={{ fontFamily: "'JetBrains Mono', monospace", color: colors.accentLight }}>.qs</code>{' '}
+            Drop a <code style={{ fontFamily: TYPOGRAPHY.fontMono, color: colors.accentText }}>.py</code>{' '}
+            or <code style={{ fontFamily: TYPOGRAPHY.fontMono, color: colors.accentText }}>.qs</code>{' '}
             or click to browse
           </div>
           {activeFileName && (
@@ -199,7 +180,7 @@ export function LaunchPortal() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: 6,
-                fontSize: 10,
+                fontSize: 11,
                 color: colors.textDim,
                 background: `${colors.success}12`,
                 border: `1px solid ${colors.success}30`,
@@ -209,7 +190,7 @@ export function LaunchPortal() {
                 minWidth: 0,
               }}
             >
-              <FileCode size={11} style={{ color: colors.success, flexShrink: 0 }} />
+              <FileCode size={12} style={{ color: colors.success, flexShrink: 0 }} />
               <span
                 style={{
                   overflow: 'hidden',
@@ -234,126 +215,50 @@ export function LaunchPortal() {
 
       {/* Provider grid */}
       <div style={{ padding: '0 12px 12px' }}>
-        <div
-          style={{
-            fontSize: 10,
-            fontWeight: 600,
-            textTransform: 'uppercase',
-            letterSpacing: 0.5,
-            color: colors.textMuted,
-            marginBottom: 8,
-            fontFamily: "'Geist Sans', sans-serif",
-          }}
-        >
+        <div className="nuclei-overline" style={{ marginBottom: 8 }}>
           Choose a destination
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-          {PORTAL_PROVIDERS.map((p) => {
+        <div className="launch-grid">
+          {orderedProviders.map((p) => {
+            const status = statusFor(p);
             const qsharpBlocked = qsharpBlocks(p.name);
-            const isDisabled = p.disabled || qsharpBlocked;
+            const comingSoon = status.kind === 'coming-soon';
+            const desktopOnly = status.kind === 'desktop-only';
+            const reason = comingSoon ? status.label : qsharpBlocked ? QSHARP_GATE_TOOLTIP : null;
             return (
-            <button
-              key={p.name}
-              onClick={() => handlePickProvider(p)}
-              disabled={isDisabled}
-              title={qsharpBlocked ? QSHARP_GATE_TOOLTIP : p.tagline}
-              style={{
-                textAlign: 'left',
-                background: colors.bgElevated,
-                border: `1px solid ${colors.border}`,
-                borderRadius: 8,
-                padding: 10,
-                cursor: isDisabled ? 'not-allowed' : 'pointer',
-                color: colors.text,
-                fontFamily: "'Geist Sans', sans-serif",
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 6,
-                opacity: isDisabled ? 0.5 : 1,
-                transition: 'border-color 120ms ease, background 120ms ease, transform 120ms ease',
-              }}
-              onMouseEnter={(e) => {
-                if (isDisabled) return;
-                e.currentTarget.style.borderColor = colors.accent;
-                e.currentTarget.style.transform = 'translateY(-1px)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = colors.border;
-                e.currentTarget.style.transform = 'translateY(0)';
-              }}
-            >
-              <div
-                style={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: 6,
-                  background: `${colors.accent}14`,
-                  color: colors.accentLight,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <ProviderLogo provider={p.name} size={20} />
-              </div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: colors.text }}>{p.label}</div>
-              <div
-                style={{
-                  fontSize: 10,
-                  color: colors.textDim,
-                  lineHeight: 1.4,
-                  overflow: 'hidden',
-                  display: '-webkit-box',
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: 'vertical' as const,
-                }}
-              >
-                {p.tagline}
-              </div>
-            </button>
+              <PortalProviderCard
+                key={p.name}
+                provider={p}
+                status={status}
+                reason={reason}
+                inert={comingSoon || qsharpBlocked}
+                muted={desktopOnly}
+                onPick={() => handlePickProvider(p.name, status)}
+              />
             );
           })}
         </div>
 
-        <button
-          onClick={openLaunchBlank}
-          style={{
-            marginTop: 10,
-            width: '100%',
-            padding: '8px 10px',
-            background: colors.accent,
-            color: '#0a0f1a',
-            border: 'none',
-            borderRadius: 8,
-            cursor: 'pointer',
-            fontSize: 12,
-            fontWeight: 600,
-            fontFamily: "'Geist Sans', sans-serif",
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 6,
-          }}
-        >
-          <Rocket size={13} /> Open full launcher
-          <span style={{ fontSize: 10, opacity: 0.7, marginLeft: 4 }}>⌘⇧R</span>
-        </button>
+        <Button variant="primary" style={{ marginTop: 10, width: '100%' }} onClick={openLaunchBlank} icon={<Rocket size={14} />}>
+          Open full launcher
+          {launchShortcut && (
+            <kbd
+              style={{
+                fontSize: 11, fontFamily: TYPOGRAPHY.fontMono, marginLeft: 4, padding: '1px 6px', borderRadius: 4,
+                background: 'color-mix(in srgb, currentColor 16%, transparent)',
+                border: '1px solid color-mix(in srgb, currentColor 36%, transparent)',
+              }}
+            >
+              {launchShortcut}
+            </kbd>
+          )}
+        </Button>
       </div>
 
       {/* Active jobs */}
       {activeJobs.length > 0 && (
         <div style={{ padding: '0 12px 12px' }}>
-          <div
-            style={{
-              fontSize: 10,
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              letterSpacing: 0.5,
-              color: colors.textMuted,
-              marginBottom: 6,
-              fontFamily: "'Geist Sans', sans-serif",
-            }}
-          >
+          <div className="nuclei-overline" style={{ marginBottom: 6 }}>
             Active jobs
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -369,7 +274,7 @@ export function LaunchPortal() {
                   border: `1px solid ${colors.border}`,
                   borderRadius: 6,
                   fontSize: 11,
-                  fontFamily: "'Geist Sans', sans-serif",
+                  fontFamily: TYPOGRAPHY.fontSans,
                 }}
               >
                 <Loader2
@@ -391,20 +296,20 @@ export function LaunchPortal() {
                   >
                     {j.backend}
                   </div>
-                  <div style={{ color: colors.textDim, fontSize: 10 }}>
+                  <div style={{ color: colors.textDim, fontSize: 11 }}>
                     {j.status}
                     {j.queuePosition !== null && ` · pos ${j.queuePosition}`}
                   </div>
                 </div>
                 <ProviderLogo provider={j.provider as HardwareProviderType} size={14} color={colors.textDim} />
-                <button
+                <Tooltip label="Cancel job" placement="above">
+                <button className="nuclei-hover-danger"
                   onClick={(e) => {
                     e.stopPropagation();
                     const hw = getHardware();
                     if (hw) hw.hardwareCancel(j.id);
                   }}
                   aria-label={`Cancel ${j.backend}`}
-                  title="Cancel job"
                   style={{
                     background: 'transparent',
                     border: `1px solid ${colors.border}`,
@@ -415,20 +320,13 @@ export function LaunchPortal() {
                     display: 'flex',
                     alignItems: 'center',
                     gap: 2,
-                    fontSize: 10,
-                    fontFamily: "'Geist Sans', sans-serif",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = colors.error;
-                    e.currentTarget.style.borderColor = `${colors.error}60`;
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = colors.textDim;
-                    e.currentTarget.style.borderColor = colors.border;
+                    fontSize: 11,
+                    fontFamily: TYPOGRAPHY.fontSans,
                   }}
                 >
-                  <X size={10} />
+                  <X size={12} />
                 </button>
+                </Tooltip>
               </div>
             ))}
           </div>
@@ -446,31 +344,29 @@ export function LaunchPortal() {
               marginBottom: 6,
             }}
           >
-            <div
-              style={{
-                fontSize: 10,
-                fontWeight: 600,
-                textTransform: 'uppercase',
-                letterSpacing: 0.5,
-                color: colors.textMuted,
-                fontFamily: "'Geist Sans', sans-serif",
-              }}
-            >
+            <div className="nuclei-overline">
               Recent results
             </div>
-            <button
-              onClick={() => { if (window.confirm('Clear all hardware jobs from the list?')) useHardwareStore.getState().clearJobs(); }}
+            <button className="nuclei-hover-text"
+              onClick={async () => {
+                const ok = await confirm({
+                  title: 'Clear all hardware jobs?',
+                  description: 'They are removed from the list.',
+                  confirmLabel: 'Clear',
+                  cancelLabel: 'Keep jobs',
+                  tone: 'danger',
+                });
+                if (ok) useHardwareStore.getState().clearJobs();
+              }}
               style={{
                 background: 'transparent',
                 border: 'none',
                 color: colors.textDim,
                 cursor: 'pointer',
                 padding: 0,
-                fontSize: 10,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontSize: 11,
+                fontFamily: TYPOGRAPHY.fontSans,
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = colors.text; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = colors.textDim; }}
             >
               Clear all
             </button>
@@ -490,7 +386,7 @@ export function LaunchPortal() {
                     border: `1px solid ${colors.success}20`,
                     borderRadius: 6,
                     fontSize: 11,
-                    fontFamily: "'Geist Sans', sans-serif",
+                    fontFamily: TYPOGRAPHY.fontSans,
                   }}
                 >
                   {hasResult ? (
@@ -512,13 +408,13 @@ export function LaunchPortal() {
                     <div
                       style={{
                         color: colors.textDim,
-                        fontSize: 10,
+                        fontSize: 11,
                         display: 'flex',
                         alignItems: 'center',
                         gap: 4,
                       }}
                     >
-                      <Clock size={9} />
+                      <Clock size={12} />
                       {fmtElapsed(j.submittedAt)}
                     </div>
                   </div>

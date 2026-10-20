@@ -3,11 +3,17 @@ import { useThemeStore } from '../../stores/themeStore';
 import { Check, X, Loader, Minus, ChevronRight, ChevronDown } from 'lucide-react';
 import type { TestCase, TestCaseResult } from '../../types/challenge';
 
+import './challenges.css';
+import { TYPOGRAPHY } from '../../styles/tokens';
+import { SUCCESS_TEXT } from '../../lib/semanticText';
+import { scoreLabel } from './scoreLabel';
 interface TestCaseRowProps {
   testCase: TestCase;
   result?: TestCaseResult;
   isRunning: boolean;
   index: number;
+  /** The program never ran (a shared compile/runtime error, or Python never started): neutral, no score. */
+  notRun?: boolean;
 }
 
 function StatusIcon({ result, isRunning }: { result?: TestCaseResult; isRunning: boolean }) {
@@ -47,7 +53,7 @@ function StatusIcon({ result, isRunning }: { result?: TestCaseResult; isRunning:
         alignItems: 'center',
         justifyContent: 'center',
       }}>
-        <Check size={11} color={colors.success} strokeWidth={3} />
+        <Check size={12} color={colors.success} className="nuclei-icon--bold" />
       </div>
     );
   }
@@ -62,22 +68,29 @@ function StatusIcon({ result, isRunning }: { result?: TestCaseResult; isRunning:
       alignItems: 'center',
       justifyContent: 'center',
     }}>
-      <X size={11} color={colors.error} strokeWidth={3} />
+      <X size={12} color={colors.error} className="nuclei-icon--bold" />
     </div>
   );
 }
 
-export function TestCaseRow({ testCase, result, isRunning, index }: TestCaseRowProps) {
+/** A graded-by-fidelity case reports { fidelity: n }, which the score line already says. */
+function isFidelityOnly(output: unknown): boolean {
+  if (typeof output !== 'object' || output === null || Array.isArray(output)) return false;
+  const keys = Object.keys(output);
+  return keys.length === 1 && keys[0] === 'fidelity';
+}
+
+export function TestCaseRow({ testCase, result, isRunning, index, notRun = false }: TestCaseRowProps) {
   const colors = useThemeStore((s) => s.colors);
   const [expanded, setExpanded] = useState(false);
 
   const isHidden = testCase.hidden;
   const hasDetails = result && !isHidden;
-  const canExpand = hasDetails || (isHidden && !result);
+  const canExpand = Boolean(hasDetails);
 
   const label = isHidden
-    ? `Hidden Test ${index + 1}`
-    : testCase.label || `Test Case ${index + 1}`;
+    ? `Hidden test ${index + 1}${result ? '' : ' · revealed after you submit'}`
+    : testCase.label || `Test case ${index + 1}`;
   const verdictLabel = result ? result.verdict.replace(/_/g, ' ') : null;
 
   return (
@@ -86,6 +99,10 @@ export function TestCaseRow({ testCase, result, isRunning, index }: TestCaseRowP
     }}>
       {/* Row header */}
       <button
+        type="button"
+        className="row-btn"
+        data-static={!canExpand}
+        aria-expanded={canExpand ? expanded : undefined}
         onClick={() => canExpand && setExpanded(!expanded)}
         style={{
           width: '100%',
@@ -97,12 +114,6 @@ export function TestCaseRow({ testCase, result, isRunning, index }: TestCaseRowP
           border: 'none',
           cursor: canExpand ? 'pointer' : 'default',
           textAlign: 'left',
-        }}
-        onMouseEnter={(e) => {
-          if (canExpand) e.currentTarget.style.background = colors.bgElevated;
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = 'transparent';
         }}
       >
         {/* Expand chevron */}
@@ -122,7 +133,7 @@ export function TestCaseRow({ testCase, result, isRunning, index }: TestCaseRowP
           flex: 1,
           color: isHidden && !result ? colors.textDim : colors.text,
           fontSize: 12,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           fontStyle: isHidden && !result ? 'italic' : 'normal',
         }}>
           {label}
@@ -130,22 +141,29 @@ export function TestCaseRow({ testCase, result, isRunning, index }: TestCaseRowP
 
         {/* Score */}
         {result && (
-          <span style={{
-            color: result.passed ? colors.success : colors.error,
-            fontSize: 11,
-            fontWeight: 600,
-            fontFamily: "'Geist Mono', monospace",
-          }}>
-            {(result.score * 100).toFixed(0)}%
+          <span
+            title="Score for this test: how closely the output matched what was expected"
+            style={{
+              color: result.passed ? SUCCESS_TEXT : result.score > 0 ? colors.warning : colors.error,
+              fontSize: 11,
+              fontWeight: 600,
+              fontFamily: TYPOGRAPHY.fontMono,
+            }}
+          >
+            {scoreLabel(testCase, result.score)}
           </span>
+        )}
+
+        {notRun && !result && (
+          <span className="trow__notrun">Not run</span>
         )}
 
         {/* Execution time */}
         {result && result.executionTimeMs > 0 && (
           <span style={{
             color: colors.textDim,
-            fontSize: 10,
-            fontFamily: "'Geist Mono', monospace",
+            fontSize: 11,
+            fontFamily: TYPOGRAPHY.fontMono,
             minWidth: 48,
             textAlign: 'right',
           }}>
@@ -162,16 +180,7 @@ export function TestCaseRow({ testCase, result, isRunning, index }: TestCaseRowP
         <div style={{
           padding: '0 16px 10px 56px',
         }}>
-          {isHidden && !result ? (
-            <span style={{
-              color: colors.textDim,
-              fontSize: 12,
-              fontStyle: 'italic',
-              fontFamily: "'Geist Sans', sans-serif",
-            }}>
-              Hidden -- revealed after submission
-            </span>
-          ) : result ? (
+          {result ? (
             <div style={{
               display: 'flex',
               flexDirection: 'column',
@@ -185,17 +194,17 @@ export function TestCaseRow({ testCase, result, isRunning, index }: TestCaseRowP
                 border: `1px solid ${result.passed ? `${colors.success}20` : `${colors.error}20`}`,
                 color: colors.textMuted,
                 fontSize: 12,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
                 lineHeight: 1.5,
               }}>
                 {verdictLabel && (
                   <div style={{
-                    color: result.passed ? colors.success : colors.error,
-                    fontSize: 10,
+                    color: result.passed ? SUCCESS_TEXT : colors.error,
+                    fontSize: 11,
                     fontWeight: 700,
-                    fontFamily: "'Geist Sans', sans-serif",
+                    fontFamily: TYPOGRAPHY.fontSans,
                     textTransform: 'uppercase',
-                    letterSpacing: 0.4,
+                    letterSpacing: '0.04em',
                     marginBottom: 4,
                   }}>
                     {verdictLabel}
@@ -205,18 +214,18 @@ export function TestCaseRow({ testCase, result, isRunning, index }: TestCaseRowP
               </div>
 
               {/* Expected vs actual */}
-              {result.actualOutput && (
+              {result.actualOutput && !isFidelityOnly(result.actualOutput) && (
                 <div style={{
                   display: 'flex',
                   gap: 12,
                   fontSize: 11,
-                  fontFamily: "'Geist Mono', monospace",
+                  fontFamily: TYPOGRAPHY.fontMono,
                 }}>
                   <div style={{ flex: 1 }}>
                     <div style={{
                       color: colors.textDim,
                       marginBottom: 2,
-                      fontFamily: "'Geist Sans', sans-serif",
+                      fontFamily: TYPOGRAPHY.fontSans,
                       fontWeight: 600,
                     }}>
                       Actual Output

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import '../test/learnGateOn';
 import { useModeSwitchStore } from './modeSwitchStore';
 import { useWorkspaceStore } from './workspaceStore';
 import { useExperimentRunStore } from './experimentRunStore';

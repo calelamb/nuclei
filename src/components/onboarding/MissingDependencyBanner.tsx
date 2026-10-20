@@ -1,9 +1,12 @@
+import { Button, IconButton } from '../ui';
 import { useEffect, useState } from 'react';
-import { PackageX, Download, X, Check, Loader2 } from 'lucide-react';
+import { PackageX, Download, X, Check } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useMissingDependencyStore } from '../../stores/missingDependencyStore';
 import type { FrameworkInfo } from '../../stores/frameworksStore';
 import { isDesktop, resolveFramework, installFrameworks } from '../../services/environment';
+import { TYPOGRAPHY } from '../../styles/tokens';
+import { shortcutLabel } from '../../config/keybindings';
 
 type Phase = 'idle' | 'installing' | 'done' | 'error';
 
@@ -83,7 +86,7 @@ export function MissingDependencyBanner() {
         borderRadius: 10,
         boxShadow: '0 18px 44px -18px rgba(0,0,0,0.65)',
         padding: '12px 14px',
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
         animation: 'nuclei-slide-down 200ms ease',
       }}
     >
@@ -106,7 +109,7 @@ export function MissingDependencyBanner() {
                 {name} installed
               </div>
               <div style={{ fontSize: 12, color: colors.textDim, marginTop: 2, lineHeight: 1.45 }}>
-                Run your code again (⌘↵) — it'll pick up the new package.
+                Run your code again ({shortcutLabel('run')}) — it'll pick up the new package.
               </div>
             </>
           ) : (
@@ -130,55 +133,15 @@ export function MissingDependencyBanner() {
           {/* actions */}
           <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
             {phase !== 'done' && resolved && (
-              <button
-                type="button"
-                onClick={() => void install()}
-                disabled={phase === 'installing'}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                  padding: '6px 12px', borderRadius: 6, border: 'none',
-                  background: colors.accent, color: '#0a0f1a',
-                  fontSize: 12, fontWeight: 600, fontFamily: "'Geist Sans', sans-serif",
-                  cursor: phase === 'installing' ? 'default' : 'pointer',
-                  opacity: phase === 'installing' ? 0.7 : 1,
-                }}
-              >
-                {phase === 'installing' ? (
-                  <>
-                    <Loader2 size={13} style={{ animation: 'nuclei-spin 800ms linear infinite' }} />
-                    Installing {name}…
-                  </>
-                ) : (
-                  <>
-                    <Download size={13} />
-                    {phase === 'error' ? 'Retry install' : `Install ${name}`}
-                  </>
-                )}
-              </button>
+              <Button variant="primary" onClick={() => void install()} loading={phase === 'installing'} icon={phase === 'installing' ? undefined : <Download size={14} />}>
+                {phase === 'installing' ? `Installing ${name}…` : phase === 'error' ? 'Retry install' : `Install ${name}`}
+              </Button>
             )}
-            <button
-              type="button"
-              onClick={dismiss}
-              style={{
-                padding: '6px 10px', borderRadius: 6,
-                border: `1px solid ${colors.border}`, background: 'transparent',
-                color: colors.textMuted, fontSize: 12, fontFamily: "'Geist Sans', sans-serif",
-                cursor: 'pointer',
-              }}
-            >
-              {phase === 'done' ? 'Dismiss' : 'Not now'}
-            </button>
+            <Button onClick={dismiss}>{phase === 'done' ? 'Dismiss' : 'Not now'}</Button>
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={dismiss}
-          aria-label="Dismiss"
-          style={{ background: 'transparent', border: 'none', color: colors.textDim, cursor: 'pointer', padding: 2, flexShrink: 0 }}
-        >
-          <X size={15} />
-        </button>
+        <IconButton aria-label="Dismiss" onClick={dismiss}><X size={16} /></IconButton>
       </div>
     </div>
   );

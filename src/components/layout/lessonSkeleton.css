@@ -1,0 +1,9 @@
+/* Lesson-shaped placeholder: a text column (title bar, text bars) beside the editor block. Built from tokens, no hard-coded colours. */
+.lesson-skeleton { display: flex; flex-direction: row; gap: var(--space-6); height: 100%; padding: var(--space-6); background: var(--color-surface-base); overflow: hidden; }
+.lesson-skeleton__text { display: flex; flex-direction: column; gap: var(--space-3); flex: 0 0 34%; min-width: 0; }
+.lesson-skeleton__bar { display: block; height: 10px; width: 100%; border-radius: var(--radius-xs); background: var(--color-border-strong); animation: lesson-skeleton-pulse 1.6s var(--ease-standard) infinite; }
+.lesson-skeleton__bar--title { height: 18px; width: 45%; margin-bottom: var(--space-2); }
+.lesson-skeleton__bar--short { width: 70%; }
+.lesson-skeleton__editor { flex: 1; min-height: 120px; border: 1px solid var(--color-border-strong); border-radius: var(--radius-soft); background: var(--color-surface-raised); animation: lesson-skeleton-pulse 1.6s var(--ease-standard) infinite; }
+@keyframes lesson-skeleton-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) { .lesson-skeleton__bar, .lesson-skeleton__editor { animation: none; } }

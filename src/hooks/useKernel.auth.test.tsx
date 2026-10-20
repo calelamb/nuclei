@@ -7,6 +7,7 @@ import type { PlatformBridge } from '../platform/bridge';
 import { useEditorStore } from '../stores/editorStore';
 import { useSimulationStore } from '../stores/simulationStore';
 import { useKernel } from './useKernel';
+import { retryKernel } from '../lib/kernelControl';
 import { ackForSent } from '../test/kernelAuthProof';
 
 class FakeSocket {
@@ -168,7 +169,6 @@ describe('useKernel fail-closed start', () => {
     vi.stubGlobal('WebSocket', FakeSocket);
     useEditorStore.setState({
       kernelConnected: false, kernelReady: false, kernelStatus: 'idle', kernelError: null, code: '',
-      kernelRetryNonce: 0,
     });
   });
   afterEach(() => {
@@ -187,9 +187,8 @@ describe('useKernel fail-closed start', () => {
     const startKernel = vi.fn(async () => { throw new Error('Port 9742 is already in use'); });
     renderHook(() => useKernel(), { wrapper: failingWrapper(startKernel) });
     await waitFor(() => expect(useEditorStore.getState().kernelStatus).toBe('failed'));
-    expect(useEditorStore.getState().kernelError).toBe(
-      "Couldn't start the kernel: Port 9742 is already in use",
-    );
+    // The failure banner supplies the "couldn't start" heading (lib/kernelErrors); the status keeps the Rust reason.
+    expect(useEditorStore.getState().kernelError).toBe('Port 9742 is already in use');
     expect(FakeSocket.instances).toHaveLength(0);
   });
 
@@ -202,7 +201,7 @@ describe('useKernel fail-closed start', () => {
     });
     renderHook(() => useKernel(), { wrapper: failingWrapper(startKernel) });
     await waitFor(() => expect(useEditorStore.getState().kernelStatus).toBe('failed'));
-    useEditorStore.getState().requestKernelRetry();
+    retryKernel();
     await waitFor(() => expect(FakeSocket.instances).toHaveLength(1));
     expect(startKernel).toHaveBeenCalledTimes(2);
   });

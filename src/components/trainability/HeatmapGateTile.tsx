@@ -45,7 +45,7 @@ export function HeatmapGateTile({
       tabIndex={0}
       role="img"
       aria-label={overlayLabel(overlay)}
-      style={{ cursor: 'default', outline: 'none' }}
+      style={{ cursor: 'default' }}
       className="trainability-gate"
       onPointerEnter={(e) => onShow(overlay, e.clientX, e.clientY)}
       onPointerMove={(e) => onShow(overlay, e.clientX, e.clientY)}

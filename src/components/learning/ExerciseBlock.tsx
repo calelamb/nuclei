@@ -1,14 +1,22 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
-import Editor from '@monaco-editor/react';
-import { useThemeStore } from '../../stores/themeStore';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { LessonCodeEditor } from './LessonCodeEditor';
 import { useLearnStore } from '../../stores/learnStore';
 import { useDiracPanelStore } from '../../stores/diracPanelStore';
-import { usePlatform } from '../../platform/PlatformProvider';
-import { KERNEL_WS_URL } from '../../config/kernel';
-import { openAuthenticatedKernelSocket } from '../../services/kernelSocket';
 import type { Framework, SimulationResult, KernelResponse } from '../../types/quantum';
-import { Play, Lightbulb, CheckCircle, XCircle, HelpCircle, Terminal } from 'lucide-react';
-import { hasExpectedDistribution, isQuantumCode, validateExerciseResult } from './exerciseValidation';
+import { Lightbulb, CheckCircle, XCircle, HelpCircle, Terminal, RotateCcw } from 'lucide-react';
+import { hasAnyExpectation, hasExpectedDistribution, isQuantumCode, shouldAutoGrade, validateExerciseRun } from './exerciseValidation';
+import { UnsupportedNotice } from './UnsupportedNotice';
+import { OutcomeResults } from './OutcomeResults';
+import { useLessonKernel } from './useLessonKernel';
+import { LessonEngineFailed } from './LessonEngineFailed';
+import { describeCodeError } from '../../lib/errorLine';
+import { LessonRunButton } from './LessonRunButton';
+import { Button } from '../ui';
+import { StaleResultNotice } from '../layout/StaleResultNotice';
+import { CheckSolutionButton } from './CheckSolutionButton';
+import { focusBlockEditor, focusBlockRun } from './focusBlockEditor';
+import '../dirac/dirac.css';
+import './demo.css';
 
 interface ExerciseBlockProps {
   id: string;
@@ -18,41 +26,64 @@ interface ExerciseBlockProps {
   framework: Framework;
   expectedProbabilities?: Record<string, number>;
   expectedMeasurements?: Record<string, number>;
+  expectedOutput?: string[];
+  requiredCode?: string[];
   tolerancePercent: number;
   hints: string[];
   successMessage: string;
 }
 
+const DRAFT_DEBOUNCE_MS = 300;
+
+function initialCode(lessonId: string | null, exerciseId: string, starterCode: string): string {
+  if (!lessonId) return starterCode;
+  return useLearnStore.getState().lessonProgress[lessonId]?.drafts?.[exerciseId] ?? starterCode;
+}
+
 export function ExerciseBlock({
   id, title, description, starterCode,
-  expectedProbabilities, expectedMeasurements, tolerancePercent, hints, successMessage,
+  expectedProbabilities, expectedMeasurements, expectedOutput, requiredCode, tolerancePercent, hints, successMessage,
 }: ExerciseBlockProps) {
-  const colors = useThemeStore((s) => s.colors);
-  const shadow = useThemeStore((s) => s.shadow);
   const lessonId = useLearnStore((s) => s.currentLessonId);
   const passExercise = useLearnStore((s) => s.passExercise);
   const addHintUsed = useLearnStore((s) => s.addHintUsed);
+  const setExerciseDraft = useLearnStore((s) => s.setExerciseDraft);
+  const clearExerciseDraft = useLearnStore((s) => s.clearExerciseDraft);
   const lessonProgress = useLearnStore((s) => s.lessonProgress);
   const openDirac = useDiracPanelStore((s) => s.open);
-  const platform = usePlatform();
-  const isWeb = platform.getPlatform() === 'web';
 
   const isPassed = lessonId ? lessonProgress[lessonId]?.exercisesPassed?.includes(id) ?? false : false;
 
-  const [localCode, setLocalCode] = useState(starterCode);
+  const [localCode, setLocalCode] = useState(() => initialCode(lessonId, id, starterCode));
+  const [resetArmed, setResetArmed] = useState(false);
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [output, setOutput] = useState<string[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorLine, setErrorLine] = useState<number | null>(null);
+  const [unsupported, setUnsupported] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ success: boolean; message: string } | null>(null);
   const [hintsRevealed, setHintsRevealed] = useState(0);
   const [showDiracPrompt, setShowDiracPrompt] = useState(false);
+  const [hasRun, setHasRun] = useState(false);
+  // The code the shown result came from; an edit after a run makes that result stale.
+  const [ranCode, setRanCode] = useState<string | null>(null);
+  const blockRef = useRef<HTMLDivElement>(null);
 
-  const wsRef = useRef<WebSocket | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const pyodideRef = useRef<any>(null);
   const inactivityRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hasExpectations = hasExpectedDistribution(expectedProbabilities)
+  const codeRef = useRef(localCode);
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const runTokenRef = useRef(0);
+  // A Run the learner asked for that has not been handed to Python yet; the Retry notice re-issues it.
+  const wantedRunRef = useRef(false);
+  const outputRef = useRef<string[]>([]);
+  const resultRef = useRef<SimulationResult | null>(null);
+  const expectations = useMemo(
+    () => ({ expectedProbabilities, expectedMeasurements, expectedOutput, requiredCode }),
+    [expectedProbabilities, expectedMeasurements, expectedOutput, requiredCode],
+  );
+  const hasExpectations = hasAnyExpectation(expectations);
+  const wantsDistribution = hasExpectedDistribution(expectedProbabilities)
     || hasExpectedDistribution(expectedMeasurements);
 
   const completeExercise = useCallback((message: string) => {
@@ -62,139 +93,190 @@ export function ExerciseBlock({
     }
   }, [id, lessonId, passExercise]);
 
-  const checkSolution = useCallback((nextResult: SimulationResult) => {
-    const validation = validateExerciseResult(nextResult, {
-      expectedProbabilities,
-      expectedMeasurements,
-      tolerancePercent,
-    });
-
-    if (!validation) {
-      completeExercise(successMessage);
-      return;
-    }
-
+  // Grades the latest finished run: stdout, the simulation result and the code.
+  const checkSolution = useCallback(() => {
+    const validation = validateExerciseRun(
+      {
+        result: resultRef.current,
+        output: outputRef.current,
+        code: codeRef.current,
+        starterCode,
+        tolerancePercent,
+      },
+      expectations,
+    );
     if (validation.success) {
       completeExercise(successMessage);
     } else {
       setFeedback({ success: false, message: validation.message });
     }
-  }, [
-    completeExercise,
-    expectedMeasurements,
-    expectedProbabilities,
-    successMessage,
-    tolerancePercent,
-  ]);
+  }, [completeExercise, expectations, starterCode, successMessage, tolerancePercent]);
+
+  // A plain Run only grades once the learner has changed the starter; Check solution always grades.
+  const finishRun = useCallback((gradable: boolean) => {
+    setHasRun(true);
+    if (gradable && hasExpectations && shouldAutoGrade(codeRef.current, starterCode)) checkSolution();
+  }, [checkSolution, hasExpectations, starterCode]);
 
   const handleMessage = useCallback((msg: KernelResponse) => {
     if (msg.type === 'result') {
       setResult(msg.data);
       setIsRunning(false);
       setError(null);
-      if (msg.data) {
-        if (hasExpectations) {
-          checkSolution(msg.data);
-        } else {
-          completeExercise(successMessage);
-        }
-      }
+      resultRef.current = msg.data ?? null;
+      if (msg.data) finishRun(true);
     } else if (msg.type === 'python_result') {
       setResult(null);
       setIsRunning(false);
+      resultRef.current = null;
       if (msg.success) {
         setError(null);
-        if (!hasExpectations) {
-          completeExercise(successMessage);
-        }
+        // A distribution exercise needs a circuit result; a bare script cannot satisfy it.
+        finishRun(!wantsDistribution);
       }
     } else if (msg.type === 'output') {
-      setOutput((prev) => [...prev, msg.text]);
+      // Output from the live preview re-running half-typed code is not a run.
+      if (msg.phase === 'parse') return;
+      outputRef.current = [...outputRef.current, msg.text];
+      setOutput(outputRef.current);
     } else if (msg.type === 'error') {
-      setError(msg.message);
+      if (msg.code === 'unsupported_framework') {
+        setUnsupported(msg.message);
+        setError(null);
+        setIsRunning(false);
+        return;
+      }
+      if (msg.phase === 'parse') return;
+      { const described = describeCodeError(msg.message, msg.traceback); setError(described.text); setErrorLine(described.line); }
       setIsRunning(false);
     }
-  }, [checkSolution, completeExercise, hasExpectations, successMessage]);
+  }, [finishRun, wantsDistribution]);
 
-  useEffect(() => {
-    if (isWeb) {
-      import('../../platform/pyodideKernel').then(({ PyodideKernel }) => {
-        const k = new PyodideKernel((msg) => handleMessage(msg as KernelResponse));
-        k.init().then(() => { pyodideRef.current = k; });
-      });
-      return;
-    }
-    let ws: WebSocket | null = null;
-    let cancelled = false;
-    let retries = 0;
-    function connect() {
-      void openAuthenticatedKernelSocket(
-        KERNEL_WS_URL,
-        platform.getKernelAuthToken?.bind(platform),
-      ).then((socket) => {
-        if (cancelled) { socket.close(); return; }
-        ws = socket;
-        attach(socket);
-      }).catch(() => {
-        // No session token (kernel not started or not ours): stay offline
-        // rather than talking to an unauthenticated listener.
-        wsRef.current = null;
-      });
-    }
-    function attach(ws: WebSocket) {
-      ws.onopen = () => { wsRef.current = ws; retries = 0; };
-      ws.onmessage = (ev) => {
-        try { handleMessage(JSON.parse(ev.data)); } catch { /* noop */ }
-      };
-      ws.onclose = () => {
-        wsRef.current = null;
-        if (retries < 3) { retries++; setTimeout(connect, 1000 * retries); }
-      };
-      ws.onerror = () => ws?.close();
-    }
-    connect();
-    return () => { cancelled = true; ws?.close(); };
-  }, [handleMessage, isWeb, platform]);
+  const kernel = useLessonKernel({
+    onMessage: handleMessage,
+    // The failed-start notice (with Retry) owns the explanation; no second error line.
+    onInitError: () => { setIsRunning(false); },
+  });
+  const { send: kernelSend } = kernel;
 
   // Inactivity timer for "Need help?" prompt
-  const resetInactivity = useCallback(() => {
-    setShowDiracPrompt(false);
+  const armInactivityTimer = useCallback(() => {
     if (inactivityRef.current) clearTimeout(inactivityRef.current);
     if (!isPassed) {
       inactivityRef.current = setTimeout(() => setShowDiracPrompt(true), 120_000);
     }
   }, [isPassed]);
+  const resetInactivity = useCallback(() => {
+    setShowDiracPrompt(false);
+    armInactivityTimer();
+  }, [armInactivityTimer]);
 
   useEffect(() => {
-    resetInactivity();
+    armInactivityTimer();
     return () => { if (inactivityRef.current) clearTimeout(inactivityRef.current); };
-  }, [resetInactivity]);
+  }, [armInactivityTimer]);
+
+  // Persists the draft so it survives the lesson unmounting (Glossary, Next/Prev, Explorer).
+  const flushDraft = useCallback(() => {
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = null;
+    if (!lessonId) return;
+    if (codeRef.current === starterCode) clearExerciseDraft(lessonId, id);
+    else setExerciseDraft(lessonId, id, codeRef.current);
+  }, [clearExerciseDraft, id, lessonId, setExerciseDraft, starterCode]);
+
+  useEffect(() => {
+    const pending = draftTimerRef;
+    return () => { if (pending.current) flushDraft(); };
+  }, [flushDraft]);
 
   const handleCodeChange = (value: string | undefined) => {
+    setErrorLine(null);
+    codeRef.current = value ?? '';
     setLocalCode(value ?? '');
+    setResetArmed(false);
+    setFeedback(null);
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = setTimeout(flushDraft, DRAFT_DEBOUNCE_MS);
+    setUnsupported(null);
+    // The last run no longer reflects this code, so it cannot be graded until the learner runs again.
+    setHasRun(false);
     resetInactivity();
   };
 
-  const handleRun = () => {
-    setIsRunning(true);
-    setError(null);
-    setFeedback(null);
+  const handleResetClick = () => {
+    if (!resetArmed) { setResetArmed(true); return; }
+    handleReset();
+  };
+
+  const handleReset = () => {
+    // Focus moves into the editor first: Reset disables itself once the code matches the starter.
+    focusBlockEditor(blockRef.current);
+    setResetArmed(false);
+    setRanCode(null);
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = null;
+    codeRef.current = starterCode;
+    setLocalCode(starterCode);
+    if (lessonId) clearExerciseDraft(lessonId, id);
+    outputRef.current = [];
+    resultRef.current = null;
     setOutput([]);
     setResult(null);
+    setError(null);
+    setUnsupported(null);
+    setFeedback(null);
+    setHasRun(false);
+    resetInactivity();
+  };
+
+  const handleCancelQueued = () => {
+    wantedRunRef.current = false;
+    runTokenRef.current += 1;
+    setIsRunning(false);
+  };
+
+  const handleRetry = () => {
+    // The notice unmounts as the engine restarts: put focus on Run first so it never drops to <body>.
+    focusBlockRun(blockRef.current);
+    if (wantedRunRef.current) handleRun();
+    else kernel.retry();
+  };
+
+  const handleRun = () => {
+    // A failed start stays failed until the explicit Retry; Run is that Retry.
+    if (kernel.failed) kernel.retry();
+    wantedRunRef.current = true;
+    const token = ++runTokenRef.current;
+    setIsRunning(true);
+    setError(null);
+    setUnsupported(null);
+    setFeedback(null);
+    outputRef.current = [];
+    resultRef.current = null;
+    setOutput([]);
+    setResult(null);
+    setHasRun(false);
+    setRanCode(localCode);
 
     // Learning content is Python-only today, so the language is fixed.
     const message = isQuantumCode(localCode)
       ? { type: 'execute' as const, code: localCode, shots: 1024, language: 'python' as const }
       : { type: 'run_python' as const, code: localCode };
 
-    if (isWeb && pyodideRef.current) {
-      pyodideRef.current.send(message);
-    } else if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(message));
-    } else {
-      setError('Kernel not connected');
-      setIsRunning(false);
-    }
+    kernelSend(message, { isCancelled: () => token !== runTokenRef.current }).then(
+      (sent) => {
+        if (sent) wantedRunRef.current = false;
+        if (!sent && token === runTokenRef.current) {
+          setError(kernel.unavailableMessage());
+          setIsRunning(false);
+        }
+      },
+      (e: unknown) => {
+        setError(e instanceof Error ? e.message : String(e));
+        setIsRunning(false);
+      },
+    );
   };
 
   const revealHint = () => {
@@ -204,283 +286,110 @@ export function ExerciseBlock({
     }
   };
 
-  const probEntries = result
-    ? Object.entries(result.probabilities)
-        .filter(([, p]) => p > 0.001)
-        .sort(([, a], [, b]) => b - a)
-    : [];
+  const expectedKets = useMemo(
+    () => Object.keys(expectedMeasurements && hasExpectedDistribution(expectedMeasurements) ? expectedMeasurements : expectedProbabilities ?? {}),
+    [expectedMeasurements, expectedProbabilities],
+  );
+  const hasProbabilities = Boolean(result && Object.values(result.probabilities).some((p) => p > 0.001));
+  const ranEmpty = hasRun && !isRunning && hasExpectations && !feedback && !error && !unsupported
+    && output.length === 0 && !hasProbabilities;
+  const isStale = ranCode !== null && ranCode !== localCode && !isRunning && (hasProbabilities || output.length > 0);
+  const state = isPassed ? 'passed' : feedback?.success === false ? 'failed' : 'open';
 
   return (
-    <div style={{
-      margin: '16px 0',
-      borderRadius: 12,
-      overflow: 'hidden',
-      background: colors.bgElevated,
-      border: `1px solid ${isPassed ? colors.success : feedback?.success === false ? colors.error : colors.border}`,
-      boxShadow: shadow.sm,
-      transition: 'border-color 300ms ease',
-    }}>
-      {/* Header */}
-      <div style={{
-        padding: '12px 16px',
-        borderBottom: `1px solid ${colors.border}`,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-      }}>
-        <div style={{
-          width: 6, height: 6, borderRadius: '50%',
-          background: isPassed ? colors.success : colors.warning,
-        }} />
-        <span style={{
-          color: colors.textMuted,
-          fontSize: 12,
-          fontWeight: 500,
-          fontFamily: "'Geist Sans', sans-serif",
-          textTransform: 'uppercase',
-          letterSpacing: 0.5,
-        }}>
-          Exercise
-        </span>
-        {isPassed && <CheckCircle size={14} color={colors.success} />}
+    <div ref={blockRef} className="exercise" data-state={state}>
+      <div className="demo__head">
+        <span className="exercise__dot" aria-hidden="true" />
+        <span className="demo__kicker">Exercise</span>
+        {isPassed && <CheckCircle className="exercise__passed" size={14} aria-label="Passed" />}
       </div>
 
-      {/* Title + description */}
-      <div style={{ padding: '12px 16px', borderBottom: `1px solid ${colors.border}` }}>
-        <div style={{
-          color: colors.text,
-          fontSize: 16,
-          fontWeight: 600,
-          fontFamily: "'Geist Sans', sans-serif",
-          marginBottom: 6,
-        }}>
-          {title}
-        </div>
-        <div style={{
-          color: colors.textMuted,
-          fontSize: 14,
-          fontFamily: "'Geist Sans', sans-serif",
-          lineHeight: 1.5,
-        }}>
-          {description}
-        </div>
+      <div className="exercise__brief">
+        <div className="exercise__title">{title}</div>
+        <div className="exercise__text">{description}</div>
       </div>
 
-      {/* Mini Editor */}
-      <div style={{ height: 220, borderBottom: `1px solid ${colors.border}` }}>
-        <Editor
-          height="100%"
-          language="python"
-          value={localCode}
-          onChange={handleCodeChange}
-          theme={useThemeStore.getState().mode === 'dark' ? 'vs-dark' : 'vs-light'}
-          options={{
-            minimap: { enabled: false },
-            scrollBeyondLastLine: false,
-            fontSize: 13,
-            lineNumbers: 'on',
-            glyphMargin: false,
-            folding: false,
-            lineDecorationsWidth: 0,
-            lineNumbersMinChars: 3,
-            renderLineHighlight: 'none',
-            overviewRulerLanes: 0,
-            scrollbar: { vertical: 'hidden', horizontal: 'auto' },
-            padding: { top: 8, bottom: 8 },
-            fontFamily: "'JetBrains Mono', 'Geist Mono', monospace",
-          }}
-        />
+      <div className="demo__editor">
+        <LessonCodeEditor value={localCode} onChange={handleCodeChange} errorLine={error ? errorLine : null} errorMessage={error ?? undefined} />
       </div>
 
-      {/* Buttons */}
-      <div style={{
-        padding: '8px 16px',
-        display: 'flex',
-        gap: 8,
-        alignItems: 'center',
-        borderBottom: `1px solid ${colors.border}`,
-      }}>
-        <button onClick={handleRun} disabled={isRunning} style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          padding: '6px 14px',
-          background: isRunning ? colors.bgPanel : colors.accent,
-          color: '#fff', border: 'none', borderRadius: 6,
-          fontSize: 12, fontWeight: 600, fontFamily: "'Geist Sans', sans-serif",
-          cursor: isRunning ? 'default' : 'pointer',
-        }}>
-          <Play size={12} fill="currentColor" />
-          {isRunning ? 'Running...' : 'Run'}
-        </button>
-        {result && hasExpectations && (
-          <button onClick={() => checkSolution(result)} style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '6px 14px',
-            background: colors.success,
-            color: '#fff', border: 'none', borderRadius: 6,
-            fontSize: 12, fontWeight: 600, fontFamily: "'Geist Sans', sans-serif",
-            cursor: 'pointer',
-          }}>
-            <CheckCircle size={12} />
-            Check Solution
-          </button>
+      <div className="demo__actions demo__actions--divided">
+        <LessonRunButton isRunning={isRunning} pythonLoading={kernel.loading} progress={kernel.progress} onRun={handleRun} onCancelQueued={handleCancelQueued} />
+        <Button
+          variant={resetArmed ? 'danger' : 'secondary'}
+          className="exercise__reset"
+          onClick={handleResetClick}
+          onBlur={() => setResetArmed(false)}
+          onKeyDown={(e) => { if (e.key === 'Escape' && resetArmed) { e.stopPropagation(); setResetArmed(false); } }}
+          disabled={localCode === starterCode}
+          icon={<RotateCcw size={12} aria-hidden="true" />}
+          title="Restore the starter code"
+        >
+          {resetArmed ? 'Discard?' : 'Reset'}
+        </Button>
+        <span className="nuclei-sr-only" aria-live="polite">{resetArmed ? 'Press again to discard your edits' : ''}</span>
+        {(hasRun || (ranCode !== null && ranCode !== localCode)) && hasExpectations && !isRunning && (
+          <CheckSolutionButton ready={hasRun} onCheck={checkSolution} />
         )}
-        {feedback?.success && !hasExpectations && (
-          <span style={{
-            color: colors.success, fontSize: 11, fontFamily: "'Geist Sans', sans-serif",
-            display: 'flex', alignItems: 'center', gap: 4,
-          }}>
-            <CheckCircle size={11} />
-            Code ran successfully — explore the output above
-          </span>
+        {hasRun && !hasExpectations && (
+          <span className="exercise__ok"><CheckCircle size={12} aria-hidden="true" /> Ran. Compare {output.length > 0 ? 'the output above' : 'your output'} with the task.</span>
         )}
-        <div style={{ flex: 1 }} />
+        <span className="demo__spacer" />
         {hintsRevealed < hints.length && (
-          <button onClick={revealHint} style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '6px 14px',
-            background: 'transparent', color: colors.warning,
-            border: `1px solid ${colors.warning}40`, borderRadius: 6,
-            fontSize: 12, fontFamily: "'Geist Sans', sans-serif",
-            cursor: 'pointer',
-          }}>
-            <Lightbulb size={12} />
-            Show Hint ({hintsRevealed}/{hints.length})
-          </button>
+          <Button onClick={revealHint} icon={<Lightbulb size={12} aria-hidden="true" />}>
+            Show hint ({hintsRevealed}/{hints.length})
+          </Button>
         )}
       </div>
 
-      {/* Error */}
-      {error && (
-        <div style={{
-          padding: '8px 16px',
-          background: `${colors.error}10`,
-          color: colors.error,
-          fontSize: 12,
-          fontFamily: "'Geist Mono', monospace",
-          borderBottom: `1px solid ${colors.border}`,
-        }}>
-          {error}
+      {ranEmpty && (
+        <div className="exercise__idle" role="status">Ran · no output yet. Edit the starter code, then Run.</div>
+      )}
+
+      {feedback && (
+        <div className={feedback.success ? 'exercise__feedback exercise__feedback--ok' : 'exercise__feedback exercise__feedback--fail'} role="status">
+          {feedback.success ? <CheckCircle size={16} aria-hidden="true" /> : <XCircle size={16} aria-hidden="true" />}
+          <span>{feedback.message}</span>
         </div>
       )}
 
-      {/* Hints */}
+      {kernel.failed && <LessonEngineFailed detail={kernel.failureDetail} onRetry={handleRetry} />}
+
+      {error && !kernel.failed && <div className="demo__error" role="alert">{error}</div>}
+
+      {unsupported && <div className="demo__notice"><UnsupportedNotice message={unsupported} /></div>}
+
       {hintsRevealed > 0 && (
-        <div style={{
-          padding: '10px 16px',
-          borderBottom: `1px solid ${colors.border}`,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 6,
-        }}>
+        <div className="exercise__hints">
           {hints.slice(0, hintsRevealed).map((hint, i) => (
-            <div key={i} style={{
-              display: 'flex', gap: 8, alignItems: 'flex-start',
-              color: colors.warning, fontSize: 13,
-              fontFamily: "'Geist Sans', sans-serif",
-            }}>
-              <Lightbulb size={14} style={{ marginTop: 2, flexShrink: 0 }} />
-              <span style={{ color: colors.textMuted }}>{hint}</span>
+            <div key={i} className="exercise__hint">
+              <Lightbulb size={14} aria-hidden="true" />
+              <span>{hint}</span>
             </div>
           ))}
         </div>
       )}
 
-      {/* Terminal output */}
+      {isStale && (
+        <div className="demo__stale"><StaleResultNotice inline label="From last run · Run again" onActivate={handleRun} /></div>
+      )}
+
       {output.length > 0 && (
-        <div style={{
-          padding: '8px 16px',
-          borderBottom: `1px solid ${colors.border}`,
-          background: colors.bg,
-          maxHeight: 120, overflowY: 'auto',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
-            <Terminal size={10} color={colors.textDim} />
-            <span style={{ color: colors.textDim, fontSize: 10, fontFamily: "'Geist Sans', sans-serif", textTransform: 'uppercase', letterSpacing: 0.5 }}>Output</span>
-          </div>
-          <div style={{ fontFamily: "'Geist Mono', monospace", fontSize: 12, color: colors.text, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
-            {output.map((line, i) => <div key={i}>{line}</div>)}
-          </div>
+        <div className="exercise__output" data-stale={isStale || undefined}>
+          <div className="exercise__output-label"><Terminal size={12} aria-hidden="true" /> Output</div>
+          <div className="exercise__output-lines">{output.map((line, i) => <div key={i}>{line}</div>)}</div>
         </div>
       )}
 
-      {/* Compact probability bars */}
-      {probEntries.length > 0 && (
-        <div style={{ padding: '8px 16px', borderBottom: `1px solid ${colors.border}` }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            {probEntries.map(([state, prob]) => (
-              <div key={state} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ width: 48, textAlign: 'right', fontFamily: "'Geist Mono', monospace", fontSize: 12, color: colors.text, fontWeight: 500 }}>
-                  |{state}{'\u27E9'}
-                </span>
-                <div style={{ flex: 1, height: 16, borderRadius: 3, background: colors.bgPanel, overflow: 'hidden' }}>
-                  <div style={{
-                    width: `${prob * 100}%`, height: '100%',
-                    background: `linear-gradient(90deg, ${colors.accent}cc, ${colors.accent}88)`,
-                    borderRadius: 3, transition: 'width 400ms ease-out',
-                    minWidth: prob > 0 ? 2 : 0,
-                  }} />
-                </div>
-                <span style={{ width: 42, textAlign: 'right', fontFamily: "'Geist Mono', monospace", fontSize: 11, color: colors.textMuted }}>
-                  {(prob * 100).toFixed(1)}%
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
+      {result && hasProbabilities && (
+        <div className="exercise__results" data-stale={isStale || undefined}><OutcomeResults result={result} expectedKets={expectedKets} /></div>
       )}
 
-      {/* Feedback */}
-      {feedback && (
-        <div style={{
-          padding: '12px 16px',
-          background: feedback.success ? `${colors.success}10` : `${colors.error}10`,
-          borderBottom: `1px solid ${colors.border}`,
-          display: 'flex',
-          alignItems: 'flex-start',
-          gap: 10,
-        }}>
-          {feedback.success
-            ? <CheckCircle size={18} color={colors.success} style={{ flexShrink: 0, marginTop: 1 }} />
-            : <XCircle size={18} color={colors.error} style={{ flexShrink: 0, marginTop: 1 }} />
-          }
-          <span style={{
-            color: feedback.success ? colors.success : colors.error,
-            fontSize: 14,
-            fontFamily: "'Geist Sans', sans-serif",
-            lineHeight: 1.5,
-          }}>
-            {feedback.message}
-          </span>
-        </div>
-      )}
-
-      {/* Dirac help prompt */}
       {showDiracPrompt && !isPassed && (
-        <div style={{
-          padding: '10px 16px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-        }}>
-          <HelpCircle size={14} color={colors.dirac} />
-          <span style={{
-            color: colors.textMuted, fontSize: 13,
-            fontFamily: "'Geist Sans', sans-serif",
-          }}>
-            Need help?
-          </span>
-          <button onClick={openDirac} style={{
-            background: `${colors.dirac}18`,
-            border: `1px solid ${colors.dirac}40`,
-            borderRadius: 4,
-            color: colors.dirac,
-            fontSize: 12,
-            padding: '3px 10px',
-            cursor: 'pointer',
-            fontFamily: "'Geist Sans', sans-serif",
-          }}>
-            Ask Dirac
-          </button>
+        <div className="exercise__help">
+          <HelpCircle size={14} aria-hidden="true" />
+          <span>Need help?</span>
+          <Button size="sm" className="dirac-btn-dirac" onClick={openDirac}>Ask Dirac</Button>
         </div>
       )}
     </div>

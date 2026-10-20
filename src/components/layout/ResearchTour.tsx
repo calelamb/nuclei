@@ -1,45 +1,29 @@
+import { Button } from '../ui';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { useThemeStore } from '../../stores/themeStore';
 import { useResearchTourStore, RESEARCH_TOUR_STEP_COUNT } from '../../stores/researchTourStore';
+import { useWorkspaceStore } from '../../stores/workspaceStore';
+import { useHelpOverlayStore } from '../../stores/helpOverlayStore';
+import { useHardwareStore } from '../../stores/hardwareStore';
+import { useProjectStore } from '../../stores/projectStore';
+import { isWebBuild } from '../../platform/buildTarget';
+import { researchTourSteps } from './researchTourSteps';
+import { useNavigationStore, type NavView } from '../../stores/navigationStore';
+import { placeTourCard, TOUR_CARD_WIDTH } from './tourPlacement';
+import './researchTour.css';
+
+const FOCUSABLE = 'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
 /**
  * PRD 11 Phase B — the first-run Research coach-mark tour.
  *
  * Three steps, pointing at the Explorer rail item, the Experiments rail item,
- * and the status-bar mode chip (each carries a `data-tour-target`). Non-modal:
- * the dim backdrop dismisses on click but does not trap the app. Fully
- * keyboard-driven: →/Enter next, ← back, Esc skip; focus lands on the primary
- * button each step and the step text is announced via `aria-live`.
+ * and the status-bar mode chip (each carries a `data-tour-target`). The target
+ * stays lit (the dim comes from the spotlight's own shadow); clicking outside it
+ * skips. Keyboard: →/Enter next (Enter only when no button has focus, so Back
+ * and Skip keep their meaning), ← back, Esc skip, Tab is trapped in the card;
+ * the step text is announced via `aria-live`.
  */
-
-interface TourStep {
-  target: string;
-  title: string;
-  body: string;
-  placement: 'right' | 'above';
-}
-
-const STEPS: TourStep[] = [
-  {
-    target: 'activity-files',
-    title: 'Explorer',
-    body: 'Your project files live here. Open a folder to bring your code into the workspace.',
-    placement: 'right',
-  },
-  {
-    target: 'activity-experiments',
-    title: 'Experiments',
-    body: 'Declare parameter sweeps and QEC campaigns, run them, and compare results — all as files in your project.',
-    placement: 'right',
-  },
-  {
-    target: 'mode-chip',
-    title: "You're in Research mode",
-    body: 'This chip always shows your mode and switches it. Switching never stops a running job — it only changes what you see.',
-    placement: 'above',
-  },
-];
 
 interface Rect {
   top: number;
@@ -48,17 +32,73 @@ interface Rect {
   height: number;
 }
 
+const EDITOR_SELECTOR = '.monaco-editor textarea, [aria-label="Editor content"]';
+const MODE_CHIP_SELECTOR = '[aria-label="Switch workspace mode"]';
+const EDITOR_WAIT_MS = 500;
+/** A control that starts the tour and must get focus back when it ends carries this attribute (its value is a stable key). */
+export const TOUR_RETURN_ATTR = 'data-tour-return';
+
+/**
+ * Put focus back where the person was. The editor may be mid-remount (the QEC
+ * takeover unmounts Monaco during the tour), so wait briefly for it, give up
+ * if the person has already focused something, and fall back to the mode chip.
+ */
+function restoreFocus(opener: HTMLElement | null) {
+  if (opener && document.contains(opener)) {
+    opener.focus();
+    return;
+  }
+  // An opener that was unmounted while the tour showed other panes (Settings -> Replay) re-mounts when the view is
+  // restored; it names itself so the replacement button, not the editor, gets focus back.
+  const returnKey = opener?.getAttribute(TOUR_RETURN_ATTR) ?? null;
+  const deadline = performance.now() + EDITOR_WAIT_MS;
+  const attempt = () => {
+    if (returnKey) {
+      const replacement = document.querySelector<HTMLElement>(`[${TOUR_RETURN_ATTR}="${returnKey}"]`);
+      if (replacement) { replacement.focus(); return; }
+      if (performance.now() < deadline) { requestAnimationFrame(attempt); return; }
+    }
+    // The editor can be mounted yet hidden (display: none) while the takeover is still on screen; focus() then does nothing, so keep waiting until it sticks.
+    const editor = document.querySelector<HTMLElement>(EDITOR_SELECTOR);
+    if (editor) {
+      editor.focus();
+      if (document.activeElement === editor) return;
+    }
+    const focusMoved = document.activeElement !== null && document.activeElement !== document.body;
+    if (focusMoved) return;
+    if (performance.now() >= deadline) {
+      document.querySelector<HTMLElement>(MODE_CHIP_SELECTOR)?.focus();
+      return;
+    }
+    requestAnimationFrame(attempt);
+  };
+  attempt();
+}
+
 export function ResearchTour() {
-  const colors = useThemeStore((s) => s.colors);
   const active = useResearchTourStore((s) => s.active);
   const step = useResearchTourStore((s) => s.step);
   const next = useResearchTourStore((s) => s.next);
   const prev = useResearchTourStore((s) => s.prev);
   const dismiss = useResearchTourStore((s) => s.dismiss);
+  const stop = useResearchTourStore((s) => s.stop);
   const [rect, setRect] = useState<Rect | null>(null);
+  const [sidebarRight, setSidebarRight] = useState<number | null>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
 
-  const current = STEPS[step] ?? STEPS[0];
+  const mode = useWorkspaceStore((s) => s.mode);
+  const hasProject = useProjectStore((s) => s.projectRoot !== null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  // The tour is a coach-mark for Research surfaces and the topmost layer. It ends (unseen, so it can
+  // still show later) the moment the mode leaves Research or another modal opens.
+  const overlayOpen = useHelpOverlayStore((s) => s.paletteOpen || s.shortcutsOpen || s.composeOpen);
+  const launchOpen = useHardwareStore((s) => s.launchOpen);
+  const otherModalOpen = overlayOpen || launchOpen;
+  useEffect(() => {
+    if (active && (mode !== 'research' || otherModalOpen)) stop();
+  }, [active, mode, otherModalOpen, stop]);
+  const steps = researchTourSteps({ web: isWebBuild(), hasProject, mode });
+  const current = steps[step] ?? steps[0];
 
   const measure = useCallback(() => {
     const el = document.querySelector<HTMLElement>(`[data-tour-target="${current.target}"]`);
@@ -68,26 +108,94 @@ export function ResearchTour() {
     }
     const r = el.getBoundingClientRect();
     setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
+    const sidebar = document.querySelector<HTMLElement>('[data-tour-sidebar]');
+    setSidebarRight(sidebar ? sidebar.getBoundingClientRect().right : null);
   }, [current.target]);
+
+  // Each step shows the pane it describes. The view the student had is put back when the tour ends,
+  // unless they navigated somewhere else themselves meanwhile.
+  const tourView = useRef<{ readonly prior: NavView | null; readonly shown: NavView | null } | null>(null);
+  useEffect(() => {
+    if (!active) return undefined;
+    const nav = useNavigationStore.getState();
+    const record = tourView.current ?? { prior: nav.activeView, shown: null };
+    tourView.current = record;
+    if (current.view && nav.activeView !== current.view) {
+      nav.setActiveView(current.view);
+      tourView.current = { ...record, shown: current.view };
+    }
+    return undefined;
+  }, [active, current.view]);
+  useEffect(() => {
+    if (active) return;
+    const record = tourView.current;
+    tourView.current = null;
+    if (record?.shown && useNavigationStore.getState().activeView === record.shown) {
+      useNavigationStore.getState().setActiveView(record.prior);
+    }
+  }, [active]);
 
   useEffect(() => {
     if (!active) return;
     // Measure after paint so the target's layout is settled (and to keep the
     // measurement out of the synchronous effect body).
     const raf = requestAnimationFrame(measure);
+    // The sidebar for this step mounts and settles a beat later: measure once more so the card clears it.
+    const settle = window.setTimeout(measure, 220);
     window.addEventListener('resize', measure);
     return () => {
       cancelAnimationFrame(raf);
+      window.clearTimeout(settle);
       window.removeEventListener('resize', measure);
     };
   }, [active, measure]);
 
+  // Whatever had focus before the tour (the status-bar chip, the editor) gets it back when the
+  // tour ends by Escape, Skip or Done; when that element is gone, the editor does.
+  useEffect(() => {
+    if (!active) return undefined;
+    const opener = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
+    return () => {
+      restoreFocus(opener);
+    };
+  }, [active]);
+
+  // Focus lands on the primary button for every step, and stays in the card: anything that
+  // pulls it into a text field behind the dim (Monaco mounting, a late focus call) is undone,
+  // so typing and Tab can never edit code under the tour.
+  useEffect(() => {
+    if (!active) return undefined;
+    primaryRef.current?.focus();
+    const frame = requestAnimationFrame(() => primaryRef.current?.focus());
+    const keepInCard = (e: FocusEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target || cardRef.current?.contains(target)) return;
+      const editable = target.matches('textarea, input, select, [contenteditable="true"]');
+      if (editable) primaryRef.current?.focus();
+    };
+    document.addEventListener('focusin', keepInCard);
+    return () => { cancelAnimationFrame(frame); document.removeEventListener('focusin', keepInCard); };
+  }, [active, step]);
+
   useEffect(() => {
     if (!active) return;
-    primaryRef.current?.focus();
+    const trapTab = (e: KeyboardEvent) => {
+      const items = Array.from(cardRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []);
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const inside = cardRef.current?.contains(document.activeElement) ?? false;
+      if (!inside || (e.shiftKey && document.activeElement === first) || (!e.shiftKey && document.activeElement === last)) {
+        e.preventDefault();
+        (e.shiftKey && inside ? last : first).focus();
+      }
+    };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); dismiss(); }
-      else if (e.key === 'ArrowRight' || e.key === 'Enter') { e.preventDefault(); next(); }
+      if (e.repeat) return;
+      if (e.key === 'Tab') { trapTab(e); return; }
+      if (e.key === 'Escape') { e.preventDefault(); dismiss(); return; }
+      const onButton = (e.target as HTMLElement | null)?.closest?.('button') != null;
+      if (e.key === 'ArrowRight' || (e.key === 'Enter' && !onButton)) { e.preventDefault(); next(); }
       else if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
     };
     document.addEventListener('keydown', onKey);
@@ -98,115 +206,62 @@ export function ResearchTour() {
 
   const isLast = step >= RESEARCH_TOUR_STEP_COUNT - 1;
 
-  // Tooltip placement relative to the spotlighted target.
-  const tooltipStyle: React.CSSProperties = { position: 'fixed', width: 300, maxWidth: '80vw' };
-  if (rect) {
-    if (current.placement === 'above') {
-      tooltipStyle.left = Math.max(8, rect.left);
-      tooltipStyle.bottom = window.innerHeight - rect.top + 10;
-    } else {
-      tooltipStyle.left = rect.left + rect.width + 12;
-      tooltipStyle.top = rect.top;
-    }
-  } else {
-    // Target not found (e.g. rail item hidden) — centre the card.
-    tooltipStyle.left = '50%';
-    tooltipStyle.top = '50%';
-    tooltipStyle.transform = 'translate(-50%, -50%)';
-  }
+  // Card placement relative to the spotlighted target, kept inside the window and clear of the open sidebar.
+  const card = rect ? placeTourCard(rect, current.placement, { width: window.innerWidth, height: window.innerHeight }, sidebarRight) : null;
+  // Target not found (e.g. rail item hidden): centre the card.
+  const cardStyle: React.CSSProperties = card
+    ? { left: card.left, top: card.top, bottom: card.bottom }
+    : { left: '50%', top: '50%', transform: 'translate(-50%, -50%)' };
+
+  // Click-catcher that leaves a hole over the target so it stays interactive/lit.
+  const hole = rect
+    ? `polygon(evenodd, 0 0, 100% 0, 100% 100%, 0 100%, 0 0, ${rect.left - 4}px ${rect.top - 4}px, ${rect.left - 4}px ${rect.top + rect.height + 4}px, ${rect.left + rect.width + 4}px ${rect.top + rect.height + 4}px, ${rect.left + rect.width + 4}px ${rect.top - 4}px, ${rect.left - 4}px ${rect.top - 4}px)`
+    : undefined;
 
   const overlay = (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 1200 }}>
-      {/* Dim backdrop — click to skip. Non-modal: does not trap focus. */}
+    <div className="research-tour">
+      {/* Click-catcher outside the target (click to skip). The dim is the spotlight's
+          shadow below, so the target itself is never darkened. */}
       <div
+        className={rect ? 'research-tour__catcher' : 'research-tour__catcher research-tour__catcher--dim'}
         onClick={dismiss}
-        style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)' }}
+        style={{ clipPath: hole }}
       />
       {/* Spotlight ring around the target. */}
       {rect && (
         <div
-          style={{
-            position: 'fixed',
-            top: rect.top - 4,
-            left: rect.left - 4,
-            width: rect.width + 8,
-            height: rect.height + 8,
-            borderRadius: 8,
-            border: `2px solid ${colors.dirac}`,
-            boxShadow: '0 0 0 9999px rgba(0,0,0,0.5)',
-            pointerEvents: 'none',
-          }}
+          className="research-tour__spot"
+          style={{ top: rect.top - 4, left: rect.left - 4, width: rect.width + 8, height: rect.height + 8 }}
         />
       )}
-      {/* Tooltip card. */}
       <div
+        ref={cardRef}
         role="dialog"
-        aria-modal="false"
+        aria-modal="true"
         aria-labelledby="research-tour-title"
-        style={{
-          ...tooltipStyle,
-          background: colors.bgPanel,
-          border: `1px solid ${colors.border}`,
-          borderRadius: 12,
-          padding: 16,
-          boxShadow: '0 12px 48px rgba(0,0,0,0.4)',
-          fontFamily: "'Geist Sans', sans-serif",
-        }}
+        className="research-tour__card"
+        style={{ ...cardStyle, width: TOUR_CARD_WIDTH }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        {rect && card?.arrow && (
           <span
-            style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.5, color: colors.dirac, textTransform: 'uppercase' }}
-          >
-            Research tour
-          </span>
-          <span style={{ fontSize: 10, color: colors.textDim }}>
-            {step + 1} / {RESEARCH_TOUR_STEP_COUNT}
-          </span>
+            aria-hidden="true"
+            className={current.placement === 'above' ? 'research-tour__arrow research-tour__arrow--down' : 'research-tour__arrow research-tour__arrow--left'}
+            style={current.placement === 'above' ? undefined : { top: Math.max(12, rect.top + rect.height / 2 - (card.top ?? 0) - 5) }}
+          />
+        )}
+        <div className="research-tour__meta">
+          <span className="research-tour__eyebrow">Research tour</span>
+          <span className="research-tour__count">{step + 1} / {RESEARCH_TOUR_STEP_COUNT}</span>
         </div>
-        <div
-          id="research-tour-title"
-          style={{ fontSize: 14, fontWeight: 600, color: colors.text, marginBottom: 6 }}
-        >
-          {current.title}
-        </div>
-        <div aria-live="polite" style={{ fontSize: 12.5, lineHeight: 1.5, color: colors.textMuted, marginBottom: 16 }}>
-          {current.body}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button
-            onClick={dismiss}
-            style={{
-              padding: '5px 10px', background: 'transparent', color: colors.textDim,
-              border: 'none', borderRadius: 6, fontSize: 11, cursor: 'pointer',
-              fontFamily: "'Geist Sans', sans-serif",
-            }}
-          >
-            Skip
-          </button>
+        <div id="research-tour-title" className="research-tour__title">{current.title}</div>
+        <div aria-live="polite" className="research-tour__body">{current.body}</div>
+        <div className="research-tour__actions">
+          <Button size="sm" variant="ghost" onClick={dismiss}>Skip</Button>
           <div style={{ flex: 1 }} />
-          {step > 0 && (
-            <button
-              onClick={prev}
-              style={{
-                padding: '5px 12px', background: 'transparent', color: colors.textDim,
-                border: `1px solid ${colors.border}`, borderRadius: 6, fontSize: 11, cursor: 'pointer',
-                fontFamily: "'Geist Sans', sans-serif",
-              }}
-            >
-              Back
-            </button>
-          )}
-          <button
-            ref={primaryRef}
-            onClick={next}
-            style={{
-              padding: '5px 14px', background: colors.dirac, color: '#fff',
-              border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
-              fontFamily: "'Geist Sans', sans-serif",
-            }}
-          >
+          {step > 0 && <Button size="sm" onClick={prev}>Back</Button>}
+          <Button size="sm" variant="primary" ref={primaryRef} onClick={next}>
             {isLast ? 'Done' : 'Next'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

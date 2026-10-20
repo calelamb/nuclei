@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { MousePointerClick } from 'lucide-react';
+import { MousePointerClick, Network } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useQecStore } from '../../stores/qecStore';
+import { Button } from '../ui/Button';
+import './qecAnalysis.css';
 import { PanelHeader } from '../layout/PanelHeader';
 import { QecEmptyState } from './QecEmptyState';
+import { CircuitExplainPanel } from './CircuitExplainPanel';
 import { detectorGraphLayout, decodeOverlay, type DecodeOverlay } from './qecGeometry';
 import { DetectorGraphCanvas } from './DetectorGraphCanvas';
 import { buildDecodeInput, decodedToOverlay } from './qecDecoderInput';
@@ -11,7 +14,13 @@ import { decodeSyndrome, isDecoderAvailable } from '../../lib/qecDecoderWasm';
 import { parseDemGraphWasm, type DemDetectorGraph } from '../../lib/qecDemWasm';
 import { requestQecDecodeSample, requestQecSnapshot } from '../../lib/qecDecodeSender';
 
+import { ICON_SIZE, ICON_STROKE, TYPOGRAPHY } from '../../styles/tokens';
 const DOCS = 'https://getnuclei.dev/docs/kernel-api/messages-qec/';
+/** The graph never collapses below this; the panel scrolls instead. */
+const GRAPH_MIN_HEIGHT = 280;
+
+/** The in-app interactive decoder is the WASM greedy matcher, not PyMatching. */
+export const INTERACTIVE_DECODER_LABEL = 'preview: greedy matcher, not PyMatching';
 
 /**
  * PRD 10 Phase D — the detector graph. The panel that doesn't exist anywhere
@@ -24,7 +33,7 @@ const DOCS = 'https://getnuclei.dev/docs/kernel-api/messages-qec/';
  *  - `dem.truncated` → summary counts + "Render anyway" (re-request at a
  *    higher cap). Never a silently-missing graph.
  */
-export function DetectorGraphPanel() {
+export function DetectorGraphPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const colors = useThemeStore((s) => s.colors);
   const snapshot = useQecStore((s) => s.snapshot);
   const decodeSample = useQecStore((s) => s.decodeSample);
@@ -123,53 +132,58 @@ export function DetectorGraphPanel() {
 
   const overlay = interactive ? interactiveOverlay : kernelOverlay;
 
-  const header = (
+  const header = embedded ? null : (
     <PanelHeader
       title="Detector Graph"
       context={snapshot ? `${snapshot.num_detectors} detectors` : undefined}
       helpHref={DOCS}
-      actions={
-        snapshot?.dem ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {decoderReady && (
-              <button
-                onClick={() => setInteractive((v) => !v)}
-                title="Toggle detectors and decode live in-app, no kernel round-trip"
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 4,
-                  background: interactive ? colors.accent : 'transparent',
-                  color: interactive ? '#fff' : colors.text,
-                  border: `1px solid ${interactive ? colors.accent : colors.border}`,
-                  borderRadius: 4, cursor: 'pointer', fontSize: 11, padding: '4px 9px',
-                  fontFamily: "'Geist Sans', sans-serif",
-                }}
-              >
-                <MousePointerClick size={12} />
-                Interactive
-              </button>
-            )}
-            {circuitText && !interactive && (
-              <button
-                onClick={() => requestQecDecodeSample(circuitText)}
-                disabled={decodePending}
-                title="Sample one shot and decode it"
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 4,
-                  background: colors.dirac, color: '#fff', border: 'none', borderRadius: 4,
-                  cursor: decodePending ? 'default' : 'pointer', fontSize: 11, padding: '4px 9px',
-                  opacity: decodePending ? 0.6 : 1, fontFamily: "'Geist Sans', sans-serif",
-                }}
-              >
-                {decodePending ? 'Sampling…' : 'Sample a shot'}
-              </button>
-            )}
-          </div>
-        ) : undefined
-      }
     />
   );
 
-  if (!snapshot) return <div style={{ height: '100%', background: colors.bg }}>{header}</div>;
+  // Controls sit in their own wrapping row so a narrow rail never squeezes the title.
+  const toolbar = snapshot?.dem ? (
+    <div
+      style={{
+        display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, padding: '6px 12px',
+        borderBottom: `1px solid ${colors.border}`,
+      }}
+    >
+      {decoderReady && (
+        <Button
+          size="sm"
+          aria-pressed={interactive}
+          variant="secondary"
+          className="qec-toggle-btn"
+          onClick={() => setInteractive((v) => !v)}
+          title="Toggle detectors and decode live in-app, no kernel round-trip"
+          icon={<MousePointerClick size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />}
+        >
+          Interactive
+        </Button>
+      )}
+      {circuitText && !interactive && (
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={() => requestQecDecodeSample(circuitText)}
+          disabled={decodePending}
+          title="Sample one shot and decode it"
+        >
+          {decodePending ? 'Sampling…' : 'Sample a shot'}
+        </Button>
+      )}
+    </div>
+  ) : null;
+
+  if (!snapshot) {
+    return (
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg }}>
+        {header}
+        <div style={{ flex: 1 }} />
+        <CircuitExplainPanel />
+      </div>
+    );
+  }
 
   // No detector error model at all (e.g. a non-deterministic observable).
   if (!snapshot.dem || !layout) {
@@ -177,49 +191,48 @@ export function DetectorGraphPanel() {
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg }}>
         {header}
         <QecEmptyState
+          icon={Network}
           title="No detector error model"
           body={snapshot.dem_error ?? 'stim could not build a detector error model for this circuit.'}
           docsHref={DOCS}
         />
+        <CircuitExplainPanel />
       </div>
     );
   }
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg, overflowY: 'auto' }}>
       {header}
+      {toolbar}
       {snapshot.dem.truncated && !clientDem && (
         <div
           style={{
             display: 'flex', alignItems: 'center', gap: 10, padding: '6px 12px',
             fontSize: 11, color: colors.warning, borderBottom: `1px solid ${colors.border}`,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
           <span>
             Graph truncated — {snapshot.dem.edge_count} edges + {snapshot.dem.boundary_edge_count}{' '}
             boundary exceed the render cap.
           </span>
-          <button
+          <Button
+            size="sm"
             onClick={() => void renderFullGraph()}
-            disabled={clientRendering}
+            loading={clientRendering}
             title="Parse and render the whole graph in-app (WASM) — no kernel edge cap"
-            style={{
-              background: 'transparent', border: `1px solid ${colors.border}`, borderRadius: 4,
-              color: colors.text, cursor: clientRendering ? 'default' : 'pointer', fontSize: 11, padding: '3px 8px',
-              opacity: clientRendering ? 0.6 : 1, fontFamily: "'Geist Sans', sans-serif",
-            }}
           >
             {clientRendering ? 'Rendering…' : 'Render full graph'}
-          </button>
+          </Button>
         </div>
       )}
       {clientDem && (
         <div
           style={{
             display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px',
-            fontSize: 10, color: colors.accent, borderBottom: `1px solid ${colors.border}`,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontSize: 11, color: colors.accentText, borderBottom: `1px solid ${colors.border}`,
+            fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
           Full graph rendered in-app · {clientDem.edge_count} edges + {clientDem.boundary_edge_count} boundary
@@ -229,14 +242,14 @@ export function DetectorGraphPanel() {
       {snapshot.dem.hyperedges_count > 0 && (
         <div
           style={{
-            padding: '5px 12px', fontSize: 10, color: colors.textDim,
-            borderBottom: `1px solid ${colors.border}`, fontFamily: "'Geist Sans', sans-serif",
+            padding: '5px 12px', fontSize: 11, color: colors.textDim,
+            borderBottom: `1px solid ${colors.border}`, fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
           Pairwise projection shown · {snapshot.dem.hyperedges_count} hyperedge(s) not drawn
         </div>
       )}
-      <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+      <div style={{ flex: 1, minHeight: GRAPH_MIN_HEIGHT, position: 'relative' }}>
         <DetectorGraphCanvas
           layout={layout}
           overlay={overlay}
@@ -249,11 +262,22 @@ export function DetectorGraphPanel() {
           style={{
             display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
             padding: '6px 12px', fontSize: 11, borderTop: `1px solid ${colors.border}`,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: colors.textMuted }}>
-            <MousePointerClick size={11} /> Click detectors to toggle the syndrome
+            <MousePointerClick size={ICON_SIZE.xs} /> Click detectors to toggle the syndrome
+          </span>
+          <span
+            data-testid="interactive-decoder-label"
+            title={INTERACTIVE_DECODER_LABEL}
+            aria-label={INTERACTIVE_DECODER_LABEL}
+            style={{
+              fontSize: 11, color: colors.warning, border: `1px solid ${colors.warning}`,
+              borderRadius: 'var(--radius-xs)', padding: '0 var(--space-1)', whiteSpace: 'nowrap',
+            }}
+          >
+            Greedy preview
           </span>
           {syndrome.size > 0 ? (
             <span style={{ color: interactiveOverlay?.logicalError ? colors.error : colors.success }}>
@@ -264,16 +288,7 @@ export function DetectorGraphPanel() {
             <span style={{ color: colors.textDim }}>· syndrome empty</span>
           )}
           {syndrome.size > 0 && (
-            <button
-              onClick={() => setSyndrome(new Set())}
-              style={{
-                marginLeft: 'auto', background: 'transparent', border: `1px solid ${colors.border}`,
-                borderRadius: 4, color: colors.textMuted, cursor: 'pointer', fontSize: 10, padding: '2px 7px',
-                fontFamily: "'Geist Sans', sans-serif",
-              }}
-            >
-              Clear
-            </button>
+            <Button size="sm" onClick={() => setSyndrome(new Set())} style={{ marginLeft: 'auto' }}>Clear</Button>
           )}
         </div>
       ) : overlay ? (
@@ -282,14 +297,14 @@ export function DetectorGraphPanel() {
           style={{
             padding: '6px 12px', fontSize: 11, borderTop: `1px solid ${colors.border}`,
             color: overlay.logicalError ? colors.error : colors.success,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
           {overlay.firedDetectors.size} detector(s) fired · {overlay.matchedEdges.length} matched ·{' '}
           {overlay.logicalError ? 'logical error this shot' : 'corrected — no logical error'}
         </div>
       ) : null}
+      <CircuitExplainPanel />
     </div>
   );
 }
-

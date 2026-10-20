@@ -15,6 +15,8 @@ interface QecSessionCatalogState {
   error: string | null;
   requestVersion: number;
   load(client: QecSessionCatalogClient, projectRoot: string): Promise<void>;
+  /** Record that the engine behind the catalog is offline, so the Sources list says so instead of dropping the group. */
+  markUnavailable(projectRoot: string): void;
   setProjectScope(projectRoot: string | null): void;
   reset(): void;
 }
@@ -55,6 +57,14 @@ export const useQecSessionCatalogStore = create<QecSessionCatalogState>(() => ({
   error: null,
   requestVersion: 0,
   load: loadCatalog,
+  markUnavailable: (projectRoot) => useQecSessionCatalogStore.setState((state) => state.projectRoot !== projectRoot
+    ? state
+    : {
+      sessions: EMPTY_SESSIONS,
+      status: 'error',
+      error: 'Sessions are unavailable while the QEC Data Engine is offline.',
+      requestVersion: state.requestVersion + 1,
+    }),
   setProjectScope: (projectRoot) => useQecSessionCatalogStore.setState((state) => state.projectRoot === projectRoot
     ? state
     : {

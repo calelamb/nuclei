@@ -1,11 +1,13 @@
-import { useRef, type CSSProperties } from 'react';
-import { Search } from 'lucide-react';
+import { EmptyState, Select, useConfirm } from '../ui';
+import { useRef } from 'react';
+import { Search, Share2 } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useCommunityStore } from '../../stores/communityStore';
-import { useEditorStore } from '../../stores/editorStore';
+import { loadIntoEditor } from '../editor/loadIntoEditor';
 import { CircuitCard } from './CircuitCard';
 import { CircuitDetail } from './CircuitDetail';
 
+import { ICON_SIZE, ICON_STROKE, TYPOGRAPHY } from '../../styles/tokens';
 const CATEGORIES: { value: string | null; label: string }[] = [
   { value: null, label: 'All' },
   { value: 'tutorial', label: 'Tutorials' },
@@ -37,7 +39,7 @@ export function CircuitGallery() {
   const toggleLike = useCommunityStore((s) => s.toggleLike);
   const toggleBookmark = useCommunityStore((s) => s.toggleBookmark);
   const selectCircuit = useCommunityStore((s) => s.selectCircuit);
-  const setCode = useEditorStore((s) => s.setCode);
+  const { confirm, confirmDialog } = useConfirm();
 
   // Filter and sort locally
   let filtered = [...circuits];
@@ -67,106 +69,82 @@ export function CircuitGallery() {
       break;
   }
 
-  const pillBase: CSSProperties = {
-    padding: '4px 10px',
-    borderRadius: 12,
-    border: 'none',
-    cursor: 'pointer',
-    fontSize: 11,
-    fontWeight: 500,
-    fontFamily: "'Geist Sans', sans-serif",
-    transition: 'background 0.15s, color 0.15s',
-  };
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 10 }}>
-      {/* Search */}
-      <div style={{ position: 'relative', flexShrink: 0 }}>
-        <Search
-          size={13}
-          style={{
-            position: 'absolute',
-            left: 8,
-            top: '50%',
-            transform: 'translateY(-50%)',
-            color: colors.textDim,
-            pointerEvents: 'none',
-          }}
-        />
-        <input
-          ref={searchInputRef}
-          type="text"
-          placeholder="Search circuits..."
-          value={searchQuery}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{
-            width: '100%',
-            padding: '7px 10px 7px 28px',
-            borderRadius: 6,
-            border: `1px solid ${colors.border}`,
-            background: colors.bg,
-            color: colors.text,
-            fontSize: 12,
-            fontFamily: "'Geist Sans', sans-serif",
-            outline: 'none',
-            boxSizing: 'border-box',
-          }}
-          onFocus={(e) => {
-            e.currentTarget.style.borderColor = colors.accent;
-          }}
-          onBlur={(e) => {
-            e.currentTarget.style.borderColor = colors.border;
-          }}
-        />
-      </div>
-
-      {/* Category pills */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, flexShrink: 0 }}>
-        {CATEGORIES.map((cat) => {
-          const active = selectedCategory === cat.value;
-          return (
-            <button
-              key={cat.label}
-              onClick={() => setCategory(cat.value)}
+      {/* Nothing to search, filter or sort until there is at least one circuit. */}
+      {circuits.length > 0 && (
+        <>
+          {/* Search */}
+          <div className="nuclei-focus-accent" style={{ position: 'relative', flexShrink: 0 }}>
+            <Search
+              size={14}
               style={{
-                ...pillBase,
-                background: active ? colors.accent : colors.bg,
-                color: active ? '#fff' : colors.textMuted,
+                position: 'absolute',
+                left: 8,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: colors.textDim,
+                pointerEvents: 'none',
               }}
-            >
-              {cat.label}
-            </button>
-          );
-        })}
-      </div>
+            />
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Search circuits..."
+              value={searchQuery}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '7px 10px 7px 28px',
+                borderRadius: 6,
+                border: `1px solid ${colors.border}`,
+                background: colors.bg,
+                color: colors.text,
+                fontSize: 12,
+                fontFamily: TYPOGRAPHY.fontSans,
+                boxSizing: 'border-box',
+              }}
+            />
+          </div>
 
-      {/* Sort */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-        <span style={{ fontSize: 10, color: colors.textDim, fontFamily: "'Geist Sans', sans-serif" }}>
-          Sort:
-        </span>
-        <select
-          value={sortBy}
-          onChange={(e) => setSortBy(e.target.value as 'recent' | 'popular' | 'featured')}
-          style={{
-            background: colors.bgElevated,
-            color: colors.text,
-            border: `1px solid ${colors.border}`,
-            borderRadius: 4,
-            padding: '3px 6px',
-            fontSize: 11,
-            cursor: 'pointer',
-            fontFamily: "'Geist Sans', sans-serif",
-            outline: 'none',
-          }}
-        >
-          {SORTS.map((s) => (
-            <option key={s.value} value={s.value}>
-              {s.label}
-            </option>
-          ))}
-        </select>
-      </div>
+          {/* Category filters */}
+          <div role="group" aria-label="Filter by category" style={{ display: 'flex', flexWrap: 'wrap', gap: 4, flexShrink: 0 }}>
+            {CATEGORIES.map((cat) => {
+              const active = selectedCategory === cat.value;
+              return (
+                <button
+                  key={cat.label}
+                  type="button"
+                  className="nuclei-chip"
+                  aria-pressed={active}
+                  onClick={() => setCategory(cat.value)}
+                >
+                  {cat.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Sort */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+            <span style={{ fontSize: 11, color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans }}>
+              Sort:
+            </span>
+            <Select
+              size="sm"
+              aria-label="Sort circuits"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'recent' | 'popular' | 'featured')}
+            >
+              {SORTS.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+        </>
+      )}
 
       {/* Grid */}
       <div
@@ -192,17 +170,10 @@ export function CircuitGallery() {
           />
         ))}
         {filtered.length === 0 && (
-          <div
-            style={{
-              gridColumn: '1 / -1',
-              textAlign: 'center',
-              padding: 24,
-              color: colors.textDim,
-              fontSize: 12,
-              fontFamily: "'Geist Sans', sans-serif",
-            }}
-          >
-            No community circuits shared yet — publishing isn't live yet.
+          <div style={{ gridColumn: '1 / -1' }}>
+            <EmptyState icon={<Share2 size={ICON_SIZE.lg} strokeWidth={ICON_STROKE} />} title="No shared circuits yet">
+              Publishing to the community gallery is not live yet. Circuits you share will appear here.
+            </EmptyState>
           </div>
         )}
       </div>
@@ -213,11 +184,13 @@ export function CircuitGallery() {
           circuit={selectedCircuit}
           onClose={() => selectCircuit(null)}
           onOpenInEditor={() => {
-            setCode(selectedCircuit.code);
-            selectCircuit(null);
+            void loadIntoEditor(selectedCircuit.code, { label: 'shared circuit', confirm }).then((outcome) => {
+              if (outcome !== 'cancelled') selectCircuit(null);
+            });
           }}
         />
       )}
+      {confirmDialog}
     </div>
   );
 }

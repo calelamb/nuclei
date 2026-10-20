@@ -23,7 +23,7 @@ Uniform superposition is the starting point for nearly every quantum algorithm:
 
 For \`n\` qubits:
 
-\`|\\u03C8\\u27E9 = (1 / \\u221A(2^n)) \\u2211_{x=0}^{2^n - 1} |x\\u27E9\`
+\`|ψ⟩ = (1 / √(2^n)) ∑_{x=0}^{2^n - 1} |x⟩\`
 
 ### Your Task
 
@@ -34,7 +34,7 @@ register yields every bit-string with equal probability.
 
 For \`n_qubits = 2\` the state is:
 
-\`|\\u03C8\\u27E9 = (|00\\u27E9 + |01\\u27E9 + |10\\u27E9 + |11\\u27E9) / 2\`
+\`|ψ⟩ = (|00⟩ + |01⟩ + |10⟩ + |11⟩) / 2\`
 
 and each outcome appears with probability **0.25**.`,
 

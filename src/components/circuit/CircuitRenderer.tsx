@@ -3,11 +3,29 @@ import { useCircuitStore } from '../../stores/circuitStore';
 import { useDebugStore } from '../../stores/debugStore';
 import { activeDebugStep } from '../../lib/debugTrace';
 import { useThemeStore } from '../../stores/themeStore';
-import { renderGate, WIRE_SPACING, LAYER_SPACING, LABEL_WIDTH, PADDING, GATE_SIZE } from './gates';
-import { getGateData } from '../../data/gates';
-import { useCircuitExport } from '../../hooks/useCircuitExport';
+import { useEditorStore } from '../../stores/editorStore';
+import { installStepLabel } from '../layout/kernelStatusModel';
+import { useSimulationStore } from '../../stores/simulationStore';
+import { useDisplaySnapshot } from '../../layout/useDisplaySnapshot';
+import { usePreviewPending } from '../../layout/usePreviewPending';
+import { useErrorPending } from './useErrorPending';
+import { renderGate, gateY, GATE_SIZE, LABEL_WIDTH } from './gates';
+import { computeCircuitGeometry, columnX } from './geometry';
+import { formatAngle } from './formatAngle';
+import { CircuitEmptyState } from './CircuitEmptyState';
+import { ExportMenu } from './ExportMenu';
+import { useEdgeFades } from './edgeFades';
+import { fitCircuitWidth } from './fitCircuit';
+import { describeStale, type StalePill } from './staleCaption';
+import { circuitOverflows, hiddenQubitWires } from '../../layout/circuitRail';
+import { prefersReducedMotion } from '../../lib/animations';
+import { StaleResultNotice } from '../layout/StaleResultNotice';
+import { useEditorRevealStore } from '../../stores/editorRevealStore';
+import { useElementSize } from '../../hooks/useElementSize';
+import { GateExplorerPopup } from './GateExplorerPopup';
 import type { Gate } from '../../types/quantum';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface Tooltip {
   gate: Gate;
   gateIndex: number;
@@ -22,160 +40,6 @@ interface ContextMenu {
   y: number;
 }
 
-function GateExplorerPopup({ gateIndex, onClose }: { gateIndex: number; onClose: () => void }) {
-  const snapshot = useCircuitStore((s) => s.snapshot);
-  const colors = useThemeStore((s) => s.colors);
-  const gate = snapshot?.gates[gateIndex];
-  if (!gate) return null;
-
-  const data = getGateData(gate.type);
-  if (!data) {
-    onClose();
-    return null;
-  }
-
-  return (
-    <div style={{
-      position: 'fixed',
-      top: 0, left: 0, right: 0, bottom: 0,
-      zIndex: 2000,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: 'rgba(0,0,0,0.4)',
-    }} onClick={onClose}>
-      <div style={{
-        background: colors.bg,
-        border: `1px solid ${colors.border}`,
-        borderRadius: 8,
-        padding: 20,
-        maxWidth: 420,
-        width: '90%',
-        maxHeight: '80vh',
-        overflow: 'auto',
-      }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <span style={{ color: colors.accent, fontWeight: 700, fontSize: 18, fontFamily: "'Fira Code', monospace" }}>
-            {data.symbol}
-          </span>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: colors.textMuted, cursor: 'pointer', fontSize: 16 }}>✕</button>
-        </div>
-        <div style={{ color: colors.text, fontSize: 16, fontWeight: 600, fontFamily: 'Inter, sans-serif', marginBottom: 8 }}>
-          {data.name}
-        </div>
-        <div style={{ color: colors.text, fontSize: 13, fontFamily: 'Inter, sans-serif', lineHeight: 1.6, marginBottom: 12 }}>
-          {data.description}
-        </div>
-
-        <div style={{ marginBottom: 10 }}>
-          <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: 'Inter, sans-serif', marginBottom: 4 }}>MATRIX</div>
-          <code style={{ color: colors.accent, fontSize: 12, fontFamily: "'Fira Code', monospace", background: colors.bgPanel, padding: '4px 8px', borderRadius: 4, display: 'block' }}>
-            {data.matrix}
-          </code>
-        </div>
-
-        {data.blochRotation && (
-          <div style={{ marginBottom: 10 }}>
-            <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: 'Inter, sans-serif', marginBottom: 4 }}>BLOCH SPHERE EFFECT</div>
-            <div style={{ color: colors.text, fontSize: 12, fontFamily: 'Inter, sans-serif' }}>
-              Rotation around <strong style={{ color: colors.accentLight }}>{data.blochRotation.axis}</strong> axis by <strong style={{ color: colors.accentLight }}>{data.blochRotation.angle}</strong>
-            </div>
-          </div>
-        )}
-
-        <div style={{ marginBottom: 10 }}>
-          <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: 'Inter, sans-serif', marginBottom: 4 }}>FRAMEWORK SYNTAX</div>
-          {Object.entries(data.frameworkSyntax).map(([fw, syntax]) => (
-            <div key={fw} style={{ display: 'flex', gap: 8, marginBottom: 2 }}>
-              <span style={{ color: colors.textMuted, fontSize: 11, fontFamily: 'Inter, sans-serif', width: 60 }}>{fw}</span>
-              <code style={{ color: colors.string, fontSize: 12, fontFamily: "'Fira Code', monospace" }}>{syntax}</code>
-            </div>
-          ))}
-        </div>
-
-        {data.relatedGates.length > 0 && (
-          <div>
-            <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: 'Inter, sans-serif', marginBottom: 4 }}>RELATED GATES</div>
-            <div style={{ display: 'flex', gap: 6 }}>
-              {data.relatedGates.map((g) => (
-                <span key={g} style={{ color: colors.accent, fontSize: 12, fontFamily: "'Fira Code', monospace", background: colors.bgPanel, padding: '2px 6px', borderRadius: 3 }}>
-                  {g}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ExportMenu() {
-  const [open, setOpen] = useState(false);
-  const colors = useThemeStore((s) => s.colors);
-  const snapshot = useCircuitStore((s) => s.snapshot);
-  const { exportQasmFile, exportSvg, exportPng, copyCodeToClipboard, copyQasmToClipboard, copyShareUrl, exportJsonSnapshot } = useCircuitExport();
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
-
-  if (!snapshot || snapshot.gates.length === 0) return null;
-
-  const items = [
-    { label: 'Copy code', action: () => { copyCodeToClipboard(); setOpen(false); } },
-    { label: 'Copy QASM', action: () => { copyQasmToClipboard(); setOpen(false); } },
-    { label: 'Copy share URL', action: () => { copyShareUrl(); setOpen(false); } },
-    { label: 'Export QASM file', action: () => { exportQasmFile(); setOpen(false); } },
-    { label: 'Export SVG', action: () => { exportSvg(); setOpen(false); } },
-    { label: 'Export PNG (2x)', action: () => { exportPng(2); setOpen(false); } },
-    { label: 'Export JSON', action: () => { exportJsonSnapshot(); setOpen(false); } },
-  ];
-
-  return (
-    <div ref={menuRef} style={{ position: 'absolute', top: 6, right: 6, zIndex: 100 }}>
-      <button
-        onClick={() => setOpen(!open)}
-        style={{
-          padding: '3px 8px', background: colors.bgPanel, color: colors.textMuted,
-          border: `1px solid ${colors.border}`, borderRadius: 3, cursor: 'pointer',
-          fontSize: 11, fontFamily: 'Inter, sans-serif',
-        }}
-      >
-        Export ▾
-      </button>
-      {open && (
-        <div style={{
-          position: 'absolute', top: '100%', right: 0, marginTop: 2,
-          background: colors.bgPanel, border: `1px solid ${colors.border}`,
-          borderRadius: 4, overflow: 'hidden', minWidth: 150,
-        }}>
-          {items.map((item) => (
-            <button
-              key={item.label}
-              onClick={item.action}
-              style={{
-                display: 'block', width: '100%', padding: '6px 12px',
-                background: 'transparent', color: colors.text, border: 'none',
-                cursor: 'pointer', fontSize: 12, fontFamily: 'Inter, sans-serif', textAlign: 'left',
-              }}
-              onMouseEnter={(e) => (e.target as HTMLElement).style.background = colors.border}
-              onMouseLeave={(e) => (e.target as HTMLElement).style.background = 'transparent'}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 function StepControls() {
   const stepMode = useCircuitStore((s) => s.stepMode);
@@ -233,7 +97,7 @@ function StepControls() {
     borderRadius: 3,
     cursor: 'pointer' as const,
     fontSize: 11,
-    fontFamily: 'Inter, sans-serif',
+    fontFamily: TYPOGRAPHY.fontSans,
   };
 
   return (
@@ -250,7 +114,7 @@ function StepControls() {
       <button onClick={handlePlay} style={btnStyle}>{isPlaying ? '⏸ Pause' : '▶ Play'}</button>
       <button onClick={() => setStepMode(false)} style={{ ...btnStyle, color: colors.error }}>✕ Exit</button>
       <DebugStateReadout stepIndex={stepIndex} />
-      <span style={{ color: colors.textMuted, fontSize: 11, fontFamily: 'Inter, sans-serif', marginLeft: 'auto' }}>
+      <span style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, marginLeft: 'auto' }}>
         Step {stepIndex + 1} / {totalGates}
       </span>
     </div>
@@ -265,14 +129,14 @@ function DebugStateReadout({ stepIndex }: { stepIndex: number }) {
   const error = useDebugStore((s) => s.error);
   const trace = useDebugStore((s) => s.trace);
 
-  const base = { fontSize: 11, fontFamily: 'Inter, sans-serif', marginLeft: 10 } as const;
+  const base = { fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, marginLeft: 10 } as const;
   if (pending) return <span style={{ ...base, color: colors.textMuted }}>computing state…</span>;
   if (error) return <span style={{ ...base, color: colors.textMuted }}>{error}</span>;
 
   const step = activeDebugStep(trace, stepIndex);
   if (!step) return null;
   return (
-    <span style={{ ...base, color: colors.accent }}>
+    <span style={{ ...base, color: colors.accentText }}>
       state after {step.gate_index < 0 ? 'start' : step.label}
     </span>
   );
@@ -291,17 +155,55 @@ function describeCircuit(snapshot: import('../../types/quantum').CircuitSnapshot
   return `${snapshot.qubit_count}-qubit circuit with depth ${snapshot.depth}. Gates: ${gateTypes.join(', ')}. Sequence: ${gateList}.`;
 }
 
+/** A diagram waiting on its refreshed preview: dimmer than live, lighter than the last-good stale state. */
+const PENDING_OPACITY = 0.6;
+
+/** A pill that names a line jumps to it; the pause pill runs the code (the Run it tells the person to press). */
+function staleActivation(pill: StalePill, revealLine: (line: number) => void): (() => void) | undefined {
+  if (pill.line !== null) return () => revealLine(pill.line as number);
+  if (pill.action === 'run') return () => { void import('../../App').then((app) => app.getExecute()?.()); };
+  return undefined;
+}
+
 export function CircuitRenderer() {
-  const snapshot = useCircuitStore((s) => s.snapshot);
+  const { snapshot, stale } = useDisplaySnapshot();
   const error = useCircuitStore((s) => s.error);
+  const previewPaused = useCircuitStore((s) => s.previewPaused);
+  const previewPending = usePreviewPending();
+  const errorPending = useErrorPending();
+  const errorLine = useEditorStore((s) => s.errors[0]?.line ?? null);
+  const isRunning = useSimulationStore((s) => s.isRunning);
+  const installing = useEditorStore((s) => s.kernelInstalling);
   const highlights = useCircuitStore((s) => s.highlights);
   const stepMode = useCircuitStore((s) => s.stepMode);
   const stepIndex = useCircuitStore((s) => s.stepIndex);
   const explorerGateIndex = useCircuitStore((s) => s.explorerGateIndex);
   const setExplorerGateIndex = useCircuitStore((s) => s.setExplorerGateIndex);
   const colors = useThemeStore((s) => s.colors);
+  const revealLine = useEditorRevealStore((s) => s.revealLine);
 
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [measureContainer, containerSize] = useElementSize<HTMLDivElement>();
+  const { ref: fadeRef, onScroll: onContainerScroll, style: fadeStyle } = useEdgeFades<HTMLDivElement>();
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const [wireStrip, setWireStrip] = useState<{ shown: boolean; hidden: number; scrolled: boolean }>({ shown: false, hidden: 0, scrolled: false });
+  const [measurePane, paneSize] = useElementSize<HTMLDivElement>();
+  const qubitTotal = snapshot?.qubit_count ?? 0;
+  const measureClipped = useCallback(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const shown = circuitOverflows(el.scrollHeight, paneSize.height);
+    const svg = el.querySelector('svg');
+    const drawn = Number(svg?.getAttribute('height'));
+    const natural = Number(svg?.getAttribute('viewBox')?.split(/\s+/)[3]);
+    const scale = drawn > 0 && natural > 0 ? drawn / natural : 1;
+    const hidden = shown ? hiddenQubitWires({ scrollTop: el.scrollTop, visibleHeight: el.clientHeight, scale }, qubitTotal, (snapshot?.classical_bit_count ?? 0) > 0) : 0;
+    const next = { shown, hidden, scrolled: el.scrollTop > 0 };
+    setWireStrip((prev) => (prev.shown === next.shown && prev.hidden === next.hidden && prev.scrolled === next.scrolled ? prev : next));
+  }, [qubitTotal, snapshot?.classical_bit_count, paneSize.height]);
+  const setContainerRef = useCallback((el: HTMLDivElement | null) => { scrollerRef.current = el; measureContainer(el); fadeRef(el); }, [measureContainer, fadeRef]);
+  const handleScroll = useCallback(() => { onContainerScroll(); measureClipped(); }, [onContainerScroll, measureClipped]);
+  useEffect(() => { measureClipped(); }, [measureClipped, containerSize.height, containerSize.width, snapshot]);
+  const scrollWires = (top: number) => scrollerRef.current?.scrollTo({ top, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
 
@@ -324,97 +226,94 @@ export function CircuitRenderer() {
   };
 
   if (!snapshot || snapshot.gates.length === 0) {
-    return (
-      <div className="circuit-renderer-container" style={{
-        height: '100%',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        flexDirection: 'column', gap: 12,
-      }}>
-        {error ? (
-          <span style={{ color: colors.error, fontSize: 13, fontFamily: "'Geist Sans', sans-serif" }}>{error}</span>
-        ) : (
-          <>
-            {/* Ghost circuit outline */}
-            <svg width={160} height={60} viewBox="0 0 160 60" style={{ opacity: 0.15 }}>
-              <line x1={20} y1={15} x2={140} y2={15} stroke={colors.wire} strokeWidth={1.5} strokeDasharray="4,4" />
-              <line x1={20} y1={45} x2={140} y2={45} stroke={colors.wire} strokeWidth={1.5} strokeDasharray="4,4" />
-              <text x={8} y={15} dominantBaseline="central" fill={colors.textMuted} fontSize={10} fontFamily="'JetBrains Mono', monospace">|0⟩</text>
-              <text x={8} y={45} dominantBaseline="central" fill={colors.textMuted} fontSize={10} fontFamily="'JetBrains Mono', monospace">|1⟩</text>
-              <rect x={45} y={3} width={24} height={24} rx={4} fill="none" stroke={colors.accent} strokeWidth={1} strokeDasharray="3,3" />
-              <text x={57} y={15} textAnchor="middle" dominantBaseline="central" fill={colors.accent} fontSize={10} fontFamily="'JetBrains Mono', monospace">H</text>
-              <rect x={95} y={33} width={24} height={24} rx={4} fill="none" stroke={colors.gateMeasure} strokeWidth={1} strokeDasharray="3,3" />
-              <text x={107} y={45} textAnchor="middle" dominantBaseline="central" fill={colors.gateMeasure} fontSize={9} fontFamily="'JetBrains Mono', monospace">M</text>
-            </svg>
-            <span style={{ color: colors.textDim, fontSize: 12, fontFamily: "'Geist Sans', sans-serif" }}>
-              Write quantum code to see your circuit
-            </span>
-          </>
-        )}
-      </div>
-    );
+    return <CircuitEmptyState error={error} paused={previewPaused} />;
   }
 
   const { qubit_count, depth, gates, classical_bit_count } = snapshot;
-  const svgWidth = LABEL_WIDTH + depth * LAYER_SPACING + PADDING * 2;
   const hasClassical = classical_bit_count > 0;
-  const classicalWireY = PADDING + qubit_count * WIRE_SPACING + (hasClassical ? 15 : 0);
-  const svgHeight = classicalWireY + (hasClassical ? 20 : 0) + PADDING;
+  const { columns, svgWidth, svgHeight, classicalWireY, wireStart, wireEnd } = computeCircuitGeometry(snapshot);
 
+  const awaiting = previewPending || errorPending;
+  const stalePill = stale || awaiting ? describeStale({ previewPaused, error, errorLine, previewPending: awaiting, installing }) : null;
+  const dimmed = stale || awaiting;
   const highlightSet = new Set(highlights.map((h) => h.gateIndex));
 
-  const ariaDescription = snapshot ? describeCircuit(snapshot) : 'Empty circuit';
+  const ariaDescription = describeCircuit(snapshot);
+  const fit = fitCircuitWidth(svgWidth, containerSize.width);
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }} role="region" aria-label="Circuit diagram">
+    // The rail split (src/layout/railHeights.ts) sizes this pane; a circuit taller than its share scrolls inside its own box.
+    <div style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column' }} role="region" aria-label="Circuit diagram">
+      <div className="nuclei-pane-header" style={{ justifyContent: 'space-between', padding: '0 10px 0 12px' }}>
+        <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
+          <span className="nuclei-overline">Circuit</span>
+          {!dimmed && (
+            <span style={{ fontSize: 11, color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans, whiteSpace: 'nowrap' }}>
+              {qubit_count} {qubit_count === 1 ? 'qubit' : 'qubits'} · depth {depth}
+            </span>
+          )}
+          {stalePill && !(isRunning && installing) && (
+            <StaleResultNotice
+              inline
+              label={stalePill.label}
+              tooltip={stalePill.tooltip}
+              onActivate={staleActivation(stalePill, revealLine)}
+            />
+          )}
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {isRunning && <span role="status" style={{ fontSize: 11, color: colors.textMuted, fontFamily: TYPOGRAPHY.fontSans }}>{installing ? installStepLabel(installing).short : 'Running…'}</span>}
+          <ExportMenu />
+        </span>
+      </div>
+      <div ref={measurePane} style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <div
-        ref={containerRef}
+        ref={setContainerRef}
+        onScroll={handleScroll}
         className="circuit-renderer-container"
-        style={{ flex: 1, minHeight: 0, overflow: 'auto', position: 'relative' }}
+        style={{ ...fadeStyle, flex: 1, minHeight: 0, overflow: 'auto', position: 'relative', padding: '4px 0 6px', opacity: stale ? 0.45 : awaiting ? PENDING_OPACITY : 1, transition: 'opacity var(--duration-fast) var(--ease-standard)' }}
         aria-description={ariaDescription}
       >
-        <ExportMenu />
         <svg
-          width="100%"
-          height="100%"
+          width={svgWidth * fit.scale}
+          height={svgHeight * fit.scale}
           viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-          preserveAspectRatio="xMidYMid meet"
-          style={{ minWidth: svgWidth, minHeight: svgHeight }}
+          style={{ display: 'block', margin: '0 auto', minWidth: svgWidth * fit.scale }}
+          role="img"
+          aria-label={ariaDescription}
         >
           {/* Qubit wires */}
           {Array.from({ length: qubit_count }, (_, i) => {
-            const y = PADDING + i * WIRE_SPACING;
+            const y = gateY(i);
             return (
               <g key={`wire-${i}`}>
-                <line
-                  x1={LABEL_WIDTH - 10} y1={y}
-                  x2={svgWidth - PADDING} y2={y}
-                  stroke={colors.wire} strokeWidth={1.5}
-                  strokeOpacity={0.7}
-                />
+                <line x1={wireStart} y1={y} x2={wireEnd} y2={y} stroke={colors.wire} strokeWidth={1.25} />
                 <text
-                  x={LABEL_WIDTH - 20} y={y}
+                  x={LABEL_WIDTH - 18} y={y}
                   textAnchor="end" dominantBaseline="central"
-                  fill={colors.text} fontSize={13}
-                  fontFamily="'Fira Code', monospace"
+                  fill={colors.textMuted} fontSize={12}
+                  fontFamily={TYPOGRAPHY.fontMono}
                 >
-                  |{i}⟩
+                  q{i}
                 </text>
               </g>
             );
           })}
 
-          {/* Classical wire */}
+          {/* Classical register: a double wire, the OpenQASM / Quirk convention. */}
           {hasClassical && (
             <g>
-              <line x1={LABEL_WIDTH - 10} y1={classicalWireY - 2} x2={svgWidth - PADDING} y2={classicalWireY - 2} stroke={colors.wire} strokeWidth={1} strokeDasharray="4,3" />
-              <line x1={LABEL_WIDTH - 10} y1={classicalWireY + 2} x2={svgWidth - PADDING} y2={classicalWireY + 2} stroke={colors.wire} strokeWidth={1} strokeDasharray="4,3" />
-              <text x={LABEL_WIDTH - 20} y={classicalWireY} textAnchor="end" dominantBaseline="central" fill={colors.textDim} fontSize={11} fontFamily="'Fira Code', monospace">c</text>
+              <line x1={wireStart} y1={classicalWireY - 1.5} x2={wireEnd} y2={classicalWireY - 1.5} stroke={colors.wire} strokeWidth={1} />
+              <line x1={wireStart} y1={classicalWireY + 1.5} x2={wireEnd} y2={classicalWireY + 1.5} stroke={colors.wire} strokeWidth={1} />
+              <text x={LABEL_WIDTH - 18} y={classicalWireY} textAnchor="end" dominantBaseline="central" fill={colors.textDim} fontSize={12} fontFamily={TYPOGRAPHY.fontMono}>
+                c{classical_bit_count > 1 ? `/${classical_bit_count}` : ''}
+              </text>
             </g>
           )}
 
           {/* Gates with highlight/step overlays */}
           {gates.map((gate, idx) => {
-            const x = LABEL_WIDTH + gate.layer * LAYER_SPACING + LAYER_SPACING / 2;
+            const x = columnX(columns[idx]);
             const isHighlighted = highlightSet.has(idx);
             const isGrayedOut = stepMode && idx > stepIndex;
             const opacity = isGrayedOut ? 0.2 : 1;
@@ -431,7 +330,7 @@ export function CircuitRenderer() {
                 {isHighlighted && !isGrayedOut && (
                   <circle
                     cx={x}
-                    cy={PADDING + (gate.targets[0] ?? 0) * WIRE_SPACING}
+                    cy={gateY(gate.targets[0] ?? 0)}
                     r={GATE_SIZE / 2 + 6}
                     fill="none"
                     stroke={colors.accent}
@@ -442,7 +341,7 @@ export function CircuitRenderer() {
                     }}
                   />
                 )}
-                {renderGate(gate, x, (g, mx, my) => handleHover(g, mx, my, idx), handleLeave)}
+                {renderGate(gate, x, (g, mx, my) => handleHover(g, mx, my, idx), handleLeave, hasClassical ? classicalWireY : undefined)}
               </g>
             );
           })}
@@ -458,11 +357,11 @@ export function CircuitRenderer() {
             borderRadius: 6, padding: '8px 12px',
             zIndex: 1000, pointerEvents: 'none', maxWidth: 250,
           }}>
-            <div style={{ color: colors.accent, fontWeight: 600, fontSize: 13, fontFamily: "'Fira Code', monospace" }}>{tooltip.gate.type}</div>
-            <div style={{ color: colors.text, fontSize: 12, fontFamily: 'Inter, sans-serif', marginTop: 4 }}>Targets: q{tooltip.gate.targets.join(', q')}</div>
-            {tooltip.gate.controls.length > 0 && <div style={{ color: colors.text, fontSize: 12, fontFamily: 'Inter, sans-serif' }}>Controls: q{tooltip.gate.controls.join(', q')}</div>}
-            {tooltip.gate.params.length > 0 && <div style={{ color: colors.number, fontSize: 12, fontFamily: "'Fira Code', monospace" }}>Params: {tooltip.gate.params.map(p => p.toFixed(4)).join(', ')}</div>}
-            <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: 'Inter, sans-serif', marginTop: 2 }}>Layer {tooltip.gate.layer} • Right-click to explore</div>
+            <div style={{ color: colors.accentText, fontWeight: 600, fontSize: 13, fontFamily: TYPOGRAPHY.fontMono }}>{tooltip.gate.type}</div>
+            <div style={{ color: colors.text, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, marginTop: 4 }}>Targets: q{tooltip.gate.targets.join(', q')}</div>
+            {tooltip.gate.controls.length > 0 && <div style={{ color: colors.text, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>Controls: q{tooltip.gate.controls.join(', q')}</div>}
+            {tooltip.gate.params.length > 0 && <div style={{ color: colors.number, fontSize: 12, fontFamily: TYPOGRAPHY.fontMono }}>Params: {tooltip.gate.params.map(formatAngle).join(', ')}</div>}
+            <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, marginTop: 2 }}>Layer {tooltip.gate.layer} • Right-click to explore</div>
           </div>
         )}
 
@@ -478,26 +377,42 @@ export function CircuitRenderer() {
           }}>
             <button
               onClick={() => { setExplorerGateIndex(contextMenu.gateIndex); setContextMenu(null); }}
-              style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', color: colors.text, border: 'none', cursor: 'pointer', fontSize: 12, fontFamily: 'Inter, sans-serif', textAlign: 'left' }}
-              onMouseEnter={(e) => (e.target as HTMLElement).style.background = colors.border}
-              onMouseLeave={(e) => (e.target as HTMLElement).style.background = 'transparent'}
+              className="nuclei-menu-item"
+              style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', color: colors.text, border: 'none', cursor: 'pointer', fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, textAlign: 'left' }}
             >
               Explore {contextMenu.gateName} gate
             </button>
             <button
+              className="nuclei-menu-item"
               onClick={() => {
                 useCircuitStore.getState().setStepMode(true);
                 useCircuitStore.getState().setStepIndex(contextMenu.gateIndex);
                 setContextMenu(null);
               }}
-              style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', color: colors.text, border: 'none', cursor: 'pointer', fontSize: 12, fontFamily: 'Inter, sans-serif', textAlign: 'left' }}
-              onMouseEnter={(e) => (e.target as HTMLElement).style.background = colors.border}
-              onMouseLeave={(e) => (e.target as HTMLElement).style.background = 'transparent'}
+              style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', color: colors.text, border: 'none', cursor: 'pointer', fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, textAlign: 'left' }}
             >
               Step through from here
             </button>
           </div>
         )}
+      </div>
+
+      {wireStrip.shown && (
+        <div className="circuit-more-wires-strip">
+          {wireStrip.hidden > 0 ? (
+            <button
+              type="button"
+              className="circuit-more-wires"
+              onClick={() => scrollWires(scrollerRef.current?.scrollHeight ?? 0)}
+              aria-label={`Show ${wireStrip.hidden} more ${wireStrip.hidden === 1 ? 'wire' : 'wires'}`}
+            >
+              +{wireStrip.hidden} {wireStrip.hidden === 1 ? 'wire' : 'wires'}
+            </button>
+          ) : wireStrip.scrolled && (
+            <button type="button" className="circuit-more-wires" onClick={() => scrollWires(0)}>Back to top</button>
+          )}
+        </div>
+      )}
       </div>
 
       {/* Step controls */}

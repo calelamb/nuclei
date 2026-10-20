@@ -12,11 +12,14 @@ binary you downloaded or the kernel you're talking to — it changes which
 panels are registered and how Dirac talks to you.
 {/* src/stores/workspaceStore.ts; src/components/layout/panelRegistry.ts */}
 
-<Aside type="note" title="Learn is unchanged and is still the default">
-Every Research-mode feature is additive and gated. A student who never
-switches modes sees byte-identical Learn mode — enforced by a panel-registry
-snapshot test, not just a design intention. If you've used Nuclei before
-v0.6.0, nothing about your workflow changes unless you explicitly switch.
+<Aside type="note" title="Learn is off by default">
+Nuclei is research-first: the Learn workspace is hidden for everyone, and
+Nuclei opens in Research with no mode chooser, status-bar pill or
+<kbd>⌘⇧M</kbd> chord. Turn it on under **Settings → General → Learning
+workspace** (for teaching a course), or open the web build with a `learn`
+query parameter, for example `/try/?learn`, which turns the setting on and
+keeps it on. Existing Learn progress is kept either way; it is only hidden.
+Once enabled, everything below applies as described.
 </Aside>
 
 ## What each mode shows
@@ -37,7 +40,7 @@ list.
 
 ## Switching modes
 
-There is no buried settings toggle. Three surfaces do it:
+With the Learning workspace enabled, three surfaces switch modes:
 
 1. **First launch / no project open** — a two-card chooser: "Learn quantum
    computing" (guided lessons, challenges, Dirac as tutor) or "Research

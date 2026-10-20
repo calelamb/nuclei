@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import '../../test/learnGateOn';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ModeSwitchDialog } from '../layout/ModeSwitchDialog';
 import { useLabActivityStore } from '../../stores/labActivityStore';

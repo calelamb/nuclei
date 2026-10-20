@@ -1,5 +1,7 @@
 import { useThemeStore } from '../../stores/themeStore';
-import { renderGate, WIRE_SPACING, LAYER_SPACING, LABEL_WIDTH, PADDING } from '../circuit/gates';
+import { renderGate, gateY, LABEL_WIDTH } from '../circuit/gates';
+import { computeCircuitGeometry, columnX } from '../circuit/geometry';
+import { TYPOGRAPHY } from '../../styles/tokens';
 import type { CircuitSnapshot } from '../../types/quantum';
 
 /**
@@ -20,60 +22,38 @@ export function RunCircuitDiagram({ snapshot }: { snapshot: CircuitSnapshot | nu
 
   if (!snapshot || snapshot.gates.length === 0) {
     return (
-      <div style={{ padding: 16, color: colors.textDim, fontSize: 12, fontFamily: "'Geist Sans', sans-serif" }}>
+      <div style={{ padding: 16, color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>
         No circuit snapshot recorded for this run.
       </div>
     );
   }
 
-  const { qubit_count, depth, gates, classical_bit_count } = snapshot;
-  const svgWidth = LABEL_WIDTH + depth * LAYER_SPACING + PADDING * 2;
-  const hasClassical = classical_bit_count > 0;
-  const classicalWireY = PADDING + qubit_count * WIRE_SPACING + (hasClassical ? 15 : 0);
-  const svgHeight = classicalWireY + (hasClassical ? 20 : 0) + PADDING;
+  const { qubit_count, gates } = snapshot;
+  const { hasClassical, columns, svgWidth, svgHeight, classicalWireY, wireStart, wireEnd } = computeCircuitGeometry(snapshot);
 
   return (
     <div style={{ overflow: 'auto' }} role="region" aria-label="Run circuit diagram">
-      <svg
-        width="100%"
-        height={svgHeight}
-        viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-        preserveAspectRatio="xMidYMid meet"
-        style={{ minWidth: svgWidth }}
-      >
-        {Array.from({ length: qubit_count }, (_, i) => {
-          const y = PADDING + i * WIRE_SPACING;
-          return (
-            <g key={`wire-${i}`}>
-              <line
-                x1={LABEL_WIDTH - 10} y1={y}
-                x2={svgWidth - PADDING} y2={y}
-                stroke={colors.wire} strokeWidth={1.5}
-                strokeOpacity={0.7}
-              />
-              <text
-                x={LABEL_WIDTH - 20} y={y}
-                textAnchor="end" dominantBaseline="central"
-                fill={colors.text} fontSize={13}
-                fontFamily="'Fira Code', monospace"
-              >
-                |{i}⟩
-              </text>
-            </g>
-          );
-        })}
+      <svg width={svgWidth} height={svgHeight} viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ display: 'block', minWidth: svgWidth }}>
+        {Array.from({ length: qubit_count }, (_, i) => (
+          <g key={`wire-${i}`}>
+            <line x1={wireStart} y1={gateY(i)} x2={wireEnd} y2={gateY(i)} stroke={colors.wire} strokeWidth={1.25} />
+            <text x={LABEL_WIDTH - 18} y={gateY(i)} textAnchor="end" dominantBaseline="central" fill={colors.textMuted} fontSize={12} fontFamily={TYPOGRAPHY.fontMono}>
+              q{i}
+            </text>
+          </g>
+        ))}
 
         {hasClassical && (
           <g>
-            <line x1={LABEL_WIDTH - 10} y1={classicalWireY - 2} x2={svgWidth - PADDING} y2={classicalWireY - 2} stroke={colors.wire} strokeWidth={1} strokeDasharray="4,3" />
-            <line x1={LABEL_WIDTH - 10} y1={classicalWireY + 2} x2={svgWidth - PADDING} y2={classicalWireY + 2} stroke={colors.wire} strokeWidth={1} strokeDasharray="4,3" />
-            <text x={LABEL_WIDTH - 20} y={classicalWireY} textAnchor="end" dominantBaseline="central" fill={colors.textDim} fontSize={11} fontFamily="'Fira Code', monospace">c</text>
+            <line x1={wireStart} y1={classicalWireY - 1.5} x2={wireEnd} y2={classicalWireY - 1.5} stroke={colors.wire} strokeWidth={1} />
+            <line x1={wireStart} y1={classicalWireY + 1.5} x2={wireEnd} y2={classicalWireY + 1.5} stroke={colors.wire} strokeWidth={1} />
+            <text x={LABEL_WIDTH - 18} y={classicalWireY} textAnchor="end" dominantBaseline="central" fill={colors.textDim} fontSize={12} fontFamily={TYPOGRAPHY.fontMono}>c</text>
           </g>
         )}
 
         {gates.map((gate, idx) => {
-          const x = LABEL_WIDTH + gate.layer * LAYER_SPACING + LAYER_SPACING / 2;
-          return <g key={`gate-${idx}`}>{renderGate(gate, x, noop, noop)}</g>;
+          const x = columnX(columns[idx]);
+          return <g key={`gate-${idx}`}>{renderGate(gate, x, noop, noop, hasClassical ? classicalWireY : undefined)}</g>;
         })}
       </svg>
     </div>

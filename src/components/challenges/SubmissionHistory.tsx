@@ -3,6 +3,9 @@ import { useThemeStore } from '../../stores/themeStore';
 import { Check, X, Clock, ChevronRight, ChevronDown, Star } from 'lucide-react';
 import type { Submission, SubmissionStatus } from '../../types/challenge';
 
+import './challenges.css';
+import { TYPOGRAPHY } from '../../styles/tokens';
+import { SUCCESS_TEXT } from '../../lib/semanticText';
 interface SubmissionHistoryProps {
   submissions: Submission[];
 }
@@ -13,12 +16,12 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
 
   const STATUS_META: Record<SubmissionStatus, { label: string; color: string }> = {
     pending: { label: 'Pending', color: colors.textDim },
-    running: { label: 'Running', color: colors.accent },
-    accepted: { label: 'Accepted', color: colors.success },
-    wrong_answer: { label: 'Wrong Answer', color: colors.error },
-    runtime_error: { label: 'Runtime Error', color: colors.error },
-    compile_error: { label: 'Compile Error', color: colors.warning },
-    time_limit_exceeded: { label: 'Time Limit Exceeded', color: colors.warning },
+    running: { label: 'Running', color: colors.accentText },
+    accepted: { label: 'Accepted', color: SUCCESS_TEXT },
+    wrong_answer: { label: 'Wrong answer', color: colors.error },
+    runtime_error: { label: 'Runtime error', color: colors.error },
+    compile_error: { label: 'Compile error', color: colors.warning },
+    time_limit_exceeded: { label: 'Time limit exceeded', color: colors.warning },
   };
   const statusMeta = STATUS_META[submission.status];
   const isAccepted = submission.status === 'accepted';
@@ -36,6 +39,9 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
       borderBottom: `1px solid ${colors.border}`,
     }}>
       <button
+        type="button"
+        className="row-btn"
+        aria-expanded={expanded}
         onClick={() => setExpanded(!expanded)}
         style={{
           width: '100%',
@@ -48,8 +54,6 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
           cursor: 'pointer',
           textAlign: 'left',
         }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = colors.bgElevated; }}
-        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
       >
         {expanded
           ? <ChevronDown size={12} color={colors.textDim} />
@@ -59,10 +63,10 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
         <span style={{
           color: colors.textDim,
           fontSize: 11,
-          fontFamily: "'Geist Mono', monospace",
+          fontFamily: TYPOGRAPHY.fontMono,
           width: 20,
         }}>
-          #{index + 1}
+          #{index}
         </span>
 
         {/* Status badge */}
@@ -76,9 +80,9 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
           color: statusMeta.color,
           fontSize: 11,
           fontWeight: 600,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}>
-          {isAccepted ? <Check size={10} /> : <X size={10} />}
+          {isAccepted ? <Check size={12} /> : <X size={12} />}
           {statusMeta.label}
         </div>
 
@@ -87,7 +91,7 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
           color: colors.textMuted,
           fontSize: 11,
           fontWeight: 600,
-          fontFamily: "'Geist Mono', monospace",
+          fontFamily: TYPOGRAPHY.fontMono,
         }}>
           {submission.totalScore}%
         </span>
@@ -97,9 +101,9 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
           padding: '1px 6px',
           borderRadius: 3,
           background: `${colors.accent}12`,
-          color: colors.accent,
-          fontSize: 10,
-          fontFamily: "'Geist Sans', sans-serif",
+          color: colors.accentText,
+          fontSize: 11,
+          fontFamily: TYPOGRAPHY.fontSans,
         }}>
           {submission.framework}
         </span>
@@ -112,10 +116,10 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
           alignItems: 'center',
           gap: 4,
           color: colors.textDim,
-          fontSize: 10,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontSize: 11,
+          fontFamily: TYPOGRAPHY.fontSans,
         }}>
-          <Clock size={10} />
+          <Clock size={12} />
           {timeStr}
         </div>
       </button>
@@ -139,30 +143,30 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
               }}
             >
               {tcr.passed
-                ? <Check size={10} color={colors.success} />
-                : <X size={10} color={colors.error} />
+                ? <Check size={12} color={colors.success} />
+                : <X size={12} color={colors.error} />
               }
               <span style={{
                 color: colors.textMuted,
                 fontSize: 11,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
                 flex: 1,
               }}>
                 Test {i + 1}
               </span>
               <span style={{
-                color: tcr.passed ? colors.success : colors.error,
-                fontSize: 10,
+                color: tcr.passed ? SUCCESS_TEXT : colors.error,
+                fontSize: 11,
                 fontWeight: 600,
-                fontFamily: "'Geist Mono', monospace",
+                fontFamily: TYPOGRAPHY.fontMono,
               }}>
                 {(tcr.score * 100).toFixed(0)}%
               </span>
               {tcr.executionTimeMs > 0 && (
                 <span style={{
                   color: colors.textDim,
-                  fontSize: 10,
-                  fontFamily: "'Geist Mono', monospace",
+                  fontSize: 11,
+                  fontFamily: TYPOGRAPHY.fontMono,
                   minWidth: 40,
                   textAlign: 'right',
                 }}>
@@ -182,19 +186,19 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
               gap: 12,
               flexWrap: 'wrap',
               color: colors.textDim,
-              fontSize: 10,
-              fontFamily: "'Geist Mono', monospace",
+              fontSize: 11,
+              fontFamily: TYPOGRAPHY.fontMono,
             }}>
               {submission.efficiency?.isOptimal && (
                 <span style={{
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: 3,
-                  color: colors.success,
+                  color: SUCCESS_TEXT,
                   fontWeight: 700,
-                  fontFamily: "'Geist Sans', sans-serif",
+                  fontFamily: TYPOGRAPHY.fontSans,
                 }}>
-                  <Star size={10} fill={colors.success} strokeWidth={0} />
+                  <Star size={12} fill={colors.success} strokeWidth={0} />
                   Optimal
                 </span>
               )}
@@ -215,8 +219,8 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
           }}>
             <span style={{
               color: colors.textDim,
-              fontSize: 10,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontSize: 11,
+              fontFamily: TYPOGRAPHY.fontSans,
             }}>
               Total execution: {Math.round(submission.executionTimeMs)}ms
             </span>
@@ -236,7 +240,7 @@ export function SubmissionHistory({ submissions }: SubmissionHistoryProps) {
         color: colors.textDim,
         fontSize: 12,
         fontStyle: 'italic',
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
       }}>
         No submissions yet.
       </span>
@@ -252,7 +256,7 @@ export function SubmissionHistory({ submissions }: SubmissionHistoryProps) {
         color: colors.textMuted,
         fontSize: 11,
         fontWeight: 600,
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
         marginBottom: 6,
       }}>
         Submission History ({submissions.length})

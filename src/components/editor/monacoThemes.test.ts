@@ -37,4 +37,28 @@ describe('monacoThemes', () => {
     const t = buildNucleiDarkTheme();
     expect(t.colors['editor.selectionBackground']?.toUpperCase()).toContain('00B4D8');
   });
+
+  it('suggest, find and hover widgets use Nuclei surfaces and an accent selection, not the stock VS blue', () => {
+    for (const [t, tokens] of [[buildNucleiDarkTheme(), DARK_COLORS], [buildNucleiLightTheme(), LIGHT_COLORS]] as const) {
+      expect(t.colors['editorSuggestWidget.background']).toBe(tokens.surfaceRaised);
+      expect(t.colors['editorWidget.border']).toBe(tokens.borderStrong);
+      expect(t.colors['editorSuggestWidget.selectedBackground']?.toUpperCase()).toContain('00B4D8');
+      expect(t.colors['list.activeSelectionBackground']?.toUpperCase()).toContain('00B4D8');
+      expect(JSON.stringify(t.colors).toLowerCase()).not.toContain('04395e');
+    }
+  });
+
+  it('themes the context menu and pickers with Nuclei surfaces in both themes, not VS Code grey', () => {
+    for (const [t, tokens] of [[buildNucleiDarkTheme(), DARK_COLORS], [buildNucleiLightTheme(), LIGHT_COLORS]] as const) {
+      expect(t.colors['menu.background']).toBe(tokens.surfaceRaised);
+      expect(t.colors['menu.foreground']).toBe(tokens.textPrimary);
+      expect(t.colors['menu.border']).toBe(tokens.borderStrong);
+      expect(t.colors['menu.separatorBackground']).toBe(tokens.borderStrong);
+      expect(t.colors['menu.selectionBackground']?.toUpperCase()).toContain('00B4D8');
+      expect(t.colors['menu.selectionForeground']).toBe(tokens.textPrimary);
+      expect(t.colors['quickInput.background']).toBe(tokens.surfaceRaised);
+      expect(t.colors['quickInputList.focusBackground']?.toUpperCase()).toContain('00B4D8');
+      expect(JSON.stringify(t.colors).toLowerCase()).not.toContain('3c3c3c');
+    }
+  });
 });

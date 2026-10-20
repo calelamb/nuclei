@@ -12,7 +12,11 @@ import {
   measureQubits,
   activeQubitsAtTick,
   classifyTimelineGates,
+  timelineLabel,
+  activeTimelineQubits,
   detectorTrackByTick,
+  tickMomentCount,
+  fitGraphBox,
 } from './qecGeometry';
 
 const repSnap = repetition.snapshot as CircuitSnapshot;
@@ -42,10 +46,12 @@ describe('latticeLayout', () => {
     const kinds = new Set(layout.qubits.map((q) => q.kind));
     expect(kinds.has('data')).toBe(true);
     expect(kinds.has('measure')).toBe(true);
-    // Measure qubits carry a basis; every measure in this Z-memory is Z.
+    // Stim's rotated surface code has equal numbers of X-type (ancilla controls CNOTs)
+    // and Z-type (ancilla is the CNOT target) checks; none may be left unknown.
     const measures = layout.qubits.filter((q) => q.kind === 'measure');
-    expect(measures.length).toBeGreaterThan(0);
-    expect(measures.every((q) => q.basis === 'Z')).toBe(true);
+    expect(measures.length).toBe(8);
+    expect(measures.filter((q) => q.basis === 'X').map((q) => q.index).sort((a, b) => a - b)).toEqual([2, 11, 16, 25]);
+    expect(measures.filter((q) => q.basis === 'Z').map((q) => q.index).sort((a, b) => a - b)).toEqual([9, 13, 14, 18]);
   });
 
   it('normalizes so the extreme qubits sit at the [0,1] bounds', () => {
@@ -197,5 +203,91 @@ describe('edgeHeatColor', () => {
     }
     expect(edgeHeatColor(-1)).toEqual(edgeHeatColor(0));
     expect(edgeHeatColor(2)).toEqual(edgeHeatColor(1));
+  });
+});
+
+describe('timeline legibility (qec-24)', () => {
+  it('uses Stim mnemonics instead of truncated names', () => {
+    expect(timelineLabel('CNOT')).toBe('CX');
+    expect(timelineLabel('Measure')).toBe('M');
+    expect(timelineLabel('Reset')).toBe('R');
+    expect(timelineLabel('MR')).toBe('MR');
+    expect(timelineLabel('H')).toBe('H');
+    expect(timelineLabel('SQRT_XX_DAG')).toBe('SQRT');
+  });
+
+  it('lists only qubits that have operations', () => {
+    const used = activeTimelineQubits(surfSnap.gates);
+    expect(used.length).toBeGreaterThan(0);
+    expect(used.length).toBeLessThanOrEqual(surfSnap.qubit_count);
+    expect(used).toEqual([...used].sort((a, b) => a - b));
+    expect(activeTimelineQubits([{ type: 'H', targets: [5], controls: [], params: [], layer: 0 }])).toEqual([5]);
+  });
+});
+
+describe('tickMomentCount', () => {
+  it('counts one moment per layer including the final one (surface d3: 7 TICKs, layers 0..7)', () => {
+    const count = tickMomentCount(surfQec.num_ticks, surfSnap.gates);
+    expect(count).toBe(8);
+    const maxLayer = Math.max(...surfSnap.gates.map((g) => g.layer));
+    expect(count).toBeGreaterThan(maxLayer);
+  });
+
+  it('never drops below the highest drawn layer and is at least 1', () => {
+    expect(tickMomentCount(0, [])).toBe(1);
+    expect(tickMomentCount(2, [{ layer: 9 } as never])).toBe(10);
+  });
+});
+
+describe('detectorGraphLayout rounds and scale', () => {
+  it('never draws two detectors of different rounds on the same spot', () => {
+    const layout = detectorGraphLayout(surfQec);
+    const seen = new Set(layout.nodes.map((n) => `${n.x.toFixed(4)},${n.y.toFixed(4)}`));
+    expect(seen.size).toBe(layout.nodes.length);
+  });
+
+  it('keeps detectors of different rounds clearly apart, not merely at distinct coordinates', () => {
+    const layout = detectorGraphLayout(surfQec);
+    const scale = Math.max(layout.aspect, 1);
+    let closest = Infinity;
+    for (const a of layout.nodes) {
+      for (const b of layout.nodes) {
+        if (a.detector >= b.detector) continue;
+        closest = Math.min(closest, Math.hypot((a.x - b.x) * layout.aspect, a.y - b.y) / scale);
+      }
+    }
+    expect(closest).toBeGreaterThan(0.08);
+  });
+
+  it('marks edges between the same site in different rounds as time-like', () => {
+    const layout = detectorGraphLayout(surfQec);
+    const timelike = layout.edges.filter((e) => e.timelike);
+    expect(timelike.length).toBeGreaterThan(0);
+    const byId = new Map(layout.nodes.map((n) => [n.detector, n]));
+    for (const e of timelike) expect(byId.get(e.a)!.t).not.toBe(byId.get(e.b)!.t);
+  });
+
+  it('keeps every node and the boundary inside the unit box', () => {
+    const layout = detectorGraphLayout(surfQec);
+    for (const n of [...layout.nodes, layout.boundary]) {
+      expect(n.x).toBeGreaterThanOrEqual(0);
+      expect(n.x).toBeLessThanOrEqual(1);
+      expect(n.y).toBeGreaterThanOrEqual(0);
+      expect(n.y).toBeLessThanOrEqual(1);
+    }
+    expect(layout.aspect).toBeGreaterThan(0);
+  });
+});
+
+describe('fitGraphBox', () => {
+  it('uses one scale for x and y whatever the panel shape', () => {
+    for (const [w, h] of [[800, 300], [300, 800], [500, 500]] as const) {
+      const { X, Y, boxW, boxH } = fitGraphBox(1.5, w, h, 16);
+      expect(boxW / boxH).toBeCloseTo(1.5, 6);
+      expect(X(1) - X(0)).toBeCloseTo(boxW, 6);
+      expect(Y(1) - Y(0)).toBeCloseTo(boxH, 6);
+      expect(X(0) + X(1)).toBeCloseTo(w, 6); // centred
+      expect(Y(0) + Y(1)).toBeCloseTo(h, 6);
+    }
   });
 });

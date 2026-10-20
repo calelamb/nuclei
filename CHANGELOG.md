@@ -5,7 +5,80 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.15.0] - 2026-10-19
+
+Research-first release: a full UI pass across every workspace, the Learn
+workspace hidden by default, and a new identity.
+
+### Changed — research first
+
+- Nuclei opens in the Research workspace. The learning workspace (lessons,
+  challenges, the tutor) is hidden by default for everyone; turn it on in
+  Settings → General → "Learning workspace" or with a `?learn` link.
+  Lesson progress is kept.
+- The web build accepts `?view=<rail view>` (for example `/try/?view=qec`)
+  to open a view directly.
+- New logo (a ket, |n⟩) across the app, icons, the website and the docs. The
+  website and docs are restyled to match.
+
+### Changed — UI pass
+
+- Fifteen audit-and-fix waves across the shell, design system, interaction,
+  Learn, Research and QEC surfaces: shared primitives (Dialog, Menu,
+  ConfirmDialog, Tabs, Table, Tooltip), AA contrast with guard tests,
+  deterministic focus after every takeover, resize and keyboard route, honest
+  stale/stopped/failed states, platform-aware shortcut labels, ⌘↵ as a global
+  Run outside editor takeovers, and the histogram Shots field.
+- QEC: noise-model comparison, Λ table grouped by experiment with dropped
+  distances explained, import wizard with kernel-valid session ids.
+
+### Security
+
+- The lesson kernel connection reports ready only after the kernel's proof,
+  never retries after a rejected token or failed proof, and fails closed
+  without a token. Kernel restart removes a SIGKILLed kernel's runtime files,
+  and the kernel registers runtime-file cleanup before writing them.
+
+
+### Browser runtime and status bar
+
+- The web build now runs Qiskit lessons and challenges through a small pure-Python
+  "Qiskit (browser subset)": `QuantumCircuit` with the standard gates, measurement,
+  barriers, `c_if`, composition, `QFT`, `Statevector`/`Operator`/`Pauli` and ideal
+  `AerSimulator` sampling. Anything outside the subset (noise models, `transpile`,
+  primitives, IBM Runtime) shows a calm "Runs in the desktop app" notice and never
+  counts as a failed challenge attempt.
+- Pyodide and your code now run in a web worker: the page stays responsive while
+  Python loads (about 3-10 s) and a runaway program is stopped instead of freezing
+  the tab. Cirq installs on first use.
+- Real boot progress (Downloading Python, Loading NumPy, Starting kernel) in the Run
+  button, status bar and a thin progress bar; a Run requested during boot is queued.
+- Kernel and Python load failures now show the real reason with Retry, Copy details
+  and a troubleshooting link instead of "Loading kernel..." forever.
+- The editor is never rewritten or marked unsaved while the kernel boots, so closing
+  an untouched tab no longer prompts.
+- Typing no longer floods the Terminal with live-preview output and tracebacks;
+  the desktop kernel tags parse-phase `output`/`stderr` with `phase: "parse"`.
+- Programs without measurements run in the browser; rapid Run clicks no longer queue.
+- Status bar: one truthful kernel/run item, 24 px height, readable contrast, a named
+  22 px theme toggle, and the UI-mode control only in Learn.
+
+### Kernel
+
+- Several kernels can run at once without sharing a token: each kernel writes its
+  own `kernel-<port>.json` runtime file, and `kernel.json` is now the "most recent
+  kernel" pointer (see the Kernel API overview). Nuclei removes a stopped kernel's
+  files, and example clients read the file for the port they connect to. The
+  Nuclei 0.14.1 handshake (token over stdin, server proof, fail-closed connect) is
+  unchanged.
+- Hardware backends are listed off the kernel's event loop, so a slow provider no
+  longer stalls other requests.
+
+### Added — QEC circuit explain
+
+- `qec_explain` statically analyses a Stim circuit: why a detector or observable
+  is non-deterministic and a minimum-weight undetected logical error, with each
+  fault located in the source. See the protocol changelog.
 
 ## [0.14.1] - 2026-10-18
 

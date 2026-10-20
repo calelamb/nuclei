@@ -1,4 +1,6 @@
 import { useRef, useCallback, useEffect, useState } from 'react';
+import { useDiracPanelStore } from '../../stores/diracPanelStore';
+import { useHelpOverlayStore } from '../../stores/helpOverlayStore';
 import Editor from '@monaco-editor/react';
 import type { OnMount, Monaco } from '@monaco-editor/react';
 import type * as monaco from 'monaco-editor';
@@ -14,13 +16,20 @@ import { registerPythonFormatting } from './pythonFormatting';
 import { ruffDiagnosticsToMarkers } from './ruffMarkers';
 import { InlineEditWidget } from './inlineEdit/InlineEditWidget';
 import { registerNucleiThemes } from './monacoThemes';
+import { registerNucleiEditorActions } from './nucleiEditorActions';
+import { hideStockPaletteFromContextMenu } from './monacoContextMenu';
 import { registerQsharpLanguage } from './qsharpLanguage';
 import { registerStimLanguage } from './stimLanguage';
 import { ensureQsharpLanguageService } from './qsharpLanguageService';
+import { useRevealLine } from './useRevealLine';
+import { useEditorFocusStore } from '../../stores/editorFocusStore';
+import { syncTabFocusToStore } from './tabFocusSync';
+import { isMacPlatform } from '../../config/keybindings';
 import type { Framework } from '../../types/quantum';
 import { useTrainabilityLint } from '../../services/trainability/useTrainabilityLint';
 import { useTrainabilityReveal } from '../../services/trainability/useTrainabilityReveal';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 type StandaloneEditor = monaco.editor.IStandaloneCodeEditor;
 
 // Map of file extensions to Monaco language ids. Extensions Monaco doesn't
@@ -66,9 +75,19 @@ export function QuantumEditor() {
   const [showInlineEdit, setShowInlineEdit] = useState(false);
   const [editorInstance, setEditorInstance] = useState<StandaloneEditor | null>(null);
   const [monacoInstance, setMonacoInstance] = useState<Monaco | null>(null);
+  // Click-to-source from the Circuit Explain panel (and any future caller).
+  useRevealLine(editorInstance, monacoInstance);
 
   const themeName = mode === 'dark' ? 'nuclei-dark' : 'nuclei-light';
   const language = languageForPath(filePath, framework);
+
+  // Flows elsewhere (Explorer create, dialogs) hand the keyboard back to the code through the store.
+  const focusRequest = useEditorStore((s) => s.focusRequest);
+  useEffect(() => {
+    if (focusRequest === 0) return undefined;
+    const id = requestAnimationFrame(() => editorRef.current?.focus());
+    return () => cancelAnimationFrame(id);
+  }, [focusRequest]);
 
   // Switch the model's language when the file extension changes so
   // syntax highlighting follows the file, not the initial buffer.
@@ -101,9 +120,16 @@ export function QuantumEditor() {
     setEditorInstance(editor);
     setMonacoInstance(monacoApi);
 
+    // Monaco measures glyph widths once; re-measure when the bundled mono face finishes loading.
+    void document.fonts.ready
+      .then(() => monacoApi.editor.remeasureFonts())
+      .catch((err: unknown) => {
+        if (import.meta.env.DEV) console.warn('[Nuclei] font remeasure failed:', err);
+      });
+
     editor.addAction({
       id: 'run-circuit',
-      label: 'Run Circuit',
+      label: 'Run circuit',
       keybindings: [monacoApi.KeyMod.CtrlCmd | monacoApi.KeyCode.Enter],
       run: () => {
         const execute = getExecute();
@@ -113,10 +139,64 @@ export function QuantumEditor() {
 
     editor.addAction({
       id: 'inline-edit',
-      label: 'Inline Edit (Cmd+K)',
+      label: 'Inline edit with Dirac',
       keybindings: [monacoApi.KeyMod.CtrlCmd | monacoApi.KeyCode.KeyK],
       run: () => setShowInlineEdit(true),
     });
+
+    // Keyboard escape hatch: Monaco swallows Tab for indentation, which traps
+    // keyboard-only users. Monaco's own toggle (Ctrl+M on Windows/Linux,
+    // Ctrl+Shift+M on macOS) flips a global TabFocus flag; we add Ctrl+M on
+    // macOS by triggering that same action, and mirror the real state into the
+    // store so the status-bar hint can never disagree with the editor.
+    if (isMacPlatform()) {
+      editor.addAction({
+        id: 'nuclei.toggleTabFocus',
+        label: 'Tab key moves focus',
+        keybindings: [monacoApi.KeyMod.WinCtrl | monacoApi.KeyCode.KeyM],
+        run: (ed) => {
+          ed.trigger('nuclei', 'editor.action.toggleTabFocusMode', null);
+        },
+      });
+    }
+    editor.onDidDispose(syncTabFocusToStore());
+    editor.onDidFocusEditorText(() => useEditorFocusStore.getState().setFocused(true));
+    editor.onDidBlurEditorText(() => useEditorFocusStore.getState().setFocused(false));
+    // Monaco swallows these before the window-level shortcut handler sees them,
+    // so the Dirac shortcuts must also be registered inside the editor.
+    editor.addAction({
+      id: 'toggle-dirac',
+      label: 'Toggle Dirac panel',
+      keybindings: [monacoApi.KeyMod.CtrlCmd | monacoApi.KeyCode.KeyD],
+      run: () => useDiracPanelStore.getState().toggle(),
+    });
+    editor.addAction({
+      id: 'focus-dirac',
+      label: 'Focus Dirac input',
+      keybindings: [monacoApi.KeyMod.CtrlCmd | monacoApi.KeyCode.KeyL],
+      run: () => useDiracPanelStore.getState().focusInput(),
+    });
+
+    // The help sheet and Compose are app-level chords Monaco would otherwise pre-empt
+    // (it owns Cmd+/ for comments and Cmd+I for suggestions), so register them here too.
+    editor.addAction({
+      id: 'nuclei.shortcuts',
+      label: 'Keyboard shortcuts',
+      keybindings: [
+        monacoApi.KeyMod.CtrlCmd | monacoApi.KeyMod.Shift | monacoApi.KeyCode.Slash,
+        monacoApi.KeyCode.F1,
+      ],
+      run: () => useHelpOverlayStore.getState().toggleShortcuts(),
+    });
+    editor.addAction({
+      id: 'nuclei.compose',
+      label: 'Compose with Dirac',
+      keybindings: [monacoApi.KeyMod.CtrlCmd | monacoApi.KeyCode.KeyI],
+      run: () => useHelpOverlayStore.getState().toggleCompose(),
+    });
+
+    registerNucleiEditorActions(editor, monacoApi);
+    hideStockPaletteFromContextMenu();
 
     registerGhostCompletions(monacoApi);
     // Python formatting via ruff (⇧⌥F / "Format Document"), Phase 4.
@@ -276,7 +356,7 @@ export function QuantumEditor() {
         onMount={handleMount}
         options={{
           fontSize: editorSettings.fontSize,
-          fontFamily: "'JetBrains Mono', 'Geist Mono', ui-monospace, monospace",
+          fontFamily: TYPOGRAPHY.fontMono,
           fontLigatures: true,
           minimap: { enabled: editorSettings.minimap },
           scrollBeyondLastLine: false,
@@ -289,6 +369,9 @@ export function QuantumEditor() {
           wordWrap: editorSettings.wordWrap ? 'on' : 'off',
           autoClosingBrackets: editorSettings.autoCloseBrackets ? 'always' : 'never',
           inlineSuggest: { enabled: true },
+          // The panel divider already draws the edge; a second rule inside it reads as a double line.
+          overviewRulerBorder: false,
+          hideCursorInOverviewRuler: true,
         }}
         beforeMount={setupMonaco}
       />

@@ -1,8 +1,10 @@
-import ReactMarkdown from 'react-markdown';
+import { MarkdownWithTables } from '../markdown/MarkdownWithTables';
+import { stripLeadingTitle } from './descriptionTitle';
 import { useThemeStore } from '../../stores/themeStore';
 import { MaxCutGraphViz } from './MaxCutGraphViz';
 import type { QuantumChallenge, ChallengeExample } from '../../types/challenge';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface ProblemDescriptionProps {
   challenge: QuantumChallenge;
 }
@@ -25,7 +27,7 @@ function ExampleBox({ example, index }: { example: ChallengeExample; index: numb
         color: colors.textMuted,
         fontSize: 11,
         fontWeight: 600,
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
       }}>
         Example {index + 1}
       </div>
@@ -34,7 +36,7 @@ function ExampleBox({ example, index }: { example: ChallengeExample; index: numb
           <span style={{
             color: colors.textDim,
             fontSize: 11,
-            fontFamily: "'Geist Mono', monospace",
+            fontFamily: TYPOGRAPHY.fontMono,
             fontWeight: 600,
           }}>
             Input:
@@ -46,7 +48,7 @@ function ExampleBox({ example, index }: { example: ChallengeExample; index: numb
             background: colors.bg,
             color: colors.text,
             fontSize: 12,
-            fontFamily: "'Geist Mono', monospace",
+            fontFamily: TYPOGRAPHY.fontMono,
             overflowX: 'auto',
             whiteSpace: 'pre-wrap',
           }}>
@@ -57,7 +59,7 @@ function ExampleBox({ example, index }: { example: ChallengeExample; index: numb
           <span style={{
             color: colors.textDim,
             fontSize: 11,
-            fontFamily: "'Geist Mono', monospace",
+            fontFamily: TYPOGRAPHY.fontMono,
             fontWeight: 600,
           }}>
             Output:
@@ -69,7 +71,7 @@ function ExampleBox({ example, index }: { example: ChallengeExample; index: numb
             background: colors.bg,
             color: colors.text,
             fontSize: 12,
-            fontFamily: "'Geist Mono', monospace",
+            fontFamily: TYPOGRAPHY.fontMono,
             overflowX: 'auto',
             whiteSpace: 'pre-wrap',
           }}>
@@ -81,7 +83,7 @@ function ExampleBox({ example, index }: { example: ChallengeExample; index: numb
             <span style={{
               color: colors.textDim,
               fontSize: 11,
-              fontFamily: "'Geist Mono', monospace",
+              fontFamily: TYPOGRAPHY.fontMono,
               fontWeight: 600,
             }}>
               Explanation:
@@ -90,7 +92,7 @@ function ExampleBox({ example, index }: { example: ChallengeExample; index: numb
               margin: '4px 0 0',
               color: colors.textMuted,
               fontSize: 12,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
               lineHeight: 1.5,
             }}>
               {example.explanation}
@@ -104,9 +106,7 @@ function ExampleBox({ example, index }: { example: ChallengeExample; index: numb
 
 export function ProblemDescription({ challenge }: ProblemDescriptionProps) {
   const colors = useThemeStore((s) => s.colors);
-  const signature = `${challenge.entrypoint_name ?? 'solve'}(${(challenge.arguments ?? []).map((arg) => arg.name).join(', ')})`;
   const isValueContract = challenge.contract_kind === 'returns_value';
-  const returnType = isValueContract ? 'JSON value' : 'QuantumCircuit';
   const contractBlurb = isValueContract
     ? 'Return a JSON-serializable value. The harness injects the inputs below and validates the output against visible and hidden tests.'
     : 'Return a measured Qiskit circuit. The harness injects the inputs below and validates the output against visible and hidden tests.';
@@ -128,25 +128,17 @@ export function ProblemDescription({ challenge }: ProblemDescriptionProps) {
           color: colors.textDim,
           fontSize: 11,
           fontWeight: 600,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           textTransform: 'uppercase',
-          letterSpacing: 0.4,
+          letterSpacing: '0.04em',
           marginBottom: 8,
         }}>
           Solver Contract
         </div>
         <div style={{
-          color: colors.accent,
-          fontSize: 13,
-          fontFamily: "'Geist Mono', monospace",
-          marginBottom: 8,
-        }}>
-          {signature} -&gt; {returnType}
-        </div>
-        <div style={{
           color: colors.textMuted,
           fontSize: 12,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           lineHeight: 1.6,
         }}>
           {contractBlurb}
@@ -159,9 +151,9 @@ export function ProblemDescription({ challenge }: ProblemDescriptionProps) {
                 gap: 8,
                 color: colors.textMuted,
                 fontSize: 12,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
               }}>
-                <code style={{ color: colors.text, fontFamily: "'Geist Mono', monospace" }}>
+                <code style={{ color: colors.text, fontFamily: TYPOGRAPHY.fontMono }}>
                   {arg.name}: {arg.type}
                 </code>
                 <span>{arg.description}</span>
@@ -175,23 +167,24 @@ export function ProblemDescription({ challenge }: ProblemDescriptionProps) {
       <div style={{
         color: colors.text,
         fontSize: 14,
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
         lineHeight: 1.7,
       }}>
-        <ReactMarkdown
+        <MarkdownWithTables
+        markdown={stripLeadingTitle(challenge.description, challenge.title)}
           components={{
             h1: ({ children }) => (
-              <h1 style={{ fontSize: 22, fontWeight: 700, color: colors.text, margin: '0 0 12px' }}>
+              <h1 style={{ fontSize: 20, fontWeight: 700, color: colors.text, margin: '0 0 12px' }}>
                 {children}
               </h1>
             ),
             h2: ({ children }) => (
-              <h2 style={{ fontSize: 17, fontWeight: 600, color: colors.text, margin: '20px 0 8px' }}>
+              <h2 style={{ fontSize: 16, fontWeight: 600, color: colors.text, margin: '20px 0 8px' }}>
                 {children}
               </h2>
             ),
             h3: ({ children }) => (
-              <h3 style={{ fontSize: 15, fontWeight: 600, color: colors.text, margin: '16px 0 6px' }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, color: colors.text, margin: '16px 0 6px' }}>
                 {children}
               </h3>
             ),
@@ -211,7 +204,7 @@ export function ProblemDescription({ challenge }: ProblemDescriptionProps) {
                     border: `1px solid ${colors.border}`,
                     overflowX: 'auto',
                     fontSize: 12,
-                    fontFamily: "'Geist Mono', monospace",
+                    fontFamily: TYPOGRAPHY.fontMono,
                     margin: '0 0 12px',
                   }}>
                     <code>{children}</code>
@@ -224,8 +217,8 @@ export function ProblemDescription({ challenge }: ProblemDescriptionProps) {
                   borderRadius: 3,
                   background: colors.bgElevated,
                   fontSize: 12,
-                  fontFamily: "'Geist Mono', monospace",
-                  color: colors.accent,
+                  fontFamily: TYPOGRAPHY.fontMono,
+                  color: colors.accentText,
                 }}>
                   {children}
                 </code>
@@ -237,9 +230,7 @@ export function ProblemDescription({ challenge }: ProblemDescriptionProps) {
               </strong>
             ),
           }}
-        >
-          {challenge.description}
-        </ReactMarkdown>
+        />
       </div>
 
       {/* Visualization (if present) */}
@@ -256,7 +247,7 @@ export function ProblemDescription({ challenge }: ProblemDescriptionProps) {
             color: colors.text,
             fontSize: 14,
             fontWeight: 600,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             margin: '0 0 8px',
           }}>
             Constraints
@@ -266,7 +257,7 @@ export function ProblemDescription({ challenge }: ProblemDescriptionProps) {
             padding: '0 0 0 20px',
             color: colors.textMuted,
             fontSize: 13,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             lineHeight: 1.8,
           }}>
             {challenge.constraints.map((c, i) => (
@@ -283,7 +274,7 @@ export function ProblemDescription({ challenge }: ProblemDescriptionProps) {
             color: colors.text,
             fontSize: 14,
             fontWeight: 600,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             margin: '0 0 10px',
           }}>
             Examples

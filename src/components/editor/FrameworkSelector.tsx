@@ -1,104 +1,42 @@
-import { useState, useRef, useEffect, useLayoutEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
+import { Button, Menu, useConfirm, type MenuEntry } from '../ui';
 import { useEditorStore } from '../../stores/editorStore';
-import { useThemeStore } from '../../stores/themeStore';
 import { usePlatform } from '../../platform/PlatformProvider';
 import { kernelLanguageFor } from '../../types/quantum';
 import type { Framework } from '../../types/quantum';
+import { useProjectStore } from '../../stores/projectStore';
+import { isUntouchedStarter, loadIntoEditor, placeInEditor } from './loadIntoEditor';
 import { STARTER_TEMPLATES, displayFrameworkName } from '../../data/starterTemplates';
 
 const FRAMEWORKS: Framework[] = ['qiskit', 'cirq', 'cuda-q', 'qsharp'];
 
 const displayName = displayFrameworkName;
 
-/**
- * True when the buffer still looks like the untouched starter for any
- * framework. In that case, switching framework can safely swap the
- * template without asking — the student hasn't done any real work yet.
- */
-function isUntouchedStarter(code: string): boolean {
-  const normalized = code.trimEnd();
-  return (
-    normalized === STARTER_TEMPLATES.qiskit.trimEnd() ||
-    normalized === STARTER_TEMPLATES.cirq.trimEnd() ||
-    normalized === STARTER_TEMPLATES['cuda-q'].trimEnd() ||
-    normalized === STARTER_TEMPLATES.qsharp.trimEnd() ||
-    normalized === ''
-  );
-}
-
-export function FrameworkSelector() {
-  const [open, setOpen] = useState(false);
-  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
+export function FrameworkSelector({ compact = false }: { compact?: boolean } = {}) {
   const framework = useEditorStore((s) => s.framework);
   const setFramework = useEditorStore((s) => s.setFramework);
   const setCode = useEditorStore((s) => s.setCode);
-  const setFilePath = useEditorStore((s) => s.setFilePath);
   const code = useEditorStore((s) => s.code);
   const isDirty = useEditorStore((s) => s.isDirty);
   const filePath = useEditorStore((s) => s.filePath);
-  const colors = useThemeStore((s) => s.colors);
-  const shadow = useThemeStore((s) => s.shadow);
+  const inProject = useProjectStore((s) => s.tabs.length > 0);
+  const { confirm, confirmDialog } = useConfirm();
   const platform = usePlatform();
   const isWeb = platform.getPlatform() === 'web';
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
 
-  // The dropdown is portaled to document.body so ancestors with
-  // `overflow: hidden` (e.g. the tab bar) can't clip it. The menu's
-  // position is computed from the button's bounding rect.
-  useLayoutEffect(() => {
-    if (!open) return;
-    const update = () => {
-      const btn = buttonRef.current;
-      if (!btn) return;
-      const r = btn.getBoundingClientRect();
-      setMenuPos({ top: r.bottom + 6, left: r.left });
-    };
-    update();
-    window.addEventListener('resize', update);
-    window.addEventListener('scroll', update, true);
-    return () => {
-      window.removeEventListener('resize', update);
-      window.removeEventListener('scroll', update, true);
-    };
-  }, [open]);
+  // In the browser IDE Cirq runs natively and Qiskit through a pure-Python
+  // subset; CUDA-Q/Q# need the desktop app's native kernel. Those options stay
+  // visible (so students know they exist) but are disabled with a tooltip.
+  const isDisabled = (f: Framework) => isWeb && f !== 'cirq' && f !== 'qiskit';
+  const fullLabelFor = (f: Framework) => (isWeb && f === 'qiskit' ? 'Qiskit (browser subset)' : displayName(f));
+  const labelFor = (f: Framework) => (compact ? displayName(f) : fullLabelFor(f));
 
-  useEffect(() => {
-    if (!open) return;
-    const h = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (buttonRef.current?.contains(target)) return;
-      if (menuRef.current?.contains(target)) return;
-      setOpen(false);
-    };
-    const esc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', h);
-    document.addEventListener('keydown', esc);
-    return () => {
-      document.removeEventListener('mousedown', h);
-      document.removeEventListener('keydown', esc);
-    };
-  }, [open]);
-
-  // In the browser IDE only Cirq can actually run — Qiskit/CUDA-Q require the
-  // desktop app's native Python kernel. Non-Cirq options stay visible (so
-  // students know they exist) but are disabled with a tooltip.
-  const isDisabled = (f: Framework) => isWeb && f !== 'cirq';
-
-  const applyTemplate = (f: Framework) => {
-    if (isDirty) {
-      const ok = window.confirm(
-        'You have unsaved changes. Replacing the buffer will lose them. Continue?',
-      );
-      if (!ok) return;
-    }
-    setCode(STARTER_TEMPLATES[f]);
-    setFramework(f);
-    setOpen(false);
+  /**
+   * A starter always lands in an untitled buffer, detached from any open file: in a project it gets
+   * its own in-memory tab, so nothing the learner has open is lost and no confirm is needed.
+   */
+  const applyTemplate = async (f: Framework) => {
+    await loadIntoEditor(STARTER_TEMPLATES[f], { label: `${displayName(f)} starter`, confirm, framework: f });
   };
 
   /**
@@ -116,221 +54,86 @@ export function FrameworkSelector() {
    * those picks we confirm, swap in the target starter, and detach the
    * file path so we don't pretend e.g. a .py file contains Q#.
    */
-  const handleFrameworkPick = (f: Framework) => {
+  const handleFrameworkPick = async (f: Framework) => {
     if (f === framework) {
-      setOpen(false);
       return;
     }
     const canAutoSwap = !filePath && (!isDirty || isUntouchedStarter(code));
     if (canAutoSwap) {
       setCode(STARTER_TEMPLATES[f]);
       setFramework(f);
-      setOpen(false);
       return;
     }
     if (kernelLanguageFor(f) !== kernelLanguageFor(framework)) {
-      const ok = window.confirm(
-        `Switching languages replaces the editor buffer with a ${displayName(f)} starter template. Unsaved changes will be lost. Continue?`,
-      );
-      if (!ok) return;
-      setCode(STARTER_TEMPLATES[f]);
-      setFramework(f);
-      setFilePath(null);
-      setOpen(false);
+      // In a project the starter opens in its own tab, so there is nothing to lose and nothing to ask.
+      if (!inProject) {
+        const ok = await confirm({
+          title: `Replace your code with the ${displayName(f)} starter?`,
+          description: 'Switching languages replaces the editor buffer. Your unsaved edits will be lost.',
+          confirmLabel: 'Replace',
+          cancelLabel: 'Keep editing',
+          tone: 'danger',
+        });
+        if (!ok) return;
+      }
+      placeInEditor(STARTER_TEMPLATES[f], f);
       return;
     }
     setFramework(f);
-    setOpen(false);
   };
 
-  const menu = open && menuPos ? (
-    <div
-      ref={menuRef}
-      role="menu"
-      style={{
-        position: 'fixed',
-        top: menuPos.top,
-        left: menuPos.left,
-        background: colors.bgElevated,
-        border: `1px solid ${colors.borderStrong}`,
-        borderRadius: 6,
-        overflow: 'hidden',
-        zIndex: 1000,
-        minWidth: 200,
-        boxShadow: shadow.md,
-      }}
-    >
-      <div style={{ padding: '4px 0' }}>
-        <div
-          style={{
-            padding: '6px 12px 4px',
-            fontSize: 9,
-            fontWeight: 600,
-            color: colors.textDim,
-            fontFamily: "'Geist Sans', sans-serif",
-            textTransform: 'uppercase',
-            letterSpacing: 0.5,
-          }}
-        >
-          Framework
-        </div>
-        {FRAMEWORKS.map((f) => {
-          const disabled = isDisabled(f);
-          const isActive = f === framework;
-          return (
-            <button
-              key={f}
-              disabled={disabled}
-              onClick={() => {
-                if (disabled) return;
-                handleFrameworkPick(f);
-              }}
-              title={disabled ? 'Desktop app only — download from getnuclei.dev' : undefined}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                width: '100%',
-                padding: '6px 12px',
-                background: isActive ? `${colors.accent}12` : 'transparent',
-                color: disabled ? colors.textDim : isActive ? colors.accent : colors.text,
-                border: 'none',
-                cursor: disabled ? 'not-allowed' : 'pointer',
-                fontSize: 12,
-                fontFamily: "'Geist Sans', sans-serif",
-                textAlign: 'left',
-                opacity: disabled ? 0.55 : 1,
-              }}
-              onMouseEnter={(e) => {
-                if (!isActive && !disabled)
-                  e.currentTarget.style.background = `${colors.accent}08`;
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive && !disabled) e.currentTarget.style.background = 'transparent';
-              }}
-            >
-              {isActive && <span style={{ color: colors.accent, fontSize: 10 }}>●</span>}
-              <span style={{ marginLeft: isActive ? 0 : 18, flex: 1 }}>{displayName(f)}</span>
-              {disabled && (
-                <span
-                  style={{
-                    fontSize: 9,
-                    color: colors.textDim,
-                    fontWeight: 500,
-                    textTransform: 'uppercase',
-                    letterSpacing: 0.4,
-                  }}
-                >
-                  Desktop
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-      <div style={{ borderTop: `1px solid ${colors.border}`, padding: '4px 0' }}>
-        <div
-          style={{
-            padding: '6px 12px 4px',
-            fontSize: 9,
-            fontWeight: 600,
-            color: colors.textDim,
-            fontFamily: "'Geist Sans', sans-serif",
-            textTransform: 'uppercase',
-            letterSpacing: 0.5,
-          }}
-        >
-          New from template
-        </div>
-        {FRAMEWORKS.map((f) => {
-          const disabled = isDisabled(f);
-          return (
-            <button
-              key={`tpl-${f}`}
-              disabled={disabled}
-              onClick={() => {
-                if (disabled) return;
-                applyTemplate(f);
-              }}
-              title={disabled ? 'Desktop app only — download from getnuclei.dev' : undefined}
-              style={{
-                display: 'block',
-                width: '100%',
-                padding: '6px 12px',
-                background: 'transparent',
-                color: disabled ? colors.textDim : colors.textMuted,
-                border: 'none',
-                cursor: disabled ? 'not-allowed' : 'pointer',
-                fontSize: 12,
-                fontFamily: "'Geist Sans', sans-serif",
-                textAlign: 'left',
-                opacity: disabled ? 0.55 : 1,
-              }}
-              onMouseEnter={(e) => {
-                if (disabled) return;
-                e.currentTarget.style.color = colors.text;
-                e.currentTarget.style.background = `${colors.accent}08`;
-              }}
-              onMouseLeave={(e) => {
-                if (disabled) return;
-                e.currentTarget.style.color = colors.textMuted;
-                e.currentTarget.style.background = 'transparent';
-              }}
-            >
-              New {displayName(f)} file
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  ) : null;
+  const DESKTOP_ONLY = 'Desktop app only — download from getnuclei.dev';
+  const entries: MenuEntry[] = [
+    { id: 'h-framework', heading: 'Framework' },
+    ...FRAMEWORKS.map((f): MenuEntry => ({
+      id: `fw-${f}`,
+      label: labelFor(f),
+      checked: f === framework,
+      disabled: isDisabled(f),
+      title: isDisabled(f) ? DESKTOP_ONLY : undefined,
+      hint: isDisabled(f) ? 'Desktop' : undefined,
+      onSelect: () => { void handleFrameworkPick(f); },
+    })),
+    { id: 'sep', separator: true },
+    // Only a project has tabs to add to; without one the starter replaces the buffer, so say so.
+    { id: 'h-template', heading: inProject ? 'New from template' : 'Start over from template' },
+    ...FRAMEWORKS.map((f): MenuEntry => ({
+      id: `tpl-${f}`,
+      label: inProject ? `New ${displayName(f)} file` : `${displayName(f)} starter`,
+      disabled: isDisabled(f),
+      title: isDisabled(f) ? DESKTOP_ONLY : undefined,
+      hint: isDisabled(f) ? 'Desktop' : undefined,
+      onSelect: () => { void applyTemplate(f); },
+    })),
+  ];
 
   return (
     <>
-      <button
-        ref={buttonRef}
-        onClick={() => setOpen((o) => !o)}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        title="Framework"
-        style={{
-          background: open ? colors.bgElevated : 'transparent',
-          border: `1px solid ${open ? colors.borderStrong : colors.border}`,
-          borderRadius: 5,
-          color: colors.accentLight,
-          cursor: 'pointer',
-          fontSize: 12,
-          fontFamily: "'Geist Sans', sans-serif",
-          fontWeight: 500,
-          padding: '0 10px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 5,
-          height: 26,
-          transition: 'background 120ms ease, border-color 120ms ease',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = colors.bgElevated;
-          e.currentTarget.style.borderColor = colors.borderStrong;
-        }}
-        onMouseLeave={(e) => {
-          if (!open) {
-            e.currentTarget.style.background = 'transparent';
-            e.currentTarget.style.borderColor = colors.border;
-          }
-        }}
-      >
-        {displayName(framework)}
-        <ChevronDown
-          size={12}
-          style={{
-            opacity: 0.7,
-            transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
-            transition: 'transform 150ms cubic-bezier(0.16, 1, 0.3, 1)',
-          }}
-        />
-      </button>
-      {menu && createPortal(menu, document.body)}
+    {confirmDialog}
+    <Menu
+      label="Framework"
+      entries={entries}
+      minWidth={200}
+      trigger={({ 'aria-expanded': expanded, ...p }) => (
+        <Button
+          {...p}
+          aria-expanded={expanded}
+          className="nuclei-framework-btn"
+          aria-label={compact ? `Framework: ${fullLabelFor(framework)}` : 'Framework'}
+          style={{ minWidth: 0, maxWidth: '100%' }}
+        >
+          <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{labelFor(framework)}</span>
+          <ChevronDown
+            size={12}
+            style={{
+              flexShrink: 0, opacity: 0.7,
+              transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+              transition: 'transform 150ms cubic-bezier(0.16, 1, 0.3, 1)',
+            }}
+          />
+        </Button>
+      )}
+    />
     </>
   );
 }

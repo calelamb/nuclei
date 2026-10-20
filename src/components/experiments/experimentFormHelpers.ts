@@ -30,6 +30,18 @@ export function parseNumberField(raw: string): number {
   return raw.trim() === '' ? NaN : Number(raw);
 }
 
+/** How many sweep rows have no parameter name yet; they are ignored by the grid until named. */
+export function countUnnamedRows(rows: readonly SweepRowState[]): number {
+  return rows.filter((r) => r.name.trim().length === 0).length;
+}
+
+/** "(2 parameters unnamed)" for the grid-size line; empty when every row is named. */
+export function unnamedRowsNote(rows: readonly SweepRowState[]): string {
+  const count = countUnnamedRows(rows);
+  if (count === 0) return '';
+  return ` (${count} parameter${count === 1 ? '' : 's'} unnamed)`;
+}
+
 /** Convert the form's sweep rows into the `Sweep` shape the schema expects.
  * Rows with a blank name are dropped (they're just an in-progress add). */
 export function buildSweepFromRows(rows: readonly SweepRowState[]): Sweep | undefined {
@@ -152,4 +164,15 @@ export async function discoverEntryFiles(
 
   await walk(projectRoot, '', 0);
   return results.sort();
+}
+
+/** The experiment (if any) whose YAML file a new experiment called `name` would overwrite. */
+export function findNameCollision<T extends { fileName: string; spec: { name: string } }>(
+  experiments: readonly T[],
+  name: string,
+): T | undefined {
+  const trimmed = name.trim();
+  if (trimmed.length === 0) return undefined;
+  const fileName = `${slugify(trimmed)}.experiment.yaml`;
+  return experiments.find((e) => e.fileName === fileName);
 }

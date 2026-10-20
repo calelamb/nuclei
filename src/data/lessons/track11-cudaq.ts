@@ -481,8 +481,8 @@ best_params = (0.0, 0.0)
 print(f"Minimum energy: {best_energy:.4f}")
 print(f"Optimal params: theta0={best_params[0]:.4f}, theta1={best_params[1]:.4f}")`,
         framework: 'cuda-q',
-        expectedProbabilities: {},
-        expectedMeasurements: {},
+        requiredCode: ['\\bry\\(', '\\bcx\\(', 'observe\\('],
+        expectedOutput: ['Minimum energy:\\s*-1\\.(0[5-9]|1[01])'],
         tolerancePercent: 10,
         hints: [
           'Apply ry(theta0, q[0]) and ry(theta1, q[1]) for single-qubit rotations, then cx(q[0], q[1]) for entanglement.',
@@ -849,8 +849,8 @@ def qaoa_triangle(gamma: float, beta: float):
 # TODO: Set up COBYLA optimizer and find minimum energy
 # Print the optimal parameters and MaxCut value`,
         framework: 'cuda-q',
-        expectedProbabilities: {},
-        expectedMeasurements: {},
+        requiredCode: ['spin\\.z\\(1\\)\\s*\\*\\s*spin\\.z\\(2\\)', 'COBYLA', '\\bh\\(', '\\brz\\(', '\\brx\\('],
+        expectedOutput: ['\\d\\.\\d'],
         tolerancePercent: 15,
         hints: [
           'The full Hamiltonian is: 0.5*(I - Z₀Z₁) + 0.5*(I - Z₁Z₂) + 0.5*(I - Z₀Z₂). The negated energy gives the MaxCut value.',

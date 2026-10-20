@@ -2,7 +2,10 @@ import { useState, useMemo } from 'react';
 import { CONCEPT_GRAPH, type ConceptNode } from '../../data/conceptMap';
 import { useStudentStore } from '../../stores/studentStore';
 import { useThemeStore } from '../../stores/themeStore';
-
+import { X } from 'lucide-react';
+import { IconButton } from '../ui';
+import { activateOnKey } from '../../lib/a11y';
+import { TYPOGRAPHY } from '../../styles/tokens';
 const CATEGORY_X: Record<string, number> = {
   basics: 80,
   gates: 220,
@@ -17,11 +20,15 @@ const CATEGORY_LABELS: Record<string, string> = {
   gates: 'Gates',
   entanglement: 'Entanglement',
   algorithms: 'Algorithms',
-  'error-correction': 'Error Correction',
+  'error-correction': 'Error correction',
   hardware: 'Hardware',
 };
 
 const NODE_R = 18;
+/** Vertical pitch between nodes in a column; leaves room for the label under each node. */
+const ROW_PITCH = 68;
+/** Below this the labels stop being legible; the map scrolls sideways instead of shrinking further. */
+const MIN_MAP_WIDTH = 560;
 
 interface NodePosition {
   id: string;
@@ -40,10 +47,10 @@ function layoutNodes(): NodePosition[] {
   const positions: NodePosition[] = [];
   for (const [cat, nodes] of Object.entries(byCat)) {
     const x = CATEGORY_X[cat] ?? 80;
-    const totalHeight = (nodes.length - 1) * 55;
+    const totalHeight = (nodes.length - 1) * ROW_PITCH;
     const startY = Math.max(60, 200 - totalHeight / 2);
     nodes.forEach((node, i) => {
-      positions.push({ id: node.id, x, y: startY + i * 55, node });
+      positions.push({ id: node.id, x, y: startY + i * ROW_PITCH, node });
     });
   }
   return positions;
@@ -55,6 +62,7 @@ export function ConceptMap() {
   const conceptsMastered = useStudentStore((s) => s.model.conceptsMastered);
   const conceptsStruggling = useStudentStore((s) => s.model.conceptsStruggling);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [focusId, setFocusId] = useState<string | null>(null);
 
   const positions = useMemo(() => layoutNodes(), []);
   const posMap = useMemo(() => {
@@ -70,7 +78,7 @@ export function ConceptMap() {
   const selectedNode = selectedId ? posMap[selectedId] : null;
 
   const getNodeColor = (id: string): string => {
-    if (conceptsMastered.includes(id)) return '#10B981';
+    if (conceptsMastered.includes(id)) return colors.success;
     if (conceptsStruggling.includes(id)) return colors.accent;
     return colors.textDim;
   };
@@ -81,26 +89,32 @@ export function ConceptMap() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
       {/* Legend */}
       <div style={{ padding: '8px 12px', display: 'flex', gap: 14, alignItems: 'center', flexShrink: 0 }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontFamily: 'Geist Sans, Inter, sans-serif', color: colors.textMuted }}>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10B981', display: 'inline-block' }} />
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, color: colors.textMuted }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: colors.success, display: 'inline-block' }} />
           Mastered
         </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontFamily: 'Geist Sans, Inter, sans-serif', color: colors.textMuted }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, color: colors.textMuted }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: colors.accent, display: 'inline-block' }} />
-          In Progress
+          In progress
         </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontFamily: 'Geist Sans, Inter, sans-serif', color: colors.textMuted }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, color: colors.textMuted }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: colors.textDim, opacity: 0.45, display: 'inline-block' }} />
           Unseen
         </span>
       </div>
 
       {/* SVG container with horizontal scroll */}
-      <div style={{ flex: 1, minHeight: 0, overflowX: 'auto', overflowY: 'auto' }}>
-        <svg width={svgWidth} height={svgHeight} style={{ display: 'block' }}>
+      <div style={{ overflowX: 'auto' }}>
+        <svg
+          viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+          width="100%"
+          role="group"
+          aria-label="Concept map"
+          style={{ display: 'block', minWidth: MIN_MAP_WIDTH, maxWidth: svgWidth, height: 'auto' }}
+        >
           {/* Category labels */}
           {Object.entries(CATEGORY_X).map(([cat, x]) => (
             <text
@@ -109,10 +123,9 @@ export function ConceptMap() {
               y={20}
               textAnchor="middle"
               fill={colors.textDim}
-              fontSize={9}
-              fontFamily="Geist Sans, Inter, sans-serif"
+              fontSize={11}
+              fontFamily={TYPOGRAPHY.fontSans}
               fontWeight={600}
-              style={{ textTransform: 'uppercase', letterSpacing: '0.5px' }}
             >
               {CATEGORY_LABELS[cat]}
             </text>
@@ -123,6 +136,8 @@ export function ConceptMap() {
             const from = posMap[edge.from];
             const to = posMap[edge.to];
             if (!from || !to) return null;
+            const active = focusId ?? selectedId;
+            const touchesActive = active !== null && (edge.from === active || edge.to === active);
             return (
               <line
                 key={i}
@@ -130,9 +145,9 @@ export function ConceptMap() {
                 y1={from.y}
                 x2={to.x}
                 y2={to.y}
-                stroke={colors.borderStrong}
-                strokeWidth={1}
-                opacity={0.4}
+                stroke={touchesActive ? colors.textMuted : colors.borderStrong}
+                strokeWidth={touchesActive ? 1.5 : 1}
+                opacity={active === null ? 0.4 : touchesActive ? 0.9 : 0.08}
               />
             );
           })}
@@ -146,8 +161,18 @@ export function ConceptMap() {
             return (
               <g
                 key={pos.id}
+                className="concept-node"
+                role="button"
+                tabIndex={0}
+                aria-pressed={isSelected}
+                aria-label={pos.node.label}
                 style={{ cursor: 'pointer' }}
+                onMouseEnter={() => setFocusId(pos.id)}
+                onMouseLeave={() => setFocusId(null)}
+                onFocus={() => setFocusId(pos.id)}
+                onBlur={() => setFocusId(null)}
                 onClick={() => setSelectedId(isSelected ? null : pos.id)}
+                onKeyDown={activateOnKey(() => setSelectedId(isSelected ? null : pos.id))}
               >
                 {/* Glow ring for selected */}
                 {isSelected && (
@@ -173,8 +198,8 @@ export function ConceptMap() {
                   y={pos.y + NODE_R + 12}
                   textAnchor="middle"
                   fill={colors.textMuted}
-                  fontSize={8}
-                  fontFamily="Geist Sans, Inter, sans-serif"
+                  fontSize={11}
+                  fontFamily={TYPOGRAPHY.fontSans}
                 >
                   {pos.node.label}
                 </text>
@@ -182,6 +207,8 @@ export function ConceptMap() {
             );
           })}
         </svg>
+
+      </div>
 
         {/* Popover for selected node */}
         {selectedNode && (
@@ -200,36 +227,33 @@ export function ConceptMap() {
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-              <span style={{ color: colors.text, fontSize: 13, fontWeight: 600, fontFamily: 'Geist Sans, Inter, sans-serif' }}>
+              <span style={{ color: colors.text, fontSize: 13, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans }}>
                 {selectedNode.node.label}
               </span>
-              <button
-                onClick={() => setSelectedId(null)}
-                style={{ background: 'none', border: 'none', color: colors.textDim, cursor: 'pointer', fontSize: 14, padding: 0 }}
-              >
-                x
-              </button>
+              <IconButton size="sm" aria-label="Close concept details" onClick={() => setSelectedId(null)}>
+                <X size={12} />
+              </IconButton>
             </div>
-            <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: 'Geist Sans, Inter, sans-serif', lineHeight: 1.5, marginBottom: 6 }}>
+            <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, lineHeight: 1.5, marginBottom: 6 }}>
               {selectedNode.node.description}
             </div>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
               <span style={{
-                fontSize: 9,
-                fontFamily: 'Geist Sans, Inter, sans-serif',
+                fontSize: 11,
+                fontFamily: TYPOGRAPHY.fontSans,
                 padding: '2px 6px',
                 borderRadius: 3,
                 background: getNodeColor(selectedNode.id) + '22',
                 color: getNodeColor(selectedNode.id),
                 fontWeight: 600,
               }}>
-                {conceptsMastered.includes(selectedNode.id) ? 'Mastered' : conceptsStruggling.includes(selectedNode.id) ? 'In Progress' : 'Not Started'}
+                {conceptsMastered.includes(selectedNode.id) ? 'Mastered' : conceptsStruggling.includes(selectedNode.id) ? 'In progress' : 'Not started'}
               </span>
               {selectedNode.node.exerciseIds.length > 0 && (
                 <span style={{
-                  fontSize: 9,
-                  fontFamily: 'Geist Sans, Inter, sans-serif',
-                  color: colors.accent,
+                  fontSize: 11,
+                  fontFamily: TYPOGRAPHY.fontSans,
+                  color: colors.accentText,
                 }}>
                   {selectedNode.node.exerciseIds.length} exercise{selectedNode.node.exerciseIds.length > 1 ? 's' : ''} available
                 </span>
@@ -237,7 +261,6 @@ export function ConceptMap() {
             </div>
           </div>
         )}
-      </div>
     </div>
   );
 }

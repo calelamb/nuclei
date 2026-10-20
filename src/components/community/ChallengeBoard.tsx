@@ -1,14 +1,21 @@
+import { Badge, Button, useConfirm, EmptyState, SegmentedControl, Table, Tbody, Td, Th, Thead, Tr, type BadgeTone } from '../ui';
 import { useThemeStore } from '../../stores/themeStore';
 import { useChallengeStore } from '../../stores/challengeStore';
-import { useEditorStore } from '../../stores/editorStore';
+import { loadIntoEditor } from '../editor/loadIntoEditor';
 import { useDiracPanelStore } from '../../stores/diracPanelStore';
 import { Play, Lightbulb, Trophy } from 'lucide-react';
+import { ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
 
-const DIFFICULTY_COLORS: Record<string, string> = {
-  beginner: '#10B981',
-  intermediate: '#F59E0B',
-  advanced: '#EF4444',
+import { TYPOGRAPHY } from '../../styles/tokens';
+const DIFFICULTY_TONE: Record<string, BadgeTone> = {
+  beginner: 'success',
+  intermediate: 'warning',
+  advanced: 'danger',
 };
+
+function hasEnded(deadline: string): boolean {
+  return new Date(deadline).getTime() - Date.now() <= 0;
+}
 
 function formatCountdown(deadline: string): string {
   const ms = new Date(deadline).getTime() - Date.now();
@@ -25,16 +32,16 @@ export function ChallengeBoard() {
   const activeChallenge = useChallengeStore((s) => s.activeChallenge);
   const leaderboard = useChallengeStore((s) => s.leaderboard);
   const setActiveChallenge = useChallengeStore((s) => s.setActiveChallenge);
-  const setCode = useEditorStore((s) => s.setCode);
+  const { confirm, confirmDialog } = useConfirm();
   const openDirac = useDiracPanelStore((s) => s.open);
 
   const displayed = activeChallenge ?? challenges[0] ?? null;
+  const ended = displayed ? hasEnded(displayed.deadline) : false;
 
-  const handleStart = () => {
-    if (displayed) {
-      setCode(displayed.starterCode);
-      setActiveChallenge(displayed);
-    }
+  const handleStart = async () => {
+    if (!displayed) return;
+    const outcome = await loadIntoEditor(displayed.starterCode, { label: 'challenge starter', confirm });
+    if (outcome !== 'cancelled') setActiveChallenge(displayed);
   };
 
   const handleHint = () => {
@@ -43,19 +50,12 @@ export function ChallengeBoard() {
 
   if (!displayed) {
     return (
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: '100%',
-          color: colors.textDim,
-          fontSize: 12,
-          fontFamily: "'Geist Sans', sans-serif",
-        }}
+      <EmptyState
+        icon={<Trophy size={ICON_SIZE.lg} strokeWidth={ICON_STROKE} />}
+        title="No challenges yet"
       >
-        No challenges available
-      </div>
+        Weekly challenges show up here when they are published.
+      </EmptyState>
     );
   }
 
@@ -63,29 +63,16 @@ export function ChallengeBoard() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, height: '100%' }}>
       {/* Challenge selector pills */}
       {challenges.length > 1 && (
-        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', flexShrink: 0 }}>
-          {challenges.map((ch) => {
-            const active = displayed.id === ch.id;
-            return (
-              <button
-                key={ch.id}
-                onClick={() => setActiveChallenge(ch)}
-                style={{
-                  padding: '3px 8px',
-                  borderRadius: 4,
-                  border: `1px solid ${active ? colors.accent : colors.border}`,
-                  background: active ? `${colors.accent}18` : 'transparent',
-                  color: active ? colors.accent : colors.textMuted,
-                  fontSize: 10,
-                  fontFamily: "'Geist Sans', sans-serif",
-                  cursor: 'pointer',
-                  fontWeight: active ? 600 : 400,
-                }}
-              >
-                W{ch.weekNumber}
-              </button>
-            );
-          })}
+        <div style={{ flexShrink: 0 }}>
+          <SegmentedControl
+            aria-label="Challenge week"
+            value={displayed.id}
+            options={challenges.map((ch) => ({ value: ch.id, label: `W${ch.weekNumber}` }))}
+            onChange={(id) => {
+              const next = challenges.find((ch) => ch.id === id);
+              if (next) setActiveChallenge(next);
+            }}
+          />
         </div>
       )}
 
@@ -108,35 +95,21 @@ export function ChallengeBoard() {
               fontSize: 14,
               fontWeight: 700,
               color: colors.text,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
               flex: 1,
               minWidth: 0,
             }}
           >
             {displayed.title}
           </span>
-          <span
-            style={{
-              fontSize: 9,
-              fontWeight: 600,
-              fontFamily: "'Geist Sans', sans-serif",
-              color: '#fff',
-              background: DIFFICULTY_COLORS[displayed.difficulty] ?? colors.accent,
-              padding: '2px 6px',
-              borderRadius: 3,
-              textTransform: 'uppercase',
-              flexShrink: 0,
-            }}
-          >
-            {displayed.difficulty}
-          </span>
+          <Badge tone={DIFFICULTY_TONE[displayed.difficulty] ?? 'neutral'} style={{ textTransform: 'capitalize', flexShrink: 0 }}>{displayed.difficulty}</Badge>
         </div>
 
         <p
           style={{
             fontSize: 11,
             color: colors.textMuted,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             lineHeight: 1.5,
             margin: 0,
             display: '-webkit-box',
@@ -151,179 +124,70 @@ export function ChallengeBoard() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <span
             style={{
-              fontSize: 10,
+              fontSize: 11,
               color: colors.textDim,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             {formatCountdown(displayed.deadline)}
           </span>
-          <span
-            style={{
-              fontSize: 10,
-              color: colors.textDim,
-              fontFamily: "'Geist Sans', sans-serif",
-            }}
-          >
-            {displayed.submissions} submissions
-          </span>
+          {displayed.submissions !== undefined && (
+            <span
+              style={{
+                fontSize: 11,
+                color: colors.textDim,
+                fontFamily: TYPOGRAPHY.fontSans,
+              }}
+            >
+              {displayed.submissions} {displayed.submissions === 1 ? 'submission' : 'submissions'}
+            </span>
+          )}
         </div>
 
-        {/* Action buttons */}
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            onClick={handleStart}
-            style={{
-              flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 5,
-              padding: '7px 0',
-              borderRadius: 6,
-              border: 'none',
-              background: colors.accent,
-              color: '#fff',
-              fontSize: 11,
-              fontWeight: 600,
-              fontFamily: "'Geist Sans', sans-serif",
-              cursor: 'pointer',
-            }}
-          >
-            <Play size={12} />
-            Start Challenge
-          </button>
-          <button
-            onClick={handleHint}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 5,
-              padding: '7px 12px',
-              borderRadius: 6,
-              border: `1px solid ${colors.dirac}40`,
-              background: `${colors.dirac}12`,
-              color: colors.dirac,
-              fontSize: 11,
-              fontWeight: 600,
-              fontFamily: "'Geist Sans', sans-serif",
-              cursor: 'pointer',
-            }}
-          >
-            <Lightbulb size={12} />
+        {/* Actions stack so the labels never wrap in the narrow rail */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <Button variant={ended ? 'secondary' : 'primary'} size="sm" icon={<Play size={ICON_SIZE.xs} aria-hidden="true" />} onClick={() => { void handleStart(); }} style={{ width: '100%' }}>
+            {ended ? 'Practice this challenge' : 'Start challenge'}
+          </Button>
+          <Button variant="secondary" size="sm" icon={<Lightbulb size={ICON_SIZE.xs} aria-hidden="true" />} onClick={handleHint} style={{ width: '100%' }}>
             Ask Dirac
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* Leaderboard */}
       <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            marginBottom: 8,
-          }}
-        >
-          <Trophy size={12} style={{ color: colors.accent }} />
-          <span
-            style={{
-              fontSize: 10,
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              letterSpacing: 0.5,
-              color: colors.textMuted,
-              fontFamily: "'Geist Sans', sans-serif",
-            }}
-          >
-            Leaderboard
-          </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+          <Trophy size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} style={{ color: colors.accentText }} aria-hidden="true" />
+          <h3 className="nuclei-overline">Leaderboard</h3>
         </div>
 
-        <table
-          style={{
-            width: '100%',
-            borderCollapse: 'collapse',
-            fontSize: 11,
-            fontFamily: "'Geist Sans', sans-serif",
-          }}
-        >
-          <thead>
-            <tr>
-              {['#', 'Name', 'Score'].map((h) => (
-                <th
-                  key={h}
-                  style={{
-                    textAlign: h === 'Score' ? 'right' : 'left',
-                    padding: '4px 6px',
-                    color: colors.textDim,
-                    fontWeight: 600,
-                    fontSize: 9,
-                    textTransform: 'uppercase',
-                    letterSpacing: 0.5,
-                    borderBottom: `1px solid ${colors.border}`,
-                  }}
-                >
-                  {h}
-                </th>
+        {leaderboard.length === 0 ? (
+          <p style={{ margin: 0, padding: 16, textAlign: 'center', fontSize: 12, color: colors.textMuted }}>
+            {ended ? 'No submissions were recorded for this challenge.' : 'No submissions yet. Be the first.'}
+          </p>
+        ) : (
+          <Table label="Leaderboard" dense>
+            <Thead>
+              <Tr>
+                <Th plain>#</Th>
+                <Th plain>Name</Th>
+                <Th plain numeric>Score</Th>
+              </Tr>
+            </Thead>
+            <Tbody>
+              {leaderboard.map((entry) => (
+                <Tr key={entry.rank}>
+                  <Td numeric>{entry.rank}</Td>
+                  <Td text>{entry.displayName}</Td>
+                  <Td numeric>{entry.score}</Td>
+                </Tr>
               ))}
-            </tr>
-          </thead>
-          <tbody>
-            {leaderboard.map((entry) => (
-              <tr key={entry.rank}>
-                <td
-                  style={{
-                    padding: '5px 6px',
-                    color: entry.rank <= 3 ? colors.accent : colors.textMuted,
-                    fontWeight: entry.rank <= 3 ? 700 : 400,
-                    borderBottom: `1px solid ${colors.border}`,
-                    width: 28,
-                  }}
-                >
-                  {entry.rank}
-                </td>
-                <td
-                  style={{
-                    padding: '5px 6px',
-                    color: colors.text,
-                    borderBottom: `1px solid ${colors.border}`,
-                  }}
-                >
-                  {entry.displayName}
-                </td>
-                <td
-                  style={{
-                    padding: '5px 6px',
-                    color: colors.textMuted,
-                    textAlign: 'right',
-                    borderBottom: `1px solid ${colors.border}`,
-                    fontVariantNumeric: 'tabular-nums',
-                  }}
-                >
-                  {entry.score}
-                </td>
-              </tr>
-            ))}
-            {leaderboard.length === 0 && (
-              <tr>
-                <td
-                  colSpan={3}
-                  style={{
-                    padding: 16,
-                    textAlign: 'center',
-                    color: colors.textDim,
-                  }}
-                >
-                  No submissions yet — be the first.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+            </Tbody>
+          </Table>
+        )}
       </div>
+      {confirmDialog}
     </div>
   );
 }

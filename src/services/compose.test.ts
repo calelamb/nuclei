@@ -118,9 +118,14 @@ describe('compose', () => {
   it('returns null on http error', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('nope', { status: 500 }));
     const out = await compose({ intent: 'make bell', framework: 'cirq', currentCode: '' });
-    expect(out).toEqual({
-      ok: false,
-      error: 'HTTP 500',
-    });
+    expect(out).toMatchObject({ ok: false, error: 'nope' });
+  });
+
+  it('classifies a rejected key so every Dirac surface speaks the same words', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ error: { message: 'invalid x-api-key' } }), { status: 401 }),
+    );
+    const out = await compose({ intent: 'make bell', framework: 'cirq', currentCode: '' });
+    expect(out).toMatchObject({ ok: false, error: 'invalid x-api-key', info: { kind: 'auth', title: 'Your Anthropic key was rejected', action: 'update-key' } });
   });
 });

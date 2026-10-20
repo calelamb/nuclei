@@ -1,13 +1,19 @@
 // @vitest-environment jsdom
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { render, cleanup } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import '../../test/learnGateOn';
+import { render, cleanup, fireEvent } from '@testing-library/react';
 import { StatusBar } from './StatusBar';
 import { PlatformProvider } from '../../platform/PlatformProvider';
 import type { PlatformBridge } from '../../platform/bridge';
 import { useCircuitStore } from '../../stores/circuitStore';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
+import { useEditorStore } from '../../stores/editorStore';
 import { useExperimentRunStore } from '../../stores/experimentRunStore';
+import { useLearnStore } from '../../stores/learnStore';
+import { useUIModeStore } from '../../stores/uiModeStore';
+import { useNavigationStore } from '../../stores/navigationStore';
+import { useLearnGateStore } from '../../stores/learnGateStore';
 
 const bridge: PlatformBridge = {
   async startKernel() { return 'ok'; },
@@ -54,15 +60,15 @@ describe('<StatusBar> (extracted from PanelLayout, Phase A)', () => {
 
   it('renders the status-bar toolbar with its canonical slots', () => {
     const { getByRole, getByText } = renderStatusBar();
-    const toolbar = getByRole('toolbar', { name: 'Status bar' });
+    // A group, not a toolbar: it has no roving arrow-key model, so every control is its own Tab stop.
+    const toolbar = getByRole('group', { name: 'Status bar' });
     expect(toolbar).toBeTruthy();
     // Left slots
     expect(getByText('Qubits: —')).toBeTruthy();
     expect(getByText('Depth: —')).toBeTruthy();
-    expect(getByRole('combobox', { name: 'Layout preset' })).toBeTruthy();
-    // Right slots: kernel state, run status
-    expect(getByText(/^Kernel/)).toBeTruthy();
-    expect(getByText('Ready')).toBeTruthy();
+    expect(getByRole('button', { name: /^Layout preset:/ })).toBeTruthy();
+    // Right slot: one truthful kernel/run item (idle until a kernel starts)
+    expect(getByText('Kernel idle')).toBeTruthy();
     // Far-left mode chip carries the "Switch workspace mode" control (Phase B).
     expect(getByRole('button', { name: 'Switch workspace mode' })).toBeTruthy();
   });
@@ -105,5 +111,209 @@ describe('<StatusBar> (extracted from PanelLayout, Phase A)', () => {
     // controls off-screen), so assert on each piece.
     expect(getByText('theta-sweep')).toBeTruthy();
     expect(getByText(/: 3\/8/)).toBeTruthy();
+  });
+});
+
+describe('StatusBar in takeover views (S-19)', () => {
+  beforeEach(() => {
+    useCircuitStore.setState({ snapshot: null });
+    useWorkspaceStore.setState({ mode: 'learn' });
+    useLearnStore.setState({ isLearnMode: false });
+    useNavigationStore.setState({ activeView: 'files' });
+  });
+  afterEach(() => {
+    useLearnStore.setState({ isLearnMode: false });
+    useNavigationStore.setState({ activeView: 'files' });
+  });
+
+  it('hides Qubits/Depth and the layout preset while a lesson owns the main area', () => {
+    useLearnStore.setState({ isLearnMode: true });
+    const { queryByText, queryByRole } = renderStatusBar();
+    expect(queryByText(/Qubits:/)).toBeNull();
+    expect(queryByText(/Depth:/)).toBeNull();
+    expect(queryByRole('button', { name: /^Layout preset:/ })).toBeNull();
+  });
+
+  it('hides them in the QEC Workbench too', () => {
+    useWorkspaceStore.setState({ mode: 'research' });
+    useNavigationStore.setState({ activeView: 'qec' });
+    const { queryByText } = renderStatusBar();
+    expect(queryByText(/Qubits:/)).toBeNull();
+  });
+
+  it('labels the preset trigger so a bare "Clean" is never ambiguous, and opens on the current preset', () => {
+    const { getByRole, getAllByRole } = renderStatusBar();
+    const trigger = getByRole('button', { name: 'Layout preset: Clean' });
+    expect(trigger.textContent).toBe('Layout: Clean');
+    fireEvent.click(trigger);
+    const checked = getAllByRole('menuitemradio').find((el) => el.getAttribute('aria-checked') === 'true');
+    expect(checked?.textContent).toContain('Clean');
+    expect(document.activeElement).toBe(checked);
+  });
+
+  it('is a menu like Level, sized to its label (no fixed-width select with a gap before the chevron)', () => {
+    const { getByRole } = renderStatusBar();
+    expect(getByRole('button', { name: /^Layout preset:/ }).getAttribute('aria-haspopup')).toBe('menu');
+    expect(document.querySelector('.nuclei-statusbar-select')).toBeNull();
+  });
+});
+
+describe('StatusBar kernel state', () => {
+  beforeEach(() => {
+    useWorkspaceStore.setState({ mode: 'learn' });
+    useSimulationStore.setState({ isRunning: false, result: null });
+    useEditorStore.setState({ kernelReady: false, kernelStatus: 'idle', kernelError: null, kernelProgress: null });
+  });
+
+  it('is a retry action that carries the error when the kernel failed', () => {
+    useEditorStore.getState().setKernelStatus('failed', 'Kernel rejected the session token — restart Nuclei');
+    const { getByRole } = renderStatusBar();
+    const chip = getByRole('button', { name: /Kernel didn't start/ });
+    expect(chip.getAttribute('title')).toBeNull();
+  });
+
+  it('sends a failed-kernel click to the banner that owns Retry, and retries itself only when no banner is showing', async () => {
+    const control = await import('../../lib/kernelControl');
+    const retry = vi.fn();
+    const focusBanner = vi.fn();
+    control.registerKernelRetry(retry);
+    useEditorStore.getState().setKernelStatus('failed', 'boom');
+    const { getByRole } = renderStatusBar();
+    fireEvent.click(getByRole('button', { name: /Kernel didn't start/ }));
+    expect(retry).toHaveBeenCalledTimes(1); // no banner mounted: fall back to retrying
+    control.registerKernelBannerFocus(focusBanner);
+    fireEvent.click(getByRole('button', { name: /Kernel didn't start/ }));
+    expect(focusBanner).toHaveBeenCalledTimes(1);
+    expect(retry).toHaveBeenCalledTimes(1);
+    control.registerKernelBannerFocus(null);
+    control.registerKernelRetry(null);
+  });
+
+  it('shows the kernel state with no native title attribute (the shared tooltip carries the detail)', () => {
+    useEditorStore.setState({ kernelReady: true, kernelStatus: 'ready' });
+    const { getByText } = renderStatusBar();
+    expect(getByText(/ready/).closest('span')?.getAttribute('title')).toBeNull();
+  });
+
+  it('never says ready while the kernel is still loading', () => {
+    useEditorStore.setState({
+      kernelStatus: 'connecting',
+      kernelProgress: { step: 2, total: 3, label: 'Loading NumPy', fraction: 0.6 },
+    });
+    const { getByText, queryByText } = renderStatusBar();
+    expect(getByText(/^Starting (Python|kernel) 2\/3$/)).toBeTruthy();
+    expect(queryByText(/ready/i)).toBeNull();
+  });
+
+  it('shows Done with the run time once a result exists', () => {
+    useEditorStore.setState({ kernelReady: true, kernelStatus: 'ready' });
+    useSimulationStore.setState({ result: { execution_time_ms: 41.6 } as never });
+    const { getByText } = renderStatusBar();
+    expect(getByText('Done · 42 ms')).toBeTruthy();
+  });
+});
+
+describe('StatusBar controls', () => {
+  beforeEach(() => {
+    useEditorStore.setState({ kernelReady: true, kernelStatus: 'ready' });
+    useSimulationStore.setState({ isRunning: false, result: null });
+  });
+
+  it('names the theme toggle for assistive tech', () => {
+    const { getByRole } = renderStatusBar();
+    const toggle = getByRole('button', { name: /Switch to (light|dark) theme/ });
+    expect(toggle.style.width).toBe('22px');
+    expect(toggle.style.height).toBe('22px');
+  });
+
+  it('offers the UI-mode control in Learn but not in Research', () => {
+    useWorkspaceStore.setState({ mode: 'learn' });
+    const learn = renderStatusBar();
+    expect(learn.getByRole('button', { name: /^Level:/ })).toBeTruthy();
+    learn.unmount();
+
+    useWorkspaceStore.setState({ mode: 'research' });
+    const research = renderStatusBar();
+    expect(research.queryByRole('button', { name: /^Level:/ })).toBeNull();
+  });
+
+  it('opens a level menu instead of cycling blindly on click', () => {
+    useWorkspaceStore.setState({ mode: 'learn' });
+    useUIModeStore.setState({ mode: 'intermediate' });
+    const { getByRole, getAllByRole } = renderStatusBar();
+    fireEvent.click(getByRole('button', { name: 'Level: Intermediate' }));
+    const items = getAllByRole('menuitemradio');
+    expect(items).toHaveLength(3);
+    expect(useUIModeStore.getState().mode).toBe('intermediate');
+    fireEvent.click(items[0]);
+    expect(useUIModeStore.getState().mode).toBe('beginner');
+  });
+});
+
+describe('<StatusBar> chrome (shell-r6-07, interaction-r-11)', () => {
+  beforeEach(() => {
+    useCircuitStore.setState({ snapshot: null, lastGood: null, error: null });
+    useSimulationStore.setState({ isRunning: false, result: null });
+    useWorkspaceStore.setState({ mode: 'learn' });
+    useExperimentRunStore.setState({ active: null });
+    useUIModeStore.setState({ mode: 'intermediate' });
+  });
+
+  it('every status-bar button is a control: the shared statusbar-ctl class, not the passive quiet text', () => {
+    const { getByRole } = renderStatusBar();
+    for (const name of [/^Layout preset:/, /^Level:/, /command palette/i, /theme$/]) {
+      expect(getByRole('button', { name }).className).toContain('statusbar-ctl');
+    }
+  });
+
+  it('quiets Qubits and Depth (tertiary token, never opacity) while the diagram is the last good parse of broken code', () => {
+    const snapshot = { framework: 'qiskit', qubit_count: 2, classical_bit_count: 0, depth: 3, gates: [] } as never;
+    useCircuitStore.setState({ snapshot: null, lastGood: { snapshot, key: '__buffer__' } as never, error: 'SyntaxError' });
+    const { getByText } = renderStatusBar();
+    const qubits = getByText(/^Qubits:/);
+    expect(qubits.style.opacity).toBe('');
+    expect(qubits.style.color).toBe('var(--color-text-tertiary)');
+    expect(getByText(/^Depth:/).style.opacity).toBe('');
+    expect(getByText(/^Depth:/).style.color).toBe('var(--color-text-tertiary)');
+  });
+
+  it('keeps them at full strength for a live parse', () => {
+    const snapshot = { framework: 'qiskit', qubit_count: 2, classical_bit_count: 0, depth: 3, gates: [] } as never;
+    useCircuitStore.setState({ snapshot, error: null });
+    const { getByText } = renderStatusBar();
+    expect(getByText('Qubits: 2').style.opacity).toBe('');
+    expect(getByText('Qubits: 2').style.color).not.toBe('var(--color-text-tertiary)');
+  });
+});
+
+describe('Commands button glyph (IR10-07)', () => {
+  const realPlatform = Object.getOwnPropertyDescriptor(Navigator.prototype, 'platform');
+  afterEach(() => { if (realPlatform) Object.defineProperty(Navigator.prototype, 'platform', realPlatform); });
+  const iconClass = () => document.querySelector('button[aria-label="Open command palette"] svg')?.getAttribute('class') ?? '';
+
+  it('shows the Command key glyph on Mac and a neutral terminal glyph elsewhere', () => {
+    Object.defineProperty(Navigator.prototype, 'platform', { configurable: true, get: () => 'MacIntel' });
+    renderStatusBar();
+    expect(iconClass()).toContain('lucide-command');
+    cleanup();
+    Object.defineProperty(Navigator.prototype, 'platform', { configurable: true, get: () => 'Win32' });
+    renderStatusBar();
+    expect(iconClass()).not.toContain('lucide-command');
+    expect(iconClass()).toContain('lucide-square-terminal');
+  });
+});
+
+describe('<StatusBar> with the Learn workspace gated off', () => {
+  beforeEach(() => {
+    useLearnGateStore.getState().setLearnEnabled(false);
+    useExperimentRunStore.setState({ active: null });
+  });
+  afterEach(() => useLearnGateStore.getState().setLearnEnabled(true));
+
+  it('has no workspace-mode pill and no Level menu', () => {
+    const { queryByRole, queryByText } = renderStatusBar();
+    expect(queryByRole('button', { name: 'Switch workspace mode' })).toBeNull();
+    expect(queryByText('LEARN')).toBeNull();
+    expect(queryByRole('button', { name: /^Level/ })).toBeNull();
   });
 });

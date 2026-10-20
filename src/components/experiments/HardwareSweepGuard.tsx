@@ -1,5 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useThemeStore } from '../../stores/themeStore';
+import { TYPOGRAPHY } from '../../styles/tokens';
+import { Button, TextInput } from '../ui';
 
 /**
  * PRD 09 Phase D (D4) / Risk 1 — hardware sweep guard.
@@ -32,9 +35,20 @@ export function HardwareSweepGuard({
   const [typed, setTyped] = useState('');
   const canConfirm = !requiresTyping || typed === experimentName;
   const totalShots = pointCount * shots;
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const confirmInputRef = useRef<HTMLInputElement>(null);
+
+  // Trap Tab and restore focus to the Run button on close; the safe action
+  // (Cancel) gets focus, or the name field when typing is required.
+  useFocusTrap(dialogRef, { autoFocus: false });
+  useEffect(() => {
+    (requiresTyping ? confirmInputRef.current : cancelRef.current)?.focus();
+  }, [requiresTyping]);
 
   return (
     <div
+      ref={dialogRef}
       role="alertdialog"
       aria-modal="true"
       aria-label="Confirm hardware sweep"
@@ -44,12 +58,13 @@ export function HardwareSweepGuard({
         background: 'rgba(0,0,0,0.5)',
       }}
       onClick={onCancel}
+      onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onCancel(); } }}
     >
       <div
         style={{
-          background: colors.bg, border: `1px solid ${colors.border}`, borderRadius: 8,
+          background: colors.bg, border: `1px solid ${colors.border}`, borderRadius: 'var(--radius-round)',
           padding: 20, width: 380, maxWidth: '90%',
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -66,43 +81,18 @@ export function HardwareSweepGuard({
             <label style={{ display: 'block', color: colors.textMuted, fontSize: 11, marginBottom: 6 }}>
               Type the experiment name (<code>{experimentName}</code>) to confirm:
             </label>
-            <input
-              autoFocus
+            <TextInput
+              ref={confirmInputRef}
+              mono
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
               placeholder={experimentName}
-              style={{
-                width: '100%', padding: '6px 10px', fontSize: 12,
-                fontFamily: "'Fira Code', monospace",
-                background: colors.bgPanel, border: `1px solid ${colors.border}`,
-                borderRadius: 4, color: colors.text, outline: 'none',
-              }}
             />
           </div>
         )}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <button
-            onClick={onCancel}
-            style={{
-              padding: '6px 12px', background: 'transparent', color: colors.textDim,
-              border: `1px solid ${colors.border}`, borderRadius: 6, cursor: 'pointer', fontSize: 12,
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={!canConfirm}
-            style={{
-              padding: '6px 12px',
-              background: canConfirm ? colors.warning : colors.border,
-              color: canConfirm ? '#1a1a1a' : colors.textDim,
-              border: 'none', borderRadius: 6,
-              cursor: canConfirm ? 'pointer' : 'not-allowed', fontSize: 12, fontWeight: 600,
-            }}
-          >
-            Submit to hardware
-          </button>
+          <Button ref={cancelRef} variant="ghost" onClick={onCancel}>Cancel</Button>
+          <Button variant="primary" onClick={onConfirm} disabled={!canConfirm}>Submit to hardware</Button>
         </div>
       </div>
     </div>

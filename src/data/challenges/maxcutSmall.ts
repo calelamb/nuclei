@@ -10,7 +10,7 @@ export const maxcutSmall: QuantumChallenge = {
 The **Maximum Cut (MaxCut)** problem is a classic combinatorial optimisation problem:
 
 > Given an undirected graph \`G = (V, E)\`, partition the vertices into two sets
-> \`S\` and \`\\u0305S\` such that the number of edges crossing the partition is maximised.
+> \`S\` and \`̅S\` such that the number of edges crossing the partition is maximised.
 
 MaxCut is **NP-hard** in general, but small instances can be tackled with the
 **Quantum Approximate Optimisation Algorithm (QAOA)**.
@@ -22,18 +22,18 @@ QAOA alternates two parameterised layers:
 1. **Cost layer** \u2014 encodes the objective function into phase rotations.
    For each edge \`(i, j)\`, apply:
    \`\`\`
-   CNOT(i, j)  \u2192  RZ(\\u03B3, j)  \u2192  CNOT(i, j)
+   CNOT(i, j)  \u2192  RZ(γ, j)  \u2192  CNOT(i, j)
    \`\`\`
-   This implements \`exp(-i \\u03B3 Z_i Z_j)\`, penalising configurations where
+   This implements \`exp(-i γ Z_i Z_j)\`, penalising configurations where
    qubits \`i\` and \`j\` are in the same partition.
 
 2. **Mixer layer** \u2014 drives exploration across partitions.
    For each qubit \`i\`, apply:
    \`\`\`
-   RX(2\\u03B2, i)
+   RX(2β, i)
    \`\`\`
 
-The parameters \`\\u03B3\` and \`\\u03B2\` are tuned to maximise the expected cut value.
+The parameters \`γ\` and \`β\` are tuned to maximise the expected cut value.
 
 ### Your Task
 
@@ -51,8 +51,8 @@ A ratio of **0.7** means you captured at least 70% of the maximum possible cut.
 ### Tips
 
 - Start with a single QAOA layer (\`p = 1\`)
-- Try different \`\\u03B3\` and \`\\u03B2\` values by hand first
-- For the triangle graph, \`\\u03B3 \\u2248 0.7\` and \`\\u03B2 \\u2248 0.5\` works well`,
+- Try different \`γ\` and \`β\` values by hand first
+- For the triangle graph, \`γ ≈ 0.7\` and \`β ≈ 0.5\` works well`,
 
   constraints: [
     'Use exactly n_nodes qubits (one per vertex)',

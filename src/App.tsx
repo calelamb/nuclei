@@ -3,6 +3,8 @@ import { PanelLayout } from './components/layout/PanelLayout';
 import { PlatformProvider, usePlatform, loadBridge } from './platform/PlatformProvider';
 import { Onboarding } from './components/onboarding/Onboarding';
 import { KeyboardShortcuts } from './components/onboarding/KeyboardShortcuts';
+import { requestSettingsFocus } from './components/settings/settingsFocus';
+import { focusAfterViewSelect } from './components/layout/focusViz';
 import { CommandPalette, buildCommands } from './components/commandPalette/CommandPalette';
 import { UpdateBanner } from './components/UpdateBanner';
 import { MissingDependencyBanner } from './components/onboarding/MissingDependencyBanner';
@@ -14,20 +16,28 @@ import { LaunchModal } from './components/hardware/LaunchModal';
 import { FrameworkSetup } from './components/onboarding/FrameworkSetup';
 import { useFrameworksStore, needsFirstRunSetup, type FrameworkStatus } from './stores/frameworksStore';
 import { useHardwareStore } from './stores/hardwareStore';
+import { useResearchTourStore } from './stores/researchTourStore';
 import { useKernel } from './hooks/useKernel';
 import { useFileOps } from './hooks/useFileOps';
 import { useActiveTabSync } from './hooks/useActiveTabSync';
 import { useKeychainKeyMigration } from './hooks/useKeychainKeyMigration';
 import { useProjectStore } from './stores/projectStore';
-import { useThemeStore } from './stores/themeStore';
+import { useThemeStore, isThemePreference } from './stores/themeStore';
+import { cycleTerminalShortcut, togglePanelResolved } from './layout/resolvedVisibility';
 import { useEditorStore } from './stores/editorStore';
+import { useHelpOverlayStore } from './stores/helpOverlayStore';
+import { useWhatsNewStore } from './stores/whatsNewStore';
 import { useUIModeStore } from './stores/uiModeStore';
+import { findBindingId } from './config/keybindings';
+import { runShortcutOwnedElsewhere, runShortcutHiddenEditor } from './config/runShortcut';
+import { usePersistedPrefs } from './hooks/usePersistedPrefs';
+import { scheduleLandingFocus } from './components/onboarding/focusLanding';
+import { applyOnboardingPath, type OnboardingChoice } from './components/onboarding/applyOnboardingPath';
 import { useWorkspaceStore } from './stores/workspaceStore';
+import { useLearnGateStore } from './stores/learnGateStore';
 import { useModeSwitchStore } from './stores/modeSwitchStore';
-import { useResearchTourStore } from './stores/researchTourStore';
 import { useModeIdentity } from './hooks/useModeIdentity';
 import { useDiracPanelStore } from './stores/diracPanelStore';
-import { useBottomPanelStore } from './stores/bottomPanelStore';
 import { useNavigationStore } from './stores/navigationStore';
 import { useLayoutStore } from './stores/layoutStore';
 import { useSettingsStore } from './stores/settingsStore';
@@ -36,8 +46,10 @@ import { useExperimentUiStore } from './stores/experimentUiStore';
 import { useExperimentRun } from './hooks/useExperimentRun';
 import { openRunFolder } from './lib/openRunFolder';
 import { restorePersistedPlugins } from './plugins/pluginLoader';
-import { leftPanelsForMode, bottomLeftPanelsForMode } from './layout/panelRegistry';
-import type { LeftPanelId } from './layout/panelRegistry';
+import { topRailViewsFor } from './layout/panelRegistry';
+import { featuresFor } from './layout/uiModeFeatures';
+import { useMainTakeoverKind, readMainTakeoverKind } from './layout/takeover';
+import { useUiFeatures } from './hooks/useUiFeatures';
 import type { PlatformBridge } from './platform/bridge';
 import type { Framework, KernelLanguage } from './types/quantum';
 
@@ -64,6 +76,9 @@ let hardwareRef: HardwareActions | null = null;
 // eslint-disable-next-line react-refresh/only-export-components
 export function getHardware() { return hardwareRef; }
 
+/** The "welcome back" screen only interrupts a launch after a real gap. */
+const RETURNING_SCREEN_MIN_DAYS = 7;
+
 function AppInner() {
   const { execute, hardwareConnect, hardwareSubmit, hardwareCancel, hardwareDismiss } = useKernel();
   const fileOps = useFileOps();
@@ -72,18 +87,42 @@ function AppInner() {
   useModeIdentity();
   const platform = usePlatform();
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [showShortcuts, setShowShortcuts] = useState(false);
-  const [showCommandPalette, setShowCommandPalette] = useState(false);
-  const [composeOpen, setComposeOpen] = useState(false);
+  const showShortcuts = useHelpOverlayStore((s) => s.shortcutsOpen);
+  const setShowShortcuts = useCallback((v: boolean | ((cur: boolean) => boolean)) => {
+    const store = useHelpOverlayStore.getState();
+    store.setShortcutsOpen(typeof v === 'function' ? v(store.shortcutsOpen) : v);
+  }, []);
+  const showCommandPalette = useHelpOverlayStore((s) => s.paletteOpen);
+  const setShowCommandPalette = useCallback((v: boolean | ((cur: boolean) => boolean)) => {
+    const store = useHelpOverlayStore.getState();
+    store.setPaletteOpen(typeof v === 'function' ? v(store.paletteOpen) : v);
+  }, []);
+  const composeOpen = useHelpOverlayStore((s) => s.composeOpen);
+  const setComposeOpen = useCallback((v: boolean | ((cur: boolean) => boolean)) => {
+    const store = useHelpOverlayStore.getState();
+    store.setComposeOpen(typeof v === 'function' ? v(store.composeOpen) : v);
+  }, []);
   const [isReturningUser, setIsReturningUser] = useState(false);
   const [lastOpenedFile, setLastOpenedFile] = useState<string | undefined>();
   const [daysSinceLastSession, setDaysSinceLastSession] = useState<number | undefined>();
+  const [prefsReady, setPrefsReady] = useState(false);
   const themeToggle = useThemeStore((s) => s.toggle);
   const themeMode = useThemeStore((s) => s.mode);
+  const themePreference = useThemeStore((s) => s.preference);
+  usePersistedPrefs(platform, prefsReady);
 
   useEffect(() => {
     document.documentElement.dataset.theme = themeMode;
   }, [themeMode]);
+
+  // "System" theme follows the OS live.
+  useEffect(() => {
+    if (themePreference !== 'system' || typeof window.matchMedia !== 'function') return undefined;
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = (e: MediaQueryListEvent) => useThemeStore.getState().syncSystem(e.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, [themePreference]);
 
   const isDirty = useEditorStore((s) => s.isDirty);
   const filePath = useEditorStore((s) => s.filePath);
@@ -95,9 +134,21 @@ function AppInner() {
   const toggleDirac = useDiracPanelStore((s) => s.toggle);
   const focusDirac = useDiracPanelStore((s) => s.focusInput);
   // Workspace navigation + command-palette context (PRD 11 Phase D).
-  const navigate = useNavigationStore((s) => s.setActiveView);
-  const togglePanel = useLayoutStore((s) => s.togglePanel);
+  const setActiveView = useNavigationStore((s) => s.setActiveView);
+  // Keyboard/palette navigation to Settings also moves focus into it (it would otherwise stay in the editor).
+  const navigate = useCallback((view: Parameters<typeof setActiveView>[0]) => {
+    setActiveView(view);
+    if (view === 'settings') requestSettingsFocus();
+  }, [setActiveView]);
+  // Keyboard routes (palette "Go to", Cmd+1..9) also move focus into the sidebar they open, never leaving it in the editor.
+  const navigateFromKeyboard = useCallback((view: Parameters<typeof setActiveView>[0]) => {
+    if (view === 'settings' || view === null) { navigate(view); return; }
+    useNavigationStore.getState().selectView(view, { toggle: false });
+    focusAfterViewSelect(view);
+  }, [navigate]);
   const workspaceMode = useWorkspaceStore((s) => s.mode);
+  // Subscribed so the palette's command list rebuilds when the Learn gate flips.
+  useLearnGateStore((s) => s.learnEnabled);
   const experimentalFeatures = useSettingsStore((s) => s.general.experimentalFeatures);
   const experiments = useExperimentStore((s) => s.experiments);
   const selectedRunDir = useExperimentUiStore((s) => s.selectedRunDir);
@@ -178,11 +229,13 @@ function AppInner() {
         }
       };
 
-      const mode = await safeGet<'dark' | 'light'>('theme');
-      if (mode) useThemeStore.getState().setMode(mode);
+      const storedTheme = await safeGet<string>('theme');
+      if (isThemePreference(storedTheme)) useThemeStore.getState().setPreference(storedTheme);
 
       const uiMode = await safeGet<'beginner' | 'intermediate' | 'advanced'>('ui_mode');
       if (uiMode) useUIModeStore.getState().setMode(uiMode);
+      // Saved preferences are now in the stores; from here on, changes persist.
+      setPrefsReady(true);
 
       const lastFramework = await safeGet<Framework>('last_framework');
       if (lastFramework) setFramework(lastFramework);
@@ -199,7 +252,7 @@ function AppInner() {
             setIsReturningUser(true);
             setDaysSinceLastSession(days);
             if (lastFile) setLastOpenedFile(lastFile);
-            if (days > 1) setShowOnboarding(true);
+            if (days >= RETURNING_SCREEN_MIN_DAYS) setShowOnboarding(true);
           }
         }
 
@@ -211,11 +264,14 @@ function AppInner() {
               setCode(restoredContent);
               setFilePath(lastFile);
             } else {
-              // Drop the stale path so we don't retry next session.
+              // Drop the stale path so we don't retry next session, and don't
+              // offer to "continue" into a file that is gone.
+              setLastOpenedFile(undefined);
               await platform.setStoredValue('last_opened_file', null).catch(() => {});
             }
           } catch (err) {
             if (import.meta.env.DEV) console.warn('[Nuclei] file restore failed:', err);
+            setLastOpenedFile(undefined);
             await platform.setStoredValue('last_opened_file', null).catch(() => {});
           }
         }
@@ -273,44 +329,44 @@ function AppInner() {
     platform.setStoredValue('last_opened_file', filePath).catch(() => {});
   }, [filePath, platform]);
 
-  const completeOnboarding = useCallback(async (path?: string) => {
+  const completeOnboarding = useCallback(async (path?: OnboardingChoice) => {
     setShowOnboarding(false);
+    // Apply to the stores first (persisted by usePersistedPrefs) so a failing
+    // storage write can never leave the user in the wrong workspace.
+    applyOnboardingPath(path);
+    if (path) scheduleLandingFocus();
     try {
       await platform.setStoredValue('onboarding_complete', true);
-      if (path) {
-        await platform.setStoredValue('onboarding_path', path);
-        if (path === 'beginner') useUIModeStore.getState().setMode('beginner');
-        else if (path === 'intermediate') useUIModeStore.getState().setMode('intermediate');
-        else if (path === 'experienced') useUIModeStore.getState().setMode('advanced');
-        else if (path === 'research') useWorkspaceStore.getState().setMode('research');
-      }
+      if (path) await platform.setStoredValue('onboarding_path', path);
     } catch {
       // Non-critical: onboarding state persistence failure is safe to ignore
     }
   }, [platform]);
 
+  const uiFeatures = useUiFeatures();
+  const mainTakeover = useMainTakeoverKind();
   const commands = buildCommands({
     run: () => { const fn = getExecute(); if (fn) fn(); },
     openFile: () => fileOps.openFile(),
     saveFile: () => fileOps.saveFile(),
     newFile: () => fileOps.newFile(),
-    toggleTheme: () => {
-      themeToggle();
-      platform.setStoredValue('theme', useThemeStore.getState().mode).catch(() => {});
-    },
+    toggleTheme: themeToggle,
     toggleDirac,
+    focusDirac,
     cycleMode: () => {
+      // Research ignores uiModeStore entirely, so cycling it there is a no-op.
+      if (useWorkspaceStore.getState().mode !== 'learn') return;
       cycleMode();
-      // Non-critical: UI mode persistence failure does not affect current session
-      platform.setStoredValue('ui_mode', useUIModeStore.getState().mode).catch(() => {});
     },
     toggleShortcuts: () => setShowShortcuts((s) => !s),
+    openWhatsNew: () => useWhatsNewStore.getState().openWhatsNew(),
     // Route through the in-flight-work guard (PRD 11 Phase B): a running
     // sweep/campaign prompts a confirm before the switch; jobs never cancel.
     switchWorkspaceMode: () => useModeSwitchStore.getState().requestToggle(),
     startResearchTour: () => useResearchTourStore.getState().start(),
-    navigate,
-    togglePanel,
+    navigate: navigateFromKeyboard,
+    togglePanel: togglePanelResolved,
+    setLayoutPreset: (preset) => useLayoutStore.getState().setPreset(preset),
     runExperiment: (fileName: string) => {
       const experiment = experiments.find((e) => e.fileName === fileName);
       if (!experiment || !projectRoot) return;
@@ -323,95 +379,85 @@ function AppInner() {
   }, {
     mode: workspaceMode,
     developerViews: experimentalFeatures,
+    explorerSidebar: uiFeatures.explorerSidebar,
+    layoutPresets: uiFeatures.layoutPresets,
     experiments: experiments.map((e) => ({ fileName: e.fileName, name: e.spec.name })),
     hasSelectedRun: selectedRunDir !== null,
+    framework,
+    mainTakeover,
   });
 
-  // Global keyboard shortcuts
+  // Global keyboard shortcuts. Dispatch is by id from the single keybinding
+  // registry (src/config/keybindings.ts), which is casing-insensitive: Chromium
+  // reports e.key as 'P' under Shift, so comparing against 'p' silently failed.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      const mod = e.metaKey || e.ctrlKey;
-      if (!mod) return;
-
-      if (e.key === 'o') {
-        e.preventDefault();
-        fileOps.openFile();
-      } else if (e.key === 's' && e.shiftKey) {
-        e.preventDefault();
-        fileOps.saveFileAs();
-      } else if (e.key === 's') {
-        e.preventDefault();
-        fileOps.saveFile();
-      } else if (e.key === 'n') {
-        e.preventDefault();
-        fileOps.newFile();
-      } else if (e.key === '/' && !e.shiftKey) {
+      // The first-launch chooser is modal: no global shortcut may act behind it.
+      if (showOnboarding) return;
+      // The Research tour is modal too: the keys it owns are handled by the tour itself.
+      if (useResearchTourStore.getState().active) return;
+      // F1 opens the shortcut sheet from anywhere, including the editor.
+      if (e.key === 'F1' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
         e.preventDefault();
         setShowShortcuts((s) => !s);
-      } else if (e.key === 'p' && e.shiftKey) {
-        e.preventDefault();
-        setShowCommandPalette((s) => !s);
-      } else if (e.key === 'l' && e.shiftKey) {
-        e.preventDefault();
-        cycleMode();
-        // Non-critical: UI mode persistence failure does not affect current session
-        platform.setStoredValue('ui_mode', useUIModeStore.getState().mode).catch(() => {});
-      } else if (e.key === 't' && e.shiftKey) {
-        e.preventDefault();
-        themeToggle();
-        platform.setStoredValue('theme', useThemeStore.getState().mode).catch(() => {});
-      } else if (e.key === 'd' && !e.shiftKey) {
-        e.preventDefault();
-        toggleDirac();
-      } else if (e.key === 'l' && !e.shiftKey) {
-        e.preventDefault();
-        focusDirac();
-      } else if (e.key === 'i' && !e.shiftKey) {
-        e.preventDefault();
-        setComposeOpen((s) => !s);
-      } else if (e.key === 'r' && e.shiftKey) {
-        e.preventDefault();
-        // ⌘⇧R: open the Launch modal (submit to hardware). Separate from the
-        // plain ⌘↵ Run which stays on the classical simulator.
-        useHardwareStore.getState().openLaunch();
-      } else if ((e.key === 'm' || e.key === 'M') && e.shiftKey) {
-        e.preventDefault();
-        // ⌘⇧M: switch workspace mode (Learn/Research), through the same
-        // in-flight-work guard the palette uses (PRD 11 Phase D).
-        useModeSwitchStore.getState().requestToggle();
-      } else if (!e.shiftKey && /^[1-9]$/.test(e.key)) {
-        e.preventDefault();
-        // ⌘1..9: jump to the Nth top-rail view for the current mode. Read the
-        // mode + developer flag fresh so the mapping tracks the live rail.
-        const mode = useWorkspaceStore.getState().mode;
-        const dev = useSettingsStore.getState().general.experimentalFeatures;
-        const bottom = new Set(bottomLeftPanelsForMode(mode));
-        const topViews = leftPanelsForMode(mode, { developerViews: dev }).filter(
-          (v: LeftPanelId) => !bottom.has(v),
-        );
-        const view = topViews[Number(e.key) - 1];
-        if (view) useNavigationStore.getState().setActiveView(view);
-      } else if (e.key === '`') {
-        e.preventDefault();
-        // ⌘`: toggle the bottom panel; opening it always focuses the terminal
-        // tab so print-debug output is immediately visible.
-        const store = useBottomPanelStore.getState();
-        if (store.collapsed) {
-          store.focusTerminal();
-        } else if (store.activeTab !== 'terminal') {
-          store.setActiveTab('terminal');
-        } else {
-          store.setCollapsed(true);
+        return;
+      }
+      const id = findBindingId(e);
+      if (!id) return;
+      // Run is global, but Monaco (which binds it too), dialogs and Dirac's panel keep the chord.
+      if (id === 'run' && (e.defaultPrevented || runShortcutOwnedElsewhere(e.target) || runShortcutHiddenEditor(readMainTakeoverKind()))) return;
+      e.preventDefault();
+      switch (id) {
+        case 'run': { const execute = getExecute(); if (execute) execute(); break; }
+        case 'open': fileOps.openFile(); break;
+        case 'save-as': fileOps.saveFileAs(); break;
+        case 'save': fileOps.saveFile(); break;
+        case 'new': fileOps.newFile(); break;
+        case 'shortcuts': setShowShortcuts((s) => !s); break;
+        case 'palette': setShowCommandPalette((s) => !s); break;
+        case 'cycle-ui-mode':
+          // Research ignores uiModeStore entirely. Persistence is handled by usePersistedPrefs.
+          if (useWorkspaceStore.getState().mode === 'learn') cycleMode();
+          break;
+        case 'toggle-theme': themeToggle(); break;
+        case 'toggle-dirac': toggleDirac(); break;
+        case 'focus-dirac': focusDirac(); break;
+        case 'compose': setComposeOpen((s) => !s); break;
+        case 'settings': navigate('settings'); break;
+        // Open the Launch modal (submit to hardware). Separate from the plain
+        // Run shortcut, which stays on the classical simulator.
+        case 'launch': useHardwareStore.getState().openLaunch(); break;
+        // Switch workspace mode, through the same in-flight-work guard the palette uses.
+        case 'switch-workspace': useModeSwitchStore.getState().requestToggle(); break; // no-op while Learn is gated off
+        case 'goto-rail-view': {
+          // Jump to the Nth top-rail view for the current mode. Read the mode +
+          // developer flag fresh so the mapping tracks the live rail.
+          const mode = useWorkspaceStore.getState().mode;
+          const dev = useSettingsStore.getState().general.experimentalFeatures;
+          const explorerSidebar = featuresFor(mode, useUIModeStore.getState().mode).explorerSidebar;
+          const topViews = topRailViewsFor(mode, { developerViews: dev, explorerSidebar });
+          const view = topViews[Number(e.key) - 1];
+          if (view) {
+            useNavigationStore.getState().selectView(view, { toggle: false });
+            focusAfterViewSelect(view);
+          }
+          break;
         }
+        case 'toggle-bottom-panel': cycleTerminalShortcut(); break;
+        default: break;
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [fileOps, themeToggle, cycleMode, platform, toggleDirac, focusDirac]);
+  }, [fileOps, themeToggle, cycleMode, toggleDirac, focusDirac, navigate, setShowShortcuts, setShowCommandPalette, setComposeOpen, showOnboarding]);
 
   return (
     <>
-      <PanelLayout />
+      {/* The first-launch chooser is a real modal: the app behind it is inert,
+          so Tab and typing can never reach the hidden editor. */}
+      <div style={{ display: 'contents' }} inert={showOnboarding}>
+        <PanelLayout />
+      </div>
       <UpdateBanner />
       <MissingDependencyBanner />
       <WhatsNewModal />
@@ -449,7 +495,7 @@ function SplashScreen() {
       <div style={{
         color: 'var(--color-accent-quantum)',
         fontSize: 36,
-        fontWeight: 800,
+        fontWeight: 700,
         fontFamily: 'var(--font-sans)',
         letterSpacing: -1,
         animation: 'nuclei-fade-in var(--duration-slow) var(--ease-emphasized-out)',

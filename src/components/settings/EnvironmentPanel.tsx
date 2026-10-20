@@ -1,3 +1,4 @@
+import { Button, IconButton } from '../ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import {
@@ -11,6 +12,7 @@ import {
   Loader2,
   Terminal,
 } from 'lucide-react';
+import { describeDesktopCommandError } from '../../lib/kernelErrors';
 import { useThemeStore } from '../../stores/themeStore';
 import type { FrameworkInfo, FrameworkStatus, InstallEvent } from '../../stores/frameworksStore';
 import {
@@ -26,6 +28,7 @@ import {
   type PythonSetup,
 } from '../../services/environment';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const GROUP_LABEL: Record<FrameworkInfo['group'], string> = {
   core: 'Frameworks',
   provider: 'Hardware providers',
@@ -78,7 +81,7 @@ export function EnvironmentPanel() {
       setStatus(st);
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(describeDesktopCommandError(e));
     } finally {
       setLoading(false);
     }
@@ -128,7 +131,7 @@ export function EnvironmentPanel() {
       try {
         await fn();
       } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
+        setError(describeDesktopCommandError(e));
       } finally {
         await refresh();
         setBusy(null);
@@ -143,7 +146,7 @@ export function EnvironmentPanel() {
 
   if (!desktop) {
     return (
-      <p style={{ fontSize: 12, color: colors.textDim, fontFamily: "'Geist Sans', sans-serif", margin: 0 }}>
+      <p style={{ fontSize: 12, color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans, margin: 0 }}>
         Environment management is available in the desktop app. The web version runs Python in your
         browser via Pyodide.
       </p>
@@ -153,7 +156,7 @@ export function EnvironmentPanel() {
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: colors.textDim, fontSize: 12 }}>
-        <Loader2 size={13} style={{ animation: 'nuclei-spin 800ms linear infinite' }} />
+        <Loader2 size={14} style={{ animation: 'nuclei-spin 800ms linear infinite' }} />
         Checking your environment…
       </div>
     );
@@ -162,20 +165,20 @@ export function EnvironmentPanel() {
   const pythonOk = python?.supported ?? false;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, fontFamily: "'Geist Sans', sans-serif" }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, fontFamily: TYPOGRAPHY.fontSans }}>
       {/* Health header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         {report?.healthy ? (
-          <Check size={15} style={{ color: colors.success }} />
+          <Check size={16} style={{ color: colors.successText }} />
         ) : (
-          <AlertTriangle size={15} style={{ color: colors.warning }} />
+          <AlertTriangle size={16} style={{ color: colors.warning }} />
         )}
         <span style={{ fontSize: 13, fontWeight: 600, color: colors.text }}>
           {report?.healthy ? 'Environment ready' : 'Setup needed'}
         </span>
         <div style={{ flex: 1 }} />
         <IconBtn title="Refresh" onClick={() => void refresh()} colors={colors} busy={busy !== null}>
-          <RefreshCw size={13} />
+          <RefreshCw size={14} />
         </IconBtn>
       </div>
 
@@ -201,7 +204,7 @@ export function EnvironmentPanel() {
                   busy={busy === 'python'}
                   onClick={() => void runOp('python', installPython)}
                 >
-                  <Download size={13} />
+                  <Download size={14} />
                   Install with {PM_LABEL[python.package_manager] ?? python.package_manager}
                 </PrimaryBtn>
               ) : null}
@@ -209,7 +212,7 @@ export function EnvironmentPanel() {
                 href={python.download_url}
                 target="_blank"
                 rel="noreferrer"
-                style={{ fontSize: 12, color: colors.accent, textDecoration: 'none' }}
+                style={{ fontSize: 12, color: colors.accentText, textDecoration: 'none' }}
               >
                 Download from python.org →
               </a>
@@ -219,7 +222,7 @@ export function EnvironmentPanel() {
                 style={{
                   display: 'block', marginTop: 8, padding: '6px 9px', borderRadius: 5,
                   background: colors.bg, border: `1px solid ${colors.border}`,
-                  fontFamily: "'Geist Mono', monospace", fontSize: 11, color: colors.textMuted,
+                  fontFamily: TYPOGRAPHY.fontMono, fontSize: 11, color: colors.textMuted,
                 }}
               >
                 {python.install_command}
@@ -249,8 +252,8 @@ export function EnvironmentPanel() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                       <span style={{ fontSize: 13, fontWeight: 500, color: colors.text }}>{fw.label}</span>
                       {installed && (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10.5, color: colors.success }}>
-                          <Check size={11} /> installed
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, color: colors.successText }}>
+                          <Check size={12} /> installed
                         </span>
                       )}
                     </div>
@@ -258,7 +261,7 @@ export function EnvironmentPanel() {
                       {fw.description}
                     </div>
                   </div>
-                  <span style={{ fontSize: 10.5, color: colors.textDim, fontFamily: "'Geist Mono', monospace", flexShrink: 0 }}>
+                  <span style={{ fontSize: 11, color: colors.textDim, fontFamily: TYPOGRAPHY.fontMono, flexShrink: 0 }}>
                     ~{fw.approximate_size_mb}MB
                   </span>
                   {installed ? (
@@ -316,14 +319,14 @@ export function EnvironmentPanel() {
         <div>
           <SectionLabel colors={colors}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-              <Terminal size={11} /> Progress
+              <Terminal size={12} /> Progress
             </span>
           </SectionLabel>
           <pre
             style={{
               margin: 0, padding: 10, borderRadius: 6, border: `1px solid ${colors.border}`,
-              background: colors.bg, color: colors.textMuted, fontFamily: "'Geist Mono', monospace",
-              fontSize: 10.5, lineHeight: 1.5, maxHeight: 140, overflow: 'auto', whiteSpace: 'pre-wrap',
+              background: colors.bg, color: colors.textMuted, fontFamily: TYPOGRAPHY.fontMono,
+              fontSize: 11, lineHeight: 1.5, maxHeight: 140, overflow: 'auto', whiteSpace: 'pre-wrap',
             }}
           >
             {log.slice(-30).join('\n')}
@@ -353,48 +356,32 @@ function Row({ children }: { children: React.ReactNode }) {
   return <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>{children}</div>;
 }
 function Label({ colors, children }: { colors: C; children: React.ReactNode }) {
-  return <span style={{ fontSize: 12.5, fontWeight: 500, color: colors.text, flex: 1 }}>{children}</span>;
+  return <span style={{ fontSize: 13, fontWeight: 500, color: colors.text, flex: 1 }}>{children}</span>;
 }
 function Mono({ colors, children }: { colors: C; children: React.ReactNode }) {
-  return <span style={{ fontSize: 11.5, color: colors.textMuted, fontFamily: "'Geist Mono', monospace" }}>{children}</span>;
+  return <span style={{ fontSize: 12, color: colors.textMuted, fontFamily: TYPOGRAPHY.fontMono }}>{children}</span>;
 }
 function SectionLabel({ colors, children }: { colors: C; children: React.ReactNode }) {
   return (
-    <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, color: colors.textDim, margin: '0 0 6px' }}>
+    <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: colors.textDim, margin: '0 0 6px' }}>
       {children}
     </div>
   );
 }
-function IconBtn({ colors, busy, onClick, title, children }: { colors: C; busy?: boolean; onClick: () => void; title: string; children: React.ReactNode }) {
+function IconBtn({ busy, onClick, title, children }: { colors?: C; busy?: boolean; onClick: () => void; title: string; children: React.ReactNode }) {
   return (
-    <button
-      type="button" onClick={onClick} title={title} disabled={busy}
-      style={{ display: 'flex', alignItems: 'center', padding: 5, borderRadius: 5, background: 'transparent', border: `1px solid ${colors.border}`, color: colors.textMuted, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.5 : 1 }}
-    >
+    <IconButton size="sm" variant="secondary" aria-label={title} tooltip={{ label: title }} onClick={onClick} disabled={busy}>
       {children}
-    </button>
+    </IconButton>
   );
 }
-function PrimaryBtn({ colors, busy, onClick, children }: { colors: C; busy?: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      type="button" onClick={onClick} disabled={busy}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 13px', borderRadius: 6, background: colors.accent, color: '#0a0f1a', border: 'none', fontSize: 12, fontWeight: 600, fontFamily: "'Geist Sans', sans-serif", cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.7 : 1 }}
-    >
-      {busy ? <Loader2 size={13} style={{ animation: 'nuclei-spin 800ms linear infinite' }} /> : null}
-      {children}
-    </button>
-  );
+function PrimaryBtn({ busy, onClick, children }: { colors?: C; busy?: boolean; onClick: () => void; children: React.ReactNode }) {
+  return <Button variant="primary" onClick={onClick} loading={busy} keepFocus>{children}</Button>;
 }
-function GhostBtn({ colors, busy, danger, disabled, onClick, title, children }: { colors: C; busy?: boolean; danger?: boolean; disabled?: boolean; onClick: () => void; title?: string; children: React.ReactNode }) {
-  const off = disabled || busy;
-  const color = danger ? colors.error : colors.textMuted;
+function GhostBtn({ busy, danger, disabled, onClick, title, children }: { colors?: C; busy?: boolean; danger?: boolean; disabled?: boolean; onClick: () => void; title?: string; children: React.ReactNode }) {
   return (
-    <button
-      type="button" onClick={onClick} title={title} disabled={off}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 6, background: 'transparent', border: `1px solid ${colors.border}`, color, fontSize: 11.5, fontWeight: 500, fontFamily: "'Geist Sans', sans-serif", cursor: off ? 'default' : 'pointer', opacity: off ? 0.45 : 1, flexShrink: 0 }}
-    >
-      {busy ? <Loader2 size={12} style={{ animation: 'nuclei-spin 800ms linear infinite' }} /> : children}
-    </button>
+    <Button size="sm" variant={danger ? 'danger' : 'secondary'} onClick={onClick} title={title} disabled={disabled} loading={busy} keepFocus>
+      {children}
+    </Button>
   );
 }

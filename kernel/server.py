@@ -362,16 +362,21 @@ async def handle_message(websocket):
                 executor.parse, code, language=language
             )
 
+            # Parse re-runs the user's program on every pause in typing, so its
+            # output is tagged `phase: "parse"`: clients keep it out of the
+            # Terminal (only `execute` output is a user-requested run).
             if stdout:
                 await websocket.send(json.dumps({
                     "type": "output",
                     "text": stdout,
+                    "phase": "parse",
                 }))
 
             if stderr:
                 await websocket.send(json.dumps({
                     "type": "stderr",
                     "text": stderr,
+                    "phase": "parse",
                 }))
 
             await websocket.send(json.dumps({
@@ -717,6 +722,11 @@ async def handle_message(websocket):
                     "circuits": circuits,
                 }))
 
+        elif msg_type == "qec_explain":
+            from kernel.qec.explain_handler import handle_qec_explain
+
+            await handle_qec_explain(websocket, msg)
+
         elif msg_type == "qec_estimate":
             # Protocol v1.2 (PRD 10 Phase F): Azure Quantum Resource Estimator
             # over Q# source or OpenQASM 3. Off-thread (estimation can take
@@ -887,7 +897,8 @@ async def handle_message(websocket):
         elif msg_type == "hardware_list_backends":
             provider = msg.get("provider", None)
             try:
-                backends = hardware_manager.list_backends(provider)
+                # Listing hits each provider's network API; keep it off the event loop.
+                backends = await asyncio.to_thread(hardware_manager.list_backends, provider)
                 await websocket.send(json.dumps({
                     "type": "hardware_backends",
                     "backends": [b.to_dict() for b in backends],

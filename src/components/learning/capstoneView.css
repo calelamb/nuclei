@@ -1,0 +1,33 @@
+/* Capstone project page: lesson typography, one continuous step rail. */
+.capv { display: flex; flex-direction: column; max-width: 760px; margin-inline: auto; font-family: var(--font-sans); }
+.capv__head { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); padding-bottom: var(--space-5); border-bottom: 1px solid var(--color-border-strong); }
+.capv__title { margin: var(--space-2) 0 0; font-size: var(--font-size-title); font-weight: var(--font-weight-bold); line-height: var(--line-height-title); color: var(--color-text-primary); }
+.capv__title:focus { outline: none; } /* programmatic landing target, not a control */
+.capv__desc { margin: 0; font-size: var(--font-size-body); line-height: 1.6; color: var(--color-text-secondary); }
+.capv__progress { margin: 0; font-size: var(--font-size-chrome-label); font-variant-numeric: tabular-nums; color: var(--color-text-secondary); }
+
+.capv__steps { position: relative; margin: 0; padding: var(--space-5) 0 0; list-style: none; }
+/* The rail: a connector from each number to the next, so it ends at the last node. */
+.capv__step:not(:last-child)::before { content: ''; position: absolute; left: 11px; top: 12px; bottom: -12px; width: 2px; background: var(--color-border-strong); }
+.capv__step { position: relative; display: flex; align-items: flex-start; gap: var(--space-3); padding-bottom: var(--space-5); }
+.capv__step:last-child { padding-bottom: 0; }
+.capv__num { position: relative; z-index: 1; display: grid; place-items: center; width: 24px; height: 24px; flex-shrink: 0; border-radius: 50%; background: var(--color-surface-overlay); color: var(--color-text-secondary); font-size: var(--font-size-chrome-label); font-weight: var(--font-weight-bold); box-shadow: 0 0 0 4px var(--color-surface-base); }
+.capv__step[data-state='done'] .capv__num { background: var(--color-success-text); color: var(--color-on-accent-strong); }
+.capv__step[data-state='current'] .capv__num { background: var(--color-accent-quantum-text); color: var(--color-on-accent-strong); }
+.capv__step-body { flex: 1; min-width: 0; }
+.capv__step-title { display: flex; align-items: center; gap: var(--space-2); min-height: 24px; padding: 0; border: 0; background: none; cursor: pointer; font: var(--font-weight-semibold) var(--font-size-body) var(--font-sans); text-align: left; color: var(--color-text-primary); }
+.capv__step-title:hover { color: var(--color-accent-quantum-text); }
+.capv__step[data-state='future'] .capv__step-title { color: var(--color-text-secondary); }
+.capv__done-tag { font-size: var(--font-size-chrome-label); font-weight: var(--font-weight-medium); color: var(--color-success-text); }
+.capv__step-content { margin-top: var(--space-2); }
+.capv__step-desc { margin: 0 0 var(--space-3); font-size: var(--font-size-body); line-height: 1.6; color: var(--color-text-secondary); }
+.capv__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-3); }
+.capv__loaded { display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-size-chrome-label); color: var(--color-text-secondary); }
+.capv__loaded:not(:empty) { margin-bottom: var(--space-3); }
+.capv__hint { display: flex; align-items: flex-start; gap: var(--space-2); margin-bottom: var(--space-2); padding: var(--space-2) var(--space-3); border-radius: var(--radius-soft); background: color-mix(in srgb, var(--color-warning) 8%, transparent); font-size: var(--font-size-code); line-height: 1.5; color: var(--color-text-secondary); }
+.capv__hint svg { flex-shrink: 0; margin-top: 3px; color: var(--color-warning-text); }
+.capv__hint-btn { margin-left: calc(var(--space-2) * -1); }
+
+/* Mounted inside the learning-path panel (overflow hidden): scroll and pad like a page. */
+.lpath__panel .capv { overflow-y: auto; padding: var(--space-3); }
+.capv__back { margin-inline-start: calc(var(--space-2) * -1); }

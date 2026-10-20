@@ -1,0 +1,5 @@
+/* The bottom panel's tab strip sits inside its own bordered header, so the strip drops its own rule. */
+.nuclei-tabs.bottom-panel-tabs { border-bottom: none; overflow: visible; }
+
+/* The terminal filter is the shared small input; it only needs a width and a gap from the toolbar buttons. */
+.nuclei-input.terminal-filter { width: 140px; margin-left: var(--space-1); }

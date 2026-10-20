@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, cleanup, fireEvent } from '@testing-library/react';
-import { RunsTable } from './RunsTable';
+import { render, cleanup, fireEvent, act } from '@testing-library/react';
+import { RunsTable, RUN_COLUMN_WIDTH } from './RunsTable';
+import { formatRunLabel } from './runsTableColumns';
 import { useExperimentStore } from '../../services/experimentStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useExperimentUiStore } from '../../stores/experimentUiStore';
 import { useExperimentRunStore } from '../../stores/experimentRunStore';
+import { useEditorStore } from '../../stores/editorStore';
 import type { ExperimentSpec, RunManifest, RunRecord } from '../../types/experiment';
 
 const SPEC: ExperimentSpec = {
@@ -66,19 +68,17 @@ function installFixtureStore() {
   });
 }
 
-const RUN_DIR_RE = /^\d{8}-\d{6}-[a-z0-9]{4}/;
 
 /** Rows are absolutely positioned by `top`, ordered as rendered — this reads
  * the "Run" (dir) column back off the DOM in the order the component chose.
  * (The column-header bar also has `role="row"`, so filter to rows whose text
  * actually starts with a run-dir slug.) */
 function bodyRows(container: HTMLElement): HTMLElement[] {
-  return Array.from(container.querySelectorAll<HTMLElement>('[role="row"]'))
-    .filter((row) => RUN_DIR_RE.test(row.textContent ?? ''));
+  return Array.from(container.querySelectorAll<HTMLElement>('[data-run-dir]'));
 }
 
 function visibleRunDirs(container: HTMLElement): string[] {
-  return bodyRows(container).map((row) => row.textContent!.match(RUN_DIR_RE)![0]);
+  return bodyRows(container).map((row) => row.dataset.runDir!);
 }
 
 describe('RunsTable', () => {
@@ -86,7 +86,7 @@ describe('RunsTable', () => {
     useProjectStore.setState({ projectRoot: '/proj', tabs: [], activeTabPath: null });
     useExperimentUiStore.setState({
       selectedExperimentFileName: FILE_NAME, selectedRunDir: null,
-      compareSelection: [], compareOpen: false,
+      compareSelection: [], compareOpen: false, runsViewByExperiment: {},
     });
     useExperimentRunStore.setState({ active: null, lastSummary: null, lastError: null });
     installFixtureStore();
@@ -118,9 +118,9 @@ describe('RunsTable', () => {
 
   it('sorts descending by a metric column (energy) after a second click', () => {
     const { container, getByText } = render(<RunsTable />);
-    fireEvent.click(getByText('energy'));
+    fireEvent.click(getByText('Energy'));
     expect(visibleRunDirs(container)[0]).toBe('20260712-000003-cccc'); // -2.0 asc first
-    fireEvent.click(getByText('energy'));
+    fireEvent.click(getByText('Energy'));
     expect(visibleRunDirs(container)[0]).toBe('20260712-000002-bbbb'); // -0.5 desc first
   });
 
@@ -140,6 +140,12 @@ describe('RunsTable', () => {
     useExperimentUiStore.setState({ selectedExperimentFileName: null, selectedRunDir: null });
     const { getByText } = render(<RunsTable />);
     expect(getByText(/select an experiment/i)).toBeTruthy();
+  });
+
+  it('draws the compare checkbox with the shared Checkbox, not the OS control (rq-r3-12)', () => {
+    const { container } = render(<RunsTable />);
+    const checkbox = container.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    expect(checkbox.closest('label')?.className).toContain('nuclei-checkbox');
   });
 
   it('checking a row does not also select it for detail (checkbox click is isolated from row click)', () => {
@@ -170,5 +176,214 @@ describe('RunsTable', () => {
     const { getByText, queryByLabelText } = render(<RunsTable />);
     fireEvent.click(getByText('Sweep plot'));
     expect(queryByLabelText('X parameter')).toBeTruthy();
+  });
+
+  it('keeps column headers inside the horizontally scrolling body so they stay aligned (research-03)', () => {
+    const { container } = render(<RunsTable />);
+    const scroller = container.querySelector('[role="rowgroup"]') as HTMLElement;
+    const header = container.querySelector('[data-testid="runs-header"]') as HTMLElement;
+    expect(scroller.contains(header)).toBe(true);
+    expect(header.style.position).toBe('sticky');
+  });
+
+  it('renders every visible row after runs arrive post-mount (research-04)', () => {
+    const clientHeight = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(900);
+    useExperimentStore.setState({ runsByExperiment: { [FILE_NAME]: [] } });
+    const { container } = render(<RunsTable />);
+    const many = Array.from({ length: 80 }, (_, i) =>
+      record(`20260712-${String(i).padStart(6, '0')}-aaaa`, { params: { theta: i } }));
+    act(() => { useExperimentStore.setState({ runsByExperiment: { [FILE_NAME]: many } }); });
+    // 900px / 30px rows = 30 visible (+ overscan below)
+    expect(bodyRows(container).length).toBeGreaterThanOrEqual(30);
+    clientHeight.mockRestore();
+  });
+
+  it('keeps sort and filter after unmounting for run detail and coming back (research-12)', () => {
+    const first = render(<RunsTable />);
+    fireEvent.click(first.getByText('Energy'));
+    fireEvent.change(first.getByLabelText('Filter by status'), { target: { value: 'complete' } });
+    first.unmount();
+    const { container, getByLabelText } = render(<RunsTable />);
+    expect((getByLabelText('Filter by status') as HTMLSelectElement).value).toBe('complete');
+    expect(visibleRunDirs(container)).toEqual(['20260712-000003-cccc', '20260712-000001-aaaa']);
+  });
+
+  it('shows a failed-start error under the header (research-02)', () => {
+    useExperimentRunStore.setState({ lastError: 'Failed to connect to kernel' });
+    const { getByRole } = render(<RunsTable />);
+    expect(getByRole('status').textContent).toContain("The kernel isn't connected");
+  });
+
+  it('points the kernel error at the status bar, never a toolbar this view does not have, and offers Retry (LR-19)', () => {
+    useEditorStore.setState({ kernelStatus: 'failed' });
+    useExperimentRunStore.setState({ lastError: 'Failed to connect to kernel' });
+    const { getByRole } = render(<RunsTable />);
+    expect(getByRole('status').textContent).toContain('status bar');
+    expect(getByRole('status').textContent).not.toContain('toolbar');
+    expect(getByRole('button', { name: 'Retry' })).toBeTruthy();
+  });
+
+  it('calls a still-booting kernel starting, not a failed run (research-r-07)', () => {
+    useEditorStore.setState({ kernelStatus: 'connecting' });
+    useExperimentRunStore.setState({ lastError: 'Failed to connect to kernel' });
+    const { getByRole, queryByRole } = render(<RunsTable />);
+    expect(getByRole('status').textContent).toContain('still starting');
+    expect(getByRole('status').textContent).not.toContain('Run failed');
+    expect(queryByRole('button', { name: 'Retry' })).toBeNull();
+  });
+
+  it('shows how many of the runs a filter keeps (research-r-11)', () => {
+    const { getByLabelText, getByText } = render(<RunsTable />);
+    expect(getByText('3 runs')).toBeTruthy();
+    fireEvent.change(getByLabelText('Filter by status'), { target: { value: 'failed' } });
+    expect(getByText('1 of 3 runs')).toBeTruthy();
+  });
+
+  it('counts checked runs a filter hides and keeps Compare secondary (research-r-11)', () => {
+    const { container, getByLabelText, getByRole } = render(<RunsTable />);
+    const boxes = Array.from(container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
+    fireEvent.click(boxes[0]);
+    fireEvent.click(boxes[1]);
+    fireEvent.change(getByLabelText('Filter by status'), { target: { value: 'failed' } });
+    const compare = getByRole('button', { name: /Compare/ });
+    expect(compare.textContent).toContain('2, 1 hidden');
+    expect(compare.className).toContain('nuclei-btn--secondary');
+  });
+
+  it('lands Back from Compare on the first checked run (research-r-16)', () => {
+    const first = render(<RunsTable />);
+    const boxes = Array.from(first.container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
+    fireEvent.click(boxes[0]);
+    fireEvent.click(boxes[1]);
+    fireEvent.click(first.getByRole('button', { name: /Compare/ }));
+    first.unmount();
+    const { container } = render(<RunsTable />);
+    expect(document.activeElement).toBe(container.querySelector(`[data-run-dir="${useExperimentUiStore.getState().compareSelection[0]}"]`));
+  });
+
+  it('formats a numeric column with consistent decimals (research-18)', () => {
+    useExperimentStore.setState({
+      runsByExperiment: { [FILE_NAME]: [
+        record('20260712-000001-aaaa', { params: { theta: 6.2 } }),
+        record('20260712-000002-bbbb', { params: { theta: 6 } }),
+      ] },
+    });
+    const { container } = render(<RunsTable />);
+    const cells = Array.from(container.querySelectorAll('[data-run-dir]')).map((r) => r.querySelectorAll('[role="cell"]')[2].textContent);
+    expect(cells).toEqual(['6.2', '6.0']);
+  });
+
+  it('restores the saved scroll offset when returning to the table (research-12)', () => {
+    useExperimentUiStore.getState().patchRunsView(FILE_NAME, { scrollTop: 120 });
+    const { container } = render(<RunsTable />);
+    expect((container.querySelector('[role="rowgroup"]') as HTMLElement).scrollTop).toBe(120);
+  });
+  it('keeps scroll offsets separate per experiment (research-12 regression)', () => {
+    const other = 'other.experiment.yaml';
+    useExperimentStore.setState({
+      experiments: [
+        { fileName: FILE_NAME, path: `/proj/experiments/${FILE_NAME}`, spec: SPEC },
+        { fileName: other, path: `/proj/experiments/${other}`, spec: { ...SPEC, name: 'other' } },
+      ],
+      runsByExperiment: { [FILE_NAME]: RUNS, [other]: RUNS },
+    });
+    const { container } = render(<RunsTable />);
+    const scroller = () => container.querySelector('[role="rowgroup"]') as HTMLElement;
+    scroller().scrollTop = 500;
+    fireEvent.scroll(scroller());
+    act(() => { useExperimentUiStore.setState({ selectedExperimentFileName: other }); });
+    expect(scroller().scrollTop).toBe(0);
+    scroller().scrollTop = 1200;
+    fireEvent.scroll(scroller());
+    act(() => { useExperimentUiStore.setState({ selectedExperimentFileName: FILE_NAME }); });
+    expect(scroller().scrollTop).toBe(500);
+    act(() => { useExperimentUiStore.setState({ selectedExperimentFileName: other }); });
+    expect(scroller().scrollTop).toBe(1200);
+  });
+
+  describe('keyboard model (LR-10)', () => {
+    it('exposes aria-sort on every sortable column header', () => {
+      const { container, getByText } = render(<RunsTable />);
+      const headerFor = (label: string) => getByText(label).closest('[role="columnheader"]') as HTMLElement;
+      expect(headerFor('theta').getAttribute('aria-sort')).toBe('none');
+      fireEvent.click(getByText('theta'));
+      expect(headerFor('theta').getAttribute('aria-sort')).toBe('ascending');
+      fireEvent.click(getByText('theta'));
+      expect(headerFor('theta').getAttribute('aria-sort')).toBe('descending');
+      expect(container.querySelectorAll('[role="columnheader"][aria-sort="none"]').length).toBeGreaterThan(1);
+    });
+
+    it('makes exactly one row (and one checkbox) a tab stop', () => {
+      const { container } = render(<RunsTable />);
+      const stops = Array.from(container.querySelectorAll<HTMLElement>('[data-run-dir], [data-run-dir] input')).filter((el) => el.tabIndex === 0);
+      expect(stops).toHaveLength(2);
+      expect(bodyRows(container)[0].tabIndex).toBe(0);
+    });
+
+    it('moves the roving stop with the arrow keys and focuses the row', () => {
+      const { container } = render(<RunsTable />);
+      const rows = bodyRows(container);
+      rows[0].focus();
+      fireEvent.keyDown(rows[0], { key: 'ArrowDown' });
+      expect(document.activeElement).toBe(bodyRows(container)[1]);
+      expect(bodyRows(container)[1].tabIndex).toBe(0);
+      expect(bodyRows(container)[0].tabIndex).toBe(-1);
+      fireEvent.keyDown(bodyRows(container)[1], { key: 'End' });
+      expect(document.activeElement).toBe(bodyRows(container)[2]);
+      fireEvent.keyDown(bodyRows(container)[2], { key: 'Home' });
+      expect(document.activeElement).toBe(bodyRows(container)[0]);
+    });
+
+    it('opens a row with Enter and toggles comparison with Space', () => {
+      const { container } = render(<RunsTable />);
+      const row = bodyRows(container)[0];
+      row.focus();
+      fireEvent.keyDown(row, { key: ' ' });
+      expect(useExperimentUiStore.getState().compareSelection).toEqual(['20260712-000001-aaaa']);
+      fireEvent.keyDown(row, { key: 'Enter' });
+      expect(useExperimentUiStore.getState().selectedRunDir).toBe('20260712-000001-aaaa');
+    });
+
+    it('returns focus to the row that opened run detail (LR-10)', () => {
+      const first = render(<RunsTable />);
+      fireEvent.click(bodyRows(first.container)[1]);
+      first.unmount();
+      const { container } = render(<RunsTable />);
+      expect(document.activeElement).toBe(bodyRows(container)[1]);
+    });
+
+    it('shows how many points are ready when there are no runs yet', () => {
+      useExperimentStore.setState({ runsByExperiment: { [FILE_NAME]: [] } });
+      const { getByText } = render(<RunsTable />);
+      expect(getByText(/point(s)? ready/)).toBeTruthy();
+    });
+
+    it('offers exactly one Run sweep action at zero runs, with the swept axes and a disabled Sweep tab (research-r-14)', () => {
+      useExperimentStore.setState({ runsByExperiment: { [FILE_NAME]: [] } });
+      const { getAllByRole, getByText, getByRole } = render(<RunsTable />);
+      expect(getAllByRole('button', { name: /^Run( sweep)?$/ })).toHaveLength(1);
+      expect(getByText(/theta × 3/)).toBeTruthy();
+      expect((getByRole('tab', { name: 'Sweep plot' }) as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    it('hides Export CSV and Compare until a run exists', () => {
+      useExperimentStore.setState({ runsByExperiment: { [FILE_NAME]: [] } });
+      const { queryByRole } = render(<RunsTable />);
+      expect(queryByRole('button', { name: /Export CSV/ })).toBeNull();
+      expect(queryByRole('button', { name: /^Compare/ })).toBeNull();
+    });
+
+    it('keeps the swept parameter as a column before any run exists (research-r-14)', () => {
+      useExperimentStore.setState({ runsByExperiment: { [FILE_NAME]: [] } });
+      const { getByText } = render(<RunsTable />);
+      expect(getByText('theta')).toBeTruthy();
+    });
+  });
+});
+
+describe('run column width', () => {
+  it('leaves room for the longest run label at roughly 7.5px a character plus cell padding', () => {
+    const longest = formatRunLabel('2026-10-15_082150_a458');
+    expect(RUN_COLUMN_WIDTH).toBeGreaterThanOrEqual(longest.length * 7.5 + 16);
   });
 });

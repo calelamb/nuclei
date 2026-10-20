@@ -1,0 +1,423 @@
+/*
+ * UI primitives (Button, IconButton, Select, TextInput/TextArea, Switch).
+ * Everything resolves from tokens.css so both themes work; hover/active/focus
+ * are CSS states, never inline-style mutation. Everything sits in `@layer primitives`, so any
+ * unlayered component rule beats it regardless of specificity: a component that restyles colour or
+ * background on a primitive must also write its own :hover (and [aria-pressed]) rule.
+ */
+
+@layer primitives {
+
+.nuclei-spin { animation: nuclei-spin 900ms linear infinite; }
+
+/* ── Button ── */
+.nuclei-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-1);
+  flex: 0 0 auto; white-space: nowrap; cursor: pointer;
+  border: 1px solid transparent; border-radius: var(--radius-soft);
+  font-family: var(--font-sans); font-weight: var(--font-weight-medium); line-height: 1;
+  transition: background-color var(--duration-fast) var(--ease-standard),
+              border-color var(--duration-fast) var(--ease-standard),
+              color var(--duration-fast) var(--ease-standard),
+              box-shadow var(--duration-fast) var(--ease-standard);
+}
+.nuclei-btn.nuclei-btn--sm { height: var(--control-height-sm); padding: 0 var(--space-2); font-size: var(--font-size-caption); }
+.nuclei-btn.nuclei-btn--md { height: var(--control-height-md); padding: 0 var(--space-3); font-size: var(--font-size-chrome-label); }
+.nuclei-btn.nuclei-btn--lg { height: var(--control-height-lg); padding: 0 var(--space-4); font-size: var(--font-size-code); }
+
+.nuclei-btn.nuclei-btn--primary { background: var(--color-accent-quantum); border-color: var(--color-accent-quantum); color: var(--color-on-accent); }
+.nuclei-btn.nuclei-btn--primary:hover:not(:disabled) { background: var(--color-accent-quantum-soft); border-color: var(--color-accent-quantum-soft); }
+/* Light: the AA teal (5.36:1 with white) so the button reads as the same teal identity in both themes. */
+:root[data-theme='light'] .nuclei-btn.nuclei-btn--primary:not(:disabled) { color: var(--color-on-accent-strong); background: var(--color-accent-quantum-text); border-color: var(--color-accent-quantum-text); }
+:root[data-theme='light'] .nuclei-btn.nuclei-btn--primary:hover:not(:disabled) { background: color-mix(in srgb, var(--color-accent-quantum-text) 80%, #000); border-color: color-mix(in srgb, var(--color-accent-quantum-text) 80%, #000); }
+.nuclei-btn.nuclei-btn--primary:active:not(:disabled):not([aria-busy='true']) { filter: brightness(0.92); }
+.nuclei-btn.nuclei-btn--primary:disabled { background: var(--color-surface-overlay); border-color: var(--color-border-strong); color: var(--color-text-disabled); opacity: 1; }
+
+.nuclei-btn.nuclei-btn--secondary { background: var(--color-surface-raised); border-color: var(--color-border-strong); color: var(--color-text-primary); }
+.nuclei-btn.nuclei-btn--secondary:hover:not(:disabled) { background: var(--color-surface-overlay); }
+
+.nuclei-btn.nuclei-btn--ghost { background: transparent; color: var(--color-text-secondary); }
+.nuclei-btn.nuclei-btn--ghost:hover:not(:disabled) { background: var(--color-surface-overlay); color: var(--color-text-primary); }
+
+.nuclei-btn.nuclei-btn--danger { background: transparent; border-color: var(--color-danger); color: var(--color-danger); }
+.nuclei-btn.nuclei-btn--danger:hover:not(:disabled) { background: var(--color-danger-strong); border-color: var(--color-danger-strong); color: var(--color-on-danger); }
+
+.nuclei-btn:active:not(:disabled):not([aria-busy='true']) { transform: translateY(0.5px); }
+.nuclei-btn:disabled, .nuclei-icon-btn:disabled { cursor: not-allowed; opacity: 0.5; }
+.nuclei-btn[aria-busy='true'] { cursor: progress; opacity: 0.8; }
+
+/* ── IconButton ── */
+.nuclei-icon-btn {
+  display: inline-grid; place-items: center; flex: 0 0 auto; padding: 0; cursor: pointer;
+  border: 1px solid transparent; border-radius: var(--radius-soft);
+  background: transparent; color: var(--color-text-secondary);
+  transition: background-color var(--duration-fast) var(--ease-standard),
+              color var(--duration-fast) var(--ease-standard),
+              border-color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-icon-btn.nuclei-icon-btn--sm { width: var(--control-height-sm); height: var(--control-height-sm); }
+.nuclei-icon-btn.nuclei-icon-btn--md { width: var(--control-height-md); height: var(--control-height-md); }
+.nuclei-icon-btn.nuclei-icon-btn--secondary { background: var(--color-surface-raised); border-color: var(--color-border-strong); }
+.nuclei-icon-btn:hover:not(:disabled) { background: var(--color-surface-overlay); color: var(--color-text-primary); }
+
+/* ── Menu-select trigger: a Select look for a button that opens a Menu (rich rows a native <select> cannot show) ── */
+.nuclei-select-trigger {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); width: 100%; min-width: 0;
+  height: var(--control-height-md); padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-control); border-radius: var(--radius-soft);
+  background: var(--color-surface-raised); color: var(--color-text-primary);
+  font-family: var(--font-sans); font-size: var(--font-size-chrome-label); text-align: left; cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-select-trigger:hover:not(:disabled) { border-color: var(--color-text-tertiary); }
+.nuclei-select-trigger[aria-expanded='true'] { border-color: var(--color-accent-quantum); }
+.nuclei-select-trigger[data-placeholder='true'] { color: var(--color-text-tertiary); }
+.nuclei-select-trigger__value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nuclei-select-trigger__chevron { flex: 0 0 auto; color: var(--color-text-tertiary); }
+
+/* ── Select ── */
+.nuclei-select { position: relative; display: inline-flex; align-items: center; min-width: 0; }
+.nuclei-select > select {
+  appearance: none; -webkit-appearance: none; width: 100%; min-width: 0;
+  padding: 0 calc(var(--space-2) + var(--icon-sm) + var(--space-1)) 0 var(--space-2);
+  border: 1px solid var(--color-border-control); border-radius: var(--radius-soft);
+  background: var(--color-surface-raised); color: var(--color-text-primary);
+  font-family: var(--font-sans); font-size: var(--font-size-chrome-label); cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-select.nuclei-select--sm > select { height: var(--control-height-sm); }
+.nuclei-select.nuclei-select--md > select { height: var(--control-height-md); }
+.nuclei-select.nuclei-select--lg > select { height: var(--control-height-lg); }
+.nuclei-select > select:hover:not(:disabled) { border-color: var(--color-text-tertiary); }
+.nuclei-select > select:disabled { cursor: not-allowed; opacity: 0.5; }
+.nuclei-select > select[aria-invalid='true'] { border-color: var(--color-danger); }
+.nuclei-select__chevron { position: absolute; right: var(--space-2); pointer-events: none; color: var(--color-text-tertiary); }
+
+/* ── TextInput / TextArea ── */
+.nuclei-input, .nuclei-textarea {
+  width: 100%; min-width: 0; padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-control); border-radius: var(--radius-soft);
+  background: var(--color-surface-base); color: var(--color-text-primary);
+  font-family: var(--font-sans); font-size: var(--font-size-chrome-label);
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-input.nuclei-input--sm { height: var(--control-height-sm); }
+.nuclei-input.nuclei-input--md { height: var(--control-height-md); }
+.nuclei-input.nuclei-input--lg { height: var(--control-height-lg); }
+.nuclei-textarea { padding: var(--space-2); line-height: var(--line-height-code); resize: vertical; }
+.nuclei-input.nuclei-input--mono, .nuclei-textarea.nuclei-input--mono { font-family: var(--font-mono); }
+.nuclei-input::placeholder, .nuclei-textarea::placeholder { color: var(--color-text-tertiary); }
+.nuclei-input:hover:not(:disabled), .nuclei-textarea:hover:not(:disabled) { border-color: var(--color-text-tertiary); }
+.nuclei-input:focus-visible, .nuclei-textarea:focus-visible { border-color: var(--focus-ring-color); outline-offset: 0; }
+.nuclei-input:disabled, .nuclei-textarea:disabled { cursor: not-allowed; opacity: 0.5; }
+.nuclei-input[aria-invalid='true'], .nuclei-textarea[aria-invalid='true'] { border-color: var(--color-danger); }
+
+/* Adornments: the input keeps its border and focus ring; the icon/control float inside its edges. */
+.nuclei-input-wrap { position: relative; display: flex; align-items: center; width: 100%; min-width: 0; }
+.nuclei-input-wrap__lead, .nuclei-input-wrap__trail { position: absolute; top: 0; bottom: 0; display: inline-flex; align-items: center; }
+.nuclei-input-wrap__lead { left: var(--space-2); color: var(--color-text-tertiary); pointer-events: none; }
+.nuclei-input-wrap__trail { right: var(--space-1); }
+.nuclei-input-wrap:focus-within > .nuclei-input-wrap__lead { color: var(--color-text-secondary); }
+.nuclei-input.nuclei-input--lead { padding-left: calc(var(--space-2) + var(--icon-sm) + var(--space-2)); }
+.nuclei-input.nuclei-input--trail { padding-right: calc(var(--space-1) + var(--control-height-sm) + var(--space-1)); }
+
+/* ── Switch ── */
+.nuclei-switch {
+  position: relative; flex: 0 0 auto; width: 32px; height: 18px; padding: 0; cursor: pointer;
+  border: 1px solid var(--color-border-control); border-radius: var(--radius-pill);
+  background: var(--color-surface-overlay);
+  transition: background-color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-switch__thumb {
+  position: absolute; top: 1px; left: 1px; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--color-text-secondary);
+  transition: transform var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-switch[aria-checked='true'] { background: var(--color-accent-quantum); border-color: var(--color-accent-quantum); }
+.nuclei-switch[aria-checked='true'] .nuclei-switch__thumb { transform: translateX(14px); background: #fff; }
+.nuclei-switch:disabled { cursor: not-allowed; opacity: 0.5; }
+
+/* ── ChoiceCard ── */
+.nuclei-choice-card {
+  display: flex; flex-direction: column; align-items: flex-start; width: 100%; padding: var(--space-4) var(--space-5);
+  cursor: pointer; text-align: left; font-family: var(--font-sans);
+  border: 1px solid var(--color-border-subtle); border-radius: var(--radius-round);
+  /* The accent stripe is an inset shadow so it follows the rounded corners instead of a square border edge. */
+  box-shadow: inset 3px 0 0 var(--choice-stripe, var(--choice-accent));
+  background: var(--color-surface-sunken);
+  transition: background-color var(--duration-normal) var(--ease-standard),
+              border-color var(--duration-normal) var(--ease-standard);
+}
+.nuclei-choice-card:hover { background: var(--color-surface-raised); border-color: var(--choice-accent); }
+/* Keyboard focus is the one standard ring, offset so it reads as a separate shape from the hover border tint
+   (hover tints the border; focus never does). The resting accent stripe stays as it is. */
+.nuclei-choice-card:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color); outline-offset: var(--focus-ring-offset);
+  /* The ring is the signal now; a full-strength stripe beside it doubles the left edge. */
+  --choice-stripe: color-mix(in srgb, var(--choice-accent) 40%, transparent);
+}
+/* In the light theme the sunken surface reads as disabled; resting cards sit on the raised surface and lift to white. */
+:root[data-theme='light'] .nuclei-choice-card { background: var(--color-surface-raised); }
+:root[data-theme='light'] .nuclei-choice-card:hover { background: var(--color-surface-base); }
+.nuclei-choice-card__title { color: var(--color-text-primary); font-size: var(--font-size-heading); font-weight: var(--font-weight-semibold); }
+.nuclei-choice-card__desc { margin-top: var(--space-1); color: var(--color-text-secondary); font-size: var(--font-size-code); line-height: 1.5; }
+
+/* ── Field group: a bordered wrapper around a bare input + adornments. The wrapper shows the focus ring. ── */
+.nuclei-field-group:focus-within { border-color: var(--focus-ring-color) !important; }
+.nuclei-field-group > input:focus-visible { outline: none; }
+
+/* Borderless inputs embedded in a bar (palette, inline edit, search): swap the outline for an underline ring. */
+.nuclei-bare-input:focus-visible { outline: none; box-shadow: 0 2px 0 0 var(--focus-ring-color); }
+/* Inside a field group the wrapper's ring is the indicator; the underline would be a second one. */
+.nuclei-field-group > .nuclei-bare-input:focus-visible { box-shadow: none; }
+
+/* ── Quiet items (rail icons, tabs): CSS-driven hover, active state via data-active ── */
+.nuclei-quiet { color: var(--color-text-tertiary); }
+.nuclei-quiet:hover { color: var(--color-text-secondary); }
+.nuclei-quiet[data-active='true'] { color: var(--color-text-primary); }
+
+/* ── Menu items ── */
+.nuclei-menu-item { transition: background-color var(--duration-fast) var(--ease-standard); }
+.nuclei-menu-item:hover { background: var(--color-surface-overlay) !important; }
+.nuclei-menu-item.nuclei-menu-item--tint:hover { background: color-mix(in srgb, var(--item-accent, var(--color-accent-quantum)) 12%, transparent) !important; }
+
+/* ── Segmented control (radiogroup of 2-4 short options) ── */
+.nuclei-segmented { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--color-border-strong); border-radius: var(--radius-soft); background: var(--color-surface-sunken); }
+.nuclei-segmented__option {
+  display: inline-flex; align-items: center; gap: var(--space-1); height: calc(var(--control-height-sm) - 4px); padding: 0 var(--space-2);
+  border: none; border-radius: calc(var(--radius-soft) - 2px); background: transparent; cursor: pointer;
+  font-family: var(--font-sans); font-size: var(--font-size-caption); font-weight: var(--font-weight-medium); color: var(--color-text-secondary);
+  transition: background-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-segmented__option:hover { color: var(--color-text-primary); }
+.nuclei-segmented__option[aria-checked='true'] { background: var(--color-surface-raised); color: var(--color-text-primary); box-shadow: 0 0 0 1px var(--color-border-strong); }
+
+/* ── Checkbox: native input stays the control (focus, Space, forms); the box is drawn beside it ── */
+.nuclei-checkbox { position: relative; display: inline-flex; align-items: center; gap: var(--space-2); cursor: pointer; font-size: var(--font-size-chrome-label); color: var(--color-text-primary); }
+.nuclei-checkbox > input { position: absolute; width: 16px; height: 16px; margin: 0; opacity: 0; cursor: inherit; }
+.nuclei-checkbox__box {
+  display: inline-grid; place-items: center; flex: 0 0 auto; width: 16px; height: 16px;
+  border: 1px solid var(--color-border-control); border-radius: var(--radius-xs);
+  background: var(--color-surface-base); color: transparent;
+  transition: background-color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-checkbox:hover > input:not(:disabled) + .nuclei-checkbox__box { border-color: var(--color-text-secondary); }
+.nuclei-checkbox > input:checked + .nuclei-checkbox__box,
+.nuclei-checkbox > input:indeterminate + .nuclei-checkbox__box { background: var(--color-accent-quantum); border-color: var(--color-accent-quantum); color: var(--color-surface-sunken); }
+:root[data-theme='light'] .nuclei-checkbox > input:checked + .nuclei-checkbox__box,
+:root[data-theme='light'] .nuclei-checkbox > input:indeterminate + .nuclei-checkbox__box { color: var(--color-on-accent); }
+.nuclei-checkbox > input:focus-visible + .nuclei-checkbox__box { outline: var(--focus-ring-width, 2px) solid var(--focus-ring-color); outline-offset: 2px; }
+.nuclei-checkbox--disabled { cursor: not-allowed; opacity: 0.5; }
+
+/* ── Tabs ── */
+.nuclei-tabs { scroll-padding-inline: 28px; display: flex; align-items: stretch; gap: var(--space-1); border-bottom: 1px solid var(--color-border-subtle); overflow-x: auto; scrollbar-width: none; }
+.nuclei-tabs::-webkit-scrollbar { display: none; }
+.nuclei-tabs__tab {
+  position: relative; flex: 0 0 auto; height: var(--control-height-md); padding: 0 var(--space-2);
+  border: none; background: transparent; cursor: pointer; white-space: nowrap;
+  font-family: var(--font-sans); font-size: var(--font-size-chrome-label); font-weight: var(--font-weight-medium); color: var(--color-text-tertiary);
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-tabs__tab:hover:not(:disabled) { color: var(--color-text-secondary); }
+.nuclei-tabs__tab[aria-selected='true'] { color: var(--color-text-primary); }
+.nuclei-tabs__tab[aria-selected='true']::after { content: ''; position: absolute; left: var(--space-2); right: var(--space-2); bottom: -1px; height: 2px; border-radius: 1px; background: var(--color-accent-quantum); }
+.nuclei-tabs__tab { display: inline-flex; align-items: center; gap: var(--space-1); }
+.nuclei-tabs__icon { display: inline-flex; flex: 0 0 auto; }
+.nuclei-tabs__count { font-variant-numeric: tabular-nums; font-weight: var(--font-weight-regular); color: var(--color-text-tertiary); }
+.nuclei-tabs__tab:disabled { cursor: not-allowed; opacity: 0.5; }
+
+/* ── Badge ── */
+.nuclei-badge {
+  display: inline-flex; align-items: center; gap: var(--space-1); height: 18px; padding: 0 var(--space-2);
+  border: 1px solid var(--badge-color, var(--color-border-strong)); border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--badge-color, var(--color-text-tertiary)) 12%, transparent);
+  color: var(--badge-text, var(--color-text-secondary));
+  font-family: var(--font-sans); font-size: var(--font-size-caption); font-weight: var(--font-weight-medium); line-height: 1; white-space: nowrap;
+}
+.nuclei-badge--accent { --badge-color: var(--color-accent-quantum); --badge-text: var(--color-accent-quantum-strong); }
+.nuclei-badge--success { --badge-color: var(--color-success); --badge-text: var(--color-success-text); }
+.nuclei-badge--warning { --badge-color: var(--color-warning); --badge-text: var(--color-warning-text); }
+.nuclei-badge--danger { --badge-color: var(--color-danger); --badge-text: var(--color-danger-text); }
+.nuclei-badge--research { --badge-color: var(--color-mode-research); --badge-text: var(--color-mode-research); }
+.nuclei-badge--dirac { --badge-color: var(--color-accent-dirac); --badge-text: var(--color-accent-dirac-text); }
+
+/* Programmatic landing targets (a heading a keyboard route hands focus to, the viz column's landing): not controls,
+   so no ring. One rule for every landing attribute; a guard test keeps new attributes from slipping past it. */
+:is([data-landing], [data-nav-landing], [data-nav-landed], [data-viz-landing]):is(:focus, :focus-visible) { outline: none; }
+
+/* Open/expanded state for menu triggers */
+.nuclei-icon-btn[aria-expanded='true'] { background: var(--color-surface-overlay); color: var(--color-text-primary); }
+
+/* ── Hover utilities: replace onMouseEnter/Leave style mutation ── */
+.nuclei-hover-bg:hover:not(:disabled):not([data-active='true']) { background: var(--color-surface-overlay) !important; }
+.nuclei-hover-text:hover:not(:disabled) { color: var(--color-text-primary) !important; }
+
+/* Tree / list rows (explorer, open files): active row keeps its own tint */
+.nuclei-row { cursor: pointer; transition: background-color var(--duration-fast) var(--ease-standard); }
+.nuclei-row:hover:not([aria-selected='true']):not([data-active='true']) { background: var(--color-surface-overlay) !important; }
+
+/* Row actions that appear on hover or keyboard focus; a dirty dot yields its slot to the close button */
+.nuclei-row--reveal .nuclei-row__close { opacity: 0; }
+.nuclei-row--reveal:hover .nuclei-row__close, .nuclei-row--reveal:focus-within .nuclei-row__close, .nuclei-row--reveal .nuclei-row__close:focus-visible { opacity: 1; }
+.nuclei-row--reveal:hover .nuclei-row__dirty, .nuclei-row--reveal:focus-within .nuclei-row__dirty { display: none; }
+
+/* Status bar density: compact select and an exercise-end icon that warns on hover */
+.nuclei-statusbar-select > select { height: 20px; background: transparent; border-color: transparent; color: var(--color-text-secondary); font-size: var(--font-size-caption); }
+.nuclei-statusbar-select > select:hover:not(:disabled) { background: var(--color-surface-overlay); border-color: var(--color-border-strong); }
+.nuclei-icon-btn.nuclei-statusbar-end { width: 20px; height: 20px; }
+.nuclei-icon-btn.nuclei-statusbar-end:hover:not(:disabled) { color: var(--color-danger); }
+
+/* Dense toolbar button (terminal toolbar) and the bottom-panel tab */
+.nuclei-toolbtn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-1);
+  height: 18px; padding: 0 var(--space-2); border: none; border-radius: var(--radius-xs); cursor: pointer;
+  background: transparent; color: var(--color-text-tertiary);
+  font-family: var(--font-sans); font-size: var(--font-size-caption); font-weight: var(--font-weight-medium);
+  transition: color var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-toolbtn:hover { color: var(--color-text-primary); }
+.nuclei-toolbtn[data-active='true'] { background: color-mix(in srgb, var(--color-accent-quantum) 14%, transparent); color: var(--color-accent-quantum-text); }
+.nuclei-panel-tab {
+  height: 100%; padding: 0 var(--space-4); border: none; border-bottom: 1px solid transparent; background: transparent; cursor: pointer;
+  font-family: var(--font-sans); font-size: var(--font-size-caption); font-weight: var(--font-weight-medium); text-transform: uppercase; letter-spacing: 0.5px;
+  color: var(--color-text-tertiary); transition: color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-panel-tab:hover { color: var(--color-text-secondary); }
+.nuclei-panel-tab[aria-selected='true'] { color: var(--color-text-primary); border-bottom-color: var(--color-accent-quantum); }
+
+/* Dirac-accented Button (purple is for Dirac only) */
+.nuclei-btn.nuclei-btn--dirac { background: var(--color-accent-dirac); border-color: var(--color-accent-dirac); color: #fff; }
+.nuclei-btn.nuclei-btn--dirac:hover:not(:disabled) { filter: brightness(1.12); }
+.nuclei-tabs[data-overflow='end'] { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
+.nuclei-tabs[data-overflow='start'] { -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent); }
+.nuclei-tabs[data-overflow='both'] { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
+.nuclei-tabs__tab { display: inline-flex; align-items: center; gap: var(--space-1); }
+.nuclei-tabs.viz-zone-tabs { flex: 0 0 auto; background: var(--color-surface-base); padding: 0 var(--space-1); }
+
+/* Menu items: never react to hover while disabled */
+.nuclei-menu-item:disabled { cursor: not-allowed; }
+.nuclei-menu-item:disabled:hover { background: transparent !important; }
+.nuclei-btn[aria-expanded='true']:not(.nuclei-btn--primary) { background: var(--color-surface-overlay); }
+.nuclei-btn.nuclei-framework-btn { color: var(--color-accent-quantum-text); }
+.nuclei-icon-btn.nuclei-tab-close { width: 18px; height: 18px; border-radius: var(--radius-xs); }
+
+/* ── Hover utilities (replace onMouseEnter/Leave style mutation). !important beats the inline base styles these elements still carry. ── */
+[class*='nuclei-hover-'] { transition: color var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), transform var(--duration-fast) var(--ease-standard), opacity var(--duration-fast) var(--ease-standard); }
+.nuclei-hover-danger:hover:not(:disabled) { color: var(--color-danger) !important; border-color: color-mix(in srgb, var(--color-danger) 40%, transparent) !important; }
+.nuclei-hover-accent:hover:not(:disabled) { color: var(--color-accent-quantum-text) !important; border-color: var(--color-accent-quantum) !important; }
+.nuclei-hover-tint:hover:not(:disabled):not([aria-selected='true']) { background: color-mix(in srgb, var(--color-accent-quantum) 10%, transparent) !important; }
+.nuclei-hover-lift:hover:not(:disabled) { border-color: var(--color-accent-quantum) !important; transform: translateY(-1px); }
+.nuclei-hover-dim:hover:not(:disabled) { opacity: 0.85; }
+
+/* Status-tinted strip: --strip carries the status colour */
+.nuclei-strip-chip { background: color-mix(in srgb, var(--strip) 6%, transparent); transition: background-color var(--duration-fast) var(--ease-standard); }
+.nuclei-strip-chip:hover { background: color-mix(in srgb, var(--strip) 10%, transparent); }
+
+/* ── Chip: toggleable pill filter (aria-pressed) ── */
+.nuclei-chip {
+  display: inline-flex; align-items: center; gap: var(--space-1); height: 22px; padding: 0 var(--space-3);
+  border: 1px solid var(--color-border-strong); border-radius: var(--radius-pill); background: transparent; cursor: pointer;
+  color: var(--color-text-secondary); font-family: var(--font-sans); font-size: var(--font-size-caption); font-weight: var(--font-weight-medium);
+  transition: background-color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-chip:hover { border-color: var(--color-text-tertiary); color: var(--color-text-primary); }
+.nuclei-chip[aria-pressed='true'] { background: color-mix(in srgb, var(--color-accent-quantum) 14%, transparent); border-color: var(--color-accent-quantum); color: var(--color-accent-quantum-text); }
+.nuclei-segmented.nuclei-segmented--block { display: flex; }
+.nuclei-segmented--block .nuclei-segmented__option { flex: 1; justify-content: center; }
+.nuclei-hover-border:hover { border-color: var(--color-text-tertiary) !important; }
+.nuclei-focus-accent:focus-visible { border-color: var(--focus-ring-color) !important; outline: none; }
+
+/* ── Dialog ── */
+.nuclei-dialog-scrim {
+  position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: var(--color-scrim); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  animation: nuclei-fade-in var(--duration-fast) var(--ease-standard);
+}
+.nuclei-dialog-scrim.nuclei-dialog-scrim--top { align-items: flex-start; padding-top: min(15vh, 96px); }
+/* Offset + panel height + an 24px bottom gutter always fit the viewport (the old 15vh + 86vh overflowed by 1vh). */
+.nuclei-dialog-scrim--top .nuclei-dialog { max-height: calc(100vh - min(15vh, 96px) - 24px); }
+.nuclei-dialog {
+  display: flex; flex-direction: column; max-height: 86vh; padding: var(--space-5);
+  background: var(--color-surface-raised); border: 1px solid var(--color-border-strong); border-radius: var(--radius-round);
+  box-shadow: var(--shadow-lg); color: var(--color-text-primary); font-family: var(--font-sans);
+  animation: nuclei-slide-up var(--duration-normal) var(--ease-emphasized-out);
+}
+.nuclei-dialog:focus-visible { outline: none; }
+.nuclei-dialog__header { display: flex; align-items: center; gap: var(--space-2); }
+.nuclei-dialog__title { flex: 1 1 auto; min-width: 0; margin: 0; font-size: var(--font-size-heading); font-weight: var(--font-weight-semibold); line-height: var(--line-height-heading); color: var(--color-text-primary); }
+.nuclei-dialog__desc { margin: var(--space-1) 0 0; font-size: var(--font-size-chrome-label); line-height: var(--line-height-label); color: var(--color-text-secondary); }
+.nuclei-dialog__body { margin-top: var(--space-4); min-height: 0; overflow-y: auto; font-size: var(--font-size-chrome-label); color: var(--color-text-secondary); line-height: 1.5; }
+.nuclei-dialog__footer { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-5); }
+/* Flush: header and footer keep their padding; the body runs edge to edge. */
+.nuclei-dialog--flush { padding: 0; overflow: hidden; }
+.nuclei-dialog--flush > .nuclei-dialog__header { padding: var(--space-4) var(--space-5) var(--space-3); }
+.nuclei-dialog--flush > .nuclei-dialog__desc { margin-top: calc(-1 * var(--space-2)); padding: 0 var(--space-5) var(--space-3); }
+.nuclei-dialog--flush > .nuclei-dialog__body { margin-top: 0; padding: 0; border-top: 1px solid var(--color-border-subtle); }
+.nuclei-dialog--flush > .nuclei-dialog__footer { margin-top: 0; padding: var(--space-3) var(--space-5); border-top: 1px solid var(--color-border-subtle); }
+@media (prefers-reduced-motion: reduce) {
+  .nuclei-dialog-scrim, .nuclei-dialog { animation: none; }
+}
+
+/* ── Menu (ui/Menu) ── */
+.nuclei-menu {
+  position: fixed; z-index: 4800; display: flex; flex-direction: column; padding: var(--space-1) 0; overflow-y: auto;
+  background: var(--color-surface-raised); border: 1px solid var(--color-border-strong); border-radius: var(--radius-round);
+  box-shadow: var(--shadow-md); font-family: var(--font-sans);
+}
+.nuclei-menu__item {
+  display: flex; align-items: center; gap: var(--space-2); width: 100%; padding: 6px var(--space-3);
+  border: none; background: transparent; cursor: pointer; text-align: left;
+  color: var(--color-text-primary); font-family: var(--font-sans); font-size: var(--font-size-chrome-label); line-height: var(--line-height-label);
+}
+.nuclei-menu__item:focus, .nuclei-menu__item:hover:not(:disabled) { background: var(--color-surface-overlay) !important; }
+/* One highlight: the active row is a filled surface; the ring is a keyboard-only extra. */
+.nuclei-menu__item:focus-visible { outline: none; border-radius: var(--radius-xs); }
+.nuclei-menu[data-modality='keyboard'] .nuclei-menu__item:hover:not(:focus):not(:disabled) { background: transparent !important; } /* a parked pointer must not add a second highlight */
+.nuclei-menu[data-modality='keyboard'] .nuclei-menu__item:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring-color); outline-offset: -2px; }
+.nuclei-menu__item:disabled { color: var(--color-text-disabled); }
+.nuclei-menu__item--danger { color: var(--color-danger); }
+.nuclei-menu__slot { display: inline-grid; place-items: center; flex: 0 0 var(--icon-xs); width: var(--icon-xs); color: var(--color-accent-quantum-text); }
+.nuclei-menu__icon { display: inline-flex; flex: 0 0 auto; color: var(--color-text-tertiary); }
+.nuclei-menu__label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nuclei-menu__hint { flex: 0 0 auto; margin-left: var(--space-4); color: var(--color-text-tertiary); font-size: var(--font-size-caption); }
+.nuclei-menu__heading { padding: 6px var(--space-3) var(--space-1); color: var(--color-text-tertiary); font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); }
+.nuclei-menu__separator { height: 1px; margin: var(--space-1) 0; background: var(--color-border-strong); }
+.nuclei-menu__notice { padding: 6px var(--space-3); border-top: 1px solid var(--color-border-subtle); color: var(--color-text-secondary); font-size: var(--font-size-caption); }
+
+/* ── EmptyState ── */
+.nuclei-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-1); padding: var(--space-6) var(--space-4); text-align: center; font-family: var(--font-sans); }
+.nuclei-empty__icon { display: inline-flex; margin-bottom: var(--space-1); color: var(--color-text-tertiary); }
+.nuclei-empty__title { margin: 0; font-size: var(--font-size-code); font-weight: var(--font-weight-semibold); line-height: var(--line-height-label); color: var(--color-text-primary); }
+.nuclei-empty__body { margin: 0; max-width: 32ch; font-size: var(--font-size-chrome-label); font-weight: var(--font-weight-regular); line-height: 1.5; color: var(--color-text-secondary); text-wrap: balance; }
+.nuclei-empty__action { margin-top: var(--space-3); }
+
+/* Horizontal scroll strips (editor file tabs): fade the clipped edge so hidden tabs are discoverable. */
+.nuclei-fade-x[data-overflow='end'] { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
+.nuclei-fade-x[data-overflow='start'] { -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent); }
+.nuclei-fade-x[data-overflow='both'] { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
+.nuclei-file-tab:focus-visible { outline-offset: -2px; }
+
+/* Visually hidden but announced. Anchored at the origin so it can never extend the page's scroll area. */
+.nuclei-sr-only {
+  position: absolute; top: 0; left: 0; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+}
+
+/* ── Overline and pane header: the two shared header recipes ── */
+/* Small uppercase eyebrow: 11/600, one tracking value, tertiary text. */
+.nuclei-overline {
+  margin: 0; color: var(--color-text-tertiary); font-family: var(--font-sans);
+  font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.04em; line-height: var(--line-height-label); text-transform: uppercase;
+}
+/* Pane header: a 40px row with a bottom rule and a vertically centred title; actions sit on the right. */
+.nuclei-pane-header {
+  display: flex; align-items: center; gap: var(--space-2); flex: 0 0 auto; box-sizing: border-box; height: 40px; padding: 0 var(--space-3);
+  border-bottom: 1px solid var(--color-border-subtle); background: var(--color-surface-base);
+}
+.nuclei-pane-header__title { margin: 0; min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ErrorBoundary fallback: EmptyState centred in the failed panel; the message stays mono and wraps. */
+.nuclei-error-boundary { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; }
+.nuclei-error-boundary__message { font-family: var(--font-mono); font-size: var(--font-size-caption); word-break: break-word; }
+}

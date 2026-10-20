@@ -1,7 +1,8 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { useThemeStore } from '../../stores/themeStore';
-import { getHistogramData } from '../histogram/histogramData';
+import { formatProbabilityTick, getHistogramData, PROBABILITY_TICKS } from '../histogram/histogramData';
 import type { SimulationResult } from '../../types/quantum';
+import { TYPOGRAPHY } from '../../styles/tokens';
 
 /**
  * PRD 09 Phase D (D3) — histogram of a historical run's `measurements`.
@@ -15,13 +16,15 @@ import type { SimulationResult } from '../../types/quantum';
  * the pure probability-from-counts transform, wrapped in a small read-only
  * chart that matches the app's token-driven visual style.
  */
+const HISTOGRAM_HEIGHT = 220;
+
 export function RunHistogram({ measurements }: { measurements: Record<string, number> }) {
   const colors = useThemeStore((s) => s.colors);
   const shotCount = Object.values(measurements).reduce((a, b) => a + b, 0);
 
   if (shotCount === 0) {
     return (
-      <div style={{ padding: 16, color: colors.textDim, fontSize: 12, fontFamily: "'Geist Sans', sans-serif" }}>
+      <div style={{ padding: 16, color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>
         No measurements recorded for this run.
       </div>
     );
@@ -41,32 +44,34 @@ export function RunHistogram({ measurements }: { measurements: Record<string, nu
   const data = getHistogramData(asResult, 'sampled');
 
   return (
-    <div style={{ height: 220, display: 'flex', flexDirection: 'column' }}>
-      <ResponsiveContainer width="100%" height="100%">
+    <div style={{ height: HISTOGRAM_HEIGHT, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+      <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={HISTOGRAM_HEIGHT} initialDimension={{ width: 480, height: HISTOGRAM_HEIGHT }}>
         <BarChart data={data} margin={{ top: 5, right: 10, bottom: 5, left: 10 }}>
           <XAxis
             dataKey="state"
-            tick={{ fill: colors.text, fontSize: 11, fontFamily: "'Fira Code', monospace" }}
+            tick={{ fill: colors.text, fontSize: 11, fontFamily: TYPOGRAPHY.fontMono }}
             axisLine={{ stroke: colors.border }}
             tickLine={{ stroke: colors.border }}
           />
           <YAxis
             domain={[0, 1]}
-            tick={{ fill: colors.textDim, fontSize: 11, fontFamily: "'Fira Code', monospace" }}
+            tick={{ fill: colors.textDim, fontSize: 11, fontFamily: TYPOGRAPHY.fontMono }}
             axisLine={{ stroke: colors.border }}
             tickLine={{ stroke: colors.border }}
-            tickFormatter={(v: number) => v.toFixed(1)}
+            ticks={[...PROBABILITY_TICKS]}
+            tickFormatter={formatProbabilityTick}
           />
           <Tooltip
+            cursor={{ fill: colors.bgElevated }}
             contentStyle={{
-              background: colors.bgPanel,
-              border: `1px solid ${colors.border}`,
-              borderRadius: 6,
+              background: colors.bgElevated,
+              border: `1px solid ${colors.borderStrong}`,
+              borderRadius: 'var(--radius-soft)',
               fontSize: 12,
-              fontFamily: "'Fira Code', monospace",
+              fontFamily: TYPOGRAPHY.fontMono,
             }}
             labelStyle={{ color: colors.text }}
-            itemStyle={{ color: colors.accent }}
+            itemStyle={{ color: colors.accentText }}
             formatter={(value) => [typeof value === 'number' ? value.toFixed(4) : String(value ?? ''), 'Probability']}
           />
           <Bar dataKey="probability" radius={[4, 4, 0, 0]}>

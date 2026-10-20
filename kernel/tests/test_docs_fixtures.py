@@ -474,3 +474,26 @@ def test_example_client_default_url_follows_runtime_file(tmp_path, monkeypatch):
     auth.write_runtime_file(config, 9743, runtime_dir=tmp_path)
     monkeypatch.setenv("NUCLEI_RUNTIME_DIR", str(tmp_path))
     assert client.default_url() == "ws://localhost:9743"
+
+
+def test_example_client_token_follows_the_url_port_with_two_kernels(tmp_path, monkeypatch):
+    """Last-writer-wins on kernel.json must not hand kernel B's token to a client of kernel A."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "docs_example_client3", FIXTURES_DIR / "clients" / "example_client.py"
+    )
+    client = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(client)
+    token_b = "b" * 43
+    auth.write_runtime_file(
+        auth.build_config(token=CLIENT_TOKEN, insecure=False, dev=False), 9742, runtime_dir=tmp_path
+    )
+    auth.write_runtime_file(
+        auth.build_config(token=token_b, insecure=False, dev=False), 9743, runtime_dir=tmp_path
+    )
+    monkeypatch.delenv("NUCLEI_KERNEL_TOKEN", raising=False)
+    monkeypatch.setenv("NUCLEI_RUNTIME_DIR", str(tmp_path))
+    assert client.load_token("ws://localhost:9742") == CLIENT_TOKEN
+    assert client.load_token("ws://localhost:9743") == token_b
+    assert client.load_token() == token_b  # newest-kernel pointer

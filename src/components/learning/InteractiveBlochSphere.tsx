@@ -3,6 +3,11 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { useThemeStore } from '../../stores/themeStore';
 
+import { Crosshair, CheckCircle2 } from 'lucide-react';
+import { Button } from '../ui';
+import { formatStateEquation } from './blochEquation';
+import { DARK_COLORS, ICON_SIZE, ICON_STROKE, LIGHT_COLORS, TYPOGRAPHY } from '../../styles/tokens';
+import './lessonBlocks.css';
 const AXIS_LENGTH = 1.3;
 const LERP_FACTOR = 0.12;
 
@@ -51,16 +56,54 @@ const PRESET_STATES: Array<{ label: string; theta: number; phi: number }> = [
   { label: '|0\u27E9', theta: 0, phi: 0 },
   { label: '|1\u27E9', theta: Math.PI, phi: 0 },
   { label: '|+\u27E9', theta: Math.PI / 2, phi: 0 },
-  { label: '|-\u27E9', theta: Math.PI / 2, phi: Math.PI },
+  { label: '|\u2212\u27E9', theta: Math.PI / 2, phi: Math.PI },
   { label: '|+i\u27E9', theta: Math.PI / 2, phi: Math.PI / 2 },
-  { label: '|-i\u27E9', theta: Math.PI / 2, phi: 3 * Math.PI / 2 },
+  { label: '|\u2212i\u27E9', theta: Math.PI / 2, phi: 3 * Math.PI / 2 },
 ];
 
 const ALL_GATES = ['H', 'X', 'Y', 'Z', 'S', 'T'];
 
+// --- Pole and axis labels ---
+
+/** Basis-state labels at the ends of the three axes, in three.js coordinates (three.js Y is Bloch Z). */
+const LABEL_REACH = 1.4;
+const AXIS_LABELS: ReadonlyArray<{ text: string; at: [number, number, number]; pole: boolean }> = [
+  { text: '|0\u27E9', at: [0, LABEL_REACH, 0], pole: true },
+  { text: '|1\u27E9', at: [0, -LABEL_REACH, 0], pole: true },
+  { text: '|+\u27E9', at: [LABEL_REACH, 0, 0], pole: false },
+  { text: '|\u2212\u27E9', at: [-LABEL_REACH, 0, 0], pole: false },
+  { text: '|+i\u27E9', at: [0, 0, LABEL_REACH], pole: false },
+  { text: '|\u2212i\u27E9', at: [0, 0, -LABEL_REACH], pole: false },
+];
+
+function makeLabelSprite(text: string, cssColor: string, haloColor: string): THREE.Sprite {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.fillStyle = cssColor;
+    ctx.font = `600 34px ${TYPOGRAPHY.fontSans}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    // A halo in the panel colour keeps labels legible where they cross the sphere.
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = haloColor;
+    ctx.strokeText(text, 64, 32);
+    ctx.fillText(text, 64, 32);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, sizeAttenuation: false }));
+  // Constant on-screen size: perspective must not make the near labels huge and the far ones tiny.
+  sprite.scale.set(0.2, 0.1, 1);
+  sprite.renderOrder = 10;
+  return sprite;
+}
+
 // --- Scene construction ---
 
-function createScene(bgColor: number, gridColor: number) {
+function createScene(bgColor: number, gridColor: number, labelColors: { pole: string; equator: string; halo: string }) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(bgColor);
 
@@ -128,6 +171,12 @@ function createScene(bgColor: number, gridColor: number) {
     scene.add(pos, neg);
   }
 
+  for (const { text, at, pole } of AXIS_LABELS) {
+    const sprite = makeLabelSprite(text, pole ? labelColors.pole : labelColors.equator, labelColors.halo);
+    sprite.position.set(...at);
+    scene.add(sprite);
+  }
+
   return { scene, sphereMesh };
 }
 
@@ -180,45 +229,6 @@ function pointArrowAt(arrow: THREE.Group, target: THREE.Vector3) {
   arrow.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), target.clone().normalize());
 }
 
-// --- State equation formatter ---
-
-function formatStateEquation(theta: number, phi: number): string {
-  const cosHalf = Math.cos(theta / 2);
-  const sinHalf = Math.sin(theta / 2);
-
-  const formatNum = (n: number): string => {
-    const abs = Math.abs(n);
-    if (abs < 1e-6) return '0';
-    if (Math.abs(abs - 1) < 1e-6) return n < 0 ? '-1' : '1';
-    if (Math.abs(abs - Math.SQRT1_2) < 1e-4) return n < 0 ? '-0.707' : '0.707';
-    return n.toFixed(3);
-  };
-
-  const alpha = formatNum(cosHalf);
-  const betaReal = Math.cos(phi) * sinHalf;
-  const betaImag = Math.sin(phi) * sinHalf;
-
-  let betaStr: string;
-  const rAbs = Math.abs(betaReal);
-  const iAbs = Math.abs(betaImag);
-
-  if (rAbs < 1e-6 && iAbs < 1e-6) {
-    betaStr = '0';
-  } else if (iAbs < 1e-6) {
-    betaStr = formatNum(betaReal);
-  } else if (rAbs < 1e-6) {
-    const iVal = formatNum(betaImag);
-    betaStr = iVal === '1' ? 'i' : iVal === '-1' ? '-i' : `${iVal}i`;
-  } else {
-    const rStr = formatNum(betaReal);
-    const iVal = formatNum(Math.abs(betaImag));
-    const iStr = iVal === '1' ? 'i' : `${iVal}i`;
-    betaStr = betaImag >= 0 ? `${rStr}+${iStr}` : `${rStr}-${iStr}`;
-  }
-
-  return `${alpha}|0\u27E9 + ${betaStr}|1\u27E9`;
-}
-
 // --- Component ---
 
 interface InteractiveBlochSphereProps {
@@ -239,7 +249,6 @@ export function InteractiveBlochSphere({
   challenge,
 }: InteractiveBlochSphereProps) {
   const colors = useThemeStore((s) => s.colors);
-  const shadow = useThemeStore((s) => s.shadow);
 
   const [theta, setTheta] = useState(initialTheta);
   const [phi, setPhi] = useState(initialPhi);
@@ -269,9 +278,11 @@ export function InteractiveBlochSphere({
     const w = container.clientWidth;
     const h = container.clientHeight;
 
-    const isDark = colors.bg === '#0F1B2D';
+    const isDark = useThemeStore.getState().mode === 'dark';
     const bgColor = isDark ? 0x0a1220 : 0xf1f5f9;
     const gridColor = isDark ? 0x1a2a42 : 0xc8d5e0;
+    const palette = isDark ? DARK_COLORS : LIGHT_COLORS;
+    const labelColors = { pole: palette.textPrimary, equator: palette.textSecondary, halo: `#${bgColor.toString(16).padStart(6, '0')}` };
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(w, h);
@@ -280,11 +291,11 @@ export function InteractiveBlochSphere({
     rendererRef.current = renderer;
 
     const camera = new THREE.PerspectiveCamera(40, w / h, 0.1, 100);
-    camera.position.set(2.2, 1.8, 2.2);
+    camera.position.set(2.8, 2.2, 2.8);
     camera.lookAt(0, 0, 0);
     cameraRef.current = camera;
 
-    const { scene, sphereMesh } = createScene(bgColor, gridColor);
+    const { scene, sphereMesh } = createScene(bgColor, gridColor, labelColors);
     sphereMeshRef.current = sphereMesh;
 
     // State arrow (teal)
@@ -427,168 +438,69 @@ export function InteractiveBlochSphere({
 
   const isMatched = challengeDistance !== null && challengeDistance < 0.08;
 
-  // --- Shared inline styles ---
-
-  const btnBase: React.CSSProperties = {
-    padding: '5px 12px',
-    border: `1px solid ${colors.border}`,
-    borderRadius: 6,
-    background: colors.bgElevated,
-    color: colors.text,
-    fontSize: 12,
-    fontFamily: "'JetBrains Mono', monospace",
-    cursor: 'pointer',
-    transition: 'background 150ms ease, border-color 150ms ease',
-  };
+  const matchedPreset = (preset: { theta: number; phi: number }) =>
+    Math.abs(theta - preset.theta) < 0.01 && Math.abs(phi - preset.phi) < 0.01;
+  const challengeColor = isMatched ? 'var(--color-success)' : 'var(--color-warning)';
 
   return (
-    <div
-      style={{
-        borderRadius: 12,
-        overflow: 'hidden',
-        border: `1px solid ${colors.border}`,
-        background: colors.bgPanel,
-        boxShadow: shadow.md,
-      }}
-      role="region"
-      aria-label="Interactive Bloch sphere"
-    >
-      {/* 3D canvas */}
+    <div className="bsphere" role="region" aria-label="Interactive Bloch sphere">
       <div
         ref={containerRef}
-        style={{ width: '100%', height: 340, cursor: isDraggingRef.current ? 'grabbing' : 'grab' }}
+        className="bsphere__canvas"
+        data-dragging={isDraggingRef.current}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
       />
 
-      {/* Controls area */}
-      <div style={{ padding: '12px 16px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-
-        {/* Challenge banner */}
+      <div className="bsphere__controls">
         {challenge && (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            padding: '8px 12px',
-            borderRadius: 8,
-            background: isMatched ? `${colors.success}18` : `${colors.warning}18`,
-            border: `1px solid ${isMatched ? colors.success : colors.warning}44`,
-          }}>
-            <span style={{ fontSize: 16 }}>{isMatched ? '\u2705' : '\uD83C\uDFAF'}</span>
+          <div className="bsphere__challenge" style={{ ['--challenge-color' as string]: challengeColor }}>
+            {isMatched
+              ? <CheckCircle2 size={ICON_SIZE.md} strokeWidth={ICON_STROKE} aria-hidden="true" />
+              : <Crosshair size={ICON_SIZE.md} strokeWidth={ICON_STROKE} aria-hidden="true" />}
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: isMatched ? colors.success : colors.warning, fontFamily: "'Geist Sans', sans-serif" }}>
-                {isMatched ? 'Matched!' : challenge.description}
-              </div>
+              <div className="bsphere__challenge-title">{isMatched ? 'Matched!' : challenge.description}</div>
               {!isMatched && challengeDistance !== null && (
-                <div style={{ fontSize: 11, color: colors.textDim, fontFamily: "'Geist Sans', sans-serif", marginTop: 2 }}>
-                  Distance: {challengeDistance.toFixed(3)}
-                </div>
+                <div className="bsphere__challenge-sub">Distance: {challengeDistance.toFixed(3)}</div>
               )}
             </div>
           </div>
         )}
 
-        {/* Preset buttons */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        <div className="bsphere__chips" role="group" aria-label="Preset states">
           {PRESET_STATES.map((preset) => (
-            <button
+            <Button
               key={preset.label}
+              size="sm"
+              aria-pressed={matchedPreset(preset)}
               onClick={() => { setTheta(preset.theta); setPhi(preset.phi); }}
-              style={{
-                ...btnBase,
-                background: Math.abs(theta - preset.theta) < 0.01 && Math.abs(phi - preset.phi) < 0.01
-                  ? `${colors.accent}22`
-                  : colors.bgElevated,
-                borderColor: Math.abs(theta - preset.theta) < 0.01 && Math.abs(phi - preset.phi) < 0.01
-                  ? colors.accent
-                  : colors.border,
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = colors.accent; }}
-              onMouseLeave={(e) => {
-                const active = Math.abs(theta - preset.theta) < 0.01 && Math.abs(phi - preset.phi) < 0.01;
-                e.currentTarget.style.borderColor = active ? colors.accent : colors.border;
-              }}
             >
               {preset.label}
-            </button>
+            </Button>
           ))}
         </div>
 
-        {/* Gate buttons */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        <div className="bsphere__chips" role="group" aria-label="Apply a gate">
           {availableGates.map((gate) => (
-            <button
-              key={gate}
-              onClick={() => applyGate(gate)}
-              style={{
-                ...btnBase,
-                fontWeight: 600,
-                color: colors.accent,
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = `${colors.accent}22`;
-                e.currentTarget.style.borderColor = colors.accent;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = colors.bgElevated;
-                e.currentTarget.style.borderColor = colors.border;
-              }}
-            >
-              {gate}
-            </button>
+            <Button key={gate} size="sm" className="bsphere__gate" onClick={() => applyGate(gate)}>{gate}</Button>
           ))}
         </div>
 
-        {/* Theta / Phi sliders */}
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 180 }}>
-            <span style={{ fontSize: 13, fontFamily: "'JetBrains Mono', monospace", color: colors.textMuted, minWidth: 78 }}>
-              {'\u03B8'} = {theta.toFixed(2)}
-            </span>
-            <input
-              type="range"
-              min={0}
-              max={Math.PI}
-              step={0.01}
-              value={theta}
-              onChange={(e) => setTheta(parseFloat(e.target.value))}
-              style={{ flex: 1, accentColor: colors.accent, cursor: 'pointer' }}
-              aria-label="Theta angle"
-            />
+        <div className="bsphere__sliders">
+          <label className="bsphere__slider">
+            <span className="bsphere__slider-label">{'\u03B8'} = {theta.toFixed(2)}</span>
+            <input type="range" min={0} max={Math.PI} step={0.01} value={theta} onChange={(e) => setTheta(parseFloat(e.target.value))} aria-label="Theta angle" />
           </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 180 }}>
-            <span style={{ fontSize: 13, fontFamily: "'JetBrains Mono', monospace", color: colors.textMuted, minWidth: 78 }}>
-              {'\u03C6'} = {phi.toFixed(2)}
-            </span>
-            <input
-              type="range"
-              min={0}
-              max={2 * Math.PI}
-              step={0.01}
-              value={phi}
-              onChange={(e) => setPhi(parseFloat(e.target.value))}
-              style={{ flex: 1, accentColor: colors.accent, cursor: 'pointer' }}
-              aria-label="Phi angle"
-            />
+          <label className="bsphere__slider">
+            <span className="bsphere__slider-label">{'\u03C6'} = {phi.toFixed(2)}</span>
+            <input type="range" min={0} max={2 * Math.PI} step={0.01} value={phi} onChange={(e) => setPhi(parseFloat(e.target.value))} aria-label="Phi angle" />
           </label>
         </div>
 
-        {/* State equation */}
-        <div style={{
-          padding: '8px 12px',
-          borderRadius: 8,
-          background: colors.bg,
-          border: `1px solid ${colors.border}`,
-          fontFamily: "'JetBrains Mono', monospace",
-          fontSize: 14,
-          color: colors.text,
-          textAlign: 'center',
-          letterSpacing: 0.3,
-        }}>
-          <span style={{ color: colors.textDim }}>|{'\u03C8'}{'\u27E9'} = </span>
+        <div className="bsphere__equation">
+          <span className="bsphere__equation-lead">|{'\u03C8'}{'\u27E9'} = </span>
           {formatStateEquation(theta, phi)}
         </div>
       </div>

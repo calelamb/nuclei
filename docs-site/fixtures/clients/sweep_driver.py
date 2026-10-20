@@ -7,7 +7,7 @@ theta -> P(1) table.
 
 Usage: python sweep_driver.py [ws://localhost:9742] [shots] [points]
 Requires: pip install websockets
-Auth: reads the token from $NUCLEI_KERNEL_TOKEN or ~/.nuclei/runtime/kernel.json
+Auth: reads the token from $NUCLEI_KERNEL_TOKEN or ~/.nuclei/runtime/kernel-<port>.json
 
 This file is replay-tested: kernel/tests/test_docs_fixtures.py runs it as a
 subprocess against a live kernel server (3 points, 64 shots) and asserts
@@ -21,6 +21,7 @@ import os
 import math
 import secrets
 import sys
+from urllib.parse import urlparse
 
 import websockets
 
@@ -35,7 +36,7 @@ qc.measure(0, 0)
 """
 
 
-def load_token() -> str:
+def load_token(url: str | None = None) -> str:
     """Token for this kernel launch: $NUCLEI_KERNEL_TOKEN, else the user-only
     runtime file the kernel writes at startup (like a Jupyter runtime file)."""
     token = os.environ.get("NUCLEI_KERNEL_TOKEN")
@@ -44,14 +45,24 @@ def load_token() -> str:
     runtime_dir = os.environ.get("NUCLEI_RUNTIME_DIR") or os.path.join(
         os.path.expanduser("~"), ".nuclei", "runtime"
     )
-    with open(os.path.join(runtime_dir, "kernel.json")) as handle:
-        return json.load(handle)["token"]
+    port = urlparse(url).port if url else None
+    # Several kernels can run at once: prefer this port's own file; kernel.json
+    # is the newest-kernel pointer and is only used when it names the same port.
+    for name in ([f"kernel-{port}.json"] if port else []) + ["kernel.json"]:
+        try:
+            with open(os.path.join(runtime_dir, name)) as handle:
+                info = json.load(handle)
+        except OSError:
+            continue
+        if not port or info.get("port") == port:
+            return info["token"]
+    raise RuntimeError(f"no token for port {port}: set NUCLEI_KERNEL_TOKEN or start a kernel")
 
 
-async def authenticate(ws) -> None:
+async def authenticate(ws, url: str | None = None) -> None:
     """First frame on every connection: present the token and a random nonce,
     then check the kernel's proof (HMAC-SHA256(token, nonce)) in the ack."""
-    token = load_token()
+    token = load_token(url)
     nonce = secrets.token_hex(32)
     await ws.send(json.dumps({"type": "authenticate", "token": token, "nonce": nonce}))
     reply = json.loads(await ws.recv())
@@ -108,7 +119,7 @@ async def run_point(ws, theta: float, shots: int) -> dict:
 async def main(url: str, shots: int, points: int) -> int:
     step = math.pi / (points - 1) if points > 1 else 0.0
     async with websockets.connect(url) as ws:
-        await authenticate(ws)
+        await authenticate(ws, url)
         print(f"sweep: RY(theta) on {PROVIDER}/{BACKEND}, {shots} shots/point")
         for i in range(points):
             theta = i * step

@@ -1,6 +1,5 @@
-import { useCallback, useMemo, useState } from 'react';
-import { Check, Loader, Play, SearchCode, X } from 'lucide-react';
-import { useThemeStore } from '../../stores/themeStore';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { ArrowRight, Check, Loader, Play, SearchCode, X } from 'lucide-react';
 import { useChallengeModeStore } from '../../stores/challengeModeStore';
 import {
   inspectChallengeCase,
@@ -15,6 +14,12 @@ import {
 import { TestCaseRow } from './TestCaseRow';
 import { ChallengeInspector } from './ChallengeInspector';
 import { PerformancePanel } from './PerformancePanel';
+import { UnsupportedNotice } from '../learning/UnsupportedNotice';
+import { LessonEngineFailed } from '../learning/LessonEngineFailed';
+import { useEditorStore } from '../../stores/editorStore';
+import { bootStepLabel } from '../layout/kernelStatusModel';
+import { retryKernel } from '../../lib/kernelControl';
+import { sharedCodeFailure } from './codeFailure';
 import type {
   CircuitMetrics,
   EfficiencyReport,
@@ -25,6 +30,8 @@ import type {
   TestCaseResult,
 } from '../../types/challenge';
 import type { CircuitSnapshot } from '../../types/quantum';
+import { Button, Select, Tabs } from '../ui';
+import './challenges.css';
 
 interface TestRunnerProps {
   challenge: QuantumChallenge;
@@ -35,13 +42,13 @@ function formatVerdict(verdict: SubmissionStatus) {
     case 'accepted':
       return 'Accepted';
     case 'wrong_answer':
-      return 'Wrong Answer';
+      return 'Wrong answer';
     case 'runtime_error':
-      return 'Runtime Error';
+      return 'Runtime error';
     case 'compile_error':
-      return 'Compile Error';
+      return 'Compile error';
     case 'time_limit_exceeded':
-      return 'Time Limit Exceeded';
+      return 'Time limit exceeded';
     case 'running':
       return 'Running';
     default:
@@ -58,11 +65,11 @@ function deriveSubmissionStatus(results: TestCaseResult[]): SubmissionStatus {
 }
 
 export function TestRunner({ challenge }: TestRunnerProps) {
-  const colors = useThemeStore((s) => s.colors);
-  const shadow = useThemeStore((s) => s.shadow);
   const platform = usePlatform();
   const activeFramework = useChallengeModeStore((s) => s.activeFramework);
   const progress = useChallengeModeStore((s) => s.progress);
+  const allChallenges = useChallengeModeStore((s) => s.challenges);
+  const setActiveProblem = useChallengeModeStore((s) => s.setActiveProblem);
   const isRunning = useChallengeModeStore((s) => s.isRunning);
   const currentTestResults = useChallengeModeStore((s) => s.currentTestResults);
   const runningTestIndex = useChallengeModeStore((s) => s.runningTestIndex);
@@ -76,9 +83,20 @@ export function TestRunner({ challenge }: TestRunnerProps) {
   const setInspection = useChallengeModeStore((s) => s.setInspection);
   const setInspectionView = useChallengeModeStore((s) => s.setInspectionView);
   const [activeBottomTab, setActiveBottomTab] = useState<'tests' | 'inspection'>('tests');
+  // The verdict pill is reserved for Submit; a visible-test run only reports pass counts.
+  const [lastRunWasSubmit, setLastRunWasSubmit] = useState(false);
   // Efficiency report from the most recent accepted submission — surfaced as a
   // LeetCode-style performance panel above the test rows.
   const [perfReport, setPerfReport] = useState<EfficiencyReport | null>(null);
+  // Set when the browser build can't run the student's program (outside the
+  // Qiskit browser subset): shown calmly, and the attempt is not recorded.
+  const [unsupportedMessage, setUnsupportedMessage] = useState<string | null>(null);
+  // Python never started (or the connection failed) when the last run began: nothing ran.
+  const [engineError, setEngineError] = useState<string | null>(null);
+  const kernelStatus = useEditorStore((st) => st.kernelStatus);
+  const kernelError = useEditorStore((st) => st.kernelError);
+  const kernelProgress = useEditorStore((st) => st.kernelProgress);
+  const isWeb = platform.getPlatform() === 'web';
   const [inspectionCaseId, setInspectionCaseId] = useState<string | null>(
     challenge.visible_tests?.[0]?.id ?? challenge.testCases.find((testCase) => !testCase.hidden)?.id ?? null,
   );
@@ -116,14 +134,25 @@ export function TestRunner({ challenge }: TestRunnerProps) {
     return Math.round((earned / denominator) * 100);
   }, [challenge.testCases, currentTestResults, hiddenTests, totalWeight, visibleWeight]);
 
+  const runButtonRef = useRef<HTMLButtonElement>(null);
+  const [inspecting, setInspecting] = useState(false);
+
   const handleRun = useCallback(async (submit: boolean) => {
     if (isRunning) return;
+    // A start that failed stays failed until Retry; pressing Run is that Retry, not a doomed attempt.
+    if (useEditorStore.getState().kernelStatus === 'failed') {
+      retryKernel();
+      return;
+    }
+    setEngineError(null);
 
     clearTestResults();
     setInspection(null);
     setPerfReport(null);
+    setUnsupportedMessage(null);
     setRunning(true);
     setActiveBottomTab('tests');
+    setLastRunWasSubmit(submit);
 
     const casesToRun = submit ? challenge.testCases : visibleTests;
     const capturedMetrics: CircuitMetrics[] = [];
@@ -141,8 +170,9 @@ export function TestRunner({ challenge }: TestRunnerProps) {
         addTestResult(result);
         setRunningTestIndex(index);
       },
-      () => {
-        // Per-test failures are surfaced inline.
+      (message: string) => {
+        // Per-test failures are surfaced inline; a platform limit gets its own notice.
+        if (message.startsWith('Not supported in the browser')) setUnsupportedMessage(message);
       },
       (snapshot: CircuitSnapshot | null, result) => {
         if (snapshot) {
@@ -156,7 +186,18 @@ export function TestRunner({ challenge }: TestRunnerProps) {
     setRunning(false);
     setRunningTestIndex(-1);
 
+    // Python never started: nothing ran, so there is nothing to show, score or record.
+    const unavailable = results.find((result) => result.engineUnavailable);
+    if (unavailable) {
+      clearTestResults();
+      setEngineError(unavailable.message);
+      return;
+    }
+
     if (!submit) return;
+
+    // A platform limit is not the student's mistake: don't record a failed attempt.
+    if (results.some((result) => result.unsupported)) return;
 
     const status = deriveSubmissionStatus(results);
     const earnedWeight = results.reduce((sum, result) => {
@@ -221,6 +262,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
     if (!selectedTestCase) return;
 
     setRunning(true);
+    setInspecting(true);
     setRunningTestIndex(-1);
 
     const inspectionResult = await inspectChallengeCase(
@@ -243,6 +285,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
     });
     setInspectionView(inspectionResult.failure || isValueContract ? 'output' : 'circuit');
     setActiveBottomTab('inspection');
+    setInspecting(false);
     setRunning(false);
   }, [
     activeFramework,
@@ -259,271 +302,160 @@ export function TestRunner({ challenge }: TestRunnerProps) {
     visibleTests,
   ]);
 
+  // A platform limit is not a verdict: no red badge, score or failed rows for it.
+  const desktopOnly = unsupportedMessage !== null;
+  const engineDown = kernelStatus === 'failed' || engineError !== null;
+  const codeFailure = desktopOnly || engineDown ? null : sharedCodeFailure(currentTestResults);
+
   const verdictColor = overallVerdict === 'accepted'
-    ? colors.success
-    : overallVerdict === 'wrong_answer'
-      ? colors.error
-      : overallVerdict === 'compile_error'
-        ? colors.warning
-        : overallVerdict === 'time_limit_exceeded'
-          ? colors.warning
-          : colors.error;
+    ? 'var(--color-success)'
+    : overallVerdict === 'compile_error' || overallVerdict === 'time_limit_exceeded'
+      ? 'var(--color-warning)'
+      : 'var(--color-danger)';
+
+  const renderRow = (testCase: TestCase, index: number) => {
+    const hideResults = desktopOnly || engineDown || codeFailure !== null;
+    const result = hideResults ? undefined : currentTestResults.find((entry) => entry.testCaseId === testCase.id);
+    return (
+      <TestCaseRow
+        key={testCase.id}
+        testCase={testCase}
+        result={result}
+        notRun={codeFailure !== null && currentTestResults.some((entry) => entry.testCaseId === testCase.id)}
+        isRunning={isRunning && runningTestIndex === index}
+        index={index}
+      />
+    );
+  };
+
+  const tabs: ReadonlyArray<{ value: 'tests' | 'inspection'; label: string }> = [
+    { value: 'tests', label: 'Test cases' },
+    { value: 'inspection', label: isValueContract ? 'Return output' : 'Quantum output' },
+  ];
+  const bootNote = kernelStatus === 'connecting' && !engineDown
+    ? `${bootStepLabel(kernelProgress, { isWeb }).long}${isWeb ? " · tests run when it's ready" : ''}`
+    : null;
+  const runningTests = isRunning && !lastRunWasSubmit && !inspecting;
+  const submitting = isRunning && lastRunWasSubmit && !inspecting;
+  const nextChallenge = useMemo(() => {
+    const at = allChallenges.findIndex((c) => c.id === challenge.id);
+    return at >= 0 ? allChallenges[at + 1] ?? null : null;
+  }, [allChallenges, challenge.id]);
+  const passedCount = currentTestResults.filter((result) => result.passed).length;
 
   return (
-    <div style={{
-      height: '100%',
-      display: 'flex',
-      flexDirection: 'column',
-      overflow: 'hidden',
-      background: colors.bg,
-    }}>
-      <div style={{
-        padding: '8px 16px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        borderBottom: `1px solid ${colors.border}`,
-        background: colors.bgPanel,
-        flexWrap: 'wrap',
-      }}>
-        <button
-          onClick={() => handleRun(false)}
-          disabled={isRunning}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '6px 16px',
-            borderRadius: 6,
-            border: `1px solid ${colors.accent}`,
-            background: `${colors.accent}18`,
-            color: colors.accent,
-            fontSize: 12,
-            fontWeight: 600,
-            fontFamily: "'Geist Sans', sans-serif",
-            cursor: isRunning ? 'not-allowed' : 'pointer',
-            opacity: isRunning ? 0.5 : 1,
-          }}
-        >
-          <Play size={12} />
-          Run Visible Tests
-        </button>
+    <div className="trun">
+      <div className="trun__bar">
+        <Button ref={runButtonRef} size="lg" keepFocus loading={runningTests} disabled={isRunning && !runningTests} icon={<Play size={12} aria-hidden="true" />} onClick={() => handleRun(false)}>
+          {runningTests ? 'Running…' : 'Run visible tests'}
+        </Button>
+        <Button size="lg" variant="primary" keepFocus loading={submitting} disabled={isRunning && !submitting} icon={<Check size={12} aria-hidden="true" />} onClick={() => handleRun(true)}>
+          {submitting ? 'Submitting…' : 'Submit'}
+        </Button>
+        {bootNote && (
+          <span className="trun__bootnote" role="status">
+            <Loader className="nuclei-spin" size={12} aria-hidden="true" />
+            {bootNote}
+          </span>
+        )}
 
-        <button
-          onClick={() => handleRun(true)}
-          disabled={isRunning}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '6px 16px',
-            borderRadius: 6,
-            border: 'none',
-            background: colors.accent,
-            color: '#fff',
-            fontSize: 12,
-            fontWeight: 600,
-            fontFamily: "'Geist Sans', sans-serif",
-            cursor: isRunning ? 'not-allowed' : 'pointer',
-            opacity: isRunning ? 0.5 : 1,
-            boxShadow: shadow.sm,
-          }}
-        >
-          <Check size={12} />
-          Submit
-        </button>
-
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          marginLeft: 8,
-          paddingLeft: 8,
-          borderLeft: `1px solid ${colors.border}`,
-        }}>
-          <select
+        <div className="trun__inspect">
+          <Select
+            size="lg"
+            aria-label="Test case to inspect"
             value={inspectionCaseId ?? ''}
             onChange={(event) => setInspectionCaseId(event.target.value)}
-            style={{
-              background: colors.bgElevated,
-              border: `1px solid ${colors.border}`,
-              borderRadius: 6,
-              padding: '6px 10px',
-              color: colors.text,
-              fontSize: 11,
-              fontFamily: "'Geist Sans', sans-serif",
-            }}
           >
             {visibleTests.map((testCase: TestCase) => (
-              <option key={testCase.id} value={testCase.id}>
-                {testCase.label}
-              </option>
+              <option key={testCase.id} value={testCase.id}>{testCase.label}</option>
             ))}
-          </select>
-
-          <button
-            onClick={handleInspect}
-            disabled={isRunning || !inspectionCaseId}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '6px 14px',
-              borderRadius: 6,
-              border: `1px solid ${colors.border}`,
-              background: 'transparent',
-              color: colors.text,
-              fontSize: 12,
-              fontWeight: 600,
-              fontFamily: "'Geist Sans', sans-serif",
-              cursor: isRunning ? 'not-allowed' : 'pointer',
-              opacity: isRunning ? 0.5 : 1,
-            }}
-          >
-            <SearchCode size={12} />
-            {isValueContract ? 'Inspect Return Value' : 'Inspect Quantum Output'}
-          </button>
+          </Select>
+          <Button size="lg" keepFocus loading={inspecting} icon={<SearchCode size={12} aria-hidden="true" />} disabled={(isRunning && !inspecting) || !inspectionCaseId} onClick={handleInspect}>
+            {isValueContract ? 'Inspect return value' : 'Inspect quantum output'}
+          </Button>
         </div>
 
-        {overallVerdict && !isRunning && (
-          <div style={{
-            marginLeft: 'auto',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-          }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '4px 10px',
-              borderRadius: 999,
-              background: `${verdictColor}18`,
-              color: verdictColor,
-              fontSize: 12,
-              fontWeight: 700,
-              fontFamily: "'Geist Sans', sans-serif",
-            }}>
-              {overallVerdict === 'accepted' ? <Check size={12} /> : <X size={12} />}
-              {formatVerdict(overallVerdict)}
-            </div>
-            {totalScore !== null && (
-              <span style={{
-                color: colors.textMuted,
-                fontSize: 11,
-                fontFamily: "'Geist Sans', sans-serif",
-              }}>
-                Score: {totalScore}%
+        {overallVerdict && !isRunning && !desktopOnly && !engineDown && (
+          <div className="trun__verdict" role="status">
+            {lastRunWasSubmit ? (
+              <>
+                <span className="trun__badge" style={{ ['--verdict-color' as string]: verdictColor }}>
+                  {overallVerdict === 'accepted' ? <Check size={12} aria-hidden="true" /> : <X size={12} aria-hidden="true" />}
+                  {formatVerdict(overallVerdict)}
+                </span>
+                {codeFailure
+                  ? <span className="trun__score">0 of {currentTestResults.length} cases ran</span>
+                  : totalScore !== null && <span className="trun__score">Score: {totalScore}%</span>}
+                {overallVerdict === 'accepted' && nextChallenge && (
+                  <Button size="sm" variant="secondary" icon={<ArrowRight size={12} aria-hidden="true" />} onClick={() => setActiveProblem(nextChallenge)}>
+                    Next challenge
+                  </Button>
+                )}
+              </>
+            ) : (
+              <span className="trun__score">
+                {codeFailure
+                  ? `0 of ${currentTestResults.length} cases ran`
+                  : `${passedCount} of ${currentTestResults.length} visible cases passed`}
               </span>
             )}
           </div>
         )}
       </div>
 
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 4,
-        padding: '0 12px',
-        borderBottom: `1px solid ${colors.border}`,
-        background: colors.bgPanel,
-        flexShrink: 0,
-      }}>
-        <button
-          onClick={() => setActiveBottomTab('tests')}
-          style={{
-            padding: '6px 8px',
-            background: 'transparent',
-            border: 'none',
-            borderBottom: activeBottomTab === 'tests' ? `2px solid ${colors.accent}` : '2px solid transparent',
-            color: activeBottomTab === 'tests' ? colors.text : colors.textMuted,
-            fontSize: 11,
-            fontWeight: 600,
-            fontFamily: "'Geist Sans', sans-serif",
-            cursor: 'pointer',
-          }}
-        >
-          Test Results
-        </button>
-        <button
-          onClick={() => setActiveBottomTab('inspection')}
-          style={{
-            padding: '6px 8px',
-            background: 'transparent',
-            border: 'none',
-            borderBottom: activeBottomTab === 'inspection' ? `2px solid ${colors.accent}` : '2px solid transparent',
-            color: activeBottomTab === 'inspection' ? colors.text : colors.textMuted,
-            fontSize: 11,
-            fontWeight: 600,
-            fontFamily: "'Geist Sans', sans-serif",
-            cursor: 'pointer',
-          }}
-        >
-          {isValueContract ? 'Return Output' : 'Quantum Output'}
-        </button>
-      </div>
+      <Tabs
+        className="trun__tabs"
+        aria-label="Result view"
+        idBase="trun-tab"
+        panelId="trun-panel"
+        value={activeBottomTab}
+        options={tabs}
+        onChange={setActiveBottomTab}
+      />
 
-      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+      <div className="trun__body" id="trun-panel" role="tabpanel" aria-labelledby={`trun-tab-${activeBottomTab}`}>
         {activeBottomTab === 'inspection' ? (
           <ChallengeInspector />
         ) : (
-          <div style={{ height: '100%', overflowY: 'auto', padding: '4px 0' }}>
-            {perfReport && overallVerdict === 'accepted' && !isRunning && (
-              <PerformancePanel report={perfReport} />
+          <div className="trun__results">
+            {engineDown && !isRunning && (
+              <LessonEngineFailed
+                detail={kernelStatus === 'failed' ? kernelError : engineError}
+                onRetry={() => { runButtonRef.current?.focus({ preventScroll: true }); setEngineError(null); retryKernel(); }}
+              />
             )}
 
-            {visibleTests.map((testCase, index) => {
-              const result = currentTestResults.find((entry) => entry.testCaseId === testCase.id);
-              const running = isRunning && runningTestIndex === index;
-              return (
-                <TestCaseRow
-                  key={testCase.id}
-                  testCase={testCase}
-                  result={result}
-                  isRunning={running}
-                  index={index}
-                />
-              );
-            })}
+            {codeFailure && !isRunning && (
+              <div className="trun__failure" role="alert">
+                <div className="trun__failure-text">
+                  <span className="trun__failure-title">{codeFailure.title}</span>
+                  <span className="trun__failure-detail">{codeFailure.detail}</span>
+                </div>
+              </div>
+            )}
 
-            {hiddenTests.map((testCase, index) => {
-              const result = currentTestResults.find((entry) => entry.testCaseId === testCase.id);
-              const absoluteIndex = visibleTests.length + index;
-              const running = isRunning && runningTestIndex === absoluteIndex;
-              return (
-                <TestCaseRow
-                  key={testCase.id}
-                  testCase={testCase}
-                  result={result}
-                  isRunning={running}
-                  index={absoluteIndex}
-                />
-              );
-            })}
+            {unsupportedMessage && !isRunning && (
+              <div className="trun__notice">
+                <UnsupportedNotice message={unsupportedMessage.replace(/^Not supported in the browser: /, '')} />
+              </div>
+            )}
 
-            {isRunning && currentTestResults.length === 0 && (
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '18px 16px',
-                color: colors.textMuted,
-                fontSize: 12,
-                fontFamily: "'Geist Sans', sans-serif",
-              }}>
-                <Loader size={13} color={colors.accent} style={{ animation: 'spin 1s linear infinite' }} />
-                <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-                Preparing the kernel and running tests… the first run downloads the in-browser Python kernel and can take a few seconds.
+            {perfReport && overallVerdict === 'accepted' && !isRunning && <PerformancePanel report={perfReport} />}
+
+            {visibleTests.map((testCase, index) => renderRow(testCase, index))}
+            {hiddenTests.map((testCase, index) => renderRow(testCase, visibleTests.length + index))}
+
+            {isRunning && currentTestResults.length === 0 && !bootNote && (
+              <div className="trun__note">
+                <Loader className="nuclei-spin" size={14} aria-hidden="true" />
+                {isWeb && kernelStatus !== 'ready'
+                  ? 'Python is loading. The first run downloads it and can take a few seconds.'
+                  : 'Running tests…'}
               </div>
             )}
 
             {!isRunning && !inspection && currentTestResults.length === 0 && (
-              <div style={{
-                padding: '18px 16px',
-                color: colors.textDim,
-                fontSize: 12,
-                fontFamily: "'Geist Sans', sans-serif",
-              }}>
+              <div className="trun__note">
                 Run the visible tests to validate your solver, then submit once the visible cases are passing.
               </div>
             )}

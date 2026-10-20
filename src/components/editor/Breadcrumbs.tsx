@@ -2,8 +2,11 @@ import { useEditorStore } from '../../stores/editorStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { useExperimentUiStore } from '../../stores/experimentUiStore';
 import { useExperimentStore } from '../../services/experimentStore';
+import { formatRunLabel } from '../experiments/runsTableColumns';
 import { ChevronRight, MoreHorizontal } from 'lucide-react';
+import { isMemoryPath, MEMORY_PREFIX } from '../../hooks/useFileOps';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const MAX_VISIBLE_SEGMENTS = 3;
 
 /** Shared breadcrumb bar chrome — the file trail and the experiment→run trail
@@ -31,9 +34,36 @@ function BreadcrumbBar({ children, title }: { children: React.ReactNode; title?:
   );
 }
 
+/** An unsaved starter buffer has no folder trail: just say it is unsaved and name it. */
+function UnsavedCrumb({ name }: { name: string }) {
+  const colors = useThemeStore((s) => s.colors);
+  return (
+    <BreadcrumbBar>
+      <span style={{ fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, color: colors.textDim, whiteSpace: 'nowrap' }}>
+        Unsaved
+      </span>
+      <span aria-hidden="true" style={{ fontSize: 11, color: colors.textDim }}>·</span>
+      <span style={{ fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, color: colors.textMuted, whiteSpace: 'nowrap' }}>
+        {name}
+      </span>
+    </BreadcrumbBar>
+  );
+}
+
+/** Display name of an in-memory buffer: the last path segment, never the internal project id. */
+function unsavedName(filePath: string): string {
+  const rest = filePath.slice(MEMORY_PREFIX.length);
+  const segments = rest.split(/[\\/]/).filter(Boolean);
+  return segments[segments.length - 1] ?? 'untitled.py';
+}
+
 export function Breadcrumbs() {
   const filePath = useEditorStore((s) => s.filePath);
   const colors = useThemeStore((s) => s.colors);
+
+  if (isMemoryPath(filePath)) {
+    return <UnsavedCrumb name={unsavedName(filePath!)} />;
+  }
 
   const allSegments = filePath
     ? filePath.split(/[\\/]/).filter(Boolean)
@@ -65,19 +95,19 @@ export function Breadcrumbs() {
           title={filePath ?? undefined}
           style={{ display: 'flex', alignItems: 'center', gap: 2, color: colors.textDim }}
         >
-          <MoreHorizontal size={11} />
-          <ChevronRight size={10} />
+          <MoreHorizontal size={12} />
+          <ChevronRight size={12} />
         </span>
       )}
       {visible.map((seg, i) => {
         const isLast = i === visible.length - 1;
         return (
           <span key={`${seg}-${i}`} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            {i > 0 && <ChevronRight size={10} style={{ color: colors.textDim }} />}
+            {i > 0 && <ChevronRight size={12} style={{ color: colors.textDim }} />}
             <span
               style={{
                 fontSize: 11,
-                fontFamily: "'Geist Sans', system-ui, sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
                 color: isLast ? colors.textMuted : colors.textDim,
                 whiteSpace: 'nowrap',
               }}
@@ -107,6 +137,7 @@ export function ExperimentBreadcrumbs() {
   const selectRun = useExperimentUiStore((s) => s.selectRun);
   const closeCompare = useExperimentUiStore((s) => s.closeCompare);
   const experiments = useExperimentStore((s) => s.experiments);
+  const runs = useExperimentStore((s) => s.runsByExperiment[experimentFileName ?? '']);
 
   if (!experimentFileName) return null;
 
@@ -115,13 +146,17 @@ export function ExperimentBreadcrumbs() {
 
   // A trailing segment exists when the user has drilled into a run or the
   // compare view; then the experiment segment becomes a clickable "back".
-  const trailing = compareOpen ? `Compare (${compareCount})` : runDir;
+  const runRecord = runDir ? runs?.find((r) => r.dir === runDir) : undefined;
+  const trailing = compareOpen
+    ? `Compare (${compareCount})`
+    : runDir ? formatRunLabel(runDir, runRecord?.manifest.started_at) : null;
+  const trailingTitle = !compareOpen && runDir ? runDir : undefined;
   const backToRuns = () => { selectRun(null); closeCompare(); };
 
   const segmentStyle = (isLast: boolean, clickable: boolean): React.CSSProperties => ({
     fontSize: 11,
-    fontFamily: "'Geist Sans', system-ui, sans-serif",
-    color: isLast ? colors.textMuted : colors.accent,
+    fontFamily: TYPOGRAPHY.fontSans,
+    color: isLast ? colors.textMuted : colors.accentText,
     whiteSpace: 'nowrap',
     background: 'transparent',
     border: 'none',
@@ -140,8 +175,8 @@ export function ExperimentBreadcrumbs() {
       )}
       {trailing && (
         <span style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <ChevronRight size={10} style={{ color: colors.textDim }} />
-          <span style={{ ...segmentStyle(true, false), fontFamily: "'Fira Code', monospace" }}>
+          <ChevronRight size={12} style={{ color: colors.textDim }} />
+          <span title={trailingTitle} style={{ ...segmentStyle(true, false), fontFamily: TYPOGRAPHY.fontMono }}>
             {trailing}
           </span>
         </span>

@@ -19,20 +19,34 @@ export interface MappingOptions {
   bitOrder: string;
 }
 
-export function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KiB`;
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MiB`;
-}
-
 export function sessionIdIssue(value: string): string | null {
   if (value.length === 0) return 'choose a destination session ID';
-  if (Array.from(value).length > 256) return 'session ID must be 256 characters or fewer';
+  if (Array.from(value).length > MAX_ID_LENGTH) return 'session ID must be 128 characters or fewer';
   if (value === '.' || value === '..') return 'session ID cannot be . or ..';
   if ([...value].some((character) => '<>:"/\\|?*'.includes(character) || character.charCodeAt(0) < 32)) {
     return 'session ID contains a forbidden character';
   }
+  if (!KERNEL_ID_PATTERN.test(value)) {
+    return 'use letters, numbers, dot, dash or underscore (max 128), starting with a letter or number';
+  }
   return null;
+}
+
+const KERNEL_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+const MAX_ID_LENGTH = 128;
+const DATE_SUFFIX_LENGTH = 11;
+
+/** `<file basename>-<YYYY-MM-DD>` in the kernel's identifier grammar, so the default never fails at import. */
+export function suggestSessionId(source: string, now: Date = new Date()): string {
+  const file = source.split(/[\\/]/).filter(Boolean).pop() ?? '';
+  const stem = file
+    .replace(/\.[^.]*$/, '')
+    .replace(/[^A-Za-z0-9._-]+/g, '-')
+    .replace(/^[^A-Za-z0-9]+/, '')
+    .slice(0, MAX_ID_LENGTH - DATE_SUFFIX_LENGTH);
+  const day = [now.getFullYear(), now.getMonth() + 1, now.getDate()]
+    .map((part, index) => String(part).padStart(index === 0 ? 4 : 2, '0')).join('-');
+  return `${stem || 'import'}-${day}`;
 }
 
 export function supportedAdapters(probe: ImportProbeResult | null): ImportProbeResult['results'] {
@@ -53,12 +67,18 @@ export function adapterUsesNativeMapping(adapterId: string): boolean {
   return NATIVE_MAPPING_ADAPTERS.has(adapterId);
 }
 
+/** Sinter's statistics schema defines every field and unit, so there is nothing for a person to map or review. */
+export function adapterNeedsNoMapping(adapterId: string): boolean {
+  return adapterId === 'sinter-csv';
+}
+
 export function mappingIsReviewed(
   adapterId: string,
   rows: readonly MappingRow[],
   options: MappingOptions,
   reviewed: boolean,
 ): boolean {
+  if (adapterNeedsNoMapping(adapterId)) return true;
   if (!reviewed) return false;
   if (adapterId === 'stim-results') {
     const detectors = Number(options.detectorCount);
@@ -103,4 +123,22 @@ export function stageDescription(stage: ImportStage): string {
     Import: 'Run the copy-only import and retain its durable lifecycle.',
   };
   return descriptions[stage];
+}
+
+const ADAPTER_NAMES: Readonly<Record<string, string>> = Object.freeze({
+  'sinter-csv': 'sinter CSV',
+  'stim-results': 'Stim results',
+});
+
+/** Human display name for an adapter id ("sinter-csv" -> "sinter CSV"). */
+export function adapterDisplayName(adapterId: string): string {
+  const known = ADAPTER_NAMES[adapterId];
+  if (known) return known;
+  const spaced = adapterId.replaceAll('-', ' ');
+  return `${spaced.charAt(0).toUpperCase()}${spaced.slice(1)}`;
+}
+
+/** "1 canonical partition" / "46 records". */
+export function countLabel(count: number, noun: string): string {
+  return `${count.toLocaleString()} ${noun}${count === 1 ? '' : 's'}`;
 }

@@ -46,3 +46,7 @@ cirq-core>=1.4,<2.0
 # pyarrow>=18,<26
 # duckdb>=1.2,<2
 # jsonschema>=4.23,<5
+
+# Optional: nuclei-mcp (kernel/nuclei_mcp) has its own pins in
+# kernel/requirements-mcp.txt. They are kept out of this file because the
+# packaged app's managed venv is built from it, and mcp pulls in jsonschema.

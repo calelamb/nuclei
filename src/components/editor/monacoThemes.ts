@@ -38,6 +38,39 @@ function buildTheme(base: 'vs' | 'vs-dark', c: ColorTokens): ThemeData {
       // Dirac's inline suggestions render in Dirac violet (dimmed, since ghost
       // text is a proposal) — visually distinct from grey IntelliSense so it's
       // always clear which hand is writing. See registerGhostCompletions.
+      // Suggest, find and hover widgets: Nuclei surfaces and the accent instead of VS Code's
+      // stock blue (#04395E) selection.
+      'editorWidget.background': c.surfaceRaised,
+      'editorWidget.foreground': c.textPrimary,
+      'editorWidget.border': c.borderStrong,
+      'editorSuggestWidget.background': c.surfaceRaised,
+      'editorSuggestWidget.foreground': c.textPrimary,
+      'editorSuggestWidget.border': c.borderStrong,
+      'editorSuggestWidget.selectedBackground': base === 'vs-dark' ? '#00B4D83B' : '#00B4D82E',
+      'editorSuggestWidget.highlightForeground': c.accentQuantumText,
+      'editorHoverWidget.background': c.surfaceRaised,
+      'editorHoverWidget.border': c.borderStrong,
+      'list.activeSelectionBackground': base === 'vs-dark' ? '#00B4D83B' : '#00B4D82E',
+      'list.activeSelectionForeground': c.textPrimary,
+      'list.hoverBackground': c.surfaceOverlay,
+      'list.highlightForeground': c.accentQuantumText,
+      'input.background': c.surfaceBase,
+      'input.border': c.borderStrong,
+      'focusBorder': c.accentQuantum,
+      // The right-click menu and any Monaco picker: the same raised surface, hairline border and accent
+      // selection as Nuclei's own menus, instead of VS Code's stock grey (#3C3C3C).
+      'menu.background': c.surfaceRaised,
+      'menu.foreground': c.textPrimary,
+      'menu.border': c.borderStrong,
+      'menu.selectionBackground': base === 'vs-dark' ? '#00B4D83B' : '#00B4D82E',
+      'menu.selectionForeground': c.textPrimary,
+      'menu.separatorBackground': c.borderStrong,
+      'quickInput.background': c.surfaceRaised,
+      'quickInput.foreground': c.textPrimary,
+      'quickInputList.focusBackground': base === 'vs-dark' ? '#00B4D83B' : '#00B4D82E',
+      'quickInputList.focusForeground': c.textPrimary,
+      'pickerGroup.foreground': c.accentQuantumText,
+      'pickerGroup.border': c.borderStrong,
       'editorGhostText.foreground': base === 'vs-dark' ? '#A578D6' : '#8B3FB8',
     },
   };

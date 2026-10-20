@@ -1,13 +1,18 @@
 import { type CSSProperties } from 'react';
-import { Shuffle, Loader2 } from 'lucide-react';
+import { Shuffle } from 'lucide-react';
+import { Button, Select, SegmentedControl } from '../ui';
 import { useThemeStore, type ThemeColors } from '../../stores/themeStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useHardwareStore } from '../../stores/hardwareStore';
 import { useTranspileStore, SIMULATOR_TARGET_ID } from '../../stores/transpileStore';
 import { requestTranspile } from '../../lib/transpileSender';
+import { kernelStartFailureTitle, kernelUnavailableMessage, kernelWaitingLabel } from '../../lib/kernelErrors';
+import { retryKernel } from '../../lib/kernelControl';
+import { isWebBuild } from '../../platform/buildTarget';
 import { ConnectivityMap } from '../hardware/ConnectivityMap';
 import { resolveTargetRequest } from './transpileMath';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const DOCS = 'https://getnuclei.dev/docs/developer-tools/transpiler-explorer/';
 const OPT_LEVELS: Array<0 | 1 | 2 | 3> = [0, 1, 2, 3];
 
@@ -23,6 +28,9 @@ export function TranspilerControls() {
   const code = useEditorStore((s) => s.code);
   const framework = useEditorStore((s) => s.framework);
   const backends = useHardwareStore((s) => s.backends);
+  const kernelStatus = useEditorStore((s) => s.kernelStatus);
+  const kernelFailed = kernelStatus === 'failed';
+  const kernelNotReady = kernelStatus !== 'ready';
 
   const targetId = useTranspileStore((s) => s.targetId);
   const optimizationLevel = useTranspileStore((s) => s.optimizationLevel);
@@ -34,6 +42,7 @@ export function TranspilerControls() {
   const setError = useTranspileStore((s) => s.setError);
 
   const isQiskit = framework === 'qiskit';
+  const desktopOnly = isWebBuild();
   const selectedBackend = backends.find((b) => b.name === targetId);
 
   const run = () => {
@@ -41,14 +50,25 @@ export function TranspilerControls() {
     const target = resolveTargetRequest(targetId, backends, optimizationLevel);
     setPending(true);
     if (!requestTranspile(code, target)) {
-      setError("The kernel isn't connected. Start it and try again.");
+      setError(kernelUnavailableMessage(kernelStatus));
     }
   };
 
   const shell: CSSProperties = {
     display: 'flex', flexDirection: 'column', gap: 14, padding: 12,
-    fontFamily: "'Geist Sans', sans-serif", color: colors.text,
+    fontFamily: TYPOGRAPHY.fontSans, color: colors.text,
   };
+
+  // The main area already explains this with a Download action; the sidebar stays a quiet pointer, not a second card.
+  if (desktopOnly) {
+    return (
+      <div style={shell}>
+        <span style={{ fontSize: 12, color: colors.textMuted, lineHeight: 1.5 }}>
+          Transpiling runs in the desktop app.
+        </span>
+      </div>
+    );
+  }
 
   if (!isQiskit) {
     return (
@@ -57,7 +77,7 @@ export function TranspilerControls() {
           <strong style={{ display: 'block', marginBottom: 4, fontSize: 12 }}>
             Transpiler Explorer needs Qiskit
           </strong>
-          <span style={{ fontSize: 11.5, color: colors.textMuted, lineHeight: 1.5 }}>
+          <span style={{ fontSize: 12, color: colors.textMuted, lineHeight: 1.5 }}>
             The active buffer is {framework}. Qiskit is the only framework with an
             introspectable compiler, so the pass-by-pass view is Qiskit-only.
           </span>
@@ -68,55 +88,51 @@ export function TranspilerControls() {
 
   return (
     <div style={shell}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Button
+          variant="primary"
+          onClick={run}
+          loading={pending}
+          disabled={kernelNotReady}
+          icon={pending || kernelNotReady ? undefined : <Shuffle size={14} />}
+          style={{ flex: 1 }}
+        >
+          {kernelFailed
+            ? kernelStartFailureTitle(desktopOnly)
+            : kernelNotReady ? kernelWaitingLabel() : pending ? 'Transpiling…' : result ? 'Re-transpile' : 'Transpile'}
+        </Button>
+        {kernelFailed && <Button onClick={retryKernel}>Retry</Button>}
+      </div>
+
       <label style={fieldLabel(colors)}>
         Target
-        <select
-          value={targetId}
-          onChange={(e) => setTarget(e.target.value)}
-          style={selectStyle(colors)}
-        >
+        <Select value={targetId} onChange={(e) => setTarget(e.target.value)} aria-label="Transpile target" style={{ display: 'flex' }}>
           <option value={SIMULATOR_TARGET_ID}>Simulator (all-to-all)</option>
           {backends.map((b) => (
             <option key={b.name} value={b.name}>
               {b.name} · {b.qubitCount}q
             </option>
           ))}
-        </select>
+        </Select>
       </label>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-        <span style={{ fontSize: 11, color: colors.textDim }}>Optimization level</span>
-        <div style={{ display: 'flex', gap: 4 }}>
-          {OPT_LEVELS.map((lvl) => {
-            const active = lvl === optimizationLevel;
-            return (
-              <button
-                key={lvl}
-                type="button"
-                onClick={() => setOptimizationLevel(lvl)}
-                aria-pressed={active}
-                style={segBtn(colors, active)}
-              >
-                {lvl}
-              </button>
-            );
-          })}
-        </div>
+        <span style={fieldTitle(colors)}>Optimization level</span>
+        <SegmentedControl
+          block
+          aria-label="Optimization level"
+          value={String(optimizationLevel)}
+          options={OPT_LEVELS.map((lvl) => ({ value: String(lvl), label: String(lvl) }))}
+          onChange={(v) => setOptimizationLevel(Number(v) as 0 | 1 | 2 | 3)}
+        />
       </div>
-
-      <button type="button" onClick={run} disabled={pending} style={runBtn(colors, pending)}>
-        {pending
-          ? <Loader2 size={14} style={{ animation: 'nuclei-spin 800ms linear infinite' }} />
-          : <Shuffle size={14} />}
-        {pending ? 'Transpiling…' : result ? 'Re-transpile' : 'Transpile'}
-      </button>
 
       {/* The target's physical constraints — the topology and basis set that
           force the routing the main view then explains. */}
       {selectedBackend ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <span style={{ fontSize: 11, color: colors.textDim }}>
-            Target topology · {selectedBackend.qubitCount} qubits
+          <span style={fieldTitle(colors)}>
+            Target topology · <span style={{ fontWeight: 400 }}>{selectedBackend.qubitCount} qubits</span>
           </span>
           <div style={{ border: `1px solid ${colors.border}`, borderRadius: 6, padding: 6 }}>
             <ConnectivityMap
@@ -137,7 +153,7 @@ export function TranspilerControls() {
           All-to-all connectivity, no basis-gate constraint — the pure
           optimization passes with no routing. Pick a connected hardware backend
           to see device routing.{' '}
-          <a href={DOCS} target="_blank" rel="noreferrer" style={{ color: colors.accent }}>
+          <a href={DOCS} target="_blank" rel="noreferrer" style={{ color: colors.accentText }}>
             Learn more
           </a>
         </span>
@@ -146,45 +162,20 @@ export function TranspilerControls() {
   );
 }
 
+/** A field's title: one step above its 11px meta so every row reads title then meta. */
+function fieldTitle(colors: ThemeColors): CSSProperties {
+  return { fontSize: 12, fontWeight: 600, color: colors.text };
+}
+
 function fieldLabel(colors: ThemeColors): CSSProperties {
-  return { display: 'flex', flexDirection: 'column', gap: 5, fontSize: 11, color: colors.textDim };
-}
-
-function selectStyle(colors: ThemeColors): CSSProperties {
-  return {
-    background: colors.bg, color: colors.text,
-    border: `1px solid ${colors.border}`, borderRadius: 5,
-    padding: '6px 8px', fontSize: 12, fontFamily: "'Geist Sans', sans-serif", outline: 'none',
-  };
-}
-
-function segBtn(colors: ThemeColors, active: boolean): CSSProperties {
-  return {
-    flex: 1, padding: '6px 0', borderRadius: 5,
-    border: `1px solid ${active ? colors.accent : colors.border}`,
-    background: active ? colors.accent : 'transparent',
-    color: active ? colors.bg : colors.textMuted,
-    fontSize: 12, fontWeight: 600, fontFamily: "'Geist Mono', monospace",
-    cursor: 'pointer', transition: 'background 120ms, color 120ms, border-color 120ms',
-  };
-}
-
-function runBtn(colors: ThemeColors, pending: boolean): CSSProperties {
-  return {
-    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-    padding: '9px 14px', borderRadius: 6, border: `1px solid ${colors.accent}`,
-    background: pending ? colors.bg : colors.accent,
-    color: pending ? colors.textMuted : colors.bg,
-    fontSize: 13, fontWeight: 600, cursor: pending ? 'default' : 'pointer',
-    opacity: pending ? 0.8 : 1, transition: 'opacity 120ms, background 120ms',
-  };
+  return { display: 'flex', flexDirection: 'column', gap: 5, ...fieldTitle(colors) };
 }
 
 function chip(colors: ThemeColors): CSSProperties {
   return {
     padding: '2px 7px', borderRadius: 4, border: `1px solid ${colors.border}`,
     background: colors.bg, color: colors.textMuted,
-    fontSize: 10.5, fontFamily: "'Geist Mono', monospace",
+    fontSize: 11, fontFamily: TYPOGRAPHY.fontMono,
   };
 }
 

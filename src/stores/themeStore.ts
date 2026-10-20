@@ -11,6 +11,25 @@ import {
 
 export type { ThemeMode };
 
+/** What the user picked. `system` follows the OS and resolves to a ThemeMode. */
+export type ThemePreference = 'system' | ThemeMode;
+
+export function isThemePreference(value: unknown): value is ThemePreference {
+  return value === 'system' || value === 'dark' || value === 'light';
+}
+
+/** Resolve a preference to a concrete mode. Falls back to dark without matchMedia. */
+export function resolveThemePreference(pref: ThemePreference): ThemeMode {
+  if (pref !== 'system') return pref;
+  try {
+    const mq = typeof window !== 'undefined' ? window.matchMedia?.('(prefers-color-scheme: dark)') : undefined;
+    if (!mq) return 'dark';
+    return mq.matches ? 'dark' : 'light';
+  } catch {
+    return 'dark';
+  }
+}
+
 export interface ThemeShadows {
   sm: string;
   md: string;
@@ -28,13 +47,29 @@ export interface ThemeColors {
   text: string;
   textMuted: string;
   textDim: string;
+  /** Disabled controls only. Never use for readable text. */
+  textDisabled: string;
   accent: string;
   accentLight: string;
+  /** Teal for small text/links (AA on every surface); `accent` is for fills, borders and icons. */
+  accentText: string;
+  /** Text on a solid `accent` fill. */
+  onAccent: string;
   dirac: string;
+  /** Dirac purple for text (AA contrast); `dirac` is for fills only. */
+  diracText: string;
+  modeResearch: string;
+  basisX: string;
+  basisZ: string;
+  overlayMatching: string;
   success: string;
+  /** Green for small text/glyphs (AA on every surface); `success` is for fills and dots. */
+  successText: string;
   warning: string;
   error: string;
   info: string;
+  /** Modal backdrop colour. */
+  scrim: string;
   comment: string;
   string: string;
   number: string;
@@ -54,14 +89,24 @@ function legacyFromTokens(c: ColorTokens): ThemeColors {
     borderStrong: c.borderStrong,
     text: c.textPrimary,
     textMuted: c.textSecondary,
-    textDim: c.textDisabled,
+    textDim: c.textTertiary,
+    textDisabled: c.textDisabled,
     accent: c.accentQuantum,
     accentLight: c.accentQuantumSoft,
+    accentText: c.accentQuantumText,
+    onAccent: c.onAccent,
     dirac: c.accentDirac,
+    diracText: c.accentDiracText,
+    modeResearch: c.modeResearch,
+    basisX: c.basisX,
+    basisZ: c.basisZ,
+    overlayMatching: c.overlayMatching,
     success: c.success,
+    successText: c.successText,
     warning: c.warning,
     error: c.danger,
     info: c.info,
+    scrim: c.scrim,
     comment: c.syntaxComment,
     string: c.syntaxString,
     number: c.syntaxNumber,
@@ -78,6 +123,8 @@ function shadowsFromTokens(s: ShadowTokens): ThemeShadows {
 
 interface ThemeState {
   mode: ThemeMode;
+  /** The user's choice; `mode` is what it currently resolves to. */
+  preference: ThemePreference;
   colors: ThemeColors;
   shadow: ThemeShadows;
   /**
@@ -87,6 +134,9 @@ interface ThemeState {
    */
   pluginOverlay: Partial<ThemeColors> | null;
   setMode: (mode: ThemeMode) => void;
+  setPreference: (pref: ThemePreference) => void;
+  /** Re-resolve `system` against the OS (pass the OS's dark flag from a matchMedia listener). */
+  syncSystem: (osPrefersDark: boolean) => void;
   toggle: () => void;
   /** Apply a plugin theme's colours (intersected against known theme keys). */
   applyPluginTheme: (colors: Record<string, string>) => void;
@@ -119,11 +169,25 @@ function snapshot(mode: ThemeMode, overlay: Partial<ThemeColors> | null) {
   };
 }
 
+/** Until the user picks a theme the app follows the OS, so a light-mode machine never opens dark. */
+export const DEFAULT_THEME_PREFERENCE: ThemePreference = 'system';
+
 export const useThemeStore = create<ThemeState>((set, get) => ({
-  ...snapshot('dark', null),
+  ...snapshot(resolveThemePreference(DEFAULT_THEME_PREFERENCE), null),
+  preference: DEFAULT_THEME_PREFERENCE,
   pluginOverlay: null,
-  setMode: (mode) => set(snapshot(mode, get().pluginOverlay)),
-  toggle: () => set((s) => snapshot(s.mode === 'dark' ? 'light' : 'dark', s.pluginOverlay)),
+  setMode: (mode) => set({ ...snapshot(mode, get().pluginOverlay), preference: mode }),
+  setPreference: (preference) =>
+    set({ ...snapshot(resolveThemePreference(preference), get().pluginOverlay), preference }),
+  syncSystem: (osPrefersDark) => {
+    if (get().preference !== 'system') return;
+    set(snapshot(osPrefersDark ? 'dark' : 'light', get().pluginOverlay));
+  },
+  toggle: () =>
+    set((s) => {
+      const next: ThemeMode = s.mode === 'dark' ? 'light' : 'dark';
+      return { ...snapshot(next, s.pluginOverlay), preference: next };
+    }),
   applyPluginTheme: (raw) => {
     const overlay = intersectThemeColors(raw);
     set((s) => ({ ...snapshot(s.mode, overlay), pluginOverlay: overlay }));

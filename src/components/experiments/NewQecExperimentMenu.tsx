@@ -1,38 +1,83 @@
-import { useState } from 'react';
+import { useState, type KeyboardEvent } from 'react';
 import { Atom } from 'lucide-react';
-import { useThemeStore } from '../../stores/themeStore';
 import { QEC_TEMPLATES, type QecTemplate } from '../../services/qecTemplates';
 import { scaffoldQecExperiment } from '../../services/qecScaffold';
+import { ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
+import { Button, Dialog, TextInput } from '../ui';
+import './experiments.css';
 
 /**
- * PRD 10 Phase F — "New QEC experiment" menu. Picks a memory template, names
- * it, and scaffolds real editable files (stim-generating Python + campaign
- * YAML). Lives beside "+ New experiment" in the Experiments rail.
+ * "New QEC experiment": a dialog with a template radiogroup and a name field
+ * that scaffolds real editable files (stim-generating Python + campaign YAML).
+ * Lives beside "New experiment" in the Experiments rail. Escape, the scrim and
+ * the Cancel button dismiss it, and focus returns to the QEC button.
  */
+function TemplateRadios({ value, onChange }: { value: QecTemplate; onChange: (t: QecTemplate) => void }) {
+  const move = (e: KeyboardEvent<HTMLDivElement>) => {
+    const step = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : 0;
+    if (step === 0) return;
+    e.preventDefault();
+    const group = e.currentTarget;
+    const at = QEC_TEMPLATES.findIndex((t) => t.id === value.id);
+    const next = QEC_TEMPLATES[(at + step + QEC_TEMPLATES.length) % QEC_TEMPLATES.length];
+    onChange(next);
+    requestAnimationFrame(() => {
+      group.querySelector<HTMLElement>(`[data-template="${next.id}"]`)?.focus();
+    });
+  };
+  return (
+    <div role="radiogroup" aria-label="Template" className="nuclei-qec-templates" onKeyDown={move}>
+      {QEC_TEMPLATES.map((t) => {
+        const checked = t.id === value.id;
+        return (
+          <button
+            key={t.id}
+            type="button"
+            role="radio"
+            aria-checked={checked}
+            data-template={t.id}
+            tabIndex={checked ? 0 : -1}
+            className="nuclei-experiment-template"
+            onClick={() => onChange(t)}
+          >
+            <span className="nuclei-experiment-template__title">{t.label}</span>
+            <span className="nuclei-experiment-template__desc">{t.description}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function NewQecExperimentMenu({ projectRoot }: { projectRoot: string }) {
-  const colors = useThemeStore((s) => s.colors);
   const [open, setOpen] = useState(false);
-  const [chosen, setChosen] = useState<QecTemplate | null>(null);
-  const [name, setName] = useState('');
+  const [chosen, setChosen] = useState<QecTemplate>(QEC_TEMPLATES[0]);
+  const [name, setName] = useState(QEC_TEMPLATES[0].label);
+  const [nameEdited, setNameEdited] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const reset = () => {
+  const close = () => {
     setOpen(false);
-    setChosen(null);
-    setName('');
     setError(null);
     setBusy(false);
   };
 
+  const pick = (t: QecTemplate) => {
+    setChosen(t);
+    // Follow the template name until the user types their own.
+    if (!nameEdited) setName(t.label);
+  };
+
   const create = async () => {
-    if (!chosen) return;
     const finalName = name.trim() || chosen.label;
     setBusy(true);
     setError(null);
     const result = await scaffoldQecExperiment(chosen, finalName, projectRoot);
     if (result.ok) {
-      reset();
+      close();
+      setNameEdited(false);
+      setName(chosen.label);
     } else {
       setError(result.error ?? 'Could not create the experiment.');
       setBusy(false);
@@ -40,97 +85,47 @@ export function NewQecExperimentMenu({ projectRoot }: { projectRoot: string }) {
   };
 
   return (
-    <div style={{ position: 'relative' }}>
-      <button
-        onClick={() => setOpen((v) => !v)}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 5,
-          padding: '4px 10px', background: 'transparent', border: `1px solid ${colors.dirac}`,
-          borderRadius: 4, color: colors.dirac, cursor: 'pointer', fontSize: 11, fontWeight: 600,
-          fontFamily: "'Geist Sans', sans-serif",
-        }}
+    <>
+      <Button
+        size="md"
+        onClick={() => setOpen(true)}
+        aria-label="New QEC experiment"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        icon={<Atom size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />}
       >
-        <Atom size={12} /> New QEC experiment
-      </button>
-
+        QEC
+      </Button>
       {open && (
-        <div
-          role="menu"
-          style={{
-            position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 20,
-            width: 300, background: colors.bg, border: `1px solid ${colors.border}`,
-            borderRadius: 6, boxShadow: '0 8px 24px rgba(0,0,0,0.32)', padding: 8,
-            fontFamily: "'Geist Sans', sans-serif",
-          }}
-        >
-          {!chosen ? (
+        <Dialog
+          title="New QEC experiment"
+          description="Pick a template. Nuclei writes an editable circuit script and campaign file."
+          width={440}
+          onClose={close}
+          initialFocus="[role=radio][aria-checked=true]"
+          footer={(
             <>
-              <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, color: colors.textDim, padding: '2px 4px 6px' }}>
-                Choose a template
-              </div>
-              {QEC_TEMPLATES.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => { setChosen(t); setName(t.label); }}
-                  style={{
-                    display: 'block', width: '100%', textAlign: 'left', padding: '8px', marginBottom: 4,
-                    background: 'transparent', border: `1px solid ${colors.border}`, borderRadius: 5,
-                    cursor: 'pointer', color: colors.text,
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = colors.dirac; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = colors.border; }}
-                >
-                  <div style={{ fontSize: 12, fontWeight: 600 }}>{t.label}</div>
-                  <div style={{ fontSize: 10.5, color: colors.textDim, lineHeight: 1.4, marginTop: 3 }}>{t.description}</div>
-                </button>
-              ))}
-              <button onClick={reset} style={linkBtn(colors)}>Cancel</button>
-            </>
-          ) : (
-            <>
-              <div style={{ fontSize: 12, fontWeight: 600, color: colors.text, marginBottom: 6 }}>{chosen.label}</div>
-              <label style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.4, color: colors.textDim }}>
-                Experiment name
-              </label>
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                autoFocus
-                style={{
-                  width: '100%', marginTop: 4, padding: '6px 8px', fontSize: 12,
-                  background: colors.bg, border: `1px solid ${colors.border}`, borderRadius: 4,
-                  color: colors.text, outline: 'none', fontFamily: "'Geist Sans', sans-serif",
-                }}
-              />
-              <div style={{ fontSize: 10.5, color: colors.textDim, marginTop: 6, lineHeight: 1.4 }}>
-                Writes an editable <code>qec/…py</code> and <code>experiments/…experiment.yaml</code>.
-              </div>
-              {error && <div style={{ color: colors.error, fontSize: 11, marginTop: 6 }}>{error}</div>}
-              <div style={{ display: 'flex', gap: 6, marginTop: 8, justifyContent: 'flex-end' }}>
-                <button onClick={() => { setChosen(null); setError(null); }} style={linkBtn(colors)}>Back</button>
-                <button
-                  onClick={() => { void create(); }}
-                  disabled={busy}
-                  style={{
-                    padding: '5px 12px', background: colors.dirac, color: '#fff', border: 'none',
-                    borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: busy ? 'default' : 'pointer',
-                    opacity: busy ? 0.6 : 1, fontFamily: "'Geist Sans', sans-serif",
-                  }}
-                >
-                  {busy ? 'Creating…' : 'Create'}
-                </button>
-              </div>
+              <Button variant="ghost" onClick={close}>Cancel</Button>
+              <Button variant="primary" loading={busy} onClick={() => { void create(); }}>
+                {busy ? 'Creating…' : 'Create'}
+              </Button>
             </>
           )}
-        </div>
+        >
+          <TemplateRadios value={chosen} onChange={pick} />
+          <label htmlFor="qec-experiment-name" className="nuclei-qec-name-label">Experiment name</label>
+          <TextInput
+            id="qec-experiment-name"
+            value={name}
+            onChange={(e) => { setName(e.target.value); setNameEdited(true); }}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !busy) { e.preventDefault(); void create(); } }}
+          />
+          <p className="nuclei-qec-name-hint">
+            Writes <code>qec/…py</code> and <code>experiments/…experiment.yaml</code>.
+          </p>
+          {error && <p role="alert" className="nuclei-qec-name-error">{error}</p>}
+        </Dialog>
       )}
-    </div>
+    </>
   );
-}
-
-function linkBtn(colors: { textMuted: string }): React.CSSProperties {
-  return {
-    padding: '5px 8px', background: 'transparent', border: 'none',
-    color: colors.textMuted, fontSize: 11, cursor: 'pointer', fontFamily: "'Geist Sans', sans-serif",
-  };
 }

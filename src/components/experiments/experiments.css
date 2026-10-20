@@ -1,0 +1,185 @@
+/* Experiments workspace: small structural classes; everything resolves from tokens.css. */
+
+.nuclei-qec-templates { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-3); }
+.nuclei-experiment-template {
+  display: flex; flex-direction: column; gap: var(--space-1); width: 100%; padding: var(--space-2) var(--space-3);
+  text-align: left; cursor: pointer; color: var(--color-text-primary);
+  background: transparent; border: 1px solid var(--color-border-strong); border-radius: var(--radius-soft);
+  font-family: var(--font-sans);
+  transition: background-color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-experiment-template:hover { border-color: var(--color-text-tertiary); }
+.nuclei-experiment-template[aria-checked='true'] {
+  border-color: var(--color-accent-quantum);
+  background: color-mix(in srgb, var(--color-accent-quantum) 10%, transparent);
+}
+.nuclei-experiment-template__title { font-size: var(--font-size-chrome-label); font-weight: var(--font-weight-medium); }
+.nuclei-experiment-template__desc { font-size: var(--font-size-caption); color: var(--color-text-secondary); line-height: 1.4; }
+.nuclei-qec-name-label { display: block; font-size: var(--font-size-caption); color: var(--color-text-secondary); margin-bottom: var(--space-1); }
+.nuclei-qec-name-hint { margin: var(--space-2) 0 0; font-size: var(--font-size-caption); color: var(--color-text-secondary); }
+.nuclei-qec-name-error { margin: var(--space-2) 0 0; font-size: var(--font-size-caption); color: var(--color-danger-text); }
+
+/* Left-rail experiment rows: CSS hover and a selected state instead of inline style mutation. */
+.nuclei-experiment-row {
+  display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border-subtle); cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-experiment-row:hover { background: var(--color-surface-raised); }
+.nuclei-experiment-row[aria-current='true'] {
+  background: color-mix(in srgb, var(--color-accent-quantum) 8%, transparent);
+  box-shadow: inset 2px 0 0 var(--color-accent-quantum);
+}
+.nuclei-experiment-row__name {
+  flex: 1; min-width: 0; padding: 0; background: transparent; border: none; cursor: pointer; text-align: left;
+  color: var(--color-text-primary); font-family: var(--font-sans); font-size: var(--font-size-chrome-label); font-weight: var(--font-weight-semibold);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.nuclei-experiment-row[aria-current='true'] .nuclei-experiment-row__name { color: var(--color-accent-quantum-text); }
+
+/* Runs table (virtualised grid; keeps ARIA table roles). Same type scale as the Table primitive. */
+.nuclei-runs-header {
+  display: grid; box-sizing: border-box; position: sticky; top: 0; z-index: 3;
+  background: var(--color-surface-sunken); border-bottom: 1px solid var(--color-border-strong);
+}
+.nuclei-runs-header__cell {
+  display: flex; align-items: center; gap: var(--space-1); min-width: 0; padding: 0 var(--space-2);
+  background: transparent; text-align: left; justify-content: flex-start;
+  color: var(--color-text-secondary); font-family: var(--font-sans); font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold); text-transform: uppercase; letter-spacing: 0.04em;
+}
+/* Same recipe as .nuclei-table th: prose headers (Run) are overlines; swept parameters and metric names stay the identifiers the script uses. */
+.nuclei-runs-header__cell[data-kind='param'], .nuclei-runs-header__cell[data-kind='metric'] { text-transform: none; letter-spacing: 0; }
+.nuclei-runs-header__cell[data-numeric='true'] { justify-content: flex-end; text-align: right; }
+.nuclei-runs-header__sort {
+  display: inline-flex; align-items: center; gap: var(--space-1); min-width: 0; max-width: 100%; padding: 0; border: none; background: transparent; cursor: pointer;
+  color: inherit; font: inherit; text-transform: inherit; letter-spacing: inherit; text-align: inherit;
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-runs-header__sort:hover { color: var(--color-text-primary); }
+.nuclei-runs-header__sort[data-sorted='true'] { color: var(--color-accent-quantum-text); }
+/* Metric names wrap to two lines instead of clipping to "COUNTS_ENTR...". */
+.nuclei-runs-header__label {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.25;
+  overflow-wrap: anywhere; text-transform: inherit; letter-spacing: inherit;
+}
+
+/* Identity columns (checkbox + run) stay visible while metrics scroll sideways. */
+.nuclei-runs-header__sticky, .nuclei-runs-row__check, .nuclei-runs-row__run { position: sticky; z-index: 1; background: var(--color-surface-base); }
+.nuclei-runs-header__sticky { background: var(--color-surface-sunken); z-index: 4; }
+.nuclei-runs-header__sticky--check, .nuclei-runs-row__check { left: 0; }
+.nuclei-runs-header__sticky--run, .nuclei-runs-row__run {
+  left: 32px;
+  /* Hairline plus a soft right-edge shadow so scrolled columns visibly slide under the frozen Run column. */
+  box-shadow: 1px 0 0 var(--color-border-subtle), 6px 0 8px -6px color-mix(in srgb, var(--color-text-primary) 28%, transparent);
+}
+
+.nuclei-runs-row {
+  position: absolute; left: 0; right: 0; display: grid; align-items: stretch; cursor: pointer;
+  border-bottom: 1px solid var(--color-border-subtle); color: var(--color-text-primary);
+  font-family: var(--font-mono); font-size: var(--font-size-chrome-label);
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-runs-row:hover, .nuclei-runs-row[data-checked='true'] {
+  background: color-mix(in srgb, var(--color-accent-quantum) 8%, var(--color-surface-raised));
+}
+.nuclei-runs-row:hover > .nuclei-runs-row__check, .nuclei-runs-row:hover > .nuclei-runs-row__run,
+.nuclei-runs-row[data-checked='true'] > .nuclei-runs-row__check, .nuclei-runs-row[data-checked='true'] > .nuclei-runs-row__run {
+  background: color-mix(in srgb, var(--color-accent-quantum) 8%, var(--color-surface-raised));
+}
+/* Inset ring: the row sits flush against the sticky header and the scroller edge, so an outset ring is clipped. */
+.nuclei-runs-row:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring-color); outline-offset: -2px; z-index: 2; }
+.nuclei-runs-row input[type='checkbox'] { accent-color: var(--color-accent-quantum); }
+.nuclei-runs-row__check { display: flex; align-items: center; justify-content: center; padding: 0 var(--space-2); }
+.nuclei-runs-row__run { display: flex; align-items: center; min-width: 0; padding: 0 var(--space-2); color: var(--color-text-tertiary); }
+/* Cells fill the row height (so sticky backgrounds cover scrolled pills) and centre their content. */
+.nuclei-runs-row__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nuclei-runs-row__cell {
+  display: flex; align-items: center; justify-content: flex-start; min-width: 0;
+  padding: 0 var(--space-2); font-variant-numeric: tabular-nums; text-align: left;
+}
+.nuclei-runs-row__cell[data-numeric='true'] { justify-content: flex-end; text-align: right; }
+
+/* stdout / stderr switch in run detail (ui/Tabs) */
+.nuclei-output-tabs { margin-bottom: var(--space-2); }
+
+/* A quiet in-text action, e.g. "View traceback" beside an error summary. */
+.nuclei-link-button {
+  padding: 0; border: 0; background: transparent; cursor: pointer; flex: none;
+  color: var(--color-accent-quantum-text); font-family: var(--font-sans); font-size: var(--font-size-caption);
+}
+.nuclei-link-button:hover { text-decoration: underline; }
+
+/* Noise model list rows */
+.nuclei-noise-row {
+  display: block; width: 100%; padding: var(--space-2) var(--space-3); text-align: left; cursor: pointer;
+  background: transparent; border: none; border-left: 2px solid transparent;
+  color: var(--color-text-primary); font-family: var(--font-sans); font-size: var(--font-size-chrome-label);
+}
+.nuclei-noise-row { display: flex; align-items: center; gap: var(--space-2); }
+.nuclei-noise-row__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nuclei-noise-row__tag {
+  flex: none; padding: 0 var(--space-2); border: 1px solid var(--color-border-strong); border-radius: var(--radius-pill);
+  color: var(--color-accent-quantum-text); font-size: var(--font-size-caption);
+}
+/* Inset ring: the list scrolls and clips an outset ring at its edges. */
+.nuclei-noise-row:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring-color); outline-offset: -2px; }
+.nuclei-noise-row[data-active='true'] { background: var(--color-surface-overlay); }
+.nuclei-noise-row[data-compare='true'] { border-left-color: var(--color-accent-quantum); }
+
+/* Noise comparison: the channel column takes the slack and wraps; value columns hug their numbers,
+   and a long model name wraps inside its header so both columns always fit the dialog. */
+.nuclei-table.nuclei-noise-diff { table-layout: fixed; min-width: 0; width: 100%; }
+.nuclei-table.nuclei-noise-diff th, .nuclei-table.nuclei-noise-diff td { overflow-wrap: anywhere; white-space: normal; vertical-align: top; }
+.nuclei-table.nuclei-noise-diff th:first-child, .nuclei-table.nuclei-noise-diff td:first-child { width: 36%; }
+.nuclei-table.nuclei-noise-diff td.nuclei-table__num { white-space: nowrap; }
+
+/* Compare: equal run columns that wrap instead of widening the page. */
+.nuclei-table.nuclei-compare-diff { table-layout: fixed; min-width: 0; width: 100%; }
+.nuclei-table.nuclei-compare-diff th, .nuclei-table.nuclei-compare-diff td { white-space: normal; overflow-wrap: anywhere; vertical-align: top; }
+.nuclei-compare-long { margin-top: var(--space-3); }
+.nuclei-compare-long__key { margin-bottom: var(--space-1); color: var(--color-text-secondary); font: var(--font-weight-semibold) var(--font-size-caption) var(--font-sans); text-transform: uppercase; letter-spacing: 0.04em; }
+.nuclei-compare-long__item { margin-bottom: var(--space-2); }
+.nuclei-compare-long__run { margin-bottom: 2px; color: var(--color-text-tertiary); font: var(--font-size-caption) var(--font-mono); }
+.nuclei-compare-long__value {
+  margin: 0; padding: var(--space-2); max-height: 144px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere;
+  border: 1px solid var(--color-border-strong); border-radius: var(--radius-xs); background: var(--color-surface-sunken);
+  color: var(--color-text-primary); font: var(--font-size-chrome-label) var(--font-mono);
+}
+.nuclei-compare-long__value[data-tone='error'] { border-color: var(--color-danger); color: var(--color-text-primary); background: color-mix(in srgb, var(--color-danger) 8%, var(--color-surface-sunken)); }
+
+.nuclei-experiment-row__meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* The form scrolls on its own so the experiment list keeps its height at small window sizes. */
+.nuclei-experiment-form-region { flex: 0 1 auto; min-height: 0; max-height: calc(100% - 160px); display: flex; flex-direction: column; }
+.nuclei-experiment-form-region > form { min-height: 0; overflow-y: auto; }
+.nuclei-experiment-form__footer { position: sticky; bottom: 0; margin: 0 -12px; padding: var(--space-3) 12px; background: var(--color-surface-base); border-top: 1px solid var(--color-border-subtle); display: flex; flex-direction: column; gap: var(--space-2); }
+
+/* A malformed experiment file: collapsed to one line, expands to plain-language problems. */
+.nuclei-broken-experiment {
+  margin: var(--space-2); border: 1px solid color-mix(in srgb, var(--color-danger) 45%, var(--color-border-strong)); border-radius: var(--radius-soft);
+  background: color-mix(in srgb, var(--color-danger) 7%, transparent);
+}
+.nuclei-broken-experiment__head {
+  display: flex; align-items: center; gap: var(--space-1); width: 100%; padding: var(--space-2);
+  background: transparent; border: 0; cursor: pointer; text-align: left;
+  color: var(--color-text-primary); font-family: var(--font-sans); font-size: var(--font-size-chrome-label);
+}
+.nuclei-broken-experiment__file { font-family: var(--font-mono); font-weight: var(--font-weight-medium); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nuclei-broken-experiment__count { margin-left: auto; flex: none; color: var(--color-text-secondary); font-size: var(--font-size-caption); }
+.nuclei-broken-experiment__body { padding: 0 var(--space-2) var(--space-2); }
+.nuclei-broken-experiment__body ul { margin: 0 0 var(--space-2); padding-left: var(--space-4); color: var(--color-text-secondary); font-size: var(--font-size-chrome-label); line-height: 1.5; }
+.nuclei-broken-experiment__error { margin: 0 0 var(--space-2); color: var(--color-danger-text); font-size: var(--font-size-chrome-label); }
+.nuclei-broken-experiment__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
+/* Zero runs: the EmptyState owns the space under the header, centred. */
+.nuclei-runs-empty { flex: 1; }
+
+/* The header New experiment control reads as selected while its form is open. */
+.nuclei-experiment-new[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--color-accent-quantum) 14%, transparent);
+  border-color: var(--color-accent-quantum); color: var(--color-accent-quantum-text);
+}
+
+/* Compare chart tooltip layout; colours come from the theme via inline props. */
+.nuclei-chart-tooltip { padding: var(--space-2) var(--space-3); border-radius: var(--radius-soft); font-size: var(--font-size-caption); }

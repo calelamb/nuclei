@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { DiracErrorInfo } from '../lib/diracErrors';
 import { DIRAC_API_KEY } from '../config/dirac';
 import { isTauri } from '../platform/PlatformProvider';
 import {
@@ -63,6 +64,10 @@ export interface DiracMessage {
   timestamp: string; // ISO-8601; generated at append time
   thinking?: string; // extended thinking content
   toolCalls?: ToolCall[];
+  /** Set when the request failed; rendered as an error card, never as markdown. */
+  error?: DiracErrorInfo;
+  /** Set when the person pressed Stop; any partial reply is kept. */
+  stopped?: boolean;
 }
 
 export interface AmbientMessage {
@@ -109,6 +114,9 @@ interface DiracState {
   composePreview: ComposePreview | null;
   addMessage: (msg: NewMessageInput) => void;
   updateLastAssistant: (content: string) => void;
+  /** Turn the last assistant message into an error card. */
+  failLastAssistant: (error: DiracErrorInfo) => void;
+  markLastStopped: () => void;
   updateLastThinking: (thinking: string) => void;
   updateLastToolCalls: (toolCalls: ToolCall[]) => void;
   updateToolCallStatus: (toolId: string, status: ToolCall['status'], result?: string) => void;
@@ -169,6 +177,17 @@ export const useDiracStore = create<DiracState>((set) => ({
       msgs[lastIdx] = { ...msgs[lastIdx], content };
     }
     return { messages: msgs };
+  }),
+  failLastAssistant: (error) => set((s) => {
+    const lastIdx = s.messages.length - 1;
+    if (lastIdx < 0 || s.messages[lastIdx].role !== 'assistant') return {};
+    const msgs = s.messages.map((m, i) => (i === lastIdx ? { ...m, content: '', error } : m));
+    return { messages: msgs };
+  }),
+  markLastStopped: () => set((s) => {
+    const lastIdx = s.messages.length - 1;
+    if (lastIdx < 0 || s.messages[lastIdx].role !== 'assistant') return {};
+    return { messages: s.messages.map((m, i) => (i === lastIdx ? { ...m, stopped: true } : m)) };
   }),
   updateLastThinking: (thinking) => set((s) => {
     const msgs = [...s.messages];

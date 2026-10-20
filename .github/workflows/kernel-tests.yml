@@ -51,6 +51,8 @@ jobs:
           # QEC data engine: collection imports these modules directly, so the
           # full kernel suite must install them even though app use is optional.
           pip install "pyarrow>=18,<26" "duckdb>=1.2,<2" "jsonschema>=4.23,<5"
+          # nuclei-mcp (kernel/nuclei_mcp): official MCP SDK + scipy for the Lambda fit.
+          pip install "mcp==2.3.0" "scipy>=1.11,<2"
 
       - name: Run kernel tests
         run: pytest kernel/tests/ -v
@@ -62,7 +64,8 @@ jobs:
         # process_request signature, which once broke every connection.
         run: |
           pip install "websockets==13.1"
-          pytest kernel/tests/test_kernel_auth.py kernel/tests/test_kernel_xsite_regression.py \
+          pytest kernel/tests/test_kernel_auth.py kernel/tests/test_kernel_auth_multi.py \
+            kernel/tests/test_kernel_xsite_regression.py \
             kernel/tests/test_lab_token_isolation.py kernel/tests/test_docs_fixtures.py \
             kernel/tests/test_docs_lab_fixtures.py -v
 

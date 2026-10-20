@@ -84,3 +84,17 @@ describe('qecSessionCatalogStore', () => {
     });
   });
 });
+
+describe('markUnavailable (qec-r-12)', () => {
+  it('turns the catalog into an explained error for the current project only', () => {
+    const store = useQecSessionCatalogStore;
+    store.getState().reset();
+    store.getState().setProjectScope('/a');
+    store.getState().markUnavailable('/b');
+    expect(store.getState().status).toBe('idle');
+    store.getState().markUnavailable('/a');
+    expect(store.getState().status).toBe('error');
+    expect(store.getState().error).toMatch(/unavailable while the QEC Data Engine is offline/);
+    expect(store.getState().sessions).toEqual([]);
+  });
+});

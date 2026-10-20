@@ -18,6 +18,7 @@
 
 import { loadBridge } from '../platform/PlatformProvider';
 import type { DiracMessage, ToolCall } from '../stores/diracStore';
+import type { DiracErrorInfo, DiracErrorKind } from './diracErrors';
 
 export const CONVERSATION_SCHEMA_VERSION = 1;
 
@@ -101,6 +102,8 @@ export function parseConversation(raw: unknown): PersistedConversation | null {
       timestamp: typeof mm.timestamp === 'string' ? mm.timestamp : nowIso(),
     };
     if (typeof mm.thinking === 'string') message.thinking = mm.thinking;
+    const error = sanitizeError(mm.error);
+    if (error) message.error = error;
     if (Array.isArray(mm.toolCalls)) {
       message.toolCalls = (mm.toolCalls as unknown[])
         .map(sanitizeToolCall)
@@ -116,7 +119,44 @@ export function parseConversation(raw: unknown): PersistedConversation | null {
         : crypto.randomUUID(),
     created_at: typeof data.created_at === 'string' ? data.created_at : nowIso(),
     updated_at: typeof data.updated_at === 'string' ? data.updated_at : nowIso(),
-    messages,
+    messages: dropLegacyGreetings(messages),
+  };
+}
+
+/**
+ * Before 2026-07-14 every LessonView mount saved a canned "Welcome to
+ * **<lesson>**! ..." assistant message. The code that wrote them is gone but
+ * the saved copies keep reloading, so strip them (and any run of identical
+ * consecutive assistant messages) on load.
+ */
+const LEGACY_GREETING = /^Welcome to \*\*.+\*\*![\s\S]*I'm here to help — ask me anything as you work through this lesson\.\s*$/;
+
+export function dropLegacyGreetings(messages: readonly DiracMessage[]): DiracMessage[] {
+  const out: DiracMessage[] = [];
+  for (const m of messages) {
+    if (m.role === 'assistant' && LEGACY_GREETING.test(m.content)) continue;
+    const prev = out[out.length - 1];
+    if (
+      prev && prev.role === 'assistant' && m.role === 'assistant' &&
+      prev.content === m.content && !prev.toolCalls?.length && !m.toolCalls?.length
+    ) continue;
+    out.push(m);
+  }
+  return out;
+}
+
+const ERROR_KINDS: readonly DiracErrorKind[] = ['auth', 'rate_limit', 'busy', 'billing', 'offline', 'bad_request', 'unknown'];
+
+function sanitizeError(raw: unknown): DiracErrorInfo | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.title !== 'string' || typeof r.message !== 'string') return null;
+  return {
+    kind: ERROR_KINDS.includes(r.kind as DiracErrorKind) ? (r.kind as DiracErrorKind) : 'unknown',
+    title: r.title,
+    message: r.message,
+    action: r.action === 'update-key' ? 'update-key' : null,
+    details: typeof r.details === 'string' ? r.details : '',
   };
 }
 

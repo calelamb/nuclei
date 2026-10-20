@@ -146,6 +146,8 @@ export type KernelMessage =
   // nuclei_circuits(noise) and collect its labeled circuits.
   | { type: 'qec_materialize'; code: string; noise?: Record<string, number> }
   | { type: 'qec_decode_sample'; circuit_text: string; decoder: 'pymatching'; seed?: number }
+  // Circuit Explain: static analysis of the circuit text (non-determinism + min-weight logical error).
+  | { type: 'qec_explain'; circuit_text: string; analysis?: 'both' | 'nondeterministic' | 'min_weight'; request_id?: string }
   // Protocol v1.2 (PRD 10 Phase F) — Azure Quantum Resource Estimator over
   // Q# source or OpenQASM 3.
   | { type: 'qec_estimate'; code: string; language: 'qsharp' | 'qasm3' | 'qiskit'; options?: QecEstimateOptions }
@@ -185,25 +187,29 @@ interface HardwareJobDTO {
 
 export type KernelResponse =
   | { type: 'snapshot'; data: CircuitSnapshot | null }
-  | { type: 'result'; data: SimulationResult | null }
+  /** `stopped`: the person pressed Stop; the previous result is still valid and must not be discarded. */
+  | { type: 'result'; data: SimulationResult | null; stopped?: boolean }
   | { type: 'python_result'; success: boolean }
   | {
       type: 'error';
       message: string;
       traceback?: string;
       code?: string;
-      phase?: 'parse' | 'execute' | 'python' | 'transpile' | 'debug' | 'lint' | 'format' | 'qec_estimate' | 'qec_generate' | 'qec_snapshot' | 'qec_materialize' | 'qec_campaign' | 'qec_decode_sample' | 'trainability' | 'discovery';
+      phase?: 'parse' | 'execute' | 'python' | 'transpile' | 'debug' | 'lint' | 'format' | 'qec_estimate' | 'qec_generate' | 'qec_snapshot' | 'qec_materialize' | 'qec_campaign' | 'qec_decode_sample' | 'qec_explain' | 'trainability' | 'discovery';
       /** Protocol v1.3 (PRD 14) correlation ids on Lab errors. */
       job_id?: string;
       run_id?: string;
       candidate_id?: string;
-      /** Echo of the `request_id` of a Lab sync request (discovery_*); absent from older kernels. */
+      /** Echo of the `request_id` of a Lab sync request (discovery_*) or qec_explain; absent from older kernels. */
       request_id?: string;
       framework?: Framework;
       dependency?: string;
     }
-  | { type: 'output'; text: string }
-  | { type: 'stderr'; text: string }
+  // `phase: 'parse'` marks output captured while the live preview re-ran the
+  // user's program on a pause in typing. It is not a user-requested run, so
+  // consumers keep it out of the Terminal.
+  | { type: 'output'; text: string; phase?: 'parse' }
+  | { type: 'stderr'; text: string; phase?: 'parse' }
   // Protocol v1.1 (PRD 09 Phase B) — reply to the `environment` request.
   | ({ type: 'environment' } & KernelEnvironment)
   | { type: 'hardware_connected'; provider: string; success: boolean }
@@ -228,6 +234,8 @@ export type KernelResponse =
   | { type: 'qec_circuits'; circuits: Record<string, string> }
   | ({ type: 'qec_decode_sample' } & QecDecodeSampleResult)
   | { type: 'qec_estimate_result'; data: QecEstimate }
+  // Raw payload; validated with zod (parseQecExplainData) before it reaches the store.
+  | { type: 'qec_explain_result'; data: unknown; request_id?: string }
   // Dev tools Phase 1 — reply to `transpile`. `data` is null on error (an
   // `error` with phase 'transpile' precedes it, house style).
   | { type: 'transpile_result'; data: TranspileResult | null }

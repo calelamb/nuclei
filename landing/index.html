@@ -1,544 +1,321 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Nuclei — The open-source quantum workspace</title>
-  <meta name="description" content="The open-source quantum workspace. Learn it, research it, run it on real hardware: 4 frameworks, QEC campaigns, 8 hardware providers, local and private. Free and open source.">
-  <meta name="theme-color" content="#FBFCFE">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nuclei — QEC results, with the working shown</title>
+<meta name="description" content="Nuclei turns the sinter CSVs and Stim circuits you already have into QEC statistics you can defend: rates with units, Λ fits, decoders compared. Free and open source.">
+<meta name="theme-color" content="#FCFCFA">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230F1B2D'/%3E%3Cg transform='translate(1.96 3.52) scale(0.78)' fill='none' stroke='%232CC6E8' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 5V27'/%3E%3Cpath d='M12.5 25V15.5C12.5 12.6 14.4 11 16.75 11S21 12.6 21 15.5V25'/%3E%3Cpath d='M24.5 5L29 16L24.5 27'/%3E%3C/g%3E%3C/svg%3E">
 
-  <!-- Favicon: blue atom glyph (matches new brand accent #2563EB) -->
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Ccircle cx='24' cy='24' r='3' fill='%232563EB'/%3E%3Cg stroke='%232563EB' stroke-width='2.5' fill='none' stroke-linecap='round'%3E%3Cellipse cx='24' cy='24' rx='18' ry='7'/%3E%3Cellipse cx='24' cy='24' rx='18' ry='7' transform='rotate(60 24 24)'/%3E%3Cellipse cx='24' cy='24' rx='18' ry='7' transform='rotate(120 24 24)'/%3E%3C/g%3E%3C/svg%3E">
+<meta property="og:title" content="Nuclei — QEC results, with the working shown">
+<meta property="og:description" content="Open sinter CSVs and Stim circuits and get QEC statistics you can defend. Free and open source.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://getnuclei.dev">
+<meta name="twitter:card" content="summary">
 
-  <!-- Open Graph -->
-  <meta property="og:title" content="Nuclei — The open-source quantum workspace">
-  <meta property="og:description" content="Learn it. Research it. Run it on real hardware. 4 frameworks, QEC campaigns, 8 hardware providers, local and private. Free and open source.">
-  <meta property="og:type" content="website">
-  <meta property="og:url" content="https://getnuclei.dev">
-  <meta name="twitter:card" content="summary">
+<script defer src="/_vercel/insights/script.js"></script>
 
-  <!-- Vercel Web Analytics (cookieless, GDPR-friendly) -->
-  <script defer src="/_vercel/insights/script.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&amp;family=Hanken+Grotesk:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
 
-  <!-- Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#FCFCFA;--ink:#15171A;--ink2:#4A5058;--ink3:#33383F;--muted:#6B7178;
+  --rule:#DADDE1;--rule-soft:#E3E6EA;--rule-strong:#B9BEC5;
+  --accent:#0B6E8C;--accent-deep:#074E64;--wash:#E7F2F5;--wash2:#EEF5F7;
+  --surface:#F2F3F1;--white:#FFFFFF;--numeral:#6B7178;
+  --serif:'Newsreader',Georgia,serif;--sans:'Hanken Grotesk',system-ui,sans-serif;--mono:'JetBrains Mono',ui-monospace,monospace;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.65;-webkit-font-smoothing:antialiased}
+a{color:var(--accent)}
+a:hover{color:var(--accent-deep)}
+a:focus-visible,.scroll:focus-visible,pre:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+.skip{position:absolute;left:12px;top:-60px;background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:6px;z-index:10}
+.skip:focus{top:12px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.wrap{max-width:1120px;margin:0 auto;padding-left:24px;padding-right:24px}
+.mono{font-family:var(--mono)}
+.muted{color:var(--ink2)}
+.r{text-align:right}
 
-  <style>
-    /* ============================================================
-       Nuclei landing — monochrome blue system (v0.5.0 redesign)
-       ============================================================ */
-    :root {
-      --ink:  #0C1A33;               /* primary text, headings */
-      --sec:  #52658A;               /* secondary / body text */
-      --mut:  #94A3B8;               /* muted text, meta, labels */
-      --blue: #2563EB;               /* primary accent, CTAs, links */
-      --deep: #1E3A8A;               /* CTA hover, secondary accent */
-      --sky:  #0EA5E9;               /* tertiary accent (glow) */
-      --bg:   #FBFCFE;               /* page background */
-      --surf: #F3F6FC;               /* surfaces, cards, input fills */
-      --bd:   rgba(30, 58, 138, .10); /* hairline borders */
-      --bdh:  rgba(30, 58, 138, .22); /* border on hover */
-      --tint: rgba(37, 99, 235, .09); /* icon tiles, NEW badges */
-      --mode-teal: #00B4D8;           /* Learn door (in-app --mode-accent) */
-      --mode-violet: #7B2D8E;         /* Research door (in-app --mode-accent) */
+.site-header{display:flex;justify-content:space-between;align-items:center;gap:8px 16px;flex-wrap:wrap;padding-top:14px;padding-bottom:14px;border-bottom:1px solid var(--rule)}
+.brand{display:flex;align-items:center;gap:10px;color:var(--ink);text-decoration:none;min-height:44px}
+.brand:hover{color:var(--ink)}
+.brand span{font-family:var(--serif);font-size:22px;font-weight:600}
+.site-header nav{display:flex;gap:4px 20px;flex-wrap:wrap;align-items:center;font-size:15px}
+.site-header nav a{color:var(--ink2);text-decoration:none;display:inline-flex;align-items:center;min-height:44px;transition:color 150ms ease}
+.site-header nav a:hover{color:var(--ink)}
+.site-header nav a.strong{color:var(--ink);font-weight:600}
 
-      --font-display: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      --font-body: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+h1,h2{font-family:var(--serif);font-weight:500;margin:0}
+.hero{padding:112px 0 96px;border-bottom:1px solid var(--rule)}
+h1{font-size:clamp(44px,7vw,92px);line-height:1;letter-spacing:-.025em;max-width:940px}
+.hero-row{display:flex;flex-wrap:wrap;gap:32px 40px;margin-top:44px;align-items:flex-end;justify-content:space-between}
+.hero-copy{margin:0;font-size:20px;line-height:1.55;color:var(--ink2);max-width:580px;flex:1 1 360px}
+.btns{display:flex;gap:12px;flex-wrap:wrap}
+.btn{font-weight:600;text-decoration:none;padding:14px 22px;border-radius:6px;min-height:48px;display:inline-flex;align-items:center;transition:background-color 150ms ease,border-color 150ms ease}
+.btn-ink{background:var(--ink);color:var(--paper)}
+.btn-ink:hover{background:#2E333A;color:var(--paper)}
+.btn-line{border:1px solid var(--rule-strong);color:var(--ink)}
+.btn-line:hover{border-color:var(--ink);color:var(--ink)}
+.fine{margin:28px 0 0;font-size:14px;color:var(--muted)}
 
-      --maxw: 1180px;
-    }
+.sec{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:48px;padding-top:96px}
+.sec:first-of-type{padding-top:88px}
+.sec-main{min-width:0}
+h2{font-size:40px;line-height:1.1;letter-spacing:-.015em}
+.num{color:var(--numeral);font-size:26px;vertical-align:6px;margin-right:14px}
+.lede{margin:20px 0 0;max-width:620px;color:var(--ink3)}
+figure{margin:32px 0 0}
+figcaption{margin-top:14px;font-family:var(--serif);font-style:italic;font-size:16px;color:var(--ink2)}
+figcaption b{font-style:normal;font-weight:600;color:var(--ink)}
+.note{padding-top:76px;font-size:14.5px;line-height:1.6;color:var(--ink2)}
+.note p{margin:0;padding-top:14px;border-top:2px solid var(--ink)}
 
-    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+.code{margin:0;padding:22px 26px;background:var(--surface);border:1px solid var(--rule);border-radius:6px;font-family:var(--mono);font-size:13px;line-height:1.8;color:var(--ink);overflow-x:auto}
+.dim{color:var(--muted)}
+.box{background:var(--white);border:1px solid var(--rule);border-radius:6px}
+.plotbox{padding:20px 20px 12px}
+.plot{display:block;width:100%;height:auto}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse}
+.data{width:100%;min-width:520px;font-size:15px}
+.data thead tr{border-bottom:1.5px solid var(--ink)}
+.data th,.data td{padding:12px 20px;text-align:left}
+.data thead th{padding:14px 20px;font-weight:600}
+.data tbody tr{border-bottom:1px solid var(--rule-soft)}
+.data tbody tr:last-child{border-bottom:0}
+.data th.r,.data td.r,.lam td{text-align:right}
+.data tbody th{font-weight:500}
+.lam tbody{font-family:var(--mono);font-size:14px}
+.lam thead th.mono{font-size:13px}
+.lam .acc{font-weight:500;color:var(--accent)}
+.lam .dropped th{color:var(--muted)}
+.lam .dropped td{color:var(--muted);font-family:var(--sans);font-size:14px}
+.dec tbody th.mono,.dec td.mono{font-size:14px}
 
-    html { scroll-behavior: smooth; }
+.more{padding-top:112px}
+.more h2{max-width:720px}
+.more-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:0 48px;margin-top:28px}
+dl{margin:0}
+dl>div{padding:16px 0;border-top:1px solid var(--rule)}
+dl>div:last-child{border-bottom:1px solid var(--rule)}
+dt{font-weight:600}
+dd{margin:4px 0 0;color:var(--ink2)}
 
-    body {
-      background: var(--bg);
-      color: var(--ink);
-      font-family: var(--font-body);
-      font-size: 16px;
-      line-height: 1.6;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-    }
+.get{margin-top:128px;padding:64px 0 96px;border-top:2px solid var(--ink);display:flex;flex-wrap:wrap;gap:40px 48px}
+.get-intro{flex:1 1 300px;max-width:380px}
+.get-intro p{margin:16px 0 0;color:var(--ink2)}
+.get-table{flex:999 1 520px;min-width:0}
+.get-table table{width:100%;min-width:440px;font-size:16px}
+.get-table tr{border-bottom:1px solid var(--rule)}
+.get-table th{text-align:left;font-weight:600;padding:16px 12px 16px 0}
+.get-table td{padding:0 12px 0 0}
+.get-table td.mono{font-size:14px}
+.get-table td.r{padding-right:0}
+.dl-link{font-weight:600;display:inline-flex;align-items:center;min-height:44px;padding:0 4px;white-space:nowrap}
+.get-table tr.is-detected{background:var(--wash2)}
+.get-table tr.is-detected th{box-shadow:inset 3px 0 0 var(--accent);padding-left:12px}
 
-    a { color: inherit; text-decoration: none; }
+footer{border-top:1px solid var(--rule)}
+.foot{padding-top:20px;padding-bottom:20px;display:flex;justify-content:space-between;align-items:center;gap:4px 24px;flex-wrap:wrap;font-size:14px;color:var(--muted)}
+.foot a{display:inline-flex;align-items:center;min-height:44px}
+.foot>span:first-child a{display:inline;min-height:0}
+.foot-links{display:flex;gap:24px}
 
-    .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 40px; }
-
-    .eyebrow {
-      font-family: var(--font-mono);
-      font-size: 12px;
-      letter-spacing: .14em;
-      text-transform: uppercase;
-      color: var(--blue);
-      margin-bottom: 12px;
-    }
-
-    /* ---------- keyframes ---------- */
-    @keyframes nodePulse  { 0%,100%{opacity:.55} 50%{opacity:1} }
-    @keyframes lineFlow   { 0%,100%{opacity:.2; stroke-dashoffset:0} 50%{opacity:.75; stroke-dashoffset:14} }
-    @keyframes glowBreathe{ 0%,100%{opacity:.25; transform:scale(1)} 50%{opacity:.6; transform:scale(1.08)} }
-    @keyframes dotBlink   { 0%,100%{opacity:1} 50%{opacity:.25} }
-    @keyframes barRise    { 0%{transform:scaleY(.4)} 50%{transform:scaleY(1)} 100%{transform:scaleY(.4)} }
-
-    /* ---------- nav ---------- */
-    .nav {
-      position: sticky; top: 0; z-index: 50;
-      background: rgba(251, 252, 254, .82);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border-bottom: 1px solid var(--bd);
-    }
-    .nav-inner {
-      max-width: var(--maxw); margin: 0 auto;
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 18px 40px;
-    }
-    .brand { display: flex; align-items: center; gap: 12px; }
-    .brand svg { color: var(--blue); display: block; }
-    .wordmark {
-      font-family: var(--font-display);
-      font-size: 20px; font-weight: 700; letter-spacing: .06em;
-    }
-    .ver {
-      font-family: var(--font-mono); font-size: 11px; color: var(--mut);
-      border: 1px solid var(--bd); border-radius: 100px; padding: 2px 9px;
-    }
-    .nav-links { display: flex; align-items: center; gap: 28px; font-size: 14px; font-weight: 500; }
-    .nav-links a { color: var(--sec); transition: color 150ms ease; }
-    .nav-links a:hover { color: var(--ink); }
-    .btn-dl-nav {
-      background: var(--blue); color: #fff !important;
-      padding: 9px 20px; border-radius: 8px; font-weight: 600;
-      transition: background 150ms ease;
-    }
-    .btn-dl-nav:hover { background: var(--deep); }
-
-    /* ---------- buttons ---------- */
-    .btn-primary {
-      display: inline-flex; align-items: center; gap: 9px;
-      background: var(--blue); color: #fff;
-      padding: 14px 26px; border-radius: 10px;
-      font-weight: 600; font-size: 15px; cursor: pointer;
-      transition: background 150ms ease;
-    }
-    .btn-primary:hover { background: var(--deep); }
-    .btn-outline {
-      display: inline-flex; align-items: center;
-      padding: 14px 26px; border: 1px solid var(--bd); border-radius: 10px;
-      font-weight: 600; font-size: 15px; color: var(--ink); cursor: pointer;
-      transition: border-color 150ms ease, background 150ms ease;
-    }
-    .btn-outline:hover { border-color: var(--bdh); background: var(--surf); }
-
-    /* ---------- hero ---------- */
-    .hero { display: grid; grid-template-columns: 1.05fr .95fr; gap: 48px; align-items: center; padding: 76px 0 72px; }
-    .badge {
-      display: inline-flex; align-items: center; gap: 8px;
-      font-family: var(--font-mono); font-size: 12px; font-weight: 500; color: var(--deep);
-      border: 1px solid var(--bd); background: var(--surf);
-      padding: 5px 14px; border-radius: 100px; margin-bottom: 26px;
-    }
-    .badge .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--blue); animation: dotBlink 2.4s ease-in-out infinite; }
-    .hero h1 {
-      font-family: var(--font-display); font-size: 56px; font-weight: 600;
-      line-height: 1.04; letter-spacing: -0.03em; margin-bottom: 22px;
-    }
-    .hero h1 .accent { color: var(--blue); }
-    .hero-sub { font-size: 18px; line-height: 1.65; color: var(--sec); max-width: 470px; margin-bottom: 34px; }
-    .hero-actions { display: flex; gap: 14px; flex-wrap: wrap; }
-
-    /* two-door mode chooser — mirrors the in-app --mode-accent system
-       (teal Learn / violet Research) so site and app tell one story. */
-    .doors { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 26px; max-width: 470px; }
-    .door {
-      display: block; text-decoration: none; border-radius: 12px; padding: 18px 18px 20px;
-      border: 1px solid var(--bd); background: var(--surf); transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
-    }
-    .door:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(30,58,138,.10); }
-    .door-learn { border-top: 3px solid var(--mode-teal); }
-    .door-learn:hover { border-color: var(--mode-teal); }
-    .door-research { border-top: 3px solid var(--mode-violet); }
-    .door-research:hover { border-color: var(--mode-violet); }
-    .door-eyebrow { font-family: var(--font-mono); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; margin-bottom: 6px; }
-    .door-learn .door-eyebrow { color: var(--mode-teal); }
-    .door-research .door-eyebrow { color: var(--mode-violet); }
-    .door-title { font-family: var(--font-display); font-size: 17px; font-weight: 600; color: var(--ink); margin-bottom: 4px; }
-    .door-desc { font-size: 13px; line-height: 1.5; color: var(--sec); }
-
-    /* capabilities strip — "complete" energy shown, not stated. */
-    .caps { display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: center; font-size: 13.5px; color: var(--sec); }
-    .caps .cap { display: inline-flex; align-items: center; gap: 8px; }
-    .caps .cap::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--blue); }
-
-    .visual { position: relative; display: flex; justify-content: center; }
-    .glow { position: absolute; border-radius: 50%; }
-    .glow-a { width: 200px; height: 200px; background: radial-gradient(circle, rgba(37,99,235,.14), transparent 70%); top: 10%; left: 6%; animation: glowBreathe 5s ease-in-out infinite; }
-    .glow-b { width: 170px; height: 170px; background: radial-gradient(circle, rgba(14,165,233,.14), transparent 70%); bottom: 8%; right: 8%; animation: glowBreathe 6s ease-in-out infinite 1s; }
-    .visual svg.circuit { width: 100%; max-width: 470px; position: relative; }
-
-    /* ---------- features ---------- */
-    .features { border-top: 1px solid var(--bd); padding: 56px 0 76px; }
-    .features h2 {
-      font-family: var(--font-display); font-size: 34px; font-weight: 600;
-      letter-spacing: -0.02em; max-width: 600px; margin-bottom: 44px;
-    }
-    .feature-grid {
-      display: grid; grid-template-columns: repeat(3, 1fr);
-      gap: 1px; background: var(--bd); border: 1px solid var(--bd);
-      border-radius: 14px; overflow: hidden;
-    }
-    .cell { background: var(--bg); padding: 30px 28px 34px; }
-    .icon-tile {
-      width: 38px; height: 38px; display: flex; align-items: center; justify-content: center;
-      border-radius: 9px; color: var(--blue); background: var(--tint); margin-bottom: 18px;
-    }
-    .cell h3 { font-family: var(--font-display); font-size: 17px; font-weight: 600; margin-bottom: 7px; }
-    .cell p { font-size: 14px; line-height: 1.6; color: var(--sec); }
-
-    /* ---------- frameworks ---------- */
-    .frameworks { padding-bottom: 76px; }
-    .fw-card {
-      border: 1px solid var(--bd); border-radius: 14px; background: var(--surf);
-      padding: 44px 48px; display: flex; align-items: center; justify-content: space-between;
-      gap: 32px; flex-wrap: wrap;
-    }
-    .fw-card .lead { max-width: 260px; }
-    .fw-card .lead h2 { font-family: var(--font-display); font-size: 26px; font-weight: 600; letter-spacing: -0.02em; }
-    .fw-list { display: flex; gap: 44px; flex-wrap: wrap; }
-    .fw-name { font-family: var(--font-mono); font-size: 22px; font-weight: 500; display: inline-flex; align-items: center; gap: 7px; }
-    .fw-vendor { font-size: 13px; color: var(--mut); margin-top: 4px; }
-    .new-pill {
-      font-family: var(--font-mono); font-size: 10px; font-weight: 600; color: var(--blue);
-      background: rgba(37,99,235,.1); padding: 2px 7px; border-radius: 100px; letter-spacing: .04em;
-    }
-
-    /* ---------- how it works ---------- */
-    .how { padding-bottom: 80px; }
-    .how-head { text-align: center; margin-bottom: 48px; }
-    .how-head h2 { font-family: var(--font-display); font-size: 30px; font-weight: 600; letter-spacing: -0.02em; }
-    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 36px; max-width: 860px; margin: 0 auto; }
-    .step { text-align: center; }
-    .step .num { font-family: var(--font-display); font-size: 40px; font-weight: 400; color: var(--blue); margin-bottom: 14px; }
-    .step h3 { font-family: var(--font-display); font-size: 19px; font-weight: 600; margin-bottom: 8px; }
-    .step p { font-size: 14px; color: var(--sec); line-height: 1.6; }
-
-    /* ---------- research callout ---------- */
-    .research { padding-bottom: 76px; }
-    .research-card {
-      border: 1px solid var(--bd); border-radius: 14px; background: var(--surf);
-      padding: 40px 48px; display: flex; align-items: center; justify-content: space-between;
-      gap: 32px; flex-wrap: wrap;
-    }
-    .research-card .lead { max-width: 560px; }
-    .research-card .lead h2 { font-family: var(--font-display); font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 8px; }
-    .research-card .lead p { font-size: 14px; line-height: 1.65; color: var(--sec); }
-    .research-card .btn-outline { background: var(--bg); flex-shrink: 0; }
-
-    /* ---------- download CTA ---------- */
-    .cta { padding-bottom: 80px; }
-    .cta-panel {
-      border: 1px solid var(--bd); border-radius: 18px;
-      background: linear-gradient(180deg, var(--surf), var(--bg));
-      text-align: center; padding: 64px 48px;
-    }
-    .cta-panel h2 { font-family: var(--font-display); font-size: 32px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 14px; }
-    .cta-panel .sub { font-size: 16px; color: var(--sec); max-width: 420px; margin: 0 auto 30px; }
-    .cta-badges { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
-    .dl-badge {
-      display: inline-flex; align-items: center; gap: 9px;
-      background: #fff; border: 1px solid var(--bd); color: var(--ink);
-      padding: 13px 24px; border-radius: 100px; font-weight: 500; font-size: 14px; cursor: pointer;
-      transition: border-color 150ms ease, background 150ms ease;
-    }
-    .dl-badge:hover { border-color: var(--bdh); background: var(--surf); }
-    .dl-badge-primary { background: var(--blue); border-color: var(--blue); color: #fff; font-weight: 600; }
-    .dl-badge-primary:hover { background: var(--deep); border-color: var(--deep); }
-    .dl-badge .arch { font-family: var(--font-mono); font-size: 11px; color: var(--mut); }
-    .dl-badge-primary .arch { color: rgba(255,255,255,.8); }
-    .cta-note { font-family: var(--font-mono); font-size: 12px; color: var(--mut); margin-top: 22px; }
-
-    /* ---------- footer ---------- */
-    .footer { border-top: 1px solid var(--bd); }
-    .footer-inner {
-      max-width: var(--maxw); margin: 0 auto;
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 26px 40px; font-size: 13px; color: var(--mut);
-    }
-    .footer-left { display: flex; align-items: center; gap: 14px; }
-    .footer-left .name { font-family: var(--font-display); font-weight: 600; color: var(--sec); }
-    .footer-left .lic { font-family: var(--font-mono); }
-    .footer a { color: var(--mut); transition: color 150ms ease; }
-    .footer a:hover { color: var(--sec); }
-
-    /* ---------- responsive ---------- */
-    @media (max-width: 1024px) {
-      .hero { grid-template-columns: 1fr; gap: 40px; padding: 56px 0; }
-      .hero-sub { max-width: none; }
-      .visual { order: -1; }
-      .feature-grid { grid-template-columns: repeat(2, 1fr); }
-    }
-    @media (max-width: 720px) {
-      .wrap { padding: 0 24px; }
-      .nav-inner { padding: 16px 24px; }
-      .nav-links { gap: 18px; }
-      .hero h1 { font-size: 40px; }
-      .doors { grid-template-columns: 1fr; }
-      .feature-grid { grid-template-columns: 1fr; }
-      .fw-card { padding: 32px 28px; }
-      .fw-list { gap: 28px; }
-      .research-card { padding: 32px 28px; flex-direction: column; align-items: flex-start; }
-      .steps { grid-template-columns: 1fr; gap: 32px; }
-      .cta-panel { padding: 48px 28px; }
-      .footer-inner { padding: 22px 24px; flex-direction: column; gap: 10px; text-align: center; }
-    }
-    @media (max-width: 520px) {
-      .nav-links .nav-secondary { display: none; }
-    }
-
-    /* ---------- reduced motion ---------- */
-    @media (prefers-reduced-motion: reduce) {
-      html { scroll-behavior: auto; }
-      *, *::before, *::after { animation: none !important; transition: none !important; }
-    }
-  </style>
+@media (max-width:900px){
+  .sec{grid-template-columns:minmax(0,1fr);gap:0}
+  .note{padding-top:24px;max-width:620px}
+}
+@media (max-width:600px){
+  body{font-size:16px}
+  .wrap{padding-left:16px;padding-right:16px}
+  .hero{padding:64px 0 56px}
+  .hero-copy{font-size:18px}
+  h2{font-size:32px}
+  .sec{padding-top:64px}
+  .sec:first-of-type{padding-top:56px}
+  .more{padding-top:72px}
+  .get{margin-top:80px;padding:48px 0 64px}
+  .plotbox{padding:12px 8px 6px}
+  .code{padding:16px}
+  .btn{flex:1 1 auto;justify-content:center}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{transition:none!important;scroll-behavior:auto!important}
+}
+</style>
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 
-  <!-- ============ NAV ============ -->
-  <header class="nav">
-    <div class="nav-inner">
-      <a class="brand" href="#" aria-label="Nuclei home">
-        <svg width="26" height="26" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="3" fill="currentColor"/><g stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round"><ellipse cx="24" cy="24" rx="18" ry="7"/><ellipse cx="24" cy="24" rx="18" ry="7" transform="rotate(60 24 24)"/><ellipse cx="24" cy="24" rx="18" ry="7" transform="rotate(120 24 24)"/></g></svg>
-        <span class="wordmark">NUCLEI</span>
-        <span class="ver">v0.14.1</span>
-      </a>
-      <nav class="nav-links" aria-label="Primary">
-        <a href="/docs" class="nav-secondary">Docs</a>
-        <a href="https://github.com/calelamb/nuclei" class="nav-secondary">GitHub</a>
-        <a href="https://github.com/calelamb/nuclei/releases/latest" class="btn-dl-nav">Download</a>
-      </nav>
-    </div>
-  </header>
+<header class="wrap site-header">
+<a class="brand" href="/" aria-label="Nuclei home">
+<svg class="mark" width="26" height="26" viewBox="4 2 28 28" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 5V27"/><path d="M12.5 25V15.5C12.5 12.6 14.4 11 16.75 11S21 12.6 21 15.5V25"/><path d="M24.5 5L29 16L24.5 27"/></svg>
+<span>Nuclei</span>
+</a>
+<nav aria-label="Primary">
+<a href="/docs/">Docs</a>
+<a href="https://github.com/calelamb/nuclei/releases">Changelog</a>
+<a href="https://github.com/calelamb/nuclei">GitHub</a>
+<a class="strong" href="#get">Download</a>
+</nav>
+</header>
 
-  <main class="wrap">
+<main id="main" class="wrap">
 
-    <!-- ============ HERO ============ -->
-    <section class="hero" aria-labelledby="hero-heading">
-      <div>
-        <div class="badge"><span class="dot" aria-hidden="true"></span>Free &amp; open source</div>
-        <h1 id="hero-heading">The open-source <span class="accent">quantum workspace</span></h1>
-        <p class="hero-sub">Learn it. Research it. Run it on real hardware.</p>
+<section class="hero" aria-labelledby="hero">
+<h1 id="hero">QEC results, with the working shown.</h1>
+<div class="hero-row">
+<p class="hero-copy">Point Nuclei at the sinter CSVs and Stim circuits you already have. It turns them into statistics you can defend: rates with their units, Λ fits that say what they left out, and decoders compared with their intervals.</p>
+<div class="btns">
+<a class="btn btn-ink" href="/try/?view=qec">Open a CSV in your browser</a>
+<a class="btn btn-line" href="#get">Desktop app</a>
+</div>
+</div>
+<p class="fine">Free and open source under MIT. No account, no install for the browser version.</p>
+</section>
 
-        <!-- two-door mode chooser — mirrors the in-app Learn/Research chooser -->
-        <div class="doors">
-          <a class="door door-learn" href="/docs/introduction/getting-started/">
-            <div class="door-eyebrow">Learn</div>
-            <div class="door-title">Start learning</div>
-            <div class="door-desc">Lessons, live circuits, and a patient AI tutor from your first qubit.</div>
-          </a>
-          <a class="door door-research" href="/docs/research/workspace-modes/">
-            <div class="door-eyebrow">Research</div>
-            <div class="door-title">Open the research workspace</div>
-            <div class="door-desc">Experiments, QEC campaigns, and hardware, in a workspace built for real work.</div>
-          </a>
-        </div>
+<section class="sec" aria-labelledby="s1">
+<div class="sec-main">
+<h2 id="s1"><span class="num" aria-hidden="true">1</span>Bring the files you have</h2>
+<p class="lede">No new format and no import script. Nuclei reads sinter's own CSV, groups rows by their metadata, and merges repeated runs of the same point.</p>
+<figure>
+<pre class="code" tabindex="0" aria-label="Sinter CSV excerpt"><span class="dim">shots,errors,discards,seconds,decoder,strong_id,json_metadata</span>
+200000,1902,0,2.400,pymatching,3-0.001-…,{"d":3,"r":3,"p":0.001,…}
+200000,540,0,2.400,pymatching,5-0.001-…,{"d":5,"r":5,"p":0.001,…}
+200000,135,0,2.400,pymatching,7-0.001-…,{"d":7,"r":7,"p":0.001,…}
+200000,33,0,2.400,pymatching,9-0.001-…,{"d":9,"r":9,"p":0.001,…}</pre>
+<figcaption><b>Figure 1.</b> Four rows of a sinter CSV, exactly as sinter writes it.</figcaption>
+</figure>
+</div>
+<aside class="note"><p>In the browser the file is read in your tab. Nothing is uploaded.</p></aside>
+</section>
 
-        <div class="hero-actions">
-          <a class="btn-primary" id="hero-dl-btn" href="https://github.com/calelamb/nuclei/releases/latest">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            <span id="hero-dl-text">Download for macOS</span>
-          </a>
-          <a class="btn-outline" href="/try/">Try in browser</a>
-        </div>
+<section class="sec" aria-labelledby="s2">
+<div class="sec-main">
+<h2 id="s2"><span class="num" aria-hidden="true">2</span>Read it correctly</h2>
+<p class="lede">Every plot states what its y-axis counts, per shot or per round, and every point carries its interval. Thin statistics look thin.</p>
+<figure>
+<div class="box plotbox">
+<svg class="plot" viewBox="0 0 640 410" role="img" aria-label="Log-log plot of logical error rate per shot against physical error rate for distances 3, 5, 7 and 9. Larger distances fall faster below p = 0.004; the curves cross between 0.4% and 0.6%.">
+<rect x="443.5" y="30" width="91.5" height="320" fill="#EEF5F7"></rect>
+<text x="489" y="46" text-anchor="middle" font-family="Hanken Grotesk, sans-serif" font-size="12" fill="#4A5058">curves cross</text>
+<g stroke="#E3E6EA" stroke-width="1"><line x1="80" y1="30" x2="600" y2="30"></line><line x1="80" y1="110" x2="600" y2="110"></line><line x1="80" y1="190" x2="600" y2="190"></line><line x1="80" y1="270" x2="600" y2="270"></line></g>
+<line x1="80" y1="350" x2="600" y2="350" stroke="#15171A" stroke-width="1.2"></line>
+<line x1="80" y1="30" x2="80" y2="350" stroke="#15171A" stroke-width="1.2"></line>
+<g font-family="JetBrains Mono, monospace" font-size="11.5" fill="#6B7178" text-anchor="end"><text x="72" y="34">1</text><text x="72" y="114">10⁻¹</text><text x="72" y="194">10⁻²</text><text x="72" y="274">10⁻³</text><text x="72" y="354">10⁻⁴</text></g>
+<g font-family="JetBrains Mono, monospace" font-size="11.5" fill="#6B7178" text-anchor="middle"><text x="130.4" y="370">0.1%</text><text x="287" y="370">0.2%</text><text x="443.5" y="370">0.4%</text><text x="535" y="370">0.6%</text></g>
+<text x="340" y="398" text-anchor="middle" font-family="Hanken Grotesk, sans-serif" font-size="13" fill="#33383F">physical error rate p</text>
+<text x="18" y="190" text-anchor="middle" transform="rotate(-90 18 190)" font-family="Hanken Grotesk, sans-serif" font-size="13" fill="#33383F">logical error rate, per shot</text>
+<polyline points="130.4,191.7 287,144.6 443.5,96.7 535,68.4" fill="none" stroke="#9AA1AA" stroke-width="2"></polyline>
+<polyline points="130.4,235.5 287,164.1 443.5,90.9 535,54.1" fill="none" stroke="#5F8E9C" stroke-width="2"></polyline>
+<polyline points="130.4,283.7 287,187.4 443.5,91.8 535,54.1" fill="none" stroke="#0B6E8C" stroke-width="2"></polyline>
+<polyline points="130.4,332.6 287,216.1 443.5,94.8 535,54.0" fill="none" stroke="#15171A" stroke-width="2"></polyline>
+<g fill="#9AA1AA"><circle cx="130.4" cy="191.7" r="4"></circle><circle cx="287" cy="144.6" r="4"></circle><circle cx="443.5" cy="96.7" r="4"></circle><circle cx="535" cy="68.4" r="4"></circle></g>
+<g fill="#5F8E9C"><rect x="126.4" y="231.5" width="8" height="8"></rect><rect x="283" y="160.1" width="8" height="8"></rect><rect x="439.5" y="86.9" width="8" height="8"></rect><rect x="531" y="50.1" width="8" height="8"></rect></g>
+<g fill="#0B6E8C"><path d="M130.4 278.7L135.4 287.7H125.4Z"></path><path d="M287 182.4L292 191.4H282Z"></path><path d="M443.5 86.8L448.5 95.8H438.5Z"></path><path d="M535 49.1L540 58.1H530Z"></path></g>
+<line x1="130.4" y1="322.4" x2="130.4" y2="347" stroke="#15171A" stroke-width="1.5"></line><line x1="126" y1="322.4" x2="134.8" y2="322.4" stroke="#15171A" stroke-width="1.5"></line><line x1="126" y1="347" x2="134.8" y2="347" stroke="#15171A" stroke-width="1.5"></line>
+<g fill="#FFFFFF" stroke="#15171A" stroke-width="2"><circle cx="130.4" cy="332.6" r="4"></circle><circle cx="287" cy="216.1" r="4"></circle><circle cx="443.5" cy="94.8" r="4"></circle><circle cx="535" cy="54" r="4"></circle></g>
+<g font-family="JetBrains Mono, monospace" font-size="12" text-anchor="end"><text x="120" y="195.7" fill="#6B7178">d=3</text><text x="120" y="239.5" fill="#4F7A87">d=5</text><text x="120" y="287.7" fill="#0B6E8C">d=7</text><text x="120" y="336.6" fill="#15171A">d=9</text></g>
+</svg>
+</div>
+<figcaption><b>Figure 2.</b> Rotated surface code memory, PyMatching, 200,000 shots per point. Example data.</figcaption>
+</figure>
+</div>
+<aside class="note"><p>The d = 9 point at p = 0.1% rests on 33 errors. Its bar says so: ±34%.</p></aside>
+</section>
 
-        <div class="caps" style="margin-top: 26px;">
-          <span class="cap">4 frameworks</span>
-          <span class="cap">QEC campaigns</span>
-          <span class="cap">8 hardware providers</span>
-          <span class="cap">local &amp; private</span>
-        </div>
-      </div>
+<section class="sec" aria-labelledby="s3">
+<div class="sec-main">
+<h2 id="s3"><span class="num" aria-hidden="true">3</span>Fit Λ, and say what was left out</h2>
+<p class="lede">Λ is fitted from per-round rates. Points above threshold, where the logical error rate saturates at one half, are listed as dropped instead of quietly skipped.</p>
+<figure>
+<div class="box scroll" tabindex="0" role="region" aria-label="Figure 3 table, scrollable">
+<table class="data lam">
+<thead><tr><th scope="col">p</th><th scope="col" class="r mono">3→5</th><th scope="col" class="r mono">5→7</th><th scope="col" class="r mono">7→9</th><th scope="col" class="r">Λ</th></tr></thead>
+<tbody>
+<tr><th scope="row">0.1%</th><td>5.9</td><td>5.6</td><td>5.3</td><td class="acc">5.6</td></tr>
+<tr><th scope="row">0.2%</th><td>2.9</td><td>2.8</td><td>2.9</td><td class="acc">2.9</td></tr>
+<tr><th scope="row">0.4%</th><td>1.3</td><td>1.4</td><td>1.4</td><td class="acc">1.4</td></tr>
+<tr class="dropped"><th scope="row">0.6%</th><td colspan="4">dropped: d ≥ 5 saturate at ½, no ratio exists</td></tr>
+</tbody>
+</table>
+</div>
+<figcaption><b>Figure 3.</b> Error suppression per step of two in distance, from the data in Figure 2.</figcaption>
+</figure>
+</div>
+<aside class="note"><p>Per shot, the curves in Figure 2 cross near 0.4%. Per round, Λ is still 1.4 there. Units matter.</p></aside>
+</section>
 
-      <!-- animated quantum circuit -->
-      <div class="visual" aria-hidden="true">
-        <div class="glow glow-a"></div>
-        <div class="glow glow-b"></div>
-        <svg class="circuit" viewBox="0 0 440 340" role="img" aria-label="Animated quantum circuit diagram">
-          <line x1="120" y1="100" x2="220" y2="70"  stroke="var(--blue)" stroke-width="1.5" stroke-dasharray="6 8" style="animation:lineFlow 4s ease-in-out infinite;"/>
-          <line x1="220" y1="70"  x2="320" y2="120" stroke="var(--blue)" stroke-width="1.5" stroke-dasharray="6 8" style="animation:lineFlow 4s ease-in-out infinite .6s;"/>
-          <line x1="120" y1="100" x2="170" y2="190" stroke="var(--blue)" stroke-width="1.5" stroke-dasharray="6 8" style="animation:lineFlow 4s ease-in-out infinite 1s;"/>
-          <line x1="170" y1="190" x2="220" y2="240" stroke="var(--sky)"  stroke-width="1.5" stroke-dasharray="6 8" style="animation:lineFlow 4s ease-in-out infinite 1.4s;"/>
-          <line x1="220" y1="240" x2="320" y2="200" stroke="var(--sky)"  stroke-width="1.5" stroke-dasharray="6 8" style="animation:lineFlow 4s ease-in-out infinite 1.8s;"/>
-          <line x1="320" y1="120" x2="320" y2="200" stroke="var(--blue)" stroke-width="1.5" stroke-dasharray="6 8" style="animation:lineFlow 4s ease-in-out infinite .4s;"/>
-          <line x1="52" y1="100" x2="120" y2="100" stroke="#C6D3EA" stroke-width="2"/>
-          <line x1="52" y1="200" x2="170" y2="200" stroke="#C6D3EA" stroke-width="2"/>
-          <text x="30" y="104" fill="var(--mut)" font-family="'JetBrains Mono',monospace" font-size="11">q0</text>
-          <text x="30" y="204" fill="var(--mut)" font-family="'JetBrains Mono',monospace" font-size="11">q1</text>
-          <rect x="100" y="80" width="40" height="40" rx="7" fill="#fff" stroke="var(--blue)" stroke-width="2" style="animation:nodePulse 3s ease-in-out infinite;"/>
-          <text x="120" y="106" fill="var(--blue)" font-family="'JetBrains Mono',monospace" font-size="16" text-anchor="middle" font-weight="600">H</text>
-          <rect x="200" y="50" width="40" height="40" rx="7" fill="#fff" stroke="var(--blue)" stroke-width="2" style="animation:nodePulse 3s ease-in-out infinite .4s;"/>
-          <text x="220" y="76" fill="var(--blue)" font-family="'JetBrains Mono',monospace" font-size="16" text-anchor="middle" font-weight="600">X</text>
-          <circle cx="170" cy="180" r="8" fill="var(--blue)" style="animation:nodePulse 3s ease-in-out infinite .8s;"/>
-          <line x1="170" y1="180" x2="170" y2="200" stroke="var(--blue)" stroke-width="2"/>
-          <circle cx="170" cy="200" r="14" fill="#fff" stroke="var(--blue)" stroke-width="2" style="animation:nodePulse 3s ease-in-out infinite .8s;"/>
-          <line x1="156" y1="200" x2="184" y2="200" stroke="var(--blue)" stroke-width="2"/><line x1="170" y1="186" x2="170" y2="214" stroke="var(--blue)" stroke-width="2"/>
-          <rect x="300" y="100" width="40" height="40" rx="7" fill="#fff" stroke="var(--deep)" stroke-width="2" style="animation:nodePulse 3s ease-in-out infinite 1.2s;"/>
-          <text x="320" y="124" fill="var(--deep)" font-family="'JetBrains Mono',monospace" font-size="13" text-anchor="middle" font-weight="600">Rz</text>
-          <rect x="300" y="180" width="40" height="40" rx="7" fill="#fff" stroke="var(--mut)" stroke-width="1.5" style="animation:nodePulse 3s ease-in-out infinite 1.6s;"/>
-          <path d="M311 208 Q320 194 329 208" stroke="var(--sec)" stroke-width="1.5" fill="none"/><line x1="320" y1="208" x2="320" y2="196" stroke="var(--sec)" stroke-width="1.5"/>
-          <rect x="340" y="272" width="14" height="20" rx="2" fill="var(--blue)" opacity=".35" style="transform-origin:bottom; animation:barRise 3s ease-in-out infinite;"/>
-          <rect x="360" y="264" width="14" height="28" rx="2" fill="var(--blue)" opacity=".55" style="transform-origin:bottom; animation:barRise 3s ease-in-out infinite .5s;"/>
-          <rect x="380" y="278" width="14" height="14" rx="2" fill="var(--sky)"  opacity=".4"  style="transform-origin:bottom; animation:barRise 3s ease-in-out infinite 1s;"/>
-          <rect x="400" y="266" width="14" height="26" rx="2" fill="var(--sky)"  opacity=".5"  style="transform-origin:bottom; animation:barRise 3s ease-in-out infinite 1.5s;"/>
-        </svg>
-      </div>
-    </section>
+<section class="sec" aria-labelledby="s4">
+<div class="sec-main">
+<h2 id="s4"><span class="num" aria-hidden="true">4</span>Compare decoders without fooling yourself</h2>
+<p class="lede">Put two decoders side by side on the same points, each with its interval, before you call one of them better.</p>
+<figure>
+<div class="box scroll" tabindex="0" role="region" aria-label="Figure 4 table, scrollable">
+<table class="data dec">
+<thead><tr><th scope="col">Point</th><th scope="col" class="r">PyMatching</th><th scope="col" class="r">Fusion Blossom</th><th scope="col">95% intervals</th></tr></thead>
+<tbody>
+<tr><th scope="row" class="mono">d=7, p=0.2%</th><td class="r mono">2,154</td><td class="r mono">2,127</td><td class="muted">overlap</td></tr>
+<tr><th scope="row" class="mono">d=9, p=0.1%</th><td class="r mono">33</td><td class="r mono">23</td><td class="muted">overlap; too few errors to rank</td></tr>
+</tbody>
+</table>
+</div>
+<figcaption><b>Figure 4.</b> Logical errors out of 200,000 shots. A 43% gap that means nothing yet.</figcaption>
+</figure>
+</div>
+<aside class="note"><p>Open a single decoded shot on the detector graph to see the matching the decoder chose.</p></aside>
+</section>
 
-    <!-- ============ FEATURES ============ -->
-    <section class="features" aria-labelledby="features-heading">
-      <div class="eyebrow">Features</div>
-      <h2 id="features-heading">Everything you need to learn quantum</h2>
-      <div class="feature-grid">
+<section class="more" aria-labelledby="s5">
+<h2 id="s5">Also in the desktop app</h2>
+<div class="more-cols">
+<dl><div><dt>Stim circuits, drawn</dt><dd>Timeline, code lattice and detector error graph for any .stim file.</dd></div><div><dt>sinter campaigns</dt><dd>Run, resume and extend a campaign without re-sampling what you have.</dd></div><div><dt>Noise models as files</dt><dd>SI1000 and friends as YAML in your repo, compared channel by channel.</dd></div></dl>
+<dl><div><dt>Experiments with manifests</dt><dd>Parameter sweeps as YAML; every run records its seed, backend and environment.</dd></div><div><dt>Resource estimates</dt><dd>Azure's estimator over Q# or OpenQASM 3, without leaving the project.</dd></div><div><dt>Circuits in four SDKs</dt><dd>Qiskit, Cirq, CUDA-Q and Q#, on the local simulator or IBM, IonQ, Quantinuum, Braket and Azure hardware.</dd></div></dl>
+</div>
+</section>
 
-        <div class="cell">
-          <div class="icon-tile"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></div>
-          <h3>Code Editor</h3>
-          <p>Monaco-powered editor with quantum-aware syntax highlighting, autocomplete, and inline diagnostics.</p>
-        </div>
+<section id="get" class="get" aria-labelledby="gettitle">
+<div class="get-intro">
+<h2 id="gettitle">Get Nuclei</h2>
+<p>Start in the browser with a CSV. Take the desktop app when you want campaigns, circuits and hardware.</p>
+</div>
+<div class="get-table scroll">
+<table>
+<caption class="sr">Downloads</caption>
+<tbody>
+<tr data-os="web"><th scope="row">Browser</th><td class="mono muted">CSV analysis · no install</td><td class="r"><a class="dl-link" href="/try/?view=qec">Open</a></td></tr>
+<tr data-os="mac"><th scope="row">macOS</th><td class="mono muted">Apple Silicon</td><td class="r"><a class="dl-link" href="https://github.com/calelamb/nuclei/releases/latest">Download .dmg</a></td></tr>
+<tr data-os="win"><th scope="row">Windows</th><td class="mono muted">x64</td><td class="r"><a class="dl-link" href="https://github.com/calelamb/nuclei/releases/latest">Download .msi</a></td></tr>
+<tr data-os="linux"><th scope="row">Linux</th><td class="mono muted">x64</td><td class="r"><a class="dl-link" href="https://github.com/calelamb/nuclei/releases/latest">Download .deb</a></td></tr>
+</tbody>
+</table>
+</div>
+</section>
+</main>
 
-        <div class="cell">
-          <div class="icon-tile"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg></div>
-          <h3>Circuit Visualization</h3>
-          <p>Live-rendered circuit diagrams that update as you type. Every gate and wire, visualized instantly.</p>
-        </div>
+<footer>
+<div class="wrap foot">
+<span>Nuclei · MIT license · <a href="/docs/research/workspace-modes/">Teaching a course? Ask about the learning workspace.</a></span>
+<span class="foot-links"><a href="https://github.com/calelamb/nuclei">GitHub</a><a href="/docs/">Docs</a><a href="https://github.com/calelamb/nuclei/releases">Changelog</a></span>
+</div>
+</footer>
 
-        <div class="cell">
-          <div class="icon-tile"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg></div>
-          <h3>Bloch Sphere</h3>
-          <p>Interactive 3D visualization of qubit states. Rotate, zoom, and explore state space in real time.</p>
-        </div>
-
-        <div class="cell">
-          <div class="icon-tile"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div>
-          <h3>Probability Display</h3>
-          <p>Measurement probabilities update live after each simulation. Understand outcomes at a glance.</p>
-        </div>
-
-        <div class="cell">
-          <div class="icon-tile"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></div>
-          <h3>Dirac AI Assistant</h3>
-          <p>An AI tutor that sees your code, circuit, and errors. Ask anything about quantum computing.</p>
-        </div>
-
-        <div class="cell">
-          <div class="icon-tile"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></div>
-          <h3>Multi-Framework</h3>
-          <p>Write in any major quantum SDK — Qiskit, Cirq, CUDA-Q, or Q#. Nuclei auto-detects from imports.</p>
-        </div>
-
-      </div>
-    </section>
-
-    <!-- ============ FRAMEWORKS ============ -->
-    <section class="frameworks" aria-labelledby="fw-heading">
-      <div class="fw-card">
-        <div class="lead">
-          <div class="eyebrow">Compatibility</div>
-          <h2 id="fw-heading">One IDE. Every framework.</h2>
-        </div>
-        <div class="fw-list">
-          <div><div class="fw-name">Qiskit</div><div class="fw-vendor">IBM</div></div>
-          <div><div class="fw-name">Cirq</div><div class="fw-vendor">Google</div></div>
-          <div><div class="fw-name">CUDA-Q</div><div class="fw-vendor">NVIDIA</div></div>
-          <div><div class="fw-name">Q# <span class="new-pill">NEW</span></div><div class="fw-vendor">Microsoft</div></div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ============ HOW IT WORKS ============ -->
-    <section class="how" aria-labelledby="how-heading">
-      <div class="how-head">
-        <div class="eyebrow">Workflow</div>
-        <h2 id="how-heading">Three steps to quantum</h2>
-      </div>
-      <div class="steps">
-        <div class="step"><div class="num">01</div><h3>Write</h3><p>Write quantum code with autocomplete, highlighting, and instant error feedback.</p></div>
-        <div class="step"><div class="num">02</div><h3>Visualize</h3><p>Circuit, Bloch sphere and histogram update live as you type. No re-runs.</p></div>
-        <div class="step"><div class="num">03</div><h3>Learn</h3><p>Ask Dirac to explain concepts, debug your circuit, or generate exercises.</p></div>
-      </div>
-    </section>
-
-    <!-- ============ RESEARCH MODE ============ -->
-    <section class="research" aria-labelledby="research-heading">
-      <div class="research-card">
-        <div class="lead">
-          <div class="eyebrow">New in v0.7.0</div>
-          <h2 id="research-heading">Also doing real quantum research?</h2>
-          <p>Switch to Research mode for multi-file projects, declarative parameter-sweep experiments, QEC Studio (Stim circuits, sinter campaigns, threshold and Λ plots, resource estimation), and reproducible run manifests — with Dirac as a terse collaborator instead of a tutor. Learn mode stays exactly as it is.</p>
-        </div>
-        <a class="btn-outline" href="/docs/research/workspace-modes/">Read the docs</a>
-      </div>
-    </section>
-
-    <!-- ============ DOWNLOAD CTA ============ -->
-    <section class="cta" id="download" aria-labelledby="cta-heading">
-      <div class="cta-panel">
-        <h2 id="cta-heading">Get Nuclei</h2>
-        <p class="sub">Download the desktop app. Start writing quantum circuits in minutes.</p>
-        <div class="cta-badges" id="dl-badges">
-          <a class="dl-badge dl-badge-primary" id="dl-primary" href="https://github.com/calelamb/nuclei/releases/latest">
-            <span id="dl-primary-text">macOS</span>
-            <span class="arch" id="dl-primary-arch">Apple Silicon</span>
-          </a>
-          <a class="dl-badge" href="https://github.com/calelamb/nuclei/releases/latest">Windows <span class="arch">x64</span></a>
-          <a class="dl-badge" href="https://github.com/calelamb/nuclei/releases/latest">Linux <span class="arch">.deb</span></a>
-        </div>
-        <p class="cta-note">Requires Python 3.10+ with Qiskit, Cirq, CUDA-Q, or the Q# SDK · &lt; 10 MB · Tauri native</p>
-      </div>
-    </section>
-
-  </main>
-
-  <!-- ============ FOOTER ============ -->
-  <footer class="footer">
-    <div class="footer-inner">
-      <div class="footer-left">
-        <span class="name">Nuclei</span><span>·</span>
-        <a class="lic" href="https://github.com/calelamb/nuclei/blob/main/LICENSE">MIT License</a>
-      </div>
-      <span>Built for students</span>
-    </div>
-  </footer>
-
-  <script>
-    // ---- OS-aware download buttons (UA sniffing, same behavior as before) ----
-    (function () {
-      var heroDlBtn    = document.getElementById('hero-dl-btn');
-      var heroDlText   = document.getElementById('hero-dl-text');
-      var dlPrimary    = document.getElementById('dl-primary');
-      var dlPrimaryTxt = document.getElementById('dl-primary-text');
-      var dlPrimaryArch = document.getElementById('dl-primary-arch');
-      var RELEASES = 'https://github.com/calelamb/nuclei/releases/latest';
-      var ua = navigator.userAgent || '';
-
-      if (/Windows/.test(ua)) {
-        if (heroDlText)    heroDlText.textContent = 'Download for Windows';
-        if (dlPrimaryTxt)  dlPrimaryTxt.textContent = 'Windows';
-        if (dlPrimaryArch) dlPrimaryArch.textContent = 'x64';
-      } else if (/Linux/.test(ua) && !/Android/.test(ua)) {
-        if (heroDlText)    heroDlText.textContent = 'Download for Linux';
-        if (dlPrimaryTxt)  dlPrimaryTxt.textContent = 'Linux';
-        if (dlPrimaryArch) dlPrimaryArch.textContent = '.deb';
-      }
-      // Default (macOS / Apple Silicon) is already set in the markup.
-      if (heroDlBtn) heroDlBtn.href = RELEASES;
-      if (dlPrimary) dlPrimary.href = RELEASES;
-    })();
-  </script>
+<script>
+// Highlight the download row for the visitor's OS (macOS is the default).
+(function () {
+  var ua = navigator.userAgent || '';
+  var os = 'mac';
+  if (/Windows/.test(ua)) os = 'win';
+  else if (/Linux/.test(ua) && !/Android/.test(ua)) os = 'linux';
+  var row = document.querySelector('tr[data-os="' + os + '"]');
+  if (row) row.classList.add('is-detected');
+})();
+</script>
 </body>
 </html>

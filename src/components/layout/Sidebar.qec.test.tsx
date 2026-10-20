@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PlatformBridge } from '../../platform/bridge';
 import { PlatformProvider } from '../../platform/PlatformProvider';
 import { useProjectStore } from '../../stores/projectStore';
+import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 import { Sidebar } from './Sidebar';
 
 function bridge(platform: 'desktop' | 'web'): PlatformBridge {
@@ -34,7 +35,29 @@ describe('<Sidebar> QEC integration', () => {
     );
 
     expect(screen.getByText('QEC Workbench')).toBeTruthy();
-    expect(await screen.findByText('Open a project to manage QEC Studies.')).toBeTruthy();
+    expect(await screen.findByText(/sinter stats CSV/)).toBeTruthy();
+    expect(screen.getByText(/Studies need a project folder/)).toBeTruthy();
+    expect(screen.queryByText(/Open a project to manage QEC Studies/)).toBeNull();
+  });
+
+  it('leaves the loaded CSV name, counts and mapping to the summary bar when no project is open', async () => {
+    useQecCampaignStore.getState().reset();
+    const csv = [
+      'shots,errors,discards,seconds,decoder,strong_id,json_metadata,custom_counts',
+      '1000,10,0,1.5,pymatching,a,"{""d"":3,""p"":0.001}",',
+      '1000,20,0,1.5,pymatching,b,"{""d"":3,""p"":0.002}",',
+    ].join('\n');
+    expect(useQecCampaignStore.getState().loadFromCsv(csv, 'stats.csv').ok).toBe(true);
+    render(
+      <PlatformProvider bridge={bridge('web')}>
+        <Sidebar view="qec" width={260} onWidthChange={vi.fn()} />
+      </PlatformProvider>,
+    );
+    expect(await screen.findByText(/Studies need a project folder/)).toBeTruthy();
+    expect(screen.queryByText('stats.csv')).toBeNull();
+    expect(screen.queryByText(/2 rows/)).toBeNull();
+    expect(screen.queryByText(/p = p/)).toBeNull();
+    useQecCampaignStore.getState().reset();
   });
 
   it('provides interactive search focus and clamps drag resizing', () => {

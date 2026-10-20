@@ -1,0 +1,227 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { usePlatform } from '../../platform/PlatformProvider';
+import { KERNEL_WS_URL } from '../../config/kernel';
+import { KernelAuthRejectedError, KernelProofError, openKernelConnection } from '../../services/kernelSocket';
+import type { KernelResponse } from '../../types/quantum';
+import type { BootProgress } from '../../platform/pyodide/workerProtocol';
+import { useEditorStore } from '../../stores/editorStore';
+import { retryKernel } from '../../lib/kernelControl';
+
+export type LessonKernelMessage = { type: string; [key: string]: unknown };
+
+/** Shown when the desktop kernel socket is not open. Never used on the web build. */
+export const DESKTOP_KERNEL_UNAVAILABLE = 'Kernel not connected. Make sure the Python kernel is running.';
+
+/** Web fallback when the browser Python engine could not start. */
+export const WEB_KERNEL_UNAVAILABLE = "Couldn't start the browser Python engine. Check your connection or content blocker, then retry.";
+
+interface WebKernel {
+  init(): Promise<void>;
+  send(msg: LessonKernelMessage): Promise<void>;
+}
+
+export interface SendOptions {
+  /** Checked once the boot wait is over: a queued Run the student cancelled is dropped, not sent. */
+  isCancelled?: () => boolean;
+}
+
+export interface LessonKernel {
+  /** Resolves true once the message was handed to a kernel, false when no kernel is connected (desktop only). */
+  send: (msg: LessonKernelMessage, options?: SendOptions) => Promise<boolean>;
+  /** Web only: Python is still downloading or starting; a Run is queued, not lost. */
+  loading: boolean;
+  /** Web only: the current boot stage, e.g. "Downloading Python". */
+  stage: string | null;
+  /** Web only: the current boot stage with its step count, for the Run button. */
+  progress: BootProgress | null;
+  /** The Python engine did not start (shared with the status bar). Nothing boots again until retry(). */
+  failed: boolean;
+  /** Why it did not start, when the runtime said. */
+  failureDetail: string | null;
+  /** The explicit Retry: restart the engine the status bar's Retry restarts. */
+  retry: () => void;
+  /** What to tell the user when send() resolved false: platform-appropriate, never the desktop sentence on the web. */
+  unavailableMessage: () => string;
+}
+
+interface Options {
+  onMessage: (msg: KernelResponse) => void;
+  /** The browser runtime failed to load (offline, blocked worker). */
+  onInitError: (message: string) => void;
+  /** The kernel became usable; re-send the live parse so circuit summaries appear. */
+  onReady?: () => void;
+}
+
+/**
+ * The kernel connection shared by lesson demos and exercises. On the web it
+ * boots the shared Pyodide worker and queues sends behind that boot, so pressing
+ * Run while Python is still loading runs as soon as it is ready. On desktop it
+ * keeps a retrying authenticated WebSocket.
+ */
+export function useLessonKernel({ onMessage, onInitError, onReady }: Options): LessonKernel {
+  const platform = usePlatform();
+  const isWeb = platform.getPlatform() === 'web';
+  const [loading, setLoading] = useState(isWeb);
+  const [progress, setProgress] = useState<BootProgress | null>(null);
+  // One source of truth with the status bar: a failed start stays failed until Retry.
+  const failed = useEditorStore((s) => s.kernelStatus === 'failed');
+  const failureDetail = useEditorStore((s) => s.kernelError);
+  const failedRef = useRef(failed);
+  useEffect(() => { failedRef.current = failed; }, [failed]);
+  const wsRef = useRef<WebSocket | null>(null);
+  const webRef = useRef<Promise<WebKernel | null> | null>(null);
+  const handlers = useRef({ onMessage, onInitError, onReady });
+  useEffect(() => { handlers.current = { onMessage, onInitError, onReady }; });
+
+  const cancelledRef = useRef(false);
+  const offsRef = useRef<Array<() => void>>([]);
+  const lastErrorRef = useRef<string>(WEB_KERNEL_UNAVAILABLE);
+
+  const startBoot = useCallback((): Promise<WebKernel | null> => {
+    const fail = (e: unknown): null => {
+      const message = e instanceof Error ? e.message : String(e);
+      lastErrorRef.current = message;
+      if (!cancelledRef.current) {
+        setLoading(false);
+        setProgress(null);
+        // Tell the shared status the start failed, or its 'Starting 1/3' never resolves.
+        const editor = useEditorStore.getState();
+        editor.setKernelConnected(false);
+        editor.setKernelReady(false);
+        editor.setKernelStatus('failed', message);
+        handlers.current.onInitError(message);
+      }
+      return null;
+    };
+    const boot = (async (): Promise<WebKernel | null> => {
+      let modules;
+      try {
+        modules = await Promise.all([
+          import('../../platform/pyodideKernel'),
+          import('../../platform/pyodide/pyodideClient'),
+        ]);
+      } catch (e) {
+        return fail(e);
+      }
+      const [{ PyodideKernel }, { pyodideRuntime }] = modules;
+      if (cancelledRef.current) return null;
+      offsRef.current.forEach((off) => off());
+      offsRef.current = [
+        pyodideRuntime.onProgress((p) => { if (!cancelledRef.current && !failedRef.current) setProgress(p); }),
+        pyodideRuntime.onState((s) => { if (!cancelledRef.current) setLoading(s !== 'ready' && !failedRef.current); }),
+      ];
+      setLoading(!pyodideRuntime.isReady());
+      setProgress(pyodideRuntime.currentProgress());
+      const kernel = new PyodideKernel((msg) => handlers.current.onMessage(msg as KernelResponse));
+      try {
+        await kernel.init();
+      } catch (e) {
+        return fail(e);
+      }
+      if (!cancelledRef.current) { setLoading(false); setProgress(null); handlers.current.onReady?.(); }
+      return kernel;
+    })();
+    webRef.current = boot;
+    return boot;
+  }, []);
+
+  useEffect(() => {
+    if (!isWeb) return undefined;
+    cancelledRef.current = false;
+    // The editor already reported a failed start: do not boot a second time behind its back.
+    if (failedRef.current) {
+      setLoading(false);
+    } else {
+      void startBoot();
+    }
+    return () => {
+      cancelledRef.current = true;
+      offsRef.current.forEach((off) => off());
+      offsRef.current = [];
+    };
+  }, [isWeb, startBoot]);
+
+  useEffect(() => {
+    if (isWeb) return undefined;
+    let ws: WebSocket | null = null;
+    let cancelled = false;
+    let retries = 0;
+    // A rejected token or a failed proof is final: retrying would resend the token to whatever answers.
+    let refused = false;
+    function attach(socket: WebSocket, authenticated: Promise<void>) {
+      socket.onmessage = (ev) => {
+        try { handlers.current.onMessage(JSON.parse(ev.data)); } catch { /* malformed frame: ignore */ }
+      };
+      socket.onclose = () => {
+        wsRef.current = null;
+        if (retries < 3) { retries++; setTimeout(connect, 1000 * retries); }
+      };
+      socket.onerror = () => socket.close();
+      // Ready only once the kernel has proved it knows the token.
+      authenticated.then(
+        () => { if (!cancelled) { wsRef.current = socket; retries = 0; handlers.current.onReady?.(); } },
+        (err: unknown) => { if (err instanceof KernelAuthRejectedError || err instanceof KernelProofError) refused = true; },
+      );
+    }
+    function connect() {
+      if (cancelled || refused) return;
+      openKernelConnection(KERNEL_WS_URL, platform.getKernelAuthToken?.bind(platform)).then(({ ws: socket, authenticated }) => {
+        if (cancelled) { socket.close(); return; }
+        ws = socket;
+        attach(socket, authenticated);
+      }, () => {
+        // No token (kernel not started or not ours): fail closed, never connect unauthenticated.
+        wsRef.current = null;
+      });
+    }
+    connect();
+    return () => { cancelled = true; ws?.close(); };
+  }, [isWeb, platform]);
+
+  const send = useCallback(async (msg: LessonKernelMessage, options?: SendOptions): Promise<boolean> => {
+    if (isWeb) {
+      let kernel = await webRef.current;
+      if (!kernel) {
+        // A failed start stays failed until the explicit Retry; nothing boots behind the notice.
+        if (failedRef.current) return false;
+        // The earlier boot failed without being reported: Run is the retry.
+        setLoading(true);
+        kernel = await startBoot();
+      }
+      if (!kernel) return false;
+      if (options?.isCancelled?.()) return true;
+      await kernel.send(msg);
+      return true;
+    }
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify(msg));
+      return true;
+    }
+    return false;
+  }, [isWeb, startBoot]);
+
+  const retry = useCallback(() => {
+    if (isWeb) {
+      setLoading(true);
+      setProgress(null);
+    }
+    retryKernel();
+    if (isWeb) void startBoot();
+  }, [isWeb, startBoot]);
+
+  const unavailableMessage = useCallback(
+    () => (isWeb ? lastErrorRef.current : DESKTOP_KERNEL_UNAVAILABLE),
+    [isWeb],
+  );
+  const shownProgress = failed ? null : progress;
+  return {
+    send,
+    loading: loading && !failed,
+    stage: shownProgress?.label ?? null,
+    progress: shownProgress,
+    failed,
+    failureDetail,
+    retry,
+    unavailableMessage,
+  };
+}

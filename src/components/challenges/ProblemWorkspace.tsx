@@ -1,6 +1,5 @@
 import { useCallback, useState } from 'react';
 import { ChevronDown, ChevronRight, ShieldCheck } from 'lucide-react';
-import { useThemeStore } from '../../stores/themeStore';
 import { useChallengeModeStore } from '../../stores/challengeModeStore';
 import { isStateVerified } from '../../services/challengeGrading';
 import { ProblemDescription } from './ProblemDescription';
@@ -8,49 +7,17 @@ import { ProblemEditor } from './ProblemEditor';
 import { TestRunner } from './TestRunner';
 import { HintPanel } from './HintPanel';
 import { SubmissionHistory } from './SubmissionHistory';
-import type { ChallengeDifficulty } from '../../types/challenge';
-
-const DIFFICULTY_COLORS: Record<ChallengeDifficulty, string> = {
-  easy: '#10B981',
-  medium: '#F59E0B',
-  hard: '#EF4444',
-};
+import { Badge, Tabs } from '../ui';
+import { DIFFICULTY_TONE } from './difficultyTone';
+import './challenges.css';
 
 type WorkspaceTab = 'description' | 'submissions' | 'hints';
 
-function WorkspaceTabButton({
-  active,
-  label,
-  onClick,
-}: {
-  active: boolean;
-  label: string;
-  onClick: () => void;
-}) {
-  const colors = useThemeStore((s) => s.colors);
-
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        padding: '8px 12px',
-        background: 'transparent',
-        border: 'none',
-        borderBottom: active ? `2px solid ${colors.accent}` : '2px solid transparent',
-        color: active ? colors.text : colors.textMuted,
-        fontSize: 12,
-        fontWeight: active ? 600 : 500,
-        fontFamily: "'Geist Sans', sans-serif",
-        cursor: 'pointer',
-      }}
-    >
-      {label}
-    </button>
-  );
-}
+const DIVIDER_MIN = 28;
+const DIVIDER_MAX = 72;
+const DIVIDER_KEY_STEP = 2;
 
 export function ProblemWorkspace() {
-  const colors = useThemeStore((s) => s.colors);
   const activeProblem = useChallengeModeStore((s) => s.activeProblem);
   const progress = useChallengeModeStore((s) => s.progress);
   const [tab, setTab] = useState<WorkspaceTab>('description');
@@ -69,7 +36,7 @@ export function ProblemWorkspace() {
       const rect = container.getBoundingClientRect();
       const delta = moveEvent.clientX - startX;
       const deltaPercent = (delta / rect.width) * 100;
-      const next = Math.max(28, Math.min(72, startPercent + deltaPercent));
+      const next = Math.max(DIVIDER_MIN, Math.min(DIVIDER_MAX, startPercent + deltaPercent));
       setDividerX(next);
     };
 
@@ -82,206 +49,100 @@ export function ProblemWorkspace() {
     document.addEventListener('mouseup', onUp);
   }, [dividerX]);
 
+  const handleDividerKey = (event: React.KeyboardEvent) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    const delta = event.key === 'ArrowLeft' ? -DIVIDER_KEY_STEP : DIVIDER_KEY_STEP;
+    setDividerX((x) => Math.max(DIVIDER_MIN, Math.min(DIVIDER_MAX, x + delta)));
+  };
+
   if (!activeProblem) return null;
 
   const submissions = progress[activeProblem.id]?.submissions ?? [];
   const visibleTests = activeProblem.visible_tests ?? activeProblem.testCases.filter((test) => !test.hidden);
   const hiddenTests = activeProblem.hidden_tests ?? activeProblem.testCases.filter((test) => test.hidden);
-  const diffColor = DIFFICULTY_COLORS[activeProblem.difficulty];
   const isValueContract = activeProblem.contract_kind === 'returns_value';
-
   return (
-    <div style={{
-      height: '100%',
-      display: 'flex',
-      flexDirection: 'column',
-      overflow: 'hidden',
-      background: colors.bg,
-    }}>
-      <div style={{
-        padding: '12px 16px',
-        borderBottom: `1px solid ${colors.border}`,
-        background: colors.bgPanel,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 16,
-      }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-            <span style={{
-              padding: '3px 8px',
-              borderRadius: 999,
-              background: `${diffColor}18`,
-              color: diffColor,
-              fontSize: 11,
-              fontWeight: 600,
-              fontFamily: "'Geist Sans', sans-serif",
-              textTransform: 'capitalize',
-            }}>
-              {activeProblem.difficulty}
-            </span>
-            <span style={{
-              color: colors.textMuted,
-              fontSize: 11,
-              fontFamily: "'Geist Sans', sans-serif",
-              textTransform: 'uppercase',
-              letterSpacing: 0.4,
-            }}>
-              {activeProblem.category.replace('-', ' ')}
-            </span>
+    <div className="pwork">
+      <div className="pwork__head">
+        <div className="pwork__head-main">
+          <div className="pwork__chips">
+            <Badge tone={DIFFICULTY_TONE[activeProblem.difficulty]} style={{ textTransform: 'capitalize' }}>{activeProblem.difficulty}</Badge>
+            <span className="pwork__category">{activeProblem.category.replace('-', ' ')}</span>
             {isStateVerified(activeProblem) && (
-              <span
-                title="Graded on the actual quantum state (fidelity / oracle) — can't be passed by hardcoding the answer."
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 4,
-                  padding: '2px 8px',
-                  borderRadius: 999,
-                  background: `${colors.success}16`,
-                  border: `1px solid ${colors.success}44`,
-                  color: colors.success,
-                  fontSize: 10.5,
-                  fontWeight: 700,
-                  fontFamily: "'Geist Sans', sans-serif",
-                }}
+              <Badge
+                tone="success"
+                icon={<ShieldCheck size={12} aria-hidden="true" />}
+                title="Graded on the actual quantum state (fidelity / oracle), so it can't be passed by hardcoding the answer."
               >
-                <ShieldCheck size={11} />
                 State-verified
-              </span>
+              </Badge>
             )}
           </div>
-          <div style={{
-            color: colors.text,
-            fontSize: 18,
-            fontWeight: 700,
-            fontFamily: "'Geist Sans', sans-serif",
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}>
-            {activeProblem.title}
-          </div>
+          <div className="pwork__title">{activeProblem.title}</div>
         </div>
 
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 14,
-          color: colors.textMuted,
-          fontSize: 12,
-          fontFamily: "'Geist Sans', sans-serif",
-          flexWrap: 'wrap',
-          justifyContent: 'flex-end',
-        }}>
+        <div className="pwork__meta">
           {isValueContract && (
             <>
-              <span style={{
-                padding: '3px 8px',
-                borderRadius: 999,
-                border: `1px solid ${colors.accent}55`,
-                background: `${colors.accent}14`,
-                color: colors.accent,
-                fontWeight: 700,
-              }}>
-                Python value contract
-              </span>
-              <span style={{
-                padding: '3px 8px',
-                borderRadius: 999,
-                border: `1px solid ${colors.success}55`,
-                background: `${colors.success}12`,
-                color: colors.success,
-                fontWeight: 700,
-              }}>
-                Browser + Desktop
-              </span>
+              <Badge tone="success">Browser + Desktop</Badge>
             </>
           )}
-          <span>{Math.round(activeProblem.acceptanceRate * 100)}% acceptance</span>
           <span>{visibleTests.length} visible / {hiddenTests.length} hidden</span>
-          <span>{submissions.length} submissions</span>
+          <span>{submissions.length} {submissions.length === 1 ? 'submission' : 'submissions'}</span>
         </div>
       </div>
 
-      <div style={{
-        flex: bottomExpanded ? 0.66 : 1,
-        minHeight: 0,
-        display: 'flex',
-        overflow: 'hidden',
-      }}>
-        <div style={{ width: `${dividerX}%`, minWidth: 280, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-            padding: '0 12px',
-            borderBottom: `1px solid ${colors.border}`,
-            background: colors.bgPanel,
-            flexShrink: 0,
-          }}>
-            <WorkspaceTabButton active={tab === 'description'} label="Description" onClick={() => setTab('description')} />
-            <WorkspaceTabButton active={tab === 'submissions'} label={`Submissions (${submissions.length})`} onClick={() => setTab('submissions')} />
-            <WorkspaceTabButton active={tab === 'hints'} label={`Hints (${activeProblem.hints.length})`} onClick={() => setTab('hints')} />
-          </div>
+      <div className="pwork__split" style={{ flex: bottomExpanded ? 0.66 : 1 }}>
+        <div className="pwork__left" style={{ width: `${dividerX}%` }}>
+          <Tabs
+            className="pwork__tabs"
+            aria-label="Problem sections"
+            value={tab}
+            onChange={setTab}
+            options={[
+              { value: 'description', label: 'Description' },
+              { value: 'submissions', label: 'Submissions', count: submissions.length },
+              { value: 'hints', label: 'Hints', count: activeProblem.hints.length },
+            ]}
+          />
 
-          <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+          <div className="pwork__pane" role="tabpanel">
             {tab === 'description' && <ProblemDescription challenge={activeProblem} />}
             {tab === 'submissions' && (
-              <div style={{ height: '100%', overflowY: 'auto', padding: '20px 24px 48px' }}>
-                <SubmissionHistory submissions={submissions} />
-              </div>
+              <div className="pwork__scroll"><SubmissionHistory submissions={submissions} /></div>
             )}
             {tab === 'hints' && (
-              <div style={{ height: '100%', overflowY: 'auto', padding: '20px 24px 48px' }}>
-                <HintPanel hints={activeProblem.hints} />
-              </div>
+              <div className="pwork__scroll"><HintPanel hints={activeProblem.hints} /></div>
             )}
           </div>
         </div>
 
         <div
+          className="pwork__divider"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize problem and editor"
+          aria-valuemin={DIVIDER_MIN}
+          aria-valuemax={DIVIDER_MAX}
+          aria-valuenow={Math.round(dividerX)}
+          tabIndex={0}
           onMouseDown={handleDividerDrag}
-          style={{
-            width: 5,
-            cursor: 'col-resize',
-            background: colors.border,
-            flexShrink: 0,
-          }}
-          onMouseEnter={(event) => { event.currentTarget.style.background = colors.accent; }}
-          onMouseLeave={(event) => { event.currentTarget.style.background = colors.border; }}
+          onKeyDown={handleDividerKey}
         />
 
-        <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+        <div className="pwork__editor">
           <ProblemEditor challenge={activeProblem} />
         </div>
       </div>
 
-      <button
-        onClick={() => setBottomExpanded((open) => !open)}
-        style={{
-          width: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          padding: '6px 16px',
-          background: colors.bgPanel,
-          border: 'none',
-          borderTop: `1px solid ${colors.border}`,
-          color: colors.textMuted,
-          fontSize: 11,
-          fontFamily: "'Geist Sans', sans-serif",
-          cursor: 'pointer',
-          textAlign: 'left',
-        }}
-      >
-        {bottomExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-        Test Results
+      <button type="button" className="pwork__toggle" aria-expanded={bottomExpanded} onClick={() => setBottomExpanded((open) => !open)}>
+        {bottomExpanded ? <ChevronDown size={12} aria-hidden="true" /> : <ChevronRight size={12} aria-hidden="true" />}
+        Results
       </button>
 
       {bottomExpanded && (
-        <div style={{ flex: 0.34, minHeight: 170, overflow: 'hidden' }}>
+        <div className="pwork__results">
           <TestRunner challenge={activeProblem} />
         </div>
       )}

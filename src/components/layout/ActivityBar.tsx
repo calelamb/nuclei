@@ -1,5 +1,8 @@
 import { Files, Search, Cpu, GraduationCap, Blocks, Settings, Server, Users, Trophy, Rocket, FlaskConical, Calculator, Shuffle, Atom, Dna, Microscope } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
+import { Tooltip } from '../ui/Tooltip';
+import { railShortcutLabel, shortcutLabel } from '../../config/keybindings';
+import './activityBar.css';
 import { bottomViewsForMode } from './panelRegistry';
 import type { WorkspaceMode } from '../../stores/workspaceStore';
 
@@ -63,34 +66,29 @@ function ActivityIcon({ item, isActive, onClick, shortcut }: {
 }) {
   const colors = useThemeStore((s) => s.colors);
   const Icon = item.icon;
-  const title = shortcut ? `${item.label} (${shortcut})` : item.label;
 
   return (
-    <button
-      onClick={onClick}
-      title={title}
-      aria-label={item.label}
-      aria-pressed={isActive}
-      data-tour-target={`activity-${item.id}`}
-      style={{
-        width: 48, height: 44,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'transparent',
-        border: 'none',
-        borderLeft: isActive ? `2px solid ${colors.accent}` : '2px solid transparent',
-        cursor: 'pointer',
-        color: isActive ? colors.text : colors.textDim,
-        position: 'relative',
-      }}
-      onMouseEnter={(e) => {
-        if (!isActive) e.currentTarget.style.color = colors.textMuted;
-      }}
-      onMouseLeave={(e) => {
-        if (!isActive) e.currentTarget.style.color = colors.textDim;
-      }}
-    >
-      <Icon size={20} strokeWidth={isActive ? 2 : 1.5} />
-    </button>
+    <Tooltip label={item.label} shortcut={shortcut} placement="right">
+      <button
+        onClick={onClick}
+        aria-label={item.label}
+        aria-pressed={isActive}
+        data-active={isActive}
+        className="nuclei-quiet activity-btn"
+        data-tour-target={`activity-${item.id}`}
+        style={{
+          width: 48, height: 44,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'transparent',
+          border: 'none',
+          borderLeft: isActive ? `2px solid ${colors.accent}` : '2px solid transparent',
+          cursor: 'pointer',
+          position: 'relative',
+        }}
+      >
+        <Icon size={20} strokeWidth={isActive ? 2 : 1.5} />
+      </button>
+    </Tooltip>
   );
 }
 
@@ -108,11 +106,7 @@ export function ActivityBar({ active, onSelect, visibleViews, workspaceMode }: A
         display: 'flex', flexDirection: 'column',
         flexShrink: 0,
         borderRight: `1px solid ${colors.border}`,
-        // Mode signature (PRD 11 Phase B): a 2px accent stripe driven by the
-        // --mode-accent variable useModeIdentity sets from the workspace mode
-        // (teal in Learn, violet in Research). Falls back to transparent so a
-        // context without the variable is unchanged.
-        borderTop: '2px solid var(--mode-accent, transparent)',
+        // The mode identity lives in the status-bar chip; a 2px stripe over only the 48px rail read as a stray line.
       }}
       role="toolbar"
       aria-label="Activity bar"
@@ -125,7 +119,7 @@ export function ActivityBar({ active, onSelect, visibleViews, workspaceMode }: A
           isActive={active === id}
           onClick={() => onSelect(id)}
           // ⌘1..9 map onto the first nine top-rail views (PRD 11 Phase D).
-          shortcut={i < 9 ? `⌘${i + 1}` : undefined}
+          shortcut={railShortcutLabel(i)}
         />
       ))}
       <div style={{ flex: 1 }} />
@@ -135,6 +129,7 @@ export function ActivityBar({ active, onSelect, visibleViews, workspaceMode }: A
           item={{ id, ...ITEM_META[id] }}
           isActive={active === id}
           onClick={() => onSelect(id)}
+          shortcut={id === 'settings' ? shortcutLabel('settings') : undefined}
         />
       ))}
     </div>

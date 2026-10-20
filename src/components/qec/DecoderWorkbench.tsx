@@ -1,55 +1,79 @@
-import { useMemo } from 'react';
+import { useDeferredValue, useMemo, type ReactNode } from 'react';
 import { Download } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useQecCampaignStore } from '../../stores/qecCampaignStore';
-import { PanelHeader } from '../layout/PanelHeader';
+import { QecPanelHeader } from './QecPanelHeader';
 import { QecEmptyState } from './QecEmptyState';
-import { decoderWorkbench } from '../../types/qecStats';
+import { decoderComparison, formatSecondsPerShot } from '../../lib/qecWorkbench';
+import { decoderTableToCsv } from '../../lib/qecExport';
+import { isWebBuild } from '../../platform/buildTarget';
+import { useQecUnits } from '../../hooks/useQecUnits';
+import { useElementSize } from '../../hooks/useElementSize';
+import { QecUnitsToggle } from './QecUnitsToggle';
+import { formatNoise, formatRateInterval } from '../../lib/qecPlotFormat';
 import { downloadCsv } from '../../services/experimentExport';
 
+import { TYPOGRAPHY, ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
+import { Button, Tooltip } from '../ui';
+import './qecAnalysis.css';
+import { Table, Thead, Tbody, Tr, Th, Td } from '../ui/Table';
 const DOCS = 'https://getnuclei.dev/docs/research/qec-studio/';
+/** Below this width an all-zero Discards column is dropped so the columns that matter stay on screen. */
+const NARROW_TABLE_WIDTH = 720;
+
+type WorkbenchRow = ReturnType<typeof decoderComparison>['rows'][number];
+
+/** 1-based ordinal of each colliding task within its (experiment, decoder, d, p) group, keyed by strong_id. */
+function collisionNumbers(rows: readonly WorkbenchRow[]): ReadonlyMap<string, number> {
+  const seen = new Map<string, number>();
+  const numbers = new Map<string, number>();
+  for (const w of rows) {
+    if (!w.collides) continue;
+    const key = `${w.experiment}|${w.decoder}|${w.distance}|${w.noise}`;
+    const n = (seen.get(key) ?? 0) + 1;
+    seen.set(key, n);
+    numbers.set(w.strongId, n);
+  }
+  return numbers;
+}
 
 /**
- * PRD 10 Phase E — the decoder workbench. Same campaign, same circuits: an
- * honest side-by-side of each decoder's pooled logical error rate (± Wilson
- * CI), shots and errors collected, and decode time per shot (from sinter's
- * timing). Exports the table as CSV.
+ * PRD 10 Phase E — the decoder workbench. Same campaign, same circuits: a
+ * side-by-side of each decoder at every (experiment, d, p) point, never pooled
+ * across p, d or experiments. Rates are errors / (shots - discards) with the
+ * same sinter likelihood-ratio interval as the figure; decode time per shot
+ * comes from sinter's timing. Exports the table as CSV.
  */
-export function DecoderWorkbench() {
+export function DecoderWorkbench({ tabs, showUnits = true }: { tabs?: ReactNode; showUnits?: boolean } = {}) {
   const colors = useThemeStore((s) => s.colors);
   const rowsByStrongId = useQecCampaignStore((s) => s.rowsByStrongId);
-  const rows = useMemo(() => Object.values(rowsByStrongId), [rowsByStrongId]);
-  const wb = useMemo(() => decoderWorkbench(rows), [rows]);
+  const liveRows = useMemo(() => Object.values(rowsByStrongId), [rowsByStrongId]);
+  const rows = useDeferredValue(liveRows);
+  const { units, roundsKnown, setRequested } = useQecUnits();
+  const [areaRef, area] = useElementSize<HTMLDivElement>();
+  const unitText = units === 'per_round' ? 'per round' : 'per shot';
+  const cmp = useMemo(() => decoderComparison(rows, { units }), [rows, units]);
+  const wb = cmp.rows;
+  const contexts = useMemo(() => [...new Set(wb.map((w) => w.context))], [wb]);
+  const showExperiment = contexts.length > 1;
+  const hideDiscards = area.width > 0 && area.width < NARROW_TABLE_WIDTH && wb.every((w) => w.discards === 0);
 
-  const exportCsv = () => {
-    const csv =
-      'decoder,logical_error_rate,ci_lo,ci_hi,shots,errors,seconds_per_shot\n' +
-      wb
-        .map((w) => [w.decoder, w.rate.p, w.rate.lo, w.rate.hi, w.shots, w.errors, w.secondsPerShot].join(','))
-        .join('\n') +
-      '\n';
-    downloadCsv(csv, 'decoder-workbench.csv');
-  };
+  const exportCsv = () => downloadCsv(decoderTableToCsv(cmp), 'decoder-workbench.csv');
 
   const header = (
-    <PanelHeader
+    <QecPanelHeader
       title="Decoder Workbench"
       helpHref={DOCS}
       actions={
-        wb.length > 0 ? (
-          <button
-            onClick={exportCsv}
-            title="Export CSV"
-            aria-label="Export CSV"
-            style={{
-              display: 'flex', alignItems: 'center', gap: 4, background: 'transparent',
-              border: `1px solid ${colors.border}`, borderRadius: 4, color: colors.textMuted,
-              cursor: 'pointer', fontSize: 11, padding: '4px 8px', fontFamily: "'Geist Sans', sans-serif",
-            }}
-          >
-            <Download size={12} /> CSV
-          </button>
-        ) : undefined
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {tabs}
+          {showUnits && wb.length > 0 && roundsKnown && <QecUnitsToggle units={units} onChange={setRequested} />}
+          {wb.length > 0 && (
+            <Button size="sm" onClick={exportCsv} title="Export the decoder table as CSV" aria-label="Export decoder table (CSV)" icon={<Download size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />}>
+              CSV
+            </Button>
+          )}
+        </div>
       }
     />
   );
@@ -58,60 +82,65 @@ export function DecoderWorkbench() {
     return (
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg }}>
         {header}
-        <QecEmptyState title="No campaign results yet" body="Run a QEC campaign to compare decoders side by side." docsHref={DOCS} />
+        <QecEmptyState title="No campaign results yet" body={isWebBuild()
+          ? 'Drop a sinter stats CSV on the plot to compare decoders side by side.'
+          : 'Run a QEC campaign, or drop a sinter stats CSV on the plot, to compare decoders side by side.'} docsHref={DOCS} />
       </div>
     );
   }
 
-  const th: React.CSSProperties = {
-    textAlign: 'left', padding: '6px 10px', color: colors.textDim, fontSize: 10,
-    fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, borderBottom: `1px solid ${colors.border}`,
-  };
-  const td: React.CSSProperties = {
-    padding: '6px 10px', fontSize: 11, color: colors.text, borderBottom: `1px solid ${colors.border}`,
-    fontFamily: "'Fira Code', monospace",
-  };
-  const pct = (v: number) => `${(v * 100).toPrecision(3)}%`;
+  const taskNumbers = collisionNumbers(wb);
+  const collisionTag = (w: (typeof wb)[number]) =>
+    w.collides ? (
+      <Tooltip label={`Another task has the same experiment, d and p (strong_id ${w.strongId}); shown separately, not pooled.`} placement="below">
+        <span className="qec-collision-chip">task {taskNumbers.get(w.strongId) ?? 1}</span>
+      </Tooltip>
+    ) : null;
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg }}>
       {header}
-      <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: "'Geist Sans', sans-serif" }}>
-          <thead>
-            <tr>
-              <th style={th}>Decoder</th>
-              <th style={th}>Logical error rate</th>
-              <th style={th}>Shots</th>
-              <th style={th}>Errors</th>
-              <th style={th}>s / shot</th>
-            </tr>
-          </thead>
-          <tbody>
+      <div ref={areaRef} style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        <Table label="Decoder comparison" className="decoder-table">
+          <Thead>
+            <Tr>
+              <Th>Decoder</Th>
+              {showExperiment && <Th>Experiment</Th>}
+              <Th numeric plain>d</Th>
+              <Th numeric plain>p</Th>
+              <Th numeric>Logical error rate ({unitText})</Th>
+              <Th numeric>Kept shots</Th>
+              {!hideDiscards && <Th numeric>Discards</Th>}
+              <Th numeric>Errors</Th>
+              <Th numeric title="CPU core-seconds per shot (sampling + decoding), from sinter's seconds column">Time / shot</Th>
+            </Tr>
+          </Thead>
+          <Tbody>
             {wb.map((w) => (
-              <tr key={w.decoder}>
-                <td style={{ ...td, color: colors.dirac, fontWeight: 600 }}>{w.decoder}</td>
-                <td style={td}>
-                  {pct(w.rate.p)}{' '}
-                  <span style={{ color: colors.textDim, fontSize: 10 }}>
-                    [{pct(w.rate.lo)}, {pct(w.rate.hi)}]
-                  </span>
-                </td>
-                <td style={td}>{w.shots.toLocaleString()}</td>
-                <td style={td}>{w.errors.toLocaleString()}</td>
-                <td style={td}>{w.secondsPerShot.toPrecision(3)}</td>
-              </tr>
+              <Tr key={`${w.experiment}|${w.decoder}|${w.distance}|${w.noise}|${w.strongId}`}>
+                <Td text style={{ fontWeight: 500 }}>{w.decoder}{collisionTag(w)}</Td>
+                {showExperiment && <Td text>{w.context}</Td>}
+                <Td numeric>{w.distance ?? '—'}</Td>
+                <Td numeric>{w.noise === null ? '—' : formatNoise(w.noise)}</Td>
+                <Td numeric>{formatRateInterval(w.rate.p, w.rate.lo, w.rate.hi)}</Td>
+                <Td numeric>{w.kept.toLocaleString()}</Td>
+                {!hideDiscards && <Td numeric>{w.discards.toLocaleString()}</Td>}
+                <Td numeric>{w.errors.toLocaleString()}</Td>
+                <Td numeric>{formatSecondsPerShot(w.secondsPerShot)}</Td>
+              </Tr>
             ))}
-          </tbody>
-        </table>
+          </Tbody>
+        </Table>
       </div>
       <div
         style={{
-          padding: '5px 10px', fontSize: 10, color: colors.textDim,
-          borderTop: `1px solid ${colors.border}`, fontFamily: "'Geist Sans', sans-serif",
+          padding: '6px 10px', fontSize: 11, color: colors.textDim,
+          borderTop: `1px solid ${colors.border}`, fontFamily: TYPOGRAPHY.fontSans,
         }}
       >
-        Wilson 95% CIs · same circuits, same shots budget
+        {!showExperiment && contexts[0] !== '' && `Experiment: ${contexts[0]}. `}
+        {`Rate = errors / (shots − discards)${units === 'per_round' ? ', converted to a per-round rate' : ''}, sinter likelihood-ratio interval (factor ${cmp.maxLikelihoodFactor}, about 3.7σ). One row per task (experiment, d, p); tasks sharing metadata are listed separately, never pooled${taskNumbers.size > 0 ? ' (a task tag after the decoder name marks them)' : ''}.`}
+        {cmp.skipped > 0 && ` ${cmp.skipped} malformed or fully-discarded row(s) skipped.`}
       </div>
     </div>
   );

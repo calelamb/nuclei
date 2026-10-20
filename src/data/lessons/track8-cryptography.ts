@@ -184,6 +184,8 @@ print(f"Error rate: {rate:.1%}")
 print(f"Eavesdropper detected: {rate > 0.11}")
 `,
         framework: 'qiskit',
+        requiredCode: ['eve_bases\\[i\\]', '\\.measure\\([\\s\\S]*\\.measure\\('],
+        expectedOutput: ['Error rate:'],
         tolerancePercent: 15,
         hints: [
           'Eve measures by adding H (if X-basis) then measuring. Use a separate circuit or reset to re-prepare.',
@@ -543,6 +545,8 @@ print(f"Count range: {min_count} - {max_count}")
 print(f"Top 5 outcomes: {sorted(counts.items(), key=lambda x: -x[1])[:5]}")
 `,
         framework: 'qiskit',
+        requiredCode: ['\\.h\\(', '\\.measure\\('],
+        expectedOutput: ['Distinct byte values:\\s*[1-9]\\d{2}\\b'],
         tolerancePercent: 10,
         hints: [
           'Apply qc.h(i) for i in range(8) to put every qubit in superposition.',

@@ -53,7 +53,7 @@ function snapshotToQasm(snapshot: CircuitSnapshot): string {
   return lines.join('\n');
 }
 
-function getCircuitSvgElement(): SVGSVGElement | null {
+export function getCircuitSvgElement(): SVGSVGElement | null {
   return document.querySelector('.circuit-renderer-container svg') as SVGSVGElement | null;
 }
 
@@ -95,23 +95,6 @@ function downloadDataUrl(dataUrl: string, filename: string) {
   if (dataUrl.startsWith('blob:')) URL.revokeObjectURL(dataUrl);
 }
 
-function encodeCircuitToUrl(snapshot: CircuitSnapshot): string {
-  const compressed = JSON.stringify({
-    f: snapshot.framework,
-    q: snapshot.qubit_count,
-    c: snapshot.classical_bit_count,
-    g: snapshot.gates.map((g) => ({
-      t: g.type,
-      r: g.targets,
-      c: g.controls,
-      p: g.params,
-      l: g.layer,
-    })),
-  });
-  const encoded = btoa(encodeURIComponent(compressed));
-  return `${window.location.origin}/c/${encoded}`;
-}
-
 export function useCircuitExport() {
   const exportQasm = useCallback(() => {
     const snapshot = useCircuitStore.getState().snapshot;
@@ -126,21 +109,24 @@ export function useCircuitExport() {
     downloadDataUrl(URL.createObjectURL(blob), 'circuit.qasm');
   }, [exportQasm]);
 
-  const exportSvg = useCallback(async () => {
+  /** Resolves false when the diagram is not on screen, so the caller can say so. */
+  const exportSvg = useCallback(async (): Promise<boolean> => {
     const svg = getCircuitSvgElement();
-    if (!svg) return;
+    if (!svg) return false;
     const url = await svgToDataUrl(svg);
     downloadDataUrl(url, 'circuit.svg');
+    return true;
   }, []);
 
-  const exportPng = useCallback(async (scale = 2) => {
+  const exportPng = useCallback(async (scale = 2): Promise<boolean> => {
     const svg = getCircuitSvgElement();
-    if (!svg) return;
+    if (!svg) return false;
     const dataUrl = await svgToPngDataUrl(svg, scale);
     const a = document.createElement('a');
     a.href = dataUrl;
     a.download = 'circuit.png';
     a.click();
+    return true;
   }, []);
 
   const copyCodeToClipboard = useCallback(async () => {
@@ -152,18 +138,6 @@ export function useCircuitExport() {
     const qasm = exportQasm();
     if (qasm) await navigator.clipboard.writeText(qasm);
   }, [exportQasm]);
-
-  const getShareUrl = useCallback(() => {
-    const snapshot = useCircuitStore.getState().snapshot;
-    if (!snapshot) return null;
-    return encodeCircuitToUrl(snapshot);
-  }, []);
-
-  const copyShareUrl = useCallback(async () => {
-    const url = getShareUrl();
-    if (url) await navigator.clipboard.writeText(url);
-    return url;
-  }, [getShareUrl]);
 
   const exportJsonSnapshot = useCallback(() => {
     const snapshot = useCircuitStore.getState().snapshot;
@@ -180,8 +154,6 @@ export function useCircuitExport() {
     exportPng,
     copyCodeToClipboard,
     copyQasmToClipboard,
-    getShareUrl,
-    copyShareUrl,
     exportJsonSnapshot,
   };
 }

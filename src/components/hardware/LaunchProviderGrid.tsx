@@ -1,0 +1,106 @@
+import { useThemeStore } from '../../stores/themeStore';
+import { ProviderLogo } from './ProviderLogo';
+import { ProviderStatusBadge } from './ProviderStatusBadge';
+import { QSHARP_GATE_TOOLTIP, providerStatus, sortProvidersForDisplay } from './launchGating';
+import { useEditorStore } from '../../stores/editorStore';
+import { PROVIDERS, type ProviderMeta } from './launchProviders';
+import type { HardwareProviderType } from '../../types/hardware';
+import { TYPOGRAPHY } from '../../styles/tokens';
+
+interface Props {
+  readonly isWeb: boolean;
+  readonly cudaqInstalled: boolean;
+  readonly connected: ReadonlySet<HardwareProviderType>;
+  readonly qsharpBlocks: (provider: HardwareProviderType) => boolean;
+  readonly onPick: (provider: ProviderMeta) => void;
+}
+
+const PRICING_LABEL: Record<ProviderMeta['pricing'], string> = {
+  Free: 'Free',
+  Credits: 'Credits',
+  Paid: 'Paid',
+  Local: 'Local',
+};
+
+/** Step one: where to run. Every card carries the same status badge the Hardware panel shows. */
+export function LaunchProviderGrid({ isWeb, cudaqInstalled, connected, qsharpBlocks, onPick }: Props) {
+  const colors = useThemeStore((s) => s.colors);
+  const kernelStatus = useEditorStore((s) => s.kernelStatus);
+  const statusOf = (p: ProviderMeta) => providerStatus({ provider: p.name, connected: connected.has(p.name), isWeb, cudaqInstalled, kernelStatus });
+  const ordered = sortProvidersForDisplay(PROVIDERS, (p) => statusOf(p).kind);
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+        gap: 14,
+      }}
+    >
+      {ordered.map((p) => {
+        const status = statusOf(p);
+        const qsharpBlocked = qsharpBlocks(p.name);
+        // A starting local kernel has no backends to list yet, so its card waits for the Ready badge.
+        // Desktop-only providers on the web are as inert as coming-soon ones; the header's Download button is the way forward.
+        const disabled = status.kind === 'coming-soon' || status.kind === 'desktop-only' || status.kind === 'unavailable' || status.kind === 'starting' || qsharpBlocked;
+        return (
+          <button
+            key={p.name}
+            type="button"
+            className="nuclei-hover-lift"
+            data-provider={p.name}
+            onClick={() => onPick(p)}
+            disabled={disabled}
+            style={{
+              textAlign: 'left',
+              background: disabled ? 'transparent' : colors.bgElevated,
+              border: `1px solid ${colors.border}`,
+              borderRadius: 'var(--radius-round)',
+              padding: 16,
+              cursor: disabled ? 'not-allowed' : 'pointer',
+              color: colors.text,
+              fontFamily: TYPOGRAPHY.fontSans,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 10,
+              minHeight: 160,
+              transition: 'transform var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard)',
+              opacity: disabled ? 0.55 : 1,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 'var(--radius-soft)',
+                  background: `${colors.accent}14`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: colors.accentLight,
+                }}
+              >
+                <ProviderLogo provider={p.name} size={32} />
+              </div>
+              <span style={{ fontSize: 12, color: colors.textMuted }}>{PRICING_LABEL[p.pricing]}</span>
+            </div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: colors.text }}>{p.label}</div>
+              <div style={{ fontSize: 12, color: colors.textMuted, marginTop: 2, lineHeight: 1.5 }}>
+                {p.tagline}
+              </div>
+            </div>
+            <div style={{ flex: 1 }} />
+            <div>
+              {qsharpBlocked ? (
+                <span style={{ fontSize: 12, color: colors.textMuted }}>{QSHARP_GATE_TOOLTIP}</span>
+              ) : (
+                <ProviderStatusBadge status={status} />
+              )}
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}

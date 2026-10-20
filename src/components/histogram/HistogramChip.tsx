@@ -1,12 +1,21 @@
-import { X, Maximize2 } from 'lucide-react';
+import { X, Maximize2, Info } from 'lucide-react';
+import { IconButton, Tooltip } from '../ui';
+import { useSimulationStore } from '../../stores/simulationStore';
+import { SAMPLE_EXPLAINER, SAMPLE_LABEL } from '../../hooks/runSummary';
+import { EDITOR_FOCUS_TARGET, focusAfterUnmount } from '../../hooks/focusAfterUnmount';
+import './histogram.css';
 import { useThemeStore } from '../../stores/themeStore';
+import { useElementSize } from '../../hooks/useElementSize';
+import { chooseChipLayout } from './chipLayout';
+import { formatChipPercent } from './histogramScale';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface HistogramChipProps {
   probabilities: Record<string, number> | null;
   /**
    * Optional hardware-run probabilities. When present the chip renders two
    * stacked bars per outcome: classical (simulator) in the accent color,
-   * hardware in the Dirac purple. Makes the "real quantum hardware matches
+   * hardware in the research blue. Makes the "real quantum hardware matches
    * the simulator — mostly" teaching moment visible at a glance.
    */
   hwProbabilities?: Record<string, number> | null;
@@ -17,12 +26,19 @@ interface HistogramChipProps {
 
 const EPSILON = 1e-6;
 const MAX_BARS = 3;
+const MAX_LABEL_BITS = 8;
+
+/** Keep long bitstrings readable in a narrow chip: |0000…0000⟩. */
+function chipLabel(state: string): string {
+  if (state.length <= MAX_LABEL_BITS) return state;
+  const half = MAX_LABEL_BITS / 2;
+  return `${state.slice(0, half)}…${state.slice(-half)}`;
+}
 
 /**
- * Compact inline histogram — 2-3 bars showing top outcomes by probability.
- * Lives in the right pane under the Bloch sphere when a run has produced
- * results. Replaces the full-panel `ProbabilityHistogram` in the default
- * layout to reclaim space for the editor + circuit.
+ * Compact inline histogram — the top outcomes by probability. One line while every
+ * outcome fits with its percentage; stacked ket / bar / percentage rows when the
+ * rail is too narrow, so a bitstring or percentage is never clipped.
  */
 export function HistogramChip({
   probabilities,
@@ -32,6 +48,8 @@ export function HistogramChip({
   onExpand,
 }: HistogramChipProps) {
   const colors = useThemeStore((s) => s.colors);
+  const [measureRef, size] = useElementSize<HTMLDivElement>();
+  const shotCount = useSimulationStore((s) => s.result?.shot_count ?? 0);
 
   if (!probabilities) return null;
 
@@ -49,60 +67,124 @@ export function HistogramChip({
       merged[s] = { cls: prev.cls, hw: p, max: Math.max(prev.max, p) };
     }
   }
-  const entries = Object.entries(merged)
-    .sort((a, b) => b[1].max - a[1].max || a[0].localeCompare(b[0]))
-    .slice(0, MAX_BARS);
+  const ranked = Object.entries(merged)
+    .sort((a, b) => b[1].max - a[1].max || a[0].localeCompare(b[0]));
+  const entries = ranked.slice(0, MAX_BARS);
+  const hiddenCount = ranked.length - entries.length;
+  const hiddenLabel = hiddenCount.toLocaleString('en-US');
 
   if (entries.length === 0) return null;
 
   const hasHw = !!hwProbabilities;
+  const layout = chooseChipLayout(entries.map(([s]) => chipLabel(s)), size.width, hasHw);
+  const rows = layout === 'rows';
 
-  return (
+  // The dismissed chip takes its own button with it: keep the keyboard in the editor.
+  const dismiss = () => {
+    focusAfterUnmount(document.activeElement, [EDITOR_FOCUS_TARGET]);
+    onDismiss?.();
+  };
+
+  const shotsText = `${shotCount.toLocaleString('en-US')} ${shotCount === 1 ? 'shot' : 'shots'}`;
+  const sampleCaption = !hasHw && shotCount > 0 ? `${SAMPLE_LABEL} · ${shotsText}` : null;
+  // The explainer lives on its own focusable button (same in both layouts) so its focus ring is never clipped
+  // by an ellipsised caption, and Expand and Dismiss keep their own tooltips.
+  const sampleInfo = sampleCaption && (
+    <Tooltip label={`${sampleCaption}. ${SAMPLE_EXPLAINER}`} placement="above">
+      <button type="button" aria-label="About the Nuclei sample" className="histogram-chip__info"><Info size={12} /></button>
+    </Tooltip>
+  );
+
+  const moreAffordance = hiddenCount > 0 && (onExpand ? (
+        <button
+          type="button"
+          aria-label={`Show ${hiddenLabel} more outcomes`}
+          onClick={onExpand}
+          className="histogram-chip__more"
+        >
+          +{hiddenLabel} more
+        </button>
+      ) : (
+        <span className="histogram-chip__more histogram-chip__more--static" title={`${hiddenLabel} more outcomes. Open the full histogram to see them.`}>
+          +{hiddenLabel} more
+        </span>
+      ));
+
+  const controls = (
+    <div style={{ display: 'flex', gap: 4, flexShrink: 0, alignItems: 'center', marginLeft: rows ? 'auto' : undefined }}>
+      {!rows && sampleInfo}
+      {!rows && moreAffordance}
+      {onExpand && (
+        <IconButton size="sm" className="histogram-chip__icon" aria-label="Expand histogram" tooltip={{ placement: 'above' }} onClick={onExpand}>
+          <Maximize2 size={12} />
+        </IconButton>
+      )}
+      {onDismiss && (
+        <IconButton size="sm" className="histogram-chip__icon histogram-chip__icon--danger" aria-label="Dismiss histogram" tooltip={{ placement: 'above' }} onClick={dismiss}>
+          <X size={12} />
+        </IconButton>
+      )}
+    </div>
+  );
+
+  const chip = (
     <div
+      ref={measureRef}
+      data-layout={layout}
       style={{
         display: 'flex',
-        alignItems: 'center',
-        gap: 12,
+        flexDirection: rows ? 'column' : 'row',
+        alignItems: rows ? 'stretch' : 'center',
+        gap: rows ? 6 : 12,
+        minWidth: 0,
         padding: '6px 10px',
         background: `${colors.accent}0A`,
         border: `1px solid ${colors.border}`,
         borderRadius: 10,
         fontSize: 11,
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+      {/* Stacked: the expand/dismiss controls ride on a header row above the outcomes (no spare row below). */}
+      {rows && (
+        <div style={{ display: 'flex', alignItems: 'center', minWidth: 0, gap: 4, color: colors.textDim, fontSize: 11 }}>
+          {sampleCaption ? (
+            // The sample caption names the data; "Top outcomes" is implied by the bars below it.
+            <>
+              <span data-testid="histogram-chip-sample" className="histogram-chip__caption">
+                <span className="histogram-chip__caption-name">{SAMPLE_LABEL}</span>
+                <span className="histogram-chip__caption-shots">{` · ${shotsText}`}</span>
+              </span>
+              {sampleInfo}
+            </>
+          ) : (
+            <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Top outcomes</span>
+          )}
+          {controls}
+        </div>
+      )}
+      <div
+        style={{
+          display: 'flex', flexDirection: rows ? 'column' : 'row', alignItems: rows ? 'stretch' : 'center',
+          gap: rows ? 4 : 10, flex: rows ? undefined : 1, minWidth: 0, overflow: 'hidden',
+        }}
+      >
         {entries.map(([state, { cls, hw }]) => (
           <div
             key={state}
             data-testid="histogram-chip-bar"
-            style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, flex: rows ? undefined : '1 1 0', minWidth: 0, whiteSpace: 'nowrap' }}
           >
             <span
-              style={{
-                fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-                color: colors.accentLight,
-                flexShrink: 0,
-              }}
+              title={`|${state}⟩`}
+              style={{ fontFamily: TYPOGRAPHY.fontMono, color: colors.accentText, flexShrink: 0 }}
             >
-              |{state}⟩
+              |{chipLabel(state)}⟩
             </span>
-            <div
-              style={{
-                flex: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 2,
-                minWidth: 20,
-              }}
-            >
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
               <div
-                style={{
-                  height: hasHw ? 4 : 6,
-                  borderRadius: 3,
-                  background: `${colors.accent}14`,
-                  overflow: 'hidden',
-                }}
+                className="histogram-chip__bar"
+                style={{ height: hasHw ? 4 : 6, borderRadius: 3, background: `${colors.accent}14`, overflow: 'hidden' }}
                 title="Classical simulation"
               >
                 <div
@@ -116,19 +198,15 @@ export function HistogramChip({
               </div>
               {hasHw && (
                 <div
-                  style={{
-                    height: 4,
-                    borderRadius: 3,
-                    background: `${colors.dirac}14`,
-                    overflow: 'hidden',
-                  }}
+                  className="histogram-chip__bar"
+                  style={{ height: 4, borderRadius: 3, background: `${colors.modeResearch}14`, overflow: 'hidden' }}
                   title={hwLabel ?? 'Hardware run'}
                 >
                   <div
                     style={{
                       height: '100%',
                       width: `${Math.round(hw * 100)}%`,
-                      background: colors.dirac,
+                      background: colors.modeResearch,
                       transition: 'width 200ms cubic-bezier(0.16, 1, 0.3, 1)',
                     }}
                   />
@@ -141,57 +219,20 @@ export function HistogramChip({
                 minWidth: hasHw ? 54 : 28,
                 textAlign: 'right',
                 flexShrink: 0,
+                fontVariantNumeric: 'tabular-nums',
               }}
             >
               {hasHw
-                ? `${Math.round(cls * 100)}% · ${Math.round(hw * 100)}%`
-                : `${Math.round(cls * 100)}%`}
+                ? `${formatChipPercent(cls)} · ${formatChipPercent(hw)}`
+                : formatChipPercent(cls)}
             </span>
           </div>
         ))}
       </div>
-      <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-        {onExpand && (
-          <button
-            aria-label="Expand histogram"
-            onClick={onExpand}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: colors.textDim,
-              cursor: 'pointer',
-              padding: 2,
-              display: 'flex',
-              alignItems: 'center',
-              borderRadius: 4,
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = colors.text; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = colors.textDim; }}
-          >
-            <Maximize2 size={12} />
-          </button>
-        )}
-        {onDismiss && (
-          <button
-            aria-label="Dismiss histogram"
-            onClick={onDismiss}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: colors.textDim,
-              cursor: 'pointer',
-              padding: 2,
-              display: 'flex',
-              alignItems: 'center',
-              borderRadius: 4,
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = colors.error; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = colors.textDim; }}
-          >
-            <X size={12} />
-          </button>
-        )}
-      </div>
+      {/* Stacked: +N more sits under the bars, not in the caption header where it would squeeze the name. */}
+      {rows && moreAffordance && <div style={{ display: 'flex' }}>{moreAffordance}</div>}
+      {!rows && controls}
     </div>
   );
+  return chip;
 }

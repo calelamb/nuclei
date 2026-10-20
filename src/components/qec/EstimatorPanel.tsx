@@ -1,7 +1,8 @@
 import { useState, type CSSProperties } from 'react';
-import { Cpu, Download, Loader2, ChevronRight, HelpCircle } from 'lucide-react';
+import { Cpu, Download, ChevronRight, HelpCircle, Calculator } from 'lucide-react';
 import { useThemeStore, type ThemeColors } from '../../stores/themeStore';
 import { useEditorStore } from '../../stores/editorStore';
+import { humanNs } from '../../lib/qecEstimateFormat';
 import { useQecEstimateStore } from '../../stores/qecEstimateStore';
 import { QecEmptyState } from './QecEmptyState';
 import { downloadJson } from '../../services/experimentExport';
@@ -14,6 +15,10 @@ import {
 } from '../../types/qec';
 import type { Framework } from '../../types/quantum';
 
+import { TYPOGRAPHY, ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
+import { Button, Select, TextInput } from '../ui';
+import { DesktopOnlyState } from '../hardware/DesktopOnlyState';
+import { isWebBuild } from '../../platform/buildTarget';
 const DOCS = 'https://getnuclei.dev/docs/research/resource-estimation/';
 
 // Frameworks the Azure Quantum Resource Estimator can cost. Q# is estimated
@@ -46,16 +51,6 @@ function compact(n: number | null): string {
   if (n < 1e6) return `${(n / 1e3).toFixed(n < 1e4 ? 1 : 0)}K`;
   if (n < 1e9) return `${(n / 1e6).toFixed(2)}M`;
   return `${(n / 1e9).toFixed(2)}B`;
-}
-
-/** Nanoseconds → the most legible unit. */
-function humanNs(ns: number | null): string {
-  if (ns === null || !Number.isFinite(ns)) return '—';
-  if (ns < 1e3) return `${ns} ns`;
-  if (ns < 1e6) return `${(ns / 1e3).toFixed(2)} µs`;
-  if (ns < 1e9) return `${(ns / 1e6).toFixed(2)} ms`;
-  if (ns < 6e10) return `${(ns / 1e9).toFixed(2)} s`;
-  return `${(ns / 6e10).toFixed(2)} min`;
 }
 
 function sci(x: number | null): string {
@@ -92,31 +87,28 @@ export function EstimatorPanel() {
     requestQecEstimate(code, language, { ...options });
   };
 
-  // Slim actions row (the SidebarHeader already carries the "Estimator"
+  // Slim actions row, shown once there is something to export (the SidebarHeader already carries the "Estimator"
   // title, so this panel adds only the docs link + JSON export).
-  const toolbar = (
+  const toolbar = !result ? null : (
     <div
       style={{
         display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
         borderBottom: `1px solid ${colors.border}`,
       }}
     >
-      <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: colors.text }}>
-        <Cpu size={13} /> Resource Estimator
-      </span>
       <div style={{ flex: 1 }} />
       {result && (
-        <button
-          type="button"
+        <Button
+          size="sm"
           onClick={() => downloadJson(result.full, 'resource-estimate.json')}
           title="Export the full estimator document as JSON"
-          style={iconBtn(colors)}
+          icon={<Download size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />}
         >
-          <Download size={13} /> JSON
-        </button>
+          JSON
+        </Button>
       )}
-      <a href={DOCS} target="_blank" rel="noreferrer" title="Resource estimation docs" style={{ ...iconBtn(colors), padding: '3px 5px' }}>
-        <HelpCircle size={13} />
+      <a href={DOCS} target="_blank" rel="noreferrer" title="Resource estimation docs" aria-label="Resource estimation docs" className="nuclei-icon-btn nuclei-icon-btn--sm">
+        <HelpCircle size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />
       </a>
     </div>
   );
@@ -127,14 +119,25 @@ export function EstimatorPanel() {
     flexDirection: 'column',
     background: colors.bg,
     color: colors.text,
-    fontFamily: "'Geist Sans', sans-serif",
+    fontFamily: TYPOGRAPHY.fontSans,
   };
+
+  if (isWebBuild()) {
+    return (
+      <div style={shell}>
+        <DesktopOnlyState title="Resource estimates need the desktop app">
+          The Azure Quantum Resource Estimator needs the desktop app's Python environment, which the browser build does not include.
+        </DesktopOnlyState>
+      </div>
+    );
+  }
 
   if (!supported) {
     return (
       <div style={shell}>
         {toolbar}
         <QecEmptyState
+          icon={Calculator}
           title="Resource estimation supports Q# and Qiskit"
           body={`The active buffer is ${framework}. Switch to a Q# or Qiskit circuit to estimate the physical qubits and runtime a fault-tolerant implementation would need.`}
           docsHref={DOCS}
@@ -150,33 +153,32 @@ export function EstimatorPanel() {
         {/* Assumption controls: qubit model, QEC scheme, error budget. */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <Field label="Qubit parameters" colors={colors}>
-            <select
+            <Select
               value={options.qubit_params ?? 'qubit_gate_ns_e3'}
               onChange={(e) => setOptions({ qubit_params: e.target.value as QecQubitPreset })}
-              style={selectStyle(colors)}
             >
               {QEC_QUBIT_PRESETS.map((p) => (
                 <option key={p} value={p}>
                   {PRESET_LABELS[p]}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           <Field label="QEC scheme" colors={colors}>
-            <select
+            <Select
               value={options.qec_scheme ?? 'surface_code'}
               onChange={(e) => setOptions({ qec_scheme: e.target.value as QecEstimateScheme })}
-              style={selectStyle(colors)}
             >
               {QEC_ESTIMATE_SCHEMES.map((s) => (
                 <option key={s} value={s}>
                   {SCHEME_LABELS[s]}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           <Field label="Error budget" colors={colors}>
-            <input
+            <TextInput
+              mono
               type="number"
               min={1e-6}
               max={0.5}
@@ -186,20 +188,19 @@ export function EstimatorPanel() {
                 const v = Number(e.target.value);
                 if (Number.isFinite(v) && v > 0 && v < 1) setOptions({ error_budget: v });
               }}
-              style={selectStyle(colors)}
             />
           </Field>
         </div>
 
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="md"
           onClick={run}
-          disabled={pending}
-          style={runBtn(colors, pending)}
+          loading={pending}
+          icon={pending ? undefined : <Cpu size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />}
         >
-          {pending ? <Loader2 size={14} style={{ animation: 'nuclei-spin 800ms linear infinite' }} /> : <Cpu size={14} />}
           {pending ? 'Estimating…' : result ? 'Re-estimate' : 'Run estimate'}
-        </button>
+        </Button>
 
         {error && (
           <div style={errorBox(colors)}>{error}</div>
@@ -207,6 +208,8 @@ export function EstimatorPanel() {
 
         {!result && !error && !pending && (
           <QecEmptyState
+            align="top"
+            icon={Calculator}
             title="No estimate yet"
             body="Use Run estimate above to see the physical qubits, wall-clock runtime, and code distance a fault-tolerant run of this circuit would require."
             docsHref={DOCS}
@@ -231,17 +234,16 @@ export function EstimatorPanel() {
             </div>
 
             {/* Collapsible full estimator document. */}
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-expanded={showDetail}
               onClick={() => setShowDetail((v) => !v)}
-              style={detailToggle(colors, showDetail)}
+              style={{ alignSelf: 'flex-start' }}
+              icon={<ChevronRight size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} style={{ transform: showDetail ? 'rotate(90deg)' : 'none', transition: 'transform 120ms' }} />}
             >
-              <ChevronRight
-                size={13}
-                style={{ transform: showDetail ? 'rotate(90deg)' : 'none', transition: 'transform 120ms' }}
-              />
               Full estimator output
-            </button>
+            </Button>
             {showDetail && (
               <pre style={detailPre(colors)}>{JSON.stringify(result.full, null, 2)}</pre>
             )}
@@ -257,7 +259,7 @@ type Colors = ThemeColors;
 function Field({ label, colors, children }: { label: string; colors: Colors; children: React.ReactNode }) {
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.04em', color: colors.textDim }}>
+      <span style={{ fontSize: 12, fontWeight: 500, color: colors.textMuted }}>
         {label}
       </span>
       {children}
@@ -280,7 +282,7 @@ function Stat({
     <div
       style={{
         border: `1px solid ${colors.border}`,
-        borderRadius: 6,
+        borderRadius: 'var(--radius-soft)',
         padding: '10px 12px',
         display: 'flex',
         flexDirection: 'column',
@@ -288,15 +290,15 @@ function Stat({
         background: colors.bg,
       }}
     >
-      <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', color: colors.textDim }}>
+      <span style={{ fontSize: 12, fontWeight: 500, color: colors.textMuted }}>
         {label}
       </span>
       <span
         style={{
-          fontFamily: "'Geist Mono', monospace",
+          fontFamily: TYPOGRAPHY.fontMono,
           fontSize: accent ? 22 : 18,
           fontWeight: 600,
-          color: accent ? colors.accent : colors.text,
+          color: accent ? colors.accentText : colors.text,
           lineHeight: 1.1,
         }}
       >
@@ -306,57 +308,10 @@ function Stat({
   );
 }
 
-function selectStyle(colors: Colors): CSSProperties {
-  return {
-    background: colors.bg,
-    color: colors.text,
-    border: `1px solid ${colors.border}`,
-    borderRadius: 5,
-    padding: '6px 8px',
-    fontSize: 12,
-    fontFamily: "'Geist Sans', sans-serif",
-    outline: 'none',
-  };
-}
-
-function runBtn(colors: Colors, pending: boolean): CSSProperties {
-  return {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-    padding: '9px 14px',
-    borderRadius: 6,
-    border: `1px solid ${colors.accent}`,
-    background: pending ? colors.bg : colors.accent,
-    color: pending ? colors.textMuted : colors.bg,
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: pending ? 'default' : 'pointer',
-    opacity: pending ? 0.8 : 1,
-    transition: 'opacity 120ms, background 120ms',
-  };
-}
-
-function iconBtn(colors: Colors): CSSProperties {
-  return {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 4,
-    padding: '3px 7px',
-    borderRadius: 5,
-    border: `1px solid ${colors.border}`,
-    background: 'transparent',
-    color: colors.textMuted,
-    fontSize: 11,
-    cursor: 'pointer',
-  };
-}
-
 function errorBox(colors: Colors): CSSProperties {
   return {
     border: `1px solid ${colors.error}`,
-    borderRadius: 6,
+    borderRadius: 'var(--radius-soft)',
     padding: '9px 11px',
     fontSize: 12,
     color: colors.error,
@@ -365,31 +320,16 @@ function errorBox(colors: Colors): CSSProperties {
   };
 }
 
-function detailToggle(colors: Colors, open: boolean): CSSProperties {
-  return {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 5,
-    padding: '5px 0',
-    background: 'transparent',
-    border: 'none',
-    color: open ? colors.text : colors.textMuted,
-    fontSize: 12,
-    fontWeight: 500,
-    cursor: 'pointer',
-  };
-}
-
 function detailPre(colors: Colors): CSSProperties {
   return {
     margin: 0,
     padding: 10,
-    borderRadius: 6,
+    borderRadius: 'var(--radius-soft)',
     border: `1px solid ${colors.border}`,
     background: colors.bg,
     color: colors.textMuted,
-    fontFamily: "'Geist Mono', monospace",
-    fontSize: 10.5,
+    fontFamily: TYPOGRAPHY.fontMono,
+    fontSize: 11,
     lineHeight: 1.5,
     maxHeight: 260,
     overflow: 'auto',

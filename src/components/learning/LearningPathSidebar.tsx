@@ -1,28 +1,34 @@
-import { useState } from 'react';
-import { ChevronRight, ChevronDown, CheckCircle2, Circle, Dot } from 'lucide-react';
-import { useThemeStore } from '../../stores/themeStore';
+import { lazy, Suspense, useState, type ReactNode } from 'react';
+import { ChevronRight, ChevronDown, CheckCircle2, Circle, CircleDot, Maximize2, BookOpen, Network, Flag, Library, PlayCircle } from 'lucide-react';
 import { useLearnStore } from '../../stores/learnStore';
-import { useCapstoneStore } from '../../stores/capstoneStore';
 import { TRACKS } from '../../data/lessons/tracks';
-import { CAPSTONE_PROJECTS } from '../../data/capstoneProjects';
-import { ConceptMap } from './ConceptMap';
+import { ConceptSummary } from './ConceptSummary';
 import { Glossary } from './Glossary';
-import { CapstoneCard } from './CapstoneCard';
-import { CapstoneProjectView } from './CapstoneProject';
+import { CapstonesPanel } from './CapstonesPanel';
+import { Button, Tabs, type TabOption } from '../ui';
+import { useLearnSectionStore } from './learnSectionStore';
+import './learnSidebar.css';
 
-type TabKey = 'tracks' | 'concepts' | 'capstones' | 'glossary';
+const VideoLibrary = lazy(async () => ({ default: (await import('./VideoLibrary')).VideoLibrary }));
 
-const TABS: { key: TabKey; label: string }[] = [
-  { key: 'tracks', label: 'Tracks' },
-  { key: 'concepts', label: 'Concepts' },
-  { key: 'capstones', label: 'Capstones' },
-  { key: 'glossary', label: 'Glossary' },
-];
+type TabKey = 'tracks' | 'concepts' | 'capstones' | 'glossary' | 'videos';
 
-interface ColorSet {
-  bg: string; bgElevated: string; border: string; text: string;
-  textMuted: string; textDim: string; accent: string; success: string;
+function tab(value: TabKey, label: string, icon: ReactNode): TabOption<TabKey> {
+  return {
+    value,
+    tooltip: label,
+    label: <span className="lpath__tab-inner">{icon}<span className="lpath__tab-label">{label}</span></span>,
+  };
 }
+
+/** One strip for every section. Icon-only below 340px: the label stays in the DOM and in the shared tooltip. */
+const TAB_OPTIONS: ReadonlyArray<TabOption<TabKey>> = [
+  tab('tracks', 'Tracks', <BookOpen size={14} aria-hidden="true" />),
+  tab('concepts', 'Concepts', <Network size={14} aria-hidden="true" />),
+  tab('capstones', 'Capstones', <Flag size={14} aria-hidden="true" />),
+  tab('glossary', 'Glossary', <Library size={14} aria-hidden="true" />),
+  tab('videos', 'Videos', <PlayCircle size={14} aria-hidden="true" />),
+];
 
 /**
  * The Tracks tab — the ONE lessons model (PRD polish: the rail and the
@@ -31,7 +37,6 @@ interface ColorSet {
  * current state; click a lesson to open it in Learn mode.
  */
 function TracksTab() {
-  const colors = useThemeStore((s) => s.colors) as ColorSet;
   const currentTrackId = useLearnStore((s) => s.currentTrackId);
   const currentLessonId = useLearnStore((s) => s.currentLessonId);
   const completedLessons = useLearnStore((s) => s.completedLessons);
@@ -57,65 +62,43 @@ function TracksTab() {
   };
 
   return (
-    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '4px 0' }}>
+    <div className="lpath__tracks">
       {TRACKS.map((track) => {
         const total = track.lessons.length;
         const done = track.lessons.filter((l) => completedLessons.includes(l.id)).length;
         const isOpen = expanded.has(track.id);
         return (
           <div key={track.id}>
-            <button
-              onClick={() => toggle(track.id)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6, width: '100%', textAlign: 'left',
-                padding: '7px 12px', background: 'transparent', border: 'none', cursor: 'pointer',
-                color: colors.textMuted, fontFamily: "'Geist Sans', sans-serif",
-              }}
-            >
-              {isOpen ? <ChevronDown size={13} style={{ flexShrink: 0 }} /> : <ChevronRight size={13} style={{ flexShrink: 0 }} />}
-              <span style={{ flex: 1, fontSize: 12.5, fontWeight: 600, color: colors.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {track.title}
-              </span>
-              <span style={{ fontSize: 10, color: colors.textDim, fontVariantNumeric: 'tabular-nums' }}>
-                {done}/{total}
-              </span>
+            <button type="button" className="lpath__row lpath__track" aria-expanded={isOpen} onClick={() => toggle(track.id)}>
+              {isOpen ? <ChevronDown size={14} className="lpath__icon" /> : <ChevronRight size={14} className="lpath__icon" />}
+              <span className="lpath__track-title">{track.title}</span>
+              <span className="lpath__count">{done}/{total}</span>
             </button>
             {isOpen && track.lessons.map((lesson, i) => {
               const isCurrent = lesson.id === currentLessonId && track.id === currentTrackId;
               const isDone = completedLessons.includes(lesson.id);
+              const title = `${i + 1}. ${lesson.title}`;
               return (
                 <button
                   key={lesson.id}
+                  type="button"
+                  className="lpath__row lpath__lesson"
+                  aria-current={isCurrent ? 'true' : undefined}
+                  title={title}
                   onClick={() => openLesson(track.id, lesson.id)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left',
-                    padding: '6px 12px 6px 28px', border: 'none', cursor: 'pointer',
-                    background: isCurrent ? `${colors.accent}14` : 'transparent',
-                    borderLeft: `2px solid ${isCurrent ? colors.accent : 'transparent'}`,
-                    color: isCurrent ? colors.text : colors.textMuted,
-                    fontWeight: isCurrent ? 600 : 400, fontFamily: "'Geist Sans', sans-serif",
-                  }}
-                  onMouseEnter={(e) => { if (!isCurrent) e.currentTarget.style.background = colors.bgElevated; }}
-                  onMouseLeave={(e) => { if (!isCurrent) e.currentTarget.style.background = 'transparent'; }}
                 >
                   {isDone ? (
-                    <CheckCircle2 size={13} style={{ color: colors.success, flexShrink: 0 }} />
+                    <CheckCircle2 size={14} className="lpath__icon lpath__icon--done" />
                   ) : isCurrent ? (
-                    <Dot size={14} style={{ color: colors.accent, flexShrink: 0 }} />
+                    <CircleDot size={14} className="lpath__icon lpath__icon--current" />
                   ) : (
-                    <Circle size={11} style={{ color: colors.textDim, flexShrink: 0 }} />
+                    <Circle size={12} className="lpath__icon lpath__icon--todo" />
                   )}
-                  <span style={{ flex: 1, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {i + 1}. {lesson.title}
-                  </span>
+                  <span className="lpath__lesson-title">{title}</span>
                 </button>
               );
             })}
-            {isOpen && total === 0 && (
-              <div style={{ padding: '2px 12px 8px 30px', fontSize: 11, color: colors.textDim, fontFamily: "'Geist Sans', sans-serif" }}>
-                Coming soon
-              </div>
-            )}
+            {isOpen && total === 0 && <div className="lpath__soon">Coming soon</div>}
           </div>
         );
       })}
@@ -123,73 +106,37 @@ function TracksTab() {
   );
 }
 
-function CapstonesTab() {
-  const { activeProject, completedMilestones, startProject } = useCapstoneStore();
-
-  if (activeProject) {
-    return <CapstoneProjectView />;
-  }
-
-  return (
-    <div style={{ padding: 12, minHeight: 0, overflowY: 'auto', flex: 1 }}>
-      {CAPSTONE_PROJECTS.map((project) => {
-        const completed = completedMilestones[project.id] ?? [];
-        return (
-          <CapstoneCard
-            key={project.id}
-            project={project}
-            completedCount={completed.length}
-            onStart={() => startProject(project)}
-          />
-        );
-      })}
-    </div>
-  );
-}
-
 export function LearningPathSidebar() {
-  const colors = useThemeStore((s) => s.colors);
   const [activeTab, setActiveTab] = useState<TabKey>('tracks');
+  const setSection = useLearnSectionStore((s) => s.setSection);
+  const clearCurrentLesson = useLearnStore((s) => s.clearCurrentLesson);
+  const enterLearnMode = useLearnStore((s) => s.enterLearnMode);
+
+  const openFullView = () => {
+    setSection(activeTab);
+    clearCurrentLesson();
+    enterLearnMode();
+  };
 
   return (
-    <div style={{
-      width: '100%',
-      height: '100%',
-      background: colors.bg,
-      overflow: 'hidden',
-      display: 'flex',
-      flexDirection: 'column',
-    }}>
-      {/* Tab bar */}
-      <div style={{ display: 'flex', borderBottom: `1px solid ${colors.border}`, flexShrink: 0 }}>
-        {TABS.map((tab) => {
-          const isActive = activeTab === tab.key;
-          return (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              style={{
-                flex: 1, padding: '6px 0', background: 'transparent', border: 'none',
-                borderBottom: isActive ? `2px solid ${colors.accent}` : '2px solid transparent',
-                color: isActive ? colors.accent : colors.textDim,
-                fontSize: 10, fontWeight: 600, fontFamily: "'Geist Sans', sans-serif",
-                textTransform: 'uppercase', letterSpacing: '0.3px', cursor: 'pointer',
-                transition: 'color 0.15s, border-color 0.15s',
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
+    <div className="lpath">
+      <Tabs className="lpath__tabs" aria-label="Learn sections" value={activeTab} options={TAB_OPTIONS} onChange={setActiveTab} />
+
+      <div className="lpath__panel" role="tabpanel" aria-label={`${activeTab} panel`}>
+        {activeTab === 'tracks' && <TracksTab />}
+        {activeTab === 'concepts' && <ConceptSummary />}
+        {activeTab === 'capstones' && <CapstonesPanel />}
+        {activeTab === 'glossary' && <Glossary />}
+        {activeTab === 'videos' && <Suspense fallback={null}><VideoLibrary /></Suspense>}
       </div>
 
-      {/* Tab content */}
-      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        {activeTab === 'tracks' && <TracksTab />}
-        {activeTab === 'concepts' && <ConceptMap />}
-        {activeTab === 'capstones' && <CapstonesTab />}
-        {activeTab === 'glossary' && <Glossary />}
-      </div>
+      {activeTab === 'concepts' && (
+        <div className="lpath__foot">
+          <Button size="sm" variant="secondary" icon={<Maximize2 size={12} aria-hidden="true" />} onClick={openFullView}>
+            Open full map
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

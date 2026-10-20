@@ -1,0 +1,76 @@
+/*
+ * Analysis-view tables. The shared Table primitive sizes to its content
+ * (min-width: max-content); the Λ readout lives in a fixed-width column, so it
+ * opts into fixed layout and wraps its summary line instead of clipping r² and
+ * the warning flag. Numbers sit in the sans face with tabular numerals so the
+ * superscript exponents stay legible.
+ */
+.nuclei-table.qec-lambda-table { min-width: 0; table-layout: fixed; }
+.qec-lambda-table td.nuclei-table__text { white-space: normal; }
+.qec-lambda-table th:nth-child(1), .qec-lambda-table td:nth-child(1) { width: auto; }
+.qec-lambda-table th:nth-child(2), .qec-lambda-table td:nth-child(2) { width: 56px; }
+.qec-lambda-table th:nth-child(3), .qec-lambda-table td:nth-child(3) { width: 104px; }
+.qec-lambda-table th:nth-child(4), .qec-lambda-table td:nth-child(4) { width: 42px; }
+.qec-lambda-table th:nth-child(5), .qec-lambda-table td:nth-child(5) { width: 24px; padding-left: 0; }
+.qec-lambda-table td, .decoder-table td { font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
+.qec-lambda-table caption { text-transform: none; }
+.qec-lambda-table details > summary { line-height: 1.4; }
+.qec-lambda-table details[open] > summary { margin-bottom: var(--space-1); }
+
+/* Segmented options never wrap onto two lines, whatever the header width. */
+.nuclei-segmented__option { white-space: nowrap; }
+.nuclei-table.qec-lambda-table { max-width: 380px; }
+
+/* A quiet in-text action such as "Show all 12". */
+.qec-link-button {
+  padding: 0; border: 0; background: transparent; cursor: pointer;
+  color: var(--color-accent-quantum-text); font-family: var(--font-sans); font-size: var(--font-size-caption);
+}
+.qec-link-button:hover { text-decoration: underline; }
+
+/* Empty state: the shared EmptyState with a docs link and optional content under it. */
+.qec-empty { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); text-align: center; }
+.qec-empty--center { flex: 1; justify-content: center; padding: var(--space-4); }
+.qec-empty--top { flex: none; justify-content: flex-start; padding: var(--space-2) var(--space-4); }
+.qec-empty .nuclei-empty { padding: var(--space-3) var(--space-4); }
+.qec-empty__docs { color: var(--color-accent-quantum-text); font-size: var(--font-size-chrome-label); text-decoration: none; }
+.qec-empty__docs:hover { text-decoration: underline; }
+
+/* A toggle that is not the panel's main action: pressed reads as a teal tint, never a second primary button. */
+.qec-toggle-btn.nuclei-btn[aria-pressed='true'] {
+  border-color: var(--color-accent-quantum); color: var(--color-accent-quantum-text);
+  background: color-mix(in srgb, var(--color-accent-quantum) 14%, var(--color-surface-raised));
+}
+.qec-toggle-btn.nuclei-btn[aria-pressed='true']:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-accent-quantum) 22%, var(--color-surface-raised));
+}
+
+/* Panel header: the shared PanelHeader's bar with a real heading for the title. */
+.qec-panel-header {
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0; padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border-subtle); background: var(--color-surface-base);
+}
+.qec-panel-header__title {
+  margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--font-sans); font-size: 13px; font-weight: var(--font-weight-semibold); color: var(--color-text-primary);
+}
+.qec-panel-header__spacer { flex: 1; }
+
+/* Web QEC Workbench: the page header (h1 + loaded file) and a capped, centred body so wide windows keep readable columns. */
+.qec-web-header__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-caption); color: var(--color-text-tertiary); }
+.qec-web-header__title { display: inline-flex; align-items: center; gap: 7px; margin: 0; flex: 0 0 auto; font-family: var(--font-sans); font-size: 13px; font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
+.qec-web-body { padding-inline: max(0px, calc((100% - 1280px) / 2)); }
+/* The header's rule stays full-bleed; its content aligns with the capped body's edges. */
+.qec-web-header { padding-inline: max(var(--space-3), calc((100% - 1280px) / 2 + var(--space-3))); }
+
+/* Collision chip: marks one of several tasks that share experiment, d and p. */
+.qec-collision-chip {
+  display: inline-block; margin-left: var(--space-2); padding: 0 var(--space-1); border-radius: var(--radius-soft);
+  background: color-mix(in srgb, var(--color-warning) 14%, transparent); color: var(--color-warning-text);
+  font-family: var(--font-sans); font-size: var(--font-size-caption); font-weight: var(--font-weight-medium); line-height: var(--line-height-caption);
+}
+.qec-lambda-group td { font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); letter-spacing: 0.02em; padding-top: var(--space-2); }
+.qec-lambda-table .qec-lambda-warn { display: flex; width: 20px; height: 20px; margin-block: -4px; } /* keeps flagged rows the height of their neighbours */
+/* Every Λ row is the same height, flagged or not: the warn button never decides the row. */
+.qec-lambda-table td:not(.nuclei-table__text) { height: 24px; padding-block: 0; }
+.qec-lambda-table td .qec-lambda-warn { vertical-align: middle; margin-block: 0; }

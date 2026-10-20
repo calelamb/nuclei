@@ -1,0 +1,56 @@
+import { useMemo, useState } from 'react';
+import type { ThemeColors } from '../../stores/themeStore';
+import type { PlotModel } from '../../lib/qecPlotModel';
+import { tooltipLeft } from '../../lib/qecTooltipPosition';
+import { tooltipLines } from '../../lib/qecPlotPoints';
+import { FIGURE_FONT, QecPlotFigure, type HoverTarget } from './QecPlotFigure';
+
+interface Props {
+  model: PlotModel;
+  colors: ThemeColors;
+  width: number;
+  height: number;
+  metadata: string;
+  title: string;
+  description: string;
+}
+
+const TOOLTIP_WIDTH = 260;
+const TOOLTIP_OFFSET = 14;
+
+/** The interactive figure: hover shows the point's counts and interval in a tooltip. */
+export function QecPlotView({ model, colors, width, height, metadata, title, description }: Props) {
+  const [hover, setHover] = useState<HoverTarget | null>(null);
+  const series = useMemo(() => model.parts.find((s) => s.source.key === hover?.seriesKey)?.source, [model, hover]);
+  return (
+    <div style={{ position: 'relative', width, height, flex: 'none' }}>
+      <QecPlotFigure
+        model={model} colors={colors} width={width} height={height} metadata={metadata}
+        title={title} description={description} hover={hover} onHover={setHover}
+      />
+      <div
+        aria-live="polite"
+        style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' }}
+      >
+        {hover && series ? tooltipLines(series, hover.point, model.units).join('. ') : ''}
+      </div>
+      {hover && series && (
+        <div
+          role="tooltip"
+          style={{
+            position: 'absolute', pointerEvents: 'none', width: TOOLTIP_WIDTH, zIndex: 2,
+            left: tooltipLeft({ x: hover.x, plotWidth: width, tooltipWidth: TOOLTIP_WIDTH, offset: TOOLTIP_OFFSET }),
+            top: Math.max(4, hover.y - 20),
+            background: colors.bgElevated, color: colors.text, border: `1px solid ${colors.borderStrong}`,
+            borderRadius: 'var(--radius-soft)', padding: '6px 8px', fontSize: 11, lineHeight: 1.45, fontFamily: FIGURE_FONT,
+            boxShadow: 'var(--shadow-md)',
+          }}
+        >
+          {tooltipLines(series, hover.point, model.units).map((line, i) => (
+            <div key={i} style={{ fontWeight: i === 0 ? 600 : 400, color: i === 0 ? colors.text : colors.textMuted }}>{line}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

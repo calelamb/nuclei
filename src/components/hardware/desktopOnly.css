@@ -1,0 +1,3 @@
+/* The one "needs the desktop app" state: balanced title so a single word never orphans onto its own line. */
+.nuclei-desktop-only .nuclei-empty__title { text-wrap: balance; }
+.nuclei-desktop-only .nuclei-empty__body { text-wrap: pretty; }

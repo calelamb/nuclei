@@ -16,8 +16,10 @@ import {
   ChevronRight,
   ChevronDown,
   Sigma,
+  X,
   type LucideIcon,
 } from 'lucide-react';
+import { Button, IconButton, Menu, type MenuEntry } from '../ui';
 import { useProjectStore } from '../../stores/projectStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useThemeStore } from '../../stores/themeStore';
@@ -30,7 +32,17 @@ import {
   defaultCircuitFileName,
 } from '../../data/starterTemplates';
 import { MEMORY_PREFIX, isMemoryPath } from '../../hooks/useFileOps';
+import { DesktopOnlyState } from '../hardware/DesktopOnlyState';
+import { ExplorerNameInput } from './ExplorerNameInput';
+import { ExplorerRenameRow } from './ExplorerRenameRow';
+import { validateNewName } from './createNameValidation';
+import { flattenVisible, resolveTreeKey } from './treeNavigation';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
+import { shortcutLabel } from '../../config/keybindings';
+
+/** Platform-aware (⌘S on macOS, Ctrl+S elsewhere), from the one keybinding registry. */
+const SAVE_KEY = shortcutLabel('save') ?? 'Save';
 const EXTENSION_ICONS: Record<string, LucideIcon> = {
   py: FileCode,
   qs: Sigma,
@@ -41,10 +53,10 @@ const EXTENSION_ICONS: Record<string, LucideIcon> = {
 };
 
 function iconFor(name: string, isDir: boolean, color: string) {
-  if (isDir) return <Folder size={13} style={{ color, marginRight: 6, flexShrink: 0 }} />;
+  if (isDir) return <Folder size={14} style={{ color, marginRight: 6, flexShrink: 0 }} />;
   const ext = name.split('.').pop()?.toLowerCase() ?? '';
   const Icon = EXTENSION_ICONS[ext] ?? FileIconLucide;
-  return <Icon size={13} style={{ color, marginRight: 6, flexShrink: 0 }} />;
+  return <Icon size={14} style={{ color, marginRight: 6, flexShrink: 0 }} />;
 }
 
 function basename(path: string): string {
@@ -82,13 +94,17 @@ export function FileExplorer() {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** A rejected create lives beside its input; it never hides the tree. */
+  const [createError, setCreateError] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const renameBusy = useRef(false);
   const [pending, setPending] = useState<CreateKind | null>(null);
   const [draft, setDraft] = useState('');
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [circuitSubmenu, setCircuitSubmenu] = useState(false);
-  const menuContainerRef = useRef<HTMLDivElement>(null);
+  const treeRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [focusedPath, setFocusedPath] = useState<string | null>(null);
 
   const loadRoot = useCallback(
     async (rootPath: string) => {
@@ -107,6 +123,30 @@ export function FileExplorer() {
     [platform],
   );
 
+  /**
+   * Re-read the root listing but keep every expanded folder open (refetching
+   * only those), so refresh / create / rename never collapse the user's tree.
+   */
+  const reloadTree = useCallback(
+    async (rootPath: string) => {
+      setError(null);
+      const entries = await platform.listDirectory(rootPath);
+      if (!entries) {
+        setError('Could not read folder.');
+        return;
+      }
+      const openPaths = Object.keys(expanded).filter((p) => expanded[p]);
+      const refreshed = await Promise.all(
+        openPaths.map(async (p) => [p, await platform.listDirectory(p)] as const),
+      );
+      const stillOpen = refreshed.filter((r): r is readonly [string, DirEntry[]] => r[1] !== null);
+      setRootEntries(entries);
+      setChildEntries(Object.fromEntries(stillOpen));
+      setExpanded(Object.fromEntries(stillOpen.map(([p]) => [p, true])));
+    },
+    [platform, expanded],
+  );
+
   const inMemory = isMemoryPath(projectRoot);
   useEffect(() => {
     queueMicrotask(() => {
@@ -114,17 +154,6 @@ export function FileExplorer() {
       else setRootEntries(null);
     });
   }, [projectRoot, loadRoot]);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const h = (e: MouseEvent) => {
-      if (menuContainerRef.current?.contains(e.target as Node)) return;
-      setMenuOpen(false);
-      setCircuitSubmenu(false);
-    };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, [menuOpen]);
 
   const handleOpenFolder = useCallback(async () => {
     const picked = await platform.openDirectory();
@@ -154,8 +183,8 @@ export function FileExplorer() {
   }, [platform, setProjectRoot, openTab]);
 
   const handleRefresh = useCallback(() => {
-    if (projectRoot) loadRoot(projectRoot);
-  }, [projectRoot, loadRoot]);
+    if (projectRoot) void reloadTree(projectRoot);
+  }, [projectRoot, reloadTree]);
 
   const handleOpenFile = useCallback(
     async (path: string) => {
@@ -187,102 +216,139 @@ export function FileExplorer() {
   );
 
   const startCreate = (c: CreateKind) => {
+    setCreateError(null);
     setPending(c);
     setDraft(c.initial);
-    setMenuOpen(false);
-    setCircuitSubmenu(false);
   };
 
   const cancelCreate = () => {
+    setCreateError(null);
     setPending(null);
     setDraft('');
   };
 
-  const commitCreate = useCallback(async () => {
+  /** Escape from the name field: the keyboard goes back to the control that started the flow, not to <body>. */
+  const cancelCreateFromKeyboard = () => {
+    cancelCreate();
+    requestAnimationFrame(() => {
+      rootRef.current?.querySelector<HTMLElement>('[aria-label="New file, circuit or folder"]')?.focus();
+    });
+  };
+
+  const focusRow = useCallback((path: string) => {
+    setFocusedPath(path);
+    requestAnimationFrame(() => {
+      const rows = treeRef.current?.querySelectorAll<HTMLElement>('[data-tree-path]') ?? [];
+      Array.from(rows).find((r) => r.dataset.treePath === path)?.focus();
+    });
+  }, []);
+
+  /** Select, expand and focus a folder the person just created. */
+  const revealCreatedFolder = useCallback(async (path: string) => {
+    const children = await platform.listDirectory(path);
+    if (children) setChildEntries((c) => ({ ...c, [path]: children }));
+    setExpanded((e) => ({ ...e, [path]: true }));
+    focusRow(path);
+  }, [platform, focusRow]);
+
+  const commitCreate = useCallback(async (viaKeyboard = false) => {
     const raw = draft.trim();
     if (!raw || !projectRoot || !pending) {
       cancelCreate();
       return;
     }
-    if (raw.includes('/') || raw.includes('\\')) {
-      setError('Names cannot contain slashes. Use the file tree to choose a location.');
-      cancelCreate();
-      return;
-    }
+    const isFileKind = pending.kind === 'file' || pending.kind === 'circuit';
+    const name = isFileKind && !raw.includes('.') ? `${raw}.py` : raw;
+    const memory = isMemoryPath(projectRoot);
+    const existingNames = memory
+      ? tabs.filter((t) => t.path.startsWith(`${projectRoot}/`)).map((t) => t.path.slice(projectRoot.length + 1))
+      : (rootEntries ?? []).map((entry) => entry.name);
+    const invalid = validateNewName({ name, existingNames });
+    if (invalid) { setCreateError(invalid); return; }
 
     // In an in-memory (unsaved) project, all "creates" produce in-memory
     // tabs only. Folders and packages don't exist as concepts until the
-    // project has a real location on disk — we block them with a hint
-    // instead of silently doing nothing. Save the project first (⌘S on
-    // any file) to promote it to a real folder, then folder/package
-    // creation works normally.
-    if (isMemoryPath(projectRoot)) {
-      if (pending.kind === 'folder' || pending.kind === 'package') {
-        setError('Save the project first (⌘S) to add folders or packages.');
-        cancelCreate();
+    // project has a real location on disk, so we block them with a hint
+    // instead of silently doing nothing.
+    if (memory) {
+      if (!isFileKind) {
+        setCreateError(`Save the project first (${SAVE_KEY}) to add folders or packages.`);
         return;
       }
-      const name = raw.endsWith('.py') || raw.includes('.') ? raw : `${raw}.py`;
-      const path = `${projectRoot}/${name}`;
       const content = pending.kind === 'circuit' ? STARTER_TEMPLATES[pending.framework] : '';
       if (pending.kind === 'circuit') setEditorFramework(pending.framework);
-      openTab({ path, content });
+      openTab({ path: `${projectRoot}/${name}`, content });
       cancelCreate();
+      if (viaKeyboard) useEditorStore.getState().requestEditorFocus();
       return;
     }
 
-    if (pending.kind === 'folder') {
-      const path = `${projectRoot}/${raw}`;
-      const res = await platform.createDirectory(path, false);
-      cancelCreate();
-      if (!res) { setError(`Couldn't create folder ${raw}.`); return; }
-      await loadRoot(projectRoot);
-      return;
-    }
-
-    if (pending.kind === 'package') {
-      const path = `${projectRoot}/${raw}`;
+    if (!isFileKind) {
+      const path = `${projectRoot}/${name}`;
+      const label = pending.kind === 'package' ? 'package' : 'folder';
       const dir = await platform.createDirectory(path, false);
-      if (!dir) { setError(`Couldn't create package ${raw}.`); cancelCreate(); return; }
-      await platform.createFile(`${path}/__init__.py`, '');
+      if (!dir) { setCreateError(`Couldn't create ${label} ${name}. Check that the name is free and the folder is writable.`); return; }
+      if (pending.kind === 'package') await platform.createFile(`${path}/__init__.py`, '');
       cancelCreate();
-      await loadRoot(projectRoot);
+      await reloadTree(projectRoot);
+      if (viaKeyboard) await revealCreatedFolder(path);
       return;
     }
 
-    // file / circuit share the same create-a-file path
-    const name = raw.endsWith('.py') || raw.includes('.') ? raw : `${raw}.py`;
     const path = `${projectRoot}/${name}`;
     const content = pending.kind === 'circuit' ? STARTER_TEMPLATES[pending.framework] : '';
     const res = await platform.createFile(path, content);
+    if (!res) { setCreateError(`Couldn't create ${name}. A file with that name may already exist.`); return; }
     cancelCreate();
-    if (!res) { setError(`Couldn't create ${name} (already exists?).`); return; }
     if (pending.kind === 'circuit') setEditorFramework(pending.framework);
-    await loadRoot(projectRoot);
+    await reloadTree(projectRoot);
     openTab({ path: res.path, content });
-  }, [draft, pending, projectRoot, platform, loadRoot, openTab, setEditorFramework]);
+    setFocusedPath(res.path);
+    if (viaKeyboard) useEditorStore.getState().requestEditorFocus();
+  }, [draft, pending, projectRoot, platform, reloadTree, revealCreatedFolder, openTab, setEditorFramework, tabs, rootEntries]);
 
-  const commitRename = useCallback(
-    async (oldPath: string) => {
-      const d = renameDraft.trim();
-      setRenameTarget(null);
-      if (!d || d === basename(oldPath)) return;
-      const res = await platform.renameFile(oldPath, d);
-      if (res) {
-        useProjectStore.getState().renameTab(oldPath, res.path);
-        if (projectRoot) loadRoot(projectRoot);
+  const endRename = useCallback((focusPath: string | null) => {
+    setRenameTarget(null);
+    setRenameError(null);
+    if (focusPath) focusRow(focusPath);
+  }, [focusRow]);
+
+  /** Names already taken beside `oldPath`, so a rename cannot collide with a sibling. */
+  const siblingNames = (oldPath: string): string[] => {
+    const parent = oldPath.slice(0, oldPath.lastIndexOf('/'));
+    const entries = parent === projectRoot ? treeEntries : childEntries[parent] ?? [];
+    return entries.filter((e) => e.path !== oldPath).map((e) => e.name);
+  };
+
+  const commitRename = async (oldPath: string, viaKeyboard: boolean) => {
+    if (renameBusy.current) return;
+    const name = renameDraft.trim();
+    if (!name || name === basename(oldPath)) { endRename(viaKeyboard ? oldPath : null); return; }
+    const invalid = validateNewName({ name, existingNames: siblingNames(oldPath) });
+    // Clicking away from a bad name abandons it; only Enter keeps the field open to show why.
+    if (invalid) { if (viaKeyboard) setRenameError(invalid); else endRename(null); return; }
+    renameBusy.current = true;
+    try {
+      const res = await platform.renameFile(oldPath, name);
+      if (!res) {
+        setRenameError(`Couldn't rename ${basename(oldPath)}. A file with that name may already exist.`);
+        return;
       }
-    },
-    [renameDraft, platform, projectRoot, loadRoot],
-  );
+      useProjectStore.getState().renameTab(oldPath, res.path);
+      if (projectRoot) await reloadTree(projectRoot);
+      endRename(res.path);
+    } finally {
+      renameBusy.current = false;
+    }
+  };
 
   const rowStyle = (isActive: boolean, depth: number): React.CSSProperties => ({
     display: 'flex',
     alignItems: 'center',
     padding: `3px 8px 3px ${8 + depth * 12}px`,
     fontSize: 12,
-    fontFamily: "'Geist Sans', sans-serif",
-    color: isActive ? colors.accent : colors.text,
+    fontFamily: TYPOGRAPHY.fontSans,
+    color: isActive ? colors.accentText : colors.text,
     background: isActive ? `${colors.accent}14` : 'transparent',
     // Accent left bar on the open file — same signal as the tabs and the
     // Open Files list, so the active file is unmistakable in all three.
@@ -301,14 +367,13 @@ export function FileExplorer() {
           <div
             role="treeitem"
             aria-expanded={isExpanded}
+            aria-level={depth + 1}
+            data-tree-path={entry.path}
+            tabIndex={rovingTabIndex(entry.path)}
+            onFocus={() => setFocusedPath(entry.path)}
             onClick={() => toggleExpand(entry.path)}
+            className="nuclei-row"
             style={rowStyle(false, depth)}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = colors.bgElevated;
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'transparent';
-            }}
           >
             {isExpanded ? (
               <ChevronDown size={12} style={{ color: colors.textDim, marginRight: 2 }} />
@@ -330,53 +395,36 @@ export function FileExplorer() {
     }
     if (renameTarget === entry.path) {
       return (
-        <div key={entry.path} style={rowStyle(isActive, depth)}>
-          <input
-            autoFocus
-            value={renameDraft}
-            onChange={(e) => setRenameDraft(e.target.value)}
-            onBlur={() => commitRename(entry.path)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                commitRename(entry.path);
-              }
-              if (e.key === 'Escape') setRenameTarget(null);
-            }}
-            style={{
-              flex: 1,
-              background: colors.bgElevated,
-              border: `1px solid ${colors.accent}`,
-              color: colors.text,
-              fontSize: 12,
-              padding: '2px 6px',
-              borderRadius: 4,
-              outline: 'none',
-              fontFamily: "'Geist Sans', sans-serif",
-            }}
-          />
-        </div>
+        <ExplorerRenameRow
+          key={entry.path}
+          name={entry.name}
+          rowStyle={rowStyle(isActive, depth)}
+          icon={iconFor(entry.name, false, isActive ? colors.accent : colors.textMuted)}
+          value={renameDraft}
+          error={renameError}
+          colors={colors}
+          onChange={(v) => { setRenameDraft(v); if (renameError) setRenameError(null); }}
+          onCommit={(viaKeyboard) => { void commitRename(entry.path, viaKeyboard); }}
+          onCancel={(viaKeyboard) => endRename(viaKeyboard ? entry.path : null)}
+        />
       );
     }
     return (
       <div
         key={entry.path}
         role="treeitem"
+        aria-level={depth + 1}
+        aria-selected={isActive}
+        data-tree-path={entry.path}
+        tabIndex={rovingTabIndex(entry.path)}
+        onFocus={() => setFocusedPath(entry.path)}
         onClick={() => handleOpenFile(entry.path)}
-        onDoubleClick={() => {
-          setRenameDraft(entry.name);
-          setRenameTarget(entry.path);
-        }}
+        onDoubleClick={() => { void handleOpenFile(entry.path); }}
+        className="nuclei-row"
         style={rowStyle(isActive, depth)}
-        onMouseEnter={(e) => {
-          if (!isActive) e.currentTarget.style.background = colors.bgElevated;
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = isActive
-            ? `${colors.accent}14`
-            : 'transparent';
-        }}
       >
+        {/* Same 12px + 2px gutter as a folder's chevron, so file and folder icons share one column. */}
+        <span aria-hidden="true" data-tree-spacer style={{ width: 12, marginRight: 2, flexShrink: 0 }} />
         {iconFor(entry.name, false, isActive ? colors.accent : colors.textMuted)}
         <span
           style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
@@ -409,6 +457,39 @@ export function FileExplorer() {
       }));
   }, [tabs, projectRoot]);
 
+  const treeEntries: readonly DirEntry[] = inMemory ? memoryTabEntries : rootEntries ?? [];
+  const visibleItems = flattenVisible(treeEntries, childEntries, expanded);
+  const tabStopPath = visibleItems.some((i) => i.path === focusedPath)
+    ? focusedPath
+    : visibleItems.find((i) => i.path === activeTabPath)?.path ?? visibleItems[0]?.path ?? null;
+  const rovingTabIndex = (path: string): 0 | -1 => (path === tabStopPath ? 0 : -1);
+
+  const handleTreeKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const target = (e.target as HTMLElement).closest<HTMLElement>('[data-tree-path]');
+    if (!target || e.target !== target) return;
+    const path = target.dataset.treePath as string;
+    const action = resolveTreeKey(visibleItems, path, e.key);
+    if (action.type === 'none') return;
+    e.preventDefault();
+    const item = visibleItems.find((i) => i.path === path);
+    switch (action.type) {
+      case 'focus': focusRow(action.path); break;
+      case 'expand': void toggleExpand(action.path); break;
+      case 'collapse': setExpanded((cur) => ({ ...cur, [action.path]: false })); break;
+      case 'activate':
+        if (item?.kind === 'directory') void toggleExpand(action.path);
+        else void handleOpenFile(action.path);
+        break;
+      case 'rename': {
+        const name = basename(action.path);
+        setRenameDraft(name);
+        setRenameTarget(action.path);
+        break;
+      }
+    }
+  };
+
+
   /**
    * Quick-create from the empty state. Spins up an in-memory project
    * AND opens a starter tab in one click, so a student landing on
@@ -432,71 +513,13 @@ export function FileExplorer() {
 
   if (isWeb) {
     return (
-      <div
-        style={{
-          padding: 14,
-          color: colors.textDim,
-          fontSize: 12,
-          fontFamily: "'Geist Sans', sans-serif",
-          lineHeight: 1.6,
-        }}
-      >
-        Folder projects are a desktop-only feature right now. Download Nuclei from{' '}
-        <a href="https://getnuclei.dev" style={{ color: colors.accent }}>
-          getnuclei.dev
-        </a>{' '}
-        to open a whole lecture folder. You can still edit and simulate circuits here.
-      </div>
+      <DesktopOnlyState title="Project folders open in the desktop app">
+        You can still edit and simulate single files here.
+      </DesktopOnlyState>
     );
   }
 
   if (!projectRoot) {
-    const primaryBtn: React.CSSProperties = {
-      display: 'flex',
-      alignItems: 'center',
-      gap: 6,
-      justifyContent: 'center',
-      padding: '8px 12px',
-      background: colors.accent,
-      color: '#0a0f1a',
-      border: 'none',
-      borderRadius: 6,
-      fontSize: 12,
-      fontWeight: 600,
-      fontFamily: "'Geist Sans', sans-serif",
-      cursor: 'pointer',
-    };
-    const secondaryBtn: React.CSSProperties = {
-      display: 'flex',
-      alignItems: 'center',
-      gap: 6,
-      justifyContent: 'center',
-      padding: '8px 12px',
-      background: 'transparent',
-      color: colors.text,
-      border: `1px solid ${colors.border}`,
-      borderRadius: 6,
-      fontSize: 12,
-      fontWeight: 500,
-      fontFamily: "'Geist Sans', sans-serif",
-      cursor: 'pointer',
-    };
-    const quickChipBtn: React.CSSProperties = {
-      flex: 1,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 4,
-      padding: '6px 8px',
-      background: colors.bgElevated,
-      color: colors.accentLight,
-      border: `1px solid ${colors.border}`,
-      borderRadius: 6,
-      fontSize: 11,
-      fontWeight: 600,
-      fontFamily: "'Geist Sans', sans-serif",
-      cursor: 'pointer',
-    };
     return (
       <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
         <p
@@ -510,12 +533,12 @@ export function FileExplorer() {
           Start a new quantum project, jump straight into a circuit, or open an
           existing folder.
         </p>
-        <button onClick={handleNewProject} style={primaryBtn}>
-          <Plus size={13} /> New Project…
-        </button>
+        <Button variant="primary" onClick={handleNewProject} icon={<Plus size={14} />}>
+          New Project…
+        </Button>
         <div
           style={{
-            fontSize: 10,
+            fontSize: 11,
             textTransform: 'uppercase',
             letterSpacing: 0.5,
             color: colors.textDim,
@@ -525,22 +548,12 @@ export function FileExplorer() {
           Quick start
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
-          <button onClick={() => quickCreateCircuit('qiskit')} style={quickChipBtn}>
-            <AtomIcon size={11} /> Qiskit
-          </button>
-          <button onClick={() => quickCreateCircuit('cirq')} style={quickChipBtn}>
-            <AtomIcon size={11} /> Cirq
-          </button>
-          <button onClick={() => quickCreateCircuit('cuda-q')} style={quickChipBtn}>
-            <AtomIcon size={11} /> CUDA-Q
-          </button>
-          <button onClick={() => quickCreateCircuit('qsharp')} style={quickChipBtn}>
-            <AtomIcon size={11} /> Q#
-          </button>
+          <Button size="sm" style={{ flex: 1 }} onClick={() => quickCreateCircuit('qiskit')} icon={<AtomIcon size={12} />}>Qiskit</Button>
+          <Button size="sm" style={{ flex: 1 }} onClick={() => quickCreateCircuit('cirq')} icon={<AtomIcon size={12} />}>Cirq</Button>
+          <Button size="sm" style={{ flex: 1 }} onClick={() => quickCreateCircuit('cuda-q')} icon={<AtomIcon size={12} />}>CUDA-Q</Button>
+          <Button size="sm" style={{ flex: 1 }} onClick={() => quickCreateCircuit('qsharp')} icon={<AtomIcon size={12} />}>Q#</Button>
         </div>
-        <button onClick={handleOpenFolder} style={secondaryBtn}>
-          <FolderOpen size={13} /> Open Folder…
-        </button>
+        <Button onClick={handleOpenFolder} icon={<FolderOpen size={14} />}>Open folder…</Button>
         {error && (
           <div style={{ color: colors.error, fontSize: 11 }}>{error}</div>
         )}
@@ -548,23 +561,27 @@ export function FileExplorer() {
     );
   }
 
-  const menuItemStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    width: '100%',
-    padding: '6px 12px',
-    background: 'transparent',
-    color: colors.text,
-    border: 'none',
-    cursor: 'pointer',
-    fontSize: 12,
-    fontFamily: "'Geist Sans', sans-serif",
-    textAlign: 'left',
-  };
+  const newMenuEntries: MenuEntry[] = [
+    {
+      id: 'file', label: 'New file', icon: <FilePlus size={14} />, hint: '.py',
+      onSelect: () => startCreate({ kind: 'file', initial: 'untitled.py' }),
+    },
+    {
+      id: 'circuit', label: 'New circuit', icon: <AtomIcon size={14} />,
+      items: (['qiskit', 'cirq', 'cuda-q', 'qsharp'] as Framework[]).map((f) => ({
+        id: `circuit-${f}`,
+        label: displayFrameworkName(f),
+        icon: <AtomIcon size={14} />,
+        onSelect: () => startCreate({ kind: 'circuit', framework: f, initial: defaultCircuitFileName(f) }),
+      })),
+    },
+    { id: 'sep', separator: true },
+    { id: 'package', label: 'New Python package', icon: <Package size={14} />, onSelect: () => startCreate({ kind: 'package', initial: 'new_package' }) },
+    { id: 'folder', label: 'New folder', icon: <FolderPlus size={14} />, onSelect: () => startCreate({ kind: 'folder', initial: 'new_folder' }) },
+  ];
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div ref={rootRef} style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div
         style={{
           padding: '6px 10px',
@@ -587,192 +604,42 @@ export function FileExplorer() {
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
           {rootName}
         </span>
-        <div ref={menuContainerRef} style={{ position: 'relative' }}>
-          <button
-            title="New…"
-            onClick={() => {
-              setMenuOpen((o) => !o);
-              setCircuitSubmenu(false);
-            }}
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            style={{
-              background: menuOpen ? colors.bgElevated : 'transparent',
-              border: 'none',
-              color: menuOpen ? colors.text : colors.textDim,
-              cursor: 'pointer',
-              padding: 4,
-              display: 'flex',
-              borderRadius: 4,
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = colors.text;
-              e.currentTarget.style.background = colors.bgElevated;
-            }}
-            onMouseLeave={(e) => {
-              if (!menuOpen) {
-                e.currentTarget.style.color = colors.textDim;
-                e.currentTarget.style.background = 'transparent';
-              }
-            }}
-          >
-            <Plus size={14} />
-          </button>
-          {menuOpen && (
-            <div
-              role="menu"
-              style={{
-                position: 'absolute',
-                right: 0,
-                top: 'calc(100% + 4px)',
-                background: colors.bgPanel,
-                border: `1px solid ${colors.borderStrong}`,
-                borderRadius: 6,
-                minWidth: 220,
-                zIndex: 100,
-                overflow: 'visible',
-                boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
-                padding: '4px 0',
-              }}
-            >
-              <button
-                style={menuItemStyle}
-                onClick={() => startCreate({ kind: 'file', initial: 'untitled.py' })}
-                onMouseEnter={(e) => { e.currentTarget.style.background = `${colors.accent}12`; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-              >
-                <FilePlus size={13} style={{ color: colors.textDim }} /> New File
-                <span style={{ marginLeft: 'auto', fontSize: 10, color: colors.textDim }}>.py</span>
-              </button>
-
-              <div
-                style={{ position: 'relative' }}
-                onMouseEnter={() => setCircuitSubmenu(true)}
-                onMouseLeave={() => setCircuitSubmenu(false)}
-              >
-                <button
-                  style={menuItemStyle}
-                  onClick={() => setCircuitSubmenu((s) => !s)}
-                >
-                  <AtomIcon size={13} style={{ color: colors.accentLight }} /> New Circuit
-                  <ChevronRight size={12} style={{ marginLeft: 'auto', color: colors.textDim }} />
-                </button>
-                {circuitSubmenu && (
-                  <div
-                    role="menu"
-                    style={{
-                      position: 'absolute',
-                      right: '100%',
-                      top: 0,
-                      marginRight: 4,
-                      background: colors.bgPanel,
-                      border: `1px solid ${colors.borderStrong}`,
-                      borderRadius: 6,
-                      minWidth: 180,
-                      boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
-                      padding: '4px 0',
-                    }}
-                  >
-                    {(['qiskit', 'cirq', 'cuda-q', 'qsharp'] as Framework[]).map((f) => (
-                      <button
-                        key={f}
-                        style={menuItemStyle}
-                        onClick={() => startCreate({
-                          kind: 'circuit',
-                          framework: f,
-                          initial: defaultCircuitFileName(f),
-                        })}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = `${colors.accent}12`; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-                      >
-                        <AtomIcon size={13} style={{ color: colors.accentLight }} />
-                        {displayFrameworkName(f)}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div style={{ borderTop: `1px solid ${colors.border}`, margin: '4px 0' }} />
-
-              <button
-                style={menuItemStyle}
-                onClick={() => startCreate({ kind: 'package', initial: 'new_package' })}
-                onMouseEnter={(e) => { e.currentTarget.style.background = `${colors.accent}12`; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-              >
-                <Package size={13} style={{ color: colors.textDim }} /> New Python Package
-              </button>
-              <button
-                style={menuItemStyle}
-                onClick={() => startCreate({ kind: 'folder', initial: 'new_folder' })}
-                onMouseEnter={(e) => { e.currentTarget.style.background = `${colors.accent}12`; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-              >
-                <FolderPlus size={13} style={{ color: colors.textDim }} /> New Folder
-              </button>
-            </div>
+        <Menu
+          label="New file, circuit or folder"
+          entries={newMenuEntries}
+          minWidth={220}
+          trigger={(p) => (
+            <IconButton {...p} size="sm" aria-label="New file, circuit or folder" tooltip={{ label: 'New…' }}>
+              <Plus size={14} />
+            </IconButton>
           )}
-        </div>
-        <button
-          title="Refresh"
-          onClick={handleRefresh}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: colors.textDim,
-            cursor: 'pointer',
-            padding: 4,
-            display: 'flex',
-            borderRadius: 4,
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.color = colors.text;
-            e.currentTarget.style.background = colors.bgElevated;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.color = colors.textDim;
-            e.currentTarget.style.background = 'transparent';
-          }}
-        >
+        />
+        <IconButton size="sm" aria-label="Refresh file list" tooltip={{ label: 'Refresh' }} onClick={handleRefresh}>
           <RefreshCw size={12} />
-        </button>
-        <button
-          title="Close folder"
+        </IconButton>
+        <IconButton
+          size="sm"
+          aria-label="Close folder"
+          tooltip={{ label: 'Close folder' }}
           onClick={() => {
             setProjectRoot(null);
             platform.setStoredValue('project_root', null).catch(() => {});
           }}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: colors.textDim,
-            cursor: 'pointer',
-            padding: 4,
-            fontSize: 11,
-            fontFamily: "'Geist Sans', sans-serif",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.color = colors.text;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.color = colors.textDim;
-          }}
         >
-          ×
-        </button>
+          <X size={13} />
+        </IconButton>
       </div>
 
       {pending && (
         <div style={{ padding: '4px 8px', borderBottom: `1px solid ${colors.border}` }}>
           <div
             style={{
-              fontSize: 10,
+              fontSize: 11,
               textTransform: 'uppercase',
               letterSpacing: 0.5,
               color: colors.textDim,
@@ -781,28 +648,39 @@ export function FileExplorer() {
           >
             {createKindLabel(pending)}
           </div>
-          <input
-            autoFocus
+          <ExplorerNameInput
+            ariaLabel={`${createKindLabel(pending)} name`}
+            selectBaseName={pending.kind === 'file' || pending.kind === 'circuit'}
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={commitCreate}
+            invalid={createError !== null}
+            describedBy={createError ? 'explorer-create-error' : undefined}
+            onChange={(value) => { setDraft(value); if (createError) setCreateError(null); }}
+            onBlur={() => { if (createError) cancelCreate(); else void commitCreate(); }}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') { e.preventDefault(); commitCreate(); }
-              if (e.key === 'Escape') cancelCreate();
+              if (e.key === 'Enter') { e.preventDefault(); void commitCreate(true); }
+              if (e.key === 'Escape') cancelCreateFromKeyboard();
             }}
             placeholder={pending.initial}
             style={{
               width: '100%',
               background: colors.bgElevated,
-              border: `1px solid ${colors.accent}`,
+              border: `1px solid ${createError ? colors.error : colors.accent}`,
               color: colors.text,
               fontSize: 12,
               padding: '4px 8px',
               borderRadius: 4,
-              outline: 'none',
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           />
+          {createError && (
+            <div
+              id="explorer-create-error"
+              role="alert"
+              style={{ color: colors.error, fontSize: 11, lineHeight: 1.4, padding: '4px 2px 2px' }}
+            >
+              {createError}
+            </div>
+          )}
         </div>
       )}
 
@@ -813,7 +691,7 @@ export function FileExplorer() {
               padding: 14,
               color: colors.textDim,
               fontSize: 12,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             Loading…
@@ -825,25 +703,31 @@ export function FileExplorer() {
               padding: 14,
               color: colors.error,
               fontSize: 12,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             {error}
           </div>
         )}
+        <div
+          ref={treeRef}
+          role="tree"
+          aria-label="Project files"
+          onKeyDown={handleTreeKeyDown}
+        >
         {!loading && !error && inMemory && (
           <>
             <div
               style={{
                 padding: '8px 14px 4px',
                 color: colors.textDim,
-                fontSize: 10,
+                fontSize: 11,
                 textTransform: 'uppercase',
                 letterSpacing: 0.5,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
               }}
             >
-              Unsaved — ⌘S to save to disk
+              Unsaved — {SAVE_KEY} to save to disk
             </div>
             {memoryTabEntries.map((e) => renderEntry(e, 0))}
             {memoryTabEntries.length === 0 && (
@@ -852,10 +736,10 @@ export function FileExplorer() {
                   padding: 14,
                   color: colors.textDim,
                   fontSize: 12,
-                  fontFamily: "'Geist Sans', sans-serif",
+                  fontFamily: TYPOGRAPHY.fontSans,
                 }}
               >
-                Click + to add a file or circuit. ⌘S to save to disk.
+                Click + to add a file or circuit. {SAVE_KEY} to save to disk.
               </div>
             )}
           </>
@@ -867,12 +751,13 @@ export function FileExplorer() {
               padding: 14,
               color: colors.textDim,
               fontSize: 12,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             Folder is empty. Click + to add a file, package, or circuit.
           </div>
         )}
+        </div>
       </div>
     </div>
   );

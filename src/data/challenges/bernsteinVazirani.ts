@@ -16,15 +16,15 @@ strategy needs \`n\`.
 You are handed an opaque **oracle** — a gate on \`n + 1\` qubits (\`n\` input +
 1 output) that computes
 
-\`f(x) = s \\u00B7 x  (mod 2)\`
+\`f(x) = s · x  (mod 2)\`
 
-into the output qubit, where \`s \\u00B7 x = s\\u2080x\\u2080 \\u2295 s\\u2081x\\u2081 \\u2295 \\u2026\`.
+into the output qubit, where \`s · x = s₀x₀ ⊕ s₁x₁ ⊕ …\`.
 **You are not given \`s\`.** You must recover it by *querying* the oracle — a
 hardcoded guess can't work, because the secret differs across the hidden tests.
 
 ### The Algorithm
 
-1. Put the output qubit into \`|\\u2212\\u27E9\` (X then H) so the oracle kicks its
+1. Put the output qubit into \`|−⟩\` (X then H) so the oracle kicks its
    result back as a **phase**.
 2. Apply H to all \`n\` input qubits.
 3. **Query the oracle once.**
@@ -35,7 +35,7 @@ hardcoded guess can't work, because the secret differs across the hidden tests.
 
 Implement \`solve(oracle)\`. Read \`n\` from \`oracle.num_qubits - 1\`, build the
 Bernstein-Vazirani circuit around the oracle, and return it. **One query** is
-optimal — the \\u2605 rewards using exactly one.`,
+optimal — the ★ rewards using exactly one.`,
 
   constraints: [
     'You receive an opaque `oracle` gate — the secret string is never given to you',

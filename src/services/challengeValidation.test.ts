@@ -15,13 +15,17 @@ function resultWithMetrics(metrics: Record<string, number>): SimulationResult {
   };
 }
 
-function fidelityCase(min?: number): TestCase {
+function fidelityCase(min?: number, expectedProbabilities?: Record<string, number>): TestCase {
   return {
     id: 'fid',
     label: 'Fidelity Case',
     description: 'desc',
     params: {},
-    validation: min === undefined ? { type: 'state_fidelity' } : { type: 'state_fidelity', min_fidelity: min },
+    validation: {
+      type: 'state_fidelity',
+      ...(min === undefined ? {} : { min_fidelity: min }),
+      ...(expectedProbabilities ? { expected_probabilities: expectedProbabilities } : {}),
+    },
     hidden: false,
     weight: 1,
   };
@@ -35,11 +39,56 @@ describe('challengeValidation state_fidelity', () => {
     expect(r.score).toBeCloseTo(0.9999, 4);
   });
 
-  it('fails a spoof-level fidelity and explains phase/entanglement', () => {
+  it('fails a spoof-level fidelity without claiming the counts match when the target counts are unknown', () => {
     const r = validateTestCase(fidelityCase(), resultWithMetrics({ fidelity: 0.5 }), 5);
     expect(r.passed).toBe(false);
     expect(r.verdict).toBe('wrong_answer');
-    expect(r.message.toLowerCase()).toContain('entanglement');
+    expect(r.message).toContain('prepares a different state');
+    expect(r.message).not.toMatch(/counts/i);
+  });
+
+  describe('counts vs state (learn-r10-01)', () => {
+    const BELL = { '00': 0.5, '11': 0.5 };
+    const withProbabilities = (probabilities: Record<string, number>, fidelity: number): SimulationResult => ({
+      ...resultWithMetrics({ fidelity }),
+      probabilities,
+    });
+
+    it('says the counts match only when they do (Phi- written as Phi+: same counts, wrong phase)', () => {
+      const r = validateTestCase(fidelityCase(undefined, BELL), withProbabilities(BELL, 0), 5);
+      expect(r.passed).toBe(false);
+      expect(r.message).toContain('Your measurement counts match the target, but the prepared state differs');
+      expect(r.message).toContain('Relative phase and entanglement are graded too');
+    });
+
+    it('says the state differs when the counts do not match either (the Uniform Superposition starter)', () => {
+      const r = validateTestCase(fidelityCase(undefined, BELL), withProbabilities({ '00': 1 }, 0.5), 5);
+      expect(r.passed).toBe(false);
+      expect(r.message).toContain('Your circuit prepares a different state');
+      expect(r.message).not.toMatch(/counts match/i);
+    });
+
+    it('leaves an accepted case alone', () => {
+      const r = validateTestCase(fidelityCase(undefined, BELL), withProbabilities(BELL, 1), 5);
+      expect(r.passed).toBe(true);
+      expect(r.message).not.toMatch(/differs/);
+    });
+  });
+
+  it('states the overlap and the threshold instead of claiming the histogram looks right (learn-r9-08)', () => {
+    const r = validateTestCase(fidelityCase(), resultWithMetrics({ fidelity: 0.25 }), 5);
+    expect(r.message).toContain('25% overlap with the target');
+    expect(r.message).toContain('99% needed');
+    expect(r.message).not.toMatch(/may look right/i);
+    const near = validateTestCase(fidelityCase(), resultWithMetrics({ fidelity: 0.9895 }), 5);
+    expect(near.message).toContain('98.9% overlap');
+  });
+
+  it('does not floor floating-point noise below the true value (0.2499999999999999 reads 25%)', () => {
+    const r = validateTestCase(fidelityCase(), resultWithMetrics({ fidelity: 0.2499999999999999 }), 5);
+    expect(r.message).toContain('25% overlap');
+    const half = validateTestCase(fidelityCase(), resultWithMetrics({ fidelity: 0.4999999999999999 }), 5);
+    expect(half.message).toContain('50% overlap');
   });
 
   it('respects a custom min_fidelity', () => {

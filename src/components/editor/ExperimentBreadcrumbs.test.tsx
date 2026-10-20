@@ -50,8 +50,8 @@ describe('<ExperimentBreadcrumbs> (PRD 11 Phase C)', () => {
       selectedExperimentFileName: 'theta-sweep.experiment.yaml',
       selectedRunDir: '20260712-141530-a3f9',
     });
-    const { getByText, getByRole } = render(<ExperimentBreadcrumbs />);
-    expect(getByText('20260712-141530-a3f9')).toBeTruthy();
+    const { getByTitle, getByRole } = render(<ExperimentBreadcrumbs />);
+    expect(getByTitle('20260712-141530-a3f9')).toBeTruthy();
     // The experiment name is now a clickable "back to runs".
     fireEvent.click(getByRole('button', { name: 'theta-sweep' }));
     expect(useExperimentUiStore.getState().selectedRunDir).toBeNull();

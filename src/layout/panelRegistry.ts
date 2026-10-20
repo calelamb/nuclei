@@ -57,6 +57,8 @@ export interface VisibilityCtx {
   hasTerminalOutput: boolean;
   errorActive: boolean;
   mode: WorkspaceMode;
+  /** The chip's expand control opened the full histogram for now (a temporary override that never rewrites the preset). */
+  histogramExpanded?: boolean;
   /** Active framework (from the snapshot), used for viz-zone affinity.
    * `null` when no circuit has been parsed — affinity treats null as
    * "don't hide", preserving pre-registry behavior. */
@@ -129,12 +131,13 @@ export const PANEL_REGISTRY: readonly PanelDef[] = [
   },
   {
     id: 'histogramChip',
-    title: 'Histogram',
+    title: 'Histogram chip',
     zone: 'viz',
     modes: ['learn', 'research'],
     frameworks: 'any',
     order: 2,
-    defaultVisible: ({ preset, result }) => {
+    defaultVisible: ({ preset, result, histogramExpanded }) => {
+      if (histogramExpanded) return false;
       if (preset === 'full') return false;
       if (preset === 'balanced') return Boolean(result);
       return Boolean(result); // clean
@@ -142,12 +145,13 @@ export const PANEL_REGISTRY: readonly PanelDef[] = [
   },
   {
     id: 'histogramFull',
-    title: 'Histogram',
+    title: 'Histogram tab',
     zone: 'bottom',
     modes: ['learn', 'research'],
     frameworks: 'any',
     order: 3,
-    defaultVisible: ({ preset }) => {
+    defaultVisible: ({ preset, histogramExpanded }) => {
+      if (histogramExpanded) return true;
       if (preset === 'full') return true;
       if (preset === 'balanced') return false;
       return false; // clean
@@ -179,7 +183,7 @@ export const PANEL_REGISTRY: readonly PanelDef[] = [
     id: 'qecTimeline',
     title: 'Timeline',
     zone: 'viz',
-    modes: ['learn', 'research'],
+    modes: ['research'],
     frameworks: ['stim'],
     order: 5,
     defaultVisible: ({ snapshot, framework }) => framework === 'stim' && hasGates(snapshot),
@@ -188,7 +192,7 @@ export const PANEL_REGISTRY: readonly PanelDef[] = [
     id: 'qecLattice',
     title: 'Code Lattice',
     zone: 'viz',
-    modes: ['learn', 'research'],
+    modes: ['research'],
     frameworks: ['stim'],
     order: 6,
     defaultVisible: ({ snapshot, framework }) => framework === 'stim' && hasGates(snapshot),
@@ -197,7 +201,7 @@ export const PANEL_REGISTRY: readonly PanelDef[] = [
     id: 'qecDetectorGraph',
     title: 'Detector Graph',
     zone: 'viz',
-    modes: ['learn', 'research'],
+    modes: ['research'],
     frameworks: ['stim'],
     order: 7,
     defaultVisible: ({ snapshot, framework }) => framework === 'stim' && hasGates(snapshot),
@@ -356,4 +360,24 @@ export function leftPanelsForMode(mode: WorkspaceMode, { developerViews }: LeftR
 /** Views pinned to the bottom of the rail for a mode. */
 export function bottomLeftPanelsForMode(mode: WorkspaceMode): LeftPanelId[] {
   return railFor(mode, true, true);
+}
+
+export interface RailViewOptions extends LeftRailOptions {
+  /** Whether the Explorer sidebar exists at this level (Learn Beginner has none). */
+  explorerSidebar: boolean;
+}
+
+/**
+ * The views the activity bar actually shows. The rail, its Cmd+N hints, the
+ * Cmd+N handler and the palette Go-to list all read this one list so they can
+ * never disagree about which view is number one.
+ */
+export function railViewsFor(mode: WorkspaceMode, { developerViews, explorerSidebar }: RailViewOptions): LeftPanelId[] {
+  return leftPanelsForMode(mode, { developerViews }).filter((v) => explorerSidebar || v !== 'files');
+}
+
+/** The numbered (top) part of the rail: Cmd+1 is the first entry. */
+export function topRailViewsFor(mode: WorkspaceMode, options: RailViewOptions): LeftPanelId[] {
+  const bottom = new Set(bottomLeftPanelsForMode(mode));
+  return railViewsFor(mode, options).filter((v) => !bottom.has(v));
 }

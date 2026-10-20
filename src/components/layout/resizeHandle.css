@@ -1,0 +1,15 @@
+.resize-handle { position: relative; flex-shrink: 0; background: var(--color-border-subtle); touch-action: none; }
+.resize-handle--h { width: 1px; cursor: col-resize; }
+.resize-handle--v { height: 1px; cursor: row-resize; }
+/* Hit area: 8px around the rule, wider than it looks. */
+.resize-handle::before { content: ''; position: absolute; z-index: 2; }
+.resize-handle--h::before { inset: 0 -4px; }
+.resize-handle--v::before { inset: -4px 0; }
+/* Hover/drag line: drawn over the rule, so the layout does not move. */
+.resize-handle::after {
+  content: ''; position: absolute; background: var(--color-accent-quantum); opacity: 0; pointer-events: none;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+.resize-handle--h::after { inset: 0 -0.5px; }
+.resize-handle--v::after { inset: -0.5px 0; }
+.resize-handle:hover::after, .resize-handle[data-dragging='true']::after { opacity: 1; }

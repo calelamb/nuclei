@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useDiracStore } from '../stores/diracStore';
-import type { ToolCall } from '../stores/diracStore';
+import type { ToolCall, DiracMessage } from '../stores/diracStore';
 import { useEditorStore } from '../stores/editorStore';
 import { useCircuitStore } from '../stores/circuitStore';
 import type { GateHighlight } from '../stores/circuitStore';
@@ -12,7 +12,7 @@ import { getLesson, getTrack } from '../data/lessons/tracks';
 import { useStudentStore, studentModelToPrompt } from '../stores/studentStore';
 import { useHardwareStore } from '../stores/hardwareStore';
 import { useCapstoneStore } from '../stores/capstoneStore';
-import { useChallengeModeStore } from '../stores/challengeModeStore';
+import { getVisibleChallenge } from '../stores/challengeModeStore';
 import { DIRAC_API_URL } from '../config/dirac';
 import { classifyIntent } from '../services/classify';
 import { compose } from '../services/compose';
@@ -31,6 +31,7 @@ import { useQecStore } from '../stores/qecStore';
 import { useQecCampaignStore } from '../stores/qecCampaignStore';
 import { resolveNoiseModel } from '../types/noiseModel';
 import type { RunRecord } from '../types/experiment';
+import { describeHttpError, describeThrownError } from '../lib/diracErrors';
 
 // The capabilities/tools section is appended after the persona preamble
 // (see personaPreamble in services/diracPersona.ts) for both workspace
@@ -278,7 +279,7 @@ export function buildContextBlock(plan: ContextPlan): string {
     }
   }
 
-  const activeProblem = useChallengeModeStore.getState().activeProblem;
+  const activeProblem = getVisibleChallenge();
   if (plan.challenge && activeProblem) {
     parts.push(`## Active Challenge\n- Title: ${activeProblem.title}\n- Difficulty: ${activeProblem.difficulty}\n- Description: ${activeProblem.description}`);
   }
@@ -435,7 +436,7 @@ function executeToolById(toolId: string, accepted: boolean) {
     }
   } else if (toolCall.name === 'challenge_hint') {
     const { hint_level } = toolCall.input as { hint_level: string };
-    const challenge = useChallengeModeStore.getState().activeProblem;
+    const challenge = getVisibleChallenge();
     if (!challenge) {
       updateToolCallStatus(toolId, 'executed', 'No active challenge. Open Challenge Mode and start a problem first.');
     } else {
@@ -485,8 +486,63 @@ function executeToolById(toolId: string, accepted: boolean) {
   }
 }
 
+type ApiMessage = { role: string; content: unknown };
+
+/**
+ * Rebuild the Anthropic message list from the stored chat. Failed turns and
+ * stopped-before-first-token turns carry no content; sending them would be an
+ * empty assistant message, which the API rejects with a 400.
+ */
+export function buildApiMessages(
+  storeMessages: ReadonlyArray<DiracMessage>,
+  context: string,
+): ApiMessage[] {
+  const apiMessages: ApiMessage[] = [];
+  for (let i = 0; i < storeMessages.length; i++) {
+    const m = storeMessages[i];
+    if (m.role === 'assistant' && (m.error || (!m.content && !m.toolCalls?.length))) continue;
+    if (m.role === 'user') {
+      const isLast = i === storeMessages.length - 1;
+      apiMessages.push({
+        role: 'user',
+        content: isLast ? `<ide_context>\n${context}\n</ide_context>\n\n${m.content}` : m.content,
+      });
+    } else if (m.toolCalls && m.toolCalls.length > 0) {
+      const contentBlocks: unknown[] = [];
+      if (m.content) contentBlocks.push({ type: 'text', text: m.content });
+      for (const tc of m.toolCalls) {
+        contentBlocks.push({ type: 'tool_use', id: tc.id, name: tc.name, input: tc.input });
+      }
+      apiMessages.push({ role: 'assistant', content: contentBlocks });
+      apiMessages.push({
+        role: 'user',
+        content: m.toolCalls.map((tc) => ({
+          type: 'tool_result' as const,
+          tool_use_id: tc.id,
+          content: tc.result ?? 'Tool executed.',
+        })),
+      });
+    } else {
+      apiMessages.push({ role: 'assistant', content: m.content });
+    }
+  }
+  return apiMessages;
+}
+
+/** Controller of the in-flight chat request, if any (one reply streams at a time). */
+let activeRequest: AbortController | null = null;
+
+/** Abort the reply that is currently streaming; a no-op when nothing is pending. */
+export function stopDirac(): void {
+  activeRequest?.abort();
+}
+
+function isAbort(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError';
+}
+
 export function useDirac() {
-  const { addMessage, updateLastAssistant, updateLastThinking, updateLastToolCalls, setLoading } = useDiracStore();
+  const { addMessage, updateLastAssistant, updateLastThinking, updateLastToolCalls, failLastAssistant, markLastStopped, setLoading } = useDiracStore();
 
   // API key is now initialized in diracStore (from localStorage / env).
   // No mount-time override needed.
@@ -539,37 +595,12 @@ export function useDirac() {
     const route = routeChat(userText, diracSettings);
     // Build API messages
     const storeMessages = useDiracStore.getState().messages;
-    const apiMessages: Array<{ role: string; content: unknown }> = [];
-
-    for (let i = 0; i < storeMessages.length; i++) {
-      const m = storeMessages[i];
-      if (m.role === 'user') {
-        const isLast = i === storeMessages.length - 1;
-        apiMessages.push({
-          role: 'user',
-          content: isLast ? `<ide_context>\n${context}\n</ide_context>\n\n${m.content}` : m.content,
-        });
-      } else {
-        if (m.toolCalls && m.toolCalls.length > 0) {
-          const contentBlocks: unknown[] = [];
-          if (m.content) contentBlocks.push({ type: 'text', text: m.content });
-          for (const tc of m.toolCalls) {
-            contentBlocks.push({ type: 'tool_use', id: tc.id, name: tc.name, input: tc.input });
-          }
-          apiMessages.push({ role: 'assistant', content: contentBlocks });
-          const toolResults = m.toolCalls.map((tc) => ({
-            type: 'tool_result' as const,
-            tool_use_id: tc.id,
-            content: tc.result ?? 'Tool executed.',
-          }));
-          apiMessages.push({ role: 'user', content: toolResults });
-        } else {
-          apiMessages.push({ role: 'assistant', content: m.content });
-        }
-      }
-    }
+    const apiMessages = buildApiMessages(storeMessages, context);
 
     addMessage({ role: 'assistant', content: '', toolCalls: [] });
+
+    const controller = new AbortController();
+    activeRequest = controller;
 
     try {
       const body: Record<string, unknown> = {
@@ -595,18 +626,19 @@ export function useDirac() {
           'anthropic-dangerous-direct-browser-access': 'true',
         },
         body: JSON.stringify(body),
+        signal: controller.signal,
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        updateLastAssistant(`Error: ${response.status} — ${errorText}`);
+        failLastAssistant(describeHttpError(response.status, errorText));
         setLoading(false);
         return;
       }
 
       const reader = response.body?.getReader();
       if (!reader) {
-        updateLastAssistant('Error: No response stream');
+        failLastAssistant(describeThrownError(new Error('No response stream')));
         setLoading(false);
         return;
       }
@@ -689,14 +721,20 @@ export function useDirac() {
 
       setLoading(false);
     } catch (e) {
-      updateLastAssistant(`Error: ${e instanceof Error ? e.message : 'Unknown error'}`);
+      if (isAbort(e) || controller.signal.aborted) {
+        markLastStopped();
+      } else {
+        failLastAssistant(describeThrownError(e));
+      }
       setLoading(false);
+    } finally {
+      if (activeRequest === controller) activeRequest = null;
     }
-  }, [addMessage, updateLastAssistant, updateLastThinking, updateLastToolCalls, setLoading]);
+  }, [addMessage, updateLastAssistant, updateLastThinking, updateLastToolCalls, failLastAssistant, markLastStopped, setLoading]);
 
   const handleToolAction = useCallback((toolId: string, accepted: boolean) => {
     executeToolById(toolId, accepted);
   }, []);
 
-  return { sendMessage, handleToolAction };
+  return { sendMessage, handleToolAction, stop: stopDirac };
 }

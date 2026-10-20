@@ -1,0 +1,44 @@
+/* Slim tab standing in for the circuit column while Dirac has taken its room; clicking folds Dirac to bring it back. */
+.viz-rail {
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 28px; height: 100%; padding: 0; cursor: pointer; writing-mode: vertical-rl;
+  border: none; border-left: 1px solid var(--color-border-strong);
+  background: var(--color-surface-raised);
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+/* The tab is a full-height strip clipped by its neighbours: draw the focus ring inside it so all four edges show. */
+.viz-rail:hover { background: var(--color-surface-overlay); }
+.viz-rail:focus-visible, .dirac-rail:focus-visible { outline-offset: -2px; border-radius: var(--radius-xs); }
+.viz-rail { position: relative; }
+/* "Results are ready behind this tab": the same teal as the Terminal's unread badge. It sits in the flow just before the label (the tab is vertical-rl, so the inline axis runs down the strip and margin-inline-end is the gap between dot and label), not pinned to the strip's far edge. */
+.viz-rail__dot { flex: none; width: 8px; height: 8px; margin-inline-end: var(--space-2); border-radius: 50%; background: var(--color-accent-quantum); }
+/* Pane titles with no sidebar (web QEC Workbench, Transpiler) are the landing too; a mouse click shows no ring. */
+.nuclei-pane-header :is(h1, h2):focus:not(:focus-visible) { outline: none; }
+.viz-rail__label { color: var(--color-text-secondary); font: var(--font-weight-semibold) var(--font-size-caption) var(--font-sans); letter-spacing: 1px; }
+
+/* Right-rail empty states: balanced line breaks so a lone word never wraps onto its own line (centred copy of a few lines). */
+.viz-empty { height: 100%; }
+.viz-empty .nuclei-empty__title, .viz-empty .nuclei-empty__body { text-wrap: balance; }
+
+/* Boot placeholder: top-aligned where the circuit header will land, so the eye does not jump when Python is ready. */
+.nuclei-empty.viz-empty--boot { justify-content: flex-start; padding-top: var(--space-6); }
+.viz-empty--boot .nuclei-empty__body { max-width: 36ch; text-wrap: balance; }
+
+/* "No results yet" fills whatever the results zone has left, so it reads the same in every layout preset. */
+.viz-results-empty { flex: 1; min-height: 0; height: 100%; display: flex; }
+.viz-results-empty .viz-empty { flex: 1; }
+.viz-results-empty__actions { display: flex; gap: var(--space-2); justify-content: center; flex-wrap: wrap; }
+.viz-results-empty .nuclei-empty__body { max-width: 28ch; text-wrap: balance; }
+
+/* A strip under the diagram, never over it: selecting the pill scrolls the clipped wires into view. */
+.circuit-more-wires-strip { flex: none; display: flex; justify-content: center; align-items: center; height: 26px; }
+.circuit-more-wires {
+  padding: 2px var(--space-3); border-radius: 999px; cursor: pointer;
+  background: var(--color-surface-overlay); border: 1px solid var(--color-border-strong); color: var(--color-text-secondary);
+  font: var(--font-weight-medium) var(--font-size-caption) var(--font-sans);
+}
+.circuit-more-wires:hover { color: var(--color-text-primary); }
+
+/* Results that no longer match the code: dim the graphics (spheres, bars) and keep every label at full strength.
+   The "From last run" pill already says why; text dimmed to 0.5 fell to 2:1 contrast. */
+.viz-stale .bloch-canvas, .viz-stale .histogram-chip__bar { opacity: var(--stale-graphic-opacity); transition: opacity var(--duration-fast) var(--ease-standard); }

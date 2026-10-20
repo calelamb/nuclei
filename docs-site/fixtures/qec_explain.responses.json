@@ -1,0 +1,56 @@
+[
+  {
+    "type": "qec_explain_result",
+    "data": {
+      "nondeterministic": {
+        "kind": "detector",
+        "stim_message": "<any>",
+        "line": 1,
+        "lines": [
+          1
+        ],
+        "line_text": "R 0",
+        "tick": 0,
+        "status": "nondeterministic",
+        "detector_indices": [
+          0
+        ],
+        "observable_indices": [],
+        "targets": [
+          "D0"
+        ],
+        "target_count": 1,
+        "targets_omitted": 0,
+        "declaration_lines": {
+          "D0": 4
+        },
+        "cause": {
+          "kind": "preparation_basis_mismatch",
+          "basis": "Z",
+          "operation_line": 1,
+          "preparation_line": 1,
+          "detector_lines": {
+            "D0": 4
+          }
+        },
+        "sensitivities": [
+          {
+            "target": "D0",
+            "pauli": "X0"
+          }
+        ],
+        "operation": {
+          "description": "Z-basis reset (R)",
+          "qubits": [
+            0
+          ],
+          "instruction": "R 0"
+        },
+        "sensitivity": "X0",
+        "diagram_svg": "<any>",
+        "sentence": "Detector D0 is non-deterministic, but the Z-basis reset (R) on qubit 0 (line 1, after 0 TICKs) is only where Stim noticed it: the parity of D0 is not fixed by the preparation in that basis, so it is random even without noise. The Pauli it is sensitive to there is X0. Check the DETECTOR declaration (D0 at line 4) and the preparation at line 1: either the DETECTOR compares measurements that are not fixed in the Z basis, or the qubit is prepared in the wrong basis. This is a static property of the circuit text, independent of noise or sampled data. Common sources are a shifted or missing DETECTOR rec target, a wrong rec offset, or a measurement/reset in the wrong basis."
+      }
+    },
+    "request_id": "explain-1"
+  }
+]

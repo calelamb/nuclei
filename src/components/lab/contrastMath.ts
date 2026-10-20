@@ -42,8 +42,8 @@ function hexToRgb(hex: string): Rgb {
 }
 
 /**
- * Resolve a token to a color. Understands hex, `var(--x)` aliases and the
- * Lab's "soft" fills, `color-mix(in srgb, var(--x) N%, transparent)` (a color
+ * Resolve a token to a color. Understands hex, CSS custom-property aliases and the
+ * Lab's "soft" fills, `color-mix(in srgb, the token N%, transparent)` (a color
  * with alpha N%).
  */
 export function resolveColor(tokens: Record<string, string>, name: string, depth = 0): ColorWithAlpha {

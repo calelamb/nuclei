@@ -10,9 +10,13 @@ import {
   File as FileIconLucide,
   type LucideIcon,
 } from 'lucide-react';
+import { IconButton } from '../ui';
 import { useProjectStore } from '../../stores/projectStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { requestCloseTab } from '../../lib/tabClose';
+import './OpenFilesSection.css';
+
+const EXPANDED_KEY = 'nuclei.openFiles.expanded';
 
 const EXTENSION_ICONS: Record<string, LucideIcon> = {
   py: FileCode,
@@ -29,72 +33,56 @@ function basename(path: string): string {
 function iconFor(name: string, color: string) {
   const ext = name.split('.').pop()?.toLowerCase() ?? '';
   const Icon = EXTENSION_ICONS[ext] ?? FileIconLucide;
-  return <Icon size={13} style={{ color, marginRight: 6, flexShrink: 0 }} />;
+  return <Icon size={14} style={{ color, marginRight: 6, flexShrink: 0 }} />;
+}
+
+function readExpanded(): boolean {
+  try {
+    return window.localStorage.getItem(EXPANDED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeExpanded(expanded: boolean): void {
+  try {
+    window.localStorage.setItem(EXPANDED_KEY, expanded ? '1' : '0');
+  } catch {
+    // Private mode or blocked storage: the section simply forgets its state next launch.
+  }
 }
 
 /**
- * Always-visible list of currently-open editor tabs. Sits at the top of
- * the sidebar when the files view is active, independent of whether a
- * project folder is open — so a user who has only File > Open'd a single
- * file (no project root) can still see and switch between open editors
- * from the left rail instead of relying on the top tab bar.
+ * Currently-open editor tabs, above the file tree. Collapsed by default and a
+ * constant height whether or not tabs are open, so opening a file never moves
+ * the tree under the pointer; expanded, it is a fixed-height scroller.
  */
 export function OpenFilesSection() {
   const tabs = useProjectStore((s) => s.tabs);
   const activeTabPath = useProjectStore((s) => s.activeTabPath);
   const setActiveTab = useProjectStore((s) => s.setActiveTab);
   const colors = useThemeStore((s) => s.colors);
-  const [collapsed, setCollapsed] = useState(false);
-  const [hoveredPath, setHoveredPath] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(readExpanded);
 
-  if (tabs.length === 0) return null;
+  const toggle = () => {
+    const next = !expanded;
+    setExpanded(next);
+    writeExpanded(next);
+  };
 
   return (
-    <div
-      style={{
-        flexShrink: 0,
-        borderBottom: `1px solid ${colors.border}`,
-        background: colors.bg,
-      }}
-    >
-      <button
-        type="button"
-        onClick={() => setCollapsed((c) => !c)}
-        aria-expanded={!collapsed}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 4,
-          width: '100%',
-          padding: '6px 10px',
-          background: 'transparent',
-          border: 'none',
-          cursor: 'pointer',
-          fontSize: 10,
-          fontWeight: 600,
-          textTransform: 'uppercase',
-          letterSpacing: 0.5,
-          color: colors.textMuted,
-          fontFamily: "'Geist Sans', sans-serif",
-        }}
-      >
-        {collapsed ? <ChevronRight size={11} /> : <ChevronDown size={11} />}
-        <span>Open Files</span>
-        <span style={{ color: colors.textDim, fontWeight: 500 }}>({tabs.length})</span>
+    <div className="open-files">
+      <button type="button" className="open-files__header" onClick={toggle} aria-expanded={expanded}>
+        {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+        <span>Open files</span>
+        {tabs.length > 0 && <span className="open-files__count">({tabs.length})</span>}
       </button>
-      {!collapsed && (
-        <div style={{ display: 'flex', flexDirection: 'column', paddingBottom: 4 }}>
+      {expanded && (
+        <div className="open-files__list">
+          {tabs.length === 0 && <div className="open-files__empty">No open files</div>}
           {tabs.map((tab) => {
             const isActive = tab.path === activeTabPath;
-            const isHovered = hoveredPath === tab.path;
             const name = basename(tab.path);
-            // Active file gets the accent tint + left bar (matching the tabs and
-            // the file tree), so it never reads the same as a plain hover.
-            const background = isActive
-              ? `${colors.accent}14`
-              : isHovered
-                ? colors.bgElevated
-                : 'transparent';
             return (
               <div
                 key={tab.path}
@@ -107,74 +95,27 @@ export function OpenFilesSection() {
                     setActiveTab(tab.path);
                   }
                 }}
-                onMouseEnter={() => setHoveredPath(tab.path)}
-                onMouseLeave={() => setHoveredPath(null)}
                 title={tab.path}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '3px 8px 3px 22px',
-                  cursor: 'pointer',
-                  background,
-                  boxShadow: isActive ? `inset 2px 0 0 ${colors.accent}` : 'none',
-                  color: isActive ? colors.text : colors.textMuted,
-                  fontWeight: isActive ? 500 : 400,
-                  fontSize: 12,
-                  fontFamily: "'Geist Sans', sans-serif",
-                  outline: 'none',
-                }}
+                className="nuclei-row nuclei-row--reveal open-files__row"
+                data-active={isActive}
               >
                 {iconFor(name, isActive ? colors.accent : colors.textDim)}
-                <span
-                  style={{
-                    flex: 1,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {name}
-                </span>
-                {tab.isDirty && !isHovered && (
-                  <span
-                    title="Unsaved changes"
-                    aria-label="Unsaved changes"
-                    style={{
-                      width: 7,
-                      height: 7,
-                      borderRadius: 999,
-                      background: colors.accent,
-                      flexShrink: 0,
-                      marginRight: 4,
-                    }}
-                  />
+                <span className="open-files__name">{name}</span>
+                {tab.isDirty && (
+                  <span className="nuclei-row__dirty open-files__dirty" title="Unsaved changes" aria-label="Unsaved changes" />
                 )}
-                <button
-                  type="button"
-                  title="Close"
+                <IconButton
+                  size="sm"
+                  className="nuclei-row__close"
+                  tooltip={{ label: 'Close' }}
                   aria-label={`Close ${name}`}
                   onClick={(e) => {
                     e.stopPropagation();
                     requestCloseTab(tab.path);
                   }}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: colors.textDim,
-                    cursor: 'pointer',
-                    padding: 2,
-                    display: 'flex',
-                    borderRadius: 3,
-                    // Keep the close affordance consistent with the
-                    // top tab bar: visible on hover, out of the way otherwise.
-                    // Dirty-indicator dot takes the same spot when not hovering,
-                    // so layout never jumps.
-                    opacity: isHovered ? 1 : 0,
-                    pointerEvents: isHovered ? 'auto' : 'none',
-                  }}
                 >
-                  <X size={11} />
-                </button>
+                  <X size={12} />
+                </IconButton>
               </div>
             );
           })}

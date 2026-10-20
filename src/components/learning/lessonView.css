@@ -1,0 +1,34 @@
+/* Lesson reader: top bar, reading progress, header, next-lesson prompt. */
+.lesson { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--color-surface-base); font-family: var(--font-sans); }
+.lesson__bar { flex-shrink: 0; display: flex; align-items: center; gap: var(--space-3); height: 44px; padding: 0 var(--space-4); border-bottom: 1px solid var(--color-border-strong); background: var(--color-surface-raised); }
+.lesson__crumbs { container-type: inline-size; display: flex; align-items: center; flex: 1; min-width: 0; gap: var(--space-2); }
+.lesson__crumb-track { flex: 0 1000 auto; min-width: 0; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-chrome-label); color: var(--color-text-secondary); }
+.lesson__crumb-sep { flex-shrink: 0; color: var(--color-text-tertiary); }
+/* Narrow header: the nav column already names the track, so the lesson title gets the room. */
+@container (max-width: 380px) { .lesson__crumb-track, .lesson__crumb-sep { display: none; } }
+.lesson__crumb-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-code); font-weight: var(--font-weight-medium); color: var(--color-text-primary); }
+.lesson__done { flex-shrink: 0; color: var(--color-success); }
+.lesson__position { white-space: nowrap; font-size: var(--font-size-caption); color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
+.lesson__steps { display: flex; gap: var(--space-1); }
+.lesson__progress { flex-shrink: 0; height: 2px; background: var(--color-border-strong); }
+.lesson__progress-fill { height: 100%; background: var(--color-accent-quantum); transition: width var(--duration-normal) var(--ease-standard); }
+.lesson__scroll { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-6) var(--space-8) 64px; }
+.lesson__header { max-width: 760px; margin-inline: auto; margin-bottom: var(--space-6); }
+.lesson__meta { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); font-size: var(--font-size-caption); color: var(--color-text-secondary); }
+.lesson__title:focus { outline: none; } /* programmatic landing target, not a control */
+.lesson__title { margin: 0; font-size: var(--font-size-display); font-weight: var(--font-weight-bold); line-height: 1.2; color: var(--color-text-primary); }
+.lesson__lede { margin: var(--space-2) 0 0; font-size: var(--font-size-body); line-height: 1.5; color: var(--color-text-secondary); }
+.lesson__block { max-width: 760px; margin-inline: auto; margin-bottom: var(--space-2); scroll-margin-top: var(--space-4); }
+.lesson__block:focus { outline: none; } /* programmatic landing only (tabIndex -1); never reached by Tab */
+.lesson__next { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); max-width: 760px; margin-inline: auto; margin-top: var(--space-8); padding: var(--space-5); border: 1px solid var(--color-border-strong); border-radius: var(--radius-round); background: var(--color-surface-raised); box-shadow: var(--shadow-sm); }
+.lesson__next-kicker { margin-bottom: var(--space-1); font-size: var(--font-size-chrome-label); color: var(--color-text-secondary); }
+.lesson__next-kicker { display: flex; align-items: center; gap: var(--space-1); }
+.lesson__next--done { border-color: var(--color-success); background: color-mix(in srgb, var(--color-success) 8%, var(--color-surface-raised)); }
+.lesson__next--done .lesson__next-kicker { color: var(--color-success-text); font-weight: var(--font-weight-semibold); }
+.lesson__next-check { animation: lesson-check-pop var(--duration-slow) var(--ease-emphasized-out) both; }
+@keyframes lesson-check-pop { from { transform: scale(0.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+:root[data-reduced-motion='true'] .lesson__next-check { animation: none; }
+@media (prefers-reduced-motion: reduce) { .lesson__next-check { animation: none; } }
+.lesson__next-title { font-size: var(--font-size-body); font-weight: var(--font-weight-medium); color: var(--color-text-primary); }
+/* Warning badge text over its own tint is 4.2:1 in light; darken it inside the screens this lane owns. */
+.lesson__meta .nuclei-badge--warning { --badge-text: var(--color-warning-text); }

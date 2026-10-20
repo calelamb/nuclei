@@ -1,5 +1,5 @@
 // src/stores/themeStore.test.ts
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useThemeStore } from './themeStore';
 import { DARK_COLORS, LIGHT_COLORS } from '../styles/tokens';
 
@@ -32,5 +32,70 @@ describe('themeStore', () => {
     expect(useThemeStore.getState().mode).toBe('light');
     useThemeStore.getState().toggle();
     expect(useThemeStore.getState().mode).toBe('dark');
+  });
+
+  describe('theme preference (System option)', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('defaults to following the system, not a pinned dark', async () => {
+      vi.resetModules();
+      vi.stubGlobal('window', { matchMedia: () => ({ matches: false }) });
+      const fresh = await import('./themeStore');
+      expect(fresh.useThemeStore.getState().preference).toBe('system');
+      expect(fresh.useThemeStore.getState().mode).toBe('light');
+    });
+
+    it('opens dark when the OS prefers dark or cannot say', async () => {
+      vi.resetModules();
+      vi.stubGlobal('window', { matchMedia: () => ({ matches: true }) });
+      expect((await import('./themeStore')).useThemeStore.getState().mode).toBe('dark');
+      vi.resetModules();
+      vi.unstubAllGlobals();
+      expect((await import('./themeStore')).useThemeStore.getState().mode).toBe('dark');
+    });
+
+    it('an explicit stored choice still wins over the OS', () => {
+      vi.stubGlobal('window', { matchMedia: () => ({ matches: false }) });
+      useThemeStore.getState().setPreference('dark');
+      expect(useThemeStore.getState().mode).toBe('dark');
+    });
+
+    it('System resolves to light when the OS prefers light', () => {
+      vi.stubGlobal('window', { matchMedia: () => ({ matches: false }) });
+      useThemeStore.getState().setPreference('system');
+      expect(useThemeStore.getState().preference).toBe('system');
+      expect(useThemeStore.getState().mode).toBe('light');
+    });
+
+    it('System resolves to dark when the OS prefers dark', () => {
+      vi.stubGlobal('window', { matchMedia: () => ({ matches: true }) });
+      useThemeStore.getState().setPreference('system');
+      expect(useThemeStore.getState().mode).toBe('dark');
+    });
+
+    it('toggle() turns System into an explicit choice', () => {
+      vi.stubGlobal('window', { matchMedia: () => ({ matches: true }) });
+      useThemeStore.getState().setPreference('system');
+      useThemeStore.getState().toggle();
+      expect(useThemeStore.getState().preference).toBe('light');
+      expect(useThemeStore.getState().mode).toBe('light');
+    });
+
+    it('setMode pins the preference to that explicit mode', () => {
+      useThemeStore.getState().setPreference('system');
+      useThemeStore.getState().setMode('light');
+      expect(useThemeStore.getState().preference).toBe('light');
+    });
+
+    it('syncSystem follows the OS only while the preference is system', () => {
+      useThemeStore.getState().setMode('dark');
+      useThemeStore.getState().syncSystem(false);
+      expect(useThemeStore.getState().mode).toBe('dark');
+      useThemeStore.getState().setPreference('system');
+      useThemeStore.getState().syncSystem(false);
+      expect(useThemeStore.getState().mode).toBe('light');
+    });
   });
 });

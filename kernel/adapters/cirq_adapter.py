@@ -80,6 +80,14 @@ class CirqAdapter(FrameworkAdapter):
                 qubits = [qubit_index[q] for q in op.qubits]
                 gate_name = _gate_name(gate)
 
+                if isinstance(gate, cirq.MeasurementGate):
+                    # One Measure per measured qubit, so the diagram draws a box on every wire.
+                    gates.extend(
+                        Gate(type="Measure", targets=[q], controls=[], params=[], layer=moment_idx)
+                        for q in qubits
+                    )
+                    continue
+
                 params = []
                 symbols: list[str | None] | None = None
                 if hasattr(gate, "exponent") and not isinstance(gate, cirq.MeasurementGate):
@@ -115,7 +123,7 @@ class CirqAdapter(FrameworkAdapter):
 
         n_qubits = len(all_qubits)
         n_classical = sum(
-            1 for op in circuit_obj.all_operations()
+            len(op.qubits) for op in circuit_obj.all_operations()
             if isinstance(op.gate, cirq.MeasurementGate)
         )
         depth = len(circuit_obj.moments)

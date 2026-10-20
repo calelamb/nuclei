@@ -39,7 +39,7 @@ branch from `main` as `feat/...` or `fix/...`.
 | Frontend | `npm test` (Vitest) | Working |
 | Kernel | `python3 -m pytest kernel/tests -q` (from repo root) | Working — 365 tests, run in CI (`kernel-tests.yml`) |
 | Docs honesty suites | included in the kernel run: `test_docs_fixtures.py` replays every protocol fixture, `test_docs_examples.py` runs the extending-guide worked examples | Working |
-| Rust | `cargo test` | No tests exist yet — planned |
+| Rust | `cargo test` | Unit tests for kernel ownership and reaping |
 | Docs site | `cd docs-site && npm run build` | Working |
 
 <Aside type="note" title="CONTRIBUTING.md is stale about kernel tests">

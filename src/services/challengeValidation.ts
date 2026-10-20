@@ -53,6 +53,8 @@ export function validateTestCase(
     const { passed, score, message } = validateStateFidelity(
       result.metrics,
       validation.min_fidelity ?? DEFAULT_MIN_FIDELITY,
+      result.probabilities,
+      validation.expected_probabilities,
     );
     return {
       testCaseId: testCase.id,
@@ -249,6 +251,13 @@ function validateNumericMatch(
 }
 
 export const DEFAULT_MIN_FIDELITY = 0.99;
+/** How close two probability distributions must be to count as "the same counts". */
+const COUNTS_MATCH_TOLERANCE = 0.05;
+
+/** 0.25 -> "25%", 0.9895 -> "98.9%": one decimal at most, never rounded up to the threshold; the epsilon keeps 0.2499999999999999 from reading 24.9%. */
+function percent(fraction: number): string {
+  return `${Number((Math.floor(fraction * 1000 + 1e-6) / 10).toFixed(1))}%`;
+}
 
 /**
  * State-fidelity grading. The harness records `metrics.fidelity =
@@ -259,6 +268,8 @@ export const DEFAULT_MIN_FIDELITY = 0.99;
 function validateStateFidelity(
   metrics: Record<string, number> | undefined,
   minFidelity: number,
+  probabilities?: Record<string, number>,
+  expectedProbabilities?: Record<string, number>,
 ): { passed: boolean; score: number; message: string } {
   const fidelity = metrics?.fidelity;
   if (typeof fidelity !== 'number' || Number.isNaN(fidelity)) {
@@ -277,10 +288,17 @@ function validateStateFidelity(
       message: `State fidelity ${clamped.toFixed(4)} ≥ ${minFidelity} — the prepared state matches the target.`,
     };
   }
+  const overlap = `${percent(clamped)} overlap with the target, ${percent(minFidelity)} needed (fidelity ${clamped.toFixed(4)} < ${minFidelity})`;
+  // Only claim "your counts match" when they really do: otherwise the state is simply different.
+  const countsMatch = probabilities !== undefined
+    && expectedProbabilities !== undefined
+    && validateProbabilityMatch(probabilities, expectedProbabilities, COUNTS_MATCH_TOLERANCE).passed;
   return {
     passed: false,
     score: clamped,
-    message: `State fidelity ${clamped.toFixed(4)} < ${minFidelity}. The measurement histogram may look right, but the actual quantum state (phase / entanglement) differs from the target.`,
+    message: countsMatch
+      ? `Your measurement counts match the target, but the prepared state differs: ${overlap}. Relative phase and entanglement are graded too.`
+      : `Your circuit prepares a different state: ${overlap}.`,
   };
 }
 

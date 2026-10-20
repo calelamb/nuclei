@@ -46,4 +46,17 @@ describe('diffNoiseModels', () => {
     expect(diff.every((d) => d.b === null)).toBe(true);
     expect(diff.length).toBe(4);
   });
+
+  it('reports 0 (not null) for a channel a generator model leaves unset, so a dash only ever means entry-only', () => {
+    const diff = diffNoiseModels(byName('uniform_depolarizing'), byName('measurement_heavy'));
+    const unset = diff.find((d) => d.arg === 'before_round_data_depolarization');
+    expect(unset).toEqual({ arg: 'before_round_data_depolarization', a: 1, b: 0 });
+    expect(diff.some((d) => (d.a === null && d.b !== null) || (d.b === null && d.a !== null))).toBe(false);
+  });
+
+  it('does not report a channel set to 0 on one side and unset on the other as different', () => {
+    const a = { ...byName('SI1000'), generator_args: { after_clifford_depolarization: 0 } };
+    const b = { ...byName('SI1000'), generator_args: {} };
+    expect(diffNoiseModels(a, b)).toEqual([]);
+  });
 });

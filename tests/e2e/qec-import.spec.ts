@@ -45,11 +45,13 @@ test('@qec imports a detector stream and restores the canonical session after re
     await installQecDataStartBoundary(page, engine.endpoint);
     await openWorkbench(page);
 
+    // The row actions are revealed on hover; a real person hovers the row first.
+    await page.locator('.qec-source-row-shell', { has: page.getByRole('button', { name: 'Import minimal-dets' }) }).hover();
     await page.getByRole('button', { name: 'Import minimal-dets' }).click();
     const wizard = page.getByRole('region', { name: 'Import captures/minimal.dets' });
     await expect(wizard).toBeVisible();
-    await expect(wizard).toHaveCSS('background-color', 'rgb(247, 250, 254)');
-    await expect(wizard.getByText(SOURCE_HASH)).toBeVisible();
+    await expect(wizard).toHaveCSS('background-color', 'rgb(241, 245, 249)');
+    await expect(wizard.getByTitle(SOURCE_HASH)).toBeVisible();
 
     await nextStage(page, 'Adapter');
     await page.getByRole('radio', { name: /Stim-results adapter/ }).check();
@@ -71,7 +73,15 @@ test('@qec imports a detector stream and restores the canonical session after re
     );
     await nextStage(page, 'Validation');
     await nextStage(page, 'Destination');
-    await page.getByLabel('Session ID').fill('minimal-capture');
+    const sessionId = page.getByLabel('Session ID');
+    await expect(sessionId).toHaveValue(/^minimal-\d{4}-\d{2}-\d{2}$/);
+    await expect(sessionId).not.toHaveAttribute('aria-invalid', 'true');
+    await expect(page.locator('.qec-import-destination').getByRole('alert')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Next stage' })).toBeEnabled();
+    // Real typing after a real focus: the suggestion is selected, so keystrokes replace it instead of appending.
+    await sessionId.focus();
+    await page.keyboard.type('minimal-capture');
+    await expect(sessionId).toHaveValue('minimal-capture');
     await nextStage(page, 'Import');
     await page.getByRole('button', { name: 'Import data' }).click();
     await expect(page.getByText('2 records written')).toBeVisible({ timeout: ENGINE_RESULT_TIMEOUT_MS });
@@ -110,5 +120,64 @@ test('@qec imports a detector stream and restores the canonical session after re
     expect(readdirSync(sessionRoot, { recursive: true }).some((path) => String(path).endsWith('.pending'))).toBe(false);
   } finally {
     await engine.close();
+  }
+});
+
+/** A finished import's card in the Jobs tray: title row above its fields, never drawn over them. */
+test('@qec a finished import job card keeps its title clear of its own fields', async ({ page }) => {
+  await page.addInitScript(() => {
+    class Stub {
+      private readonly listeners = new Map<string, Array<(event: Event | MessageEvent<string>) => void>>();
+      constructor() { queueMicrotask(() => this.emit('open', new Event('open'))); }
+      addEventListener(type: string, listener: (event: Event | MessageEvent<string>) => void): void { this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]); }
+      send(serialized: string): void {
+        const frame = JSON.parse(serialized) as { type?: string; requestId?: string };
+        if (frame.type === 'authenticate') queueMicrotask(() => this.message({ type: 'authenticated' }));
+        else if (frame.type === 'session_list') queueMicrotask(() => this.message({ type: 'session_list_result', requestId: frame.requestId, sessions: [], nextCursor: null }));
+      }
+      close(): void { this.emit('close', new Event('close')); }
+      private message(frame: unknown): void { this.emit('message', new MessageEvent('message', { data: JSON.stringify(frame) })); }
+      private emit(type: string, event: Event | MessageEvent<string>): void { for (const l of this.listeners.get(type) ?? []) l(event); }
+    }
+    Object.defineProperty(window, 'WebSocket', { configurable: true, value: Stub });
+    Object.defineProperty(window, '__NUCLEI_E2E_QEC_INVOKE__', {
+      configurable: true,
+      value: async (command: string): Promise<unknown> => command === 'qec_data_start' ? { url: 'ws://127.0.0.1:9743', token: '0'.repeat(64) } : null,
+    });
+  });
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 1100, height: 800 }]) {
+    await page.setViewportSize(viewport);
+    await page.goto('/?e2eProject=qec-project&workspace=research');
+    await page.getByRole('button', { name: 'QEC Workbench' }).click();
+    // The tray scopes its jobs to the open project once it mounts; seed after that so the seed is kept.
+    await expect(page.getByRole('region', { name: 'QEC jobs and streams' })).toContainText('No active jobs');
+    await page.evaluate(async ({ hash }) => {
+      const { useQecJobStore } = await import('/src/stores/qecJobStore.ts');
+      const { useProjectStore } = await import('/src/stores/projectStore.ts');
+      useQecJobStore.setState({
+        jobs: {
+          a: {
+            id: 'f2c0b7d1-5b0e-4c36-9a3b-0d6a8d2e4b11', kind: 'import', status: 'complete', message: 'ok',
+            source: 'circuits/repetition.stim', adapterId: 'stim-circuit', sessionId: '0b6c1f3e-aaaa-4bbb-cccc-1234567890ab',
+            sourceByteSize: 8701, sourceHash: hash, provenanceId: 'prov-7788', projectRoot: useProjectStore.getState().projectRoot ?? undefined,
+          },
+        },
+      });
+    }, { hash: SOURCE_HASH });
+    const toggle = page.getByRole('button', { name: /Expand jobs and streams/ });
+    if (await toggle.count()) await toggle.click();
+    const card = page.getByRole('list', { name: 'Durable QEC jobs' }).getByRole('listitem').first();
+    await expect(card).toBeVisible();
+    const header = await card.locator(':scope > div').first().boundingBox();
+    const fields = await card.locator('dl').boundingBox();
+    const scroller = await page.locator('.qec-tray__content').boundingBox();
+    const cardBox = await card.boundingBox();
+    expect(cardBox!.y, `${viewport.width}: card top is not above the tray scroller`).toBeGreaterThanOrEqual(scroller!.y - 0.5);
+    expect(header, 'title row is drawn').not.toBeNull();
+    expect(fields, 'fields are drawn').not.toBeNull();
+    expect(header!.width, `${viewport.width}: title row width`).toBeGreaterThan(100);
+    expect(header!.y + header!.height, `${viewport.width}: title row ends above the fields`).toBeLessThanOrEqual(fields!.y + 0.5);
+    await expect(card).toContainText('8.5 KB');
+    await expect(card).not.toContainText(SOURCE_HASH);
   }
 });

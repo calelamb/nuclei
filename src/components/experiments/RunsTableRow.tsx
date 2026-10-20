@@ -1,35 +1,40 @@
-import { useThemeStore } from '../../stores/themeStore';
-import { getRunValue, type RunColumn } from './runsTableColumns';
+import { Badge, Checkbox, type BadgeTone } from '../ui';
+import { formatRunLabel, isNumericColumn, getRunValue, type RunColumn } from './runsTableColumns';
 import type { RunRecord, RunStatus } from '../../types/experiment';
-import { activateOnKey } from '../../lib/a11y';
+import { ROW_NAV_KEYS } from './runsTableNavigation';
 
 export const ROW_HEIGHT = 30;
 
-const STATUS_COLOR_KEY: Record<RunStatus, 'success' | 'error' | 'warning' | 'textDim'> = {
+const STATUS_TONE: Record<RunStatus, BadgeTone> = {
   complete: 'success',
-  failed: 'error',
+  failed: 'danger',
   running: 'warning',
-  stale: 'textDim',
+  stale: 'neutral',
 };
 
-function formatCell(value: number | string | boolean | null, column: RunColumn): string {
+function formatCell(value: number | string | boolean | null, column: RunColumn, decimals: number): string {
   if (value === null) return '—';
   if (column.key === 'duration_ms') return `${(value as number).toLocaleString()}`;
   if (column.key === 'seed_honored') return value ? 'yes' : 'no';
-  if (typeof value === 'number') {
-    return Number.isInteger(value) ? String(value) : value.toFixed(4);
-  }
+  if (column.key === 'seed') return String(value);
+  if (typeof value === 'number') return value.toFixed(decimals);
   return String(value);
 }
 
 interface RunsTableRowProps {
   run: RunRecord;
   columns: RunColumn[];
+  /** Decimals per numeric column so every row of a column prints identically. */
+  decimalsByColumn: ReadonlyMap<string, number>;
   gridTemplateColumns: string;
   top: number;
   /** PRD 09 Phase E — whether this row is checked for the Compare view. */
   compareSelected: boolean;
+  /** Roving tabindex: only the active row is a Tab stop. */
+  active: boolean;
   onSelect(dir: string): void;
+  onNavigate(key: string, dir: string): void;
+  onFocusRow(dir: string): void;
   onToggleCompare(dir: string): void;
 }
 
@@ -37,72 +42,72 @@ interface RunsTableRowProps {
 export function RunsTableRow({
   run,
   columns,
+  decimalsByColumn,
   gridTemplateColumns,
   top,
   compareSelected,
+  active,
   onSelect,
+  onNavigate,
+  onFocusRow,
   onToggleCompare,
 }: RunsTableRowProps) {
-  const colors = useThemeStore((s) => s.colors);
-  const statusKey = STATUS_COLOR_KEY[run.manifest.status];
+  const statusTone = STATUS_TONE[run.manifest.status];
 
   return (
     <div
       role="row"
-      tabIndex={0}
+      className="nuclei-runs-row"
+      data-run-dir={run.dir}
+      data-checked={compareSelected}
+      tabIndex={active ? 0 : -1}
+      aria-selected={compareSelected}
       onClick={() => onSelect(run.dir)}
-      onKeyDown={activateOnKey(() => onSelect(run.dir))}
-      style={{
-        position: 'absolute',
-        top,
-        left: 0,
-        right: 0,
-        height: ROW_HEIGHT,
-        display: 'grid',
-        gridTemplateColumns,
-        alignItems: 'center',
-        borderBottom: `1px solid ${colors.border}`,
-        background: compareSelected ? colors.bgElevated : 'transparent',
-        cursor: 'pointer',
-        fontSize: 11,
-        fontFamily: "'Fira Code', monospace",
-        color: colors.text,
+      onFocus={(e) => { if (e.target === e.currentTarget) onFocusRow(run.dir); }}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return;
+        if (ROW_NAV_KEYS.has(e.key)) {
+          e.preventDefault();
+          onNavigate(e.key, run.dir);
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          onSelect(run.dir);
+        } else if (e.key === ' ') {
+          e.preventDefault();
+          onToggleCompare(run.dir);
+        }
       }}
-      onMouseEnter={(e) => { e.currentTarget.style.background = colors.bgElevated; }}
-      onMouseLeave={(e) => { e.currentTarget.style.background = compareSelected ? colors.bgElevated : 'transparent'; }}
+      style={{ top, height: ROW_HEIGHT, gridTemplateColumns }}
     >
       <div
         role="cell"
-        style={{ padding: '0 8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        className="nuclei-runs-row__check"
         onClick={(e) => e.stopPropagation()}
       >
-        <input
-          type="checkbox"
+        <Checkbox
           checked={compareSelected}
-          onChange={() => onToggleCompare(run.dir)}
+          tabIndex={active ? 0 : -1}
+          onCheckedChange={() => onToggleCompare(run.dir)}
           aria-label={`Select ${run.dir} for comparison`}
         />
       </div>
-      <div role="cell" style={{ padding: '0 8px', color: colors.textDim, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {run.dir}
+      <div role="cell" title={run.dir} className="nuclei-runs-row__run">
+        <span className="nuclei-runs-row__text">{formatRunLabel(run.dir, run.manifest.started_at)}</span>
       </div>
       {columns.map((column) => {
         const value = getRunValue(run, column);
         const isStatus = column.key === 'status';
+        const isNumeric = isNumericColumn(column);
         return (
           <div
             key={column.key}
             role="cell"
-            style={{
-              padding: '0 8px',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              color: isStatus ? colors[statusKey] : colors.text,
-              fontWeight: isStatus ? 600 : 400,
-            }}
+            className="nuclei-runs-row__cell"
+            data-numeric={isNumeric}
           >
-            {formatCell(value, column)}
+            {isStatus ? (
+              <Badge tone={statusTone}>{formatCell(value, column, 0)}</Badge>
+            ) : <span className="nuclei-runs-row__text">{formatCell(value, column, decimalsByColumn.get(column.key) ?? 0)}</span>}
           </div>
         );
       })}

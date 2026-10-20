@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getExecutedShotCount, getHistogramData, getMultiSeriesHistogramData } from './histogramData';
+import { getExecutedShotCount, getHistogramData, getMultiSeriesHistogramData, sampledProbabilities } from './histogramData';
 
 const result = {
   state_vector: [],
@@ -51,5 +51,27 @@ describe('getMultiSeriesHistogramData', () => {
       { state: '|0⟩', solo: 0.75 },
       { state: '|1⟩', solo: 0.25 },
     ]);
+  });
+});
+
+import { formatProbabilityTick, PROBABILITY_TICKS } from './histogramData';
+
+describe('probability axis ticks', () => {
+  it('labels every tick distinctly so quarter ticks are not rounded to tenths (research-10)', () => {
+    const labels = PROBABILITY_TICKS.map(formatProbabilityTick);
+    expect(labels).toEqual(['0', '0.25', '0.50', '0.75', '1']);
+    expect(new Set(labels).size).toBe(labels.length);
+  });
+});
+
+describe('sampledProbabilities', () => {
+  const base = { state_vector: [], bloch_coords: [], execution_time_ms: 1 } as never;
+  it('turns measured counts into probabilities over the executed shots', () => {
+    const result = { ...base, probabilities: { '00': 0.5, '11': 0.5 }, measurements: { '00': 480, '11': 544 }, shot_count: 1024 };
+    expect(sampledProbabilities(result)).toEqual({ '00': 480 / 1024, '11': 544 / 1024 });
+  });
+  it('falls back to the ideal distribution when nothing was measured', () => {
+    const result = { ...base, probabilities: { '0': 1 }, measurements: {}, shot_count: 0 };
+    expect(sampledProbabilities(result)).toEqual({ '0': 1 });
   });
 });

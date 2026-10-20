@@ -14,6 +14,14 @@
   }
 }
 
+@media (max-width: 999px) {
+  /* The analysis canvas needs the width more than the file list does. */
+  .qec-workbench__body,
+  .qec-workbench--inspector-closed .qec-workbench__body {
+    grid-template-columns: minmax(208px, min(var(--qec-source-width), 30%)) 9px minmax(0, 1fr);
+  }
+}
+
 @media (max-width: 899px) {
   .qec-research-bar__primary,
   .qec-research-bar__context {
@@ -22,10 +30,6 @@
 
   .qec-study-picker {
     flex-basis: min(100%, 280px);
-  }
-
-  .qec-primary-action {
-    margin-left: 0;
   }
 
   .qec-research-bar__metadata {
@@ -50,12 +54,12 @@
 }
 
 @media (max-width: 699px) {
-  .qec-preset-switcher {
+  .qec-research-bar__primary > .nuclei-segmented {
     width: 100%; order: 3;
   }
 
-  .qec-preset-switcher button {
-    min-width: 0; flex: 1;
+  .qec-research-bar__primary > .nuclei-segmented .nuclei-segmented__option {
+    flex: 1; justify-content: center;
   }
 
   .qec-workbench__body {
@@ -94,4 +98,38 @@
   .qec-workbench *::after {
     scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important;
   }
+}
+
+/* Sources fold to a 44px rail on narrow windows so the canvas keeps the width. */
+.qec-workbench.qec-workbench--sources-collapsed .qec-workbench__body {
+  grid-template-columns: 44px minmax(0, 1fr) 9px minmax(280px, var(--qec-inspector-width));
+}
+
+.qec-workbench.qec-workbench--sources-collapsed.qec-workbench--inspector-closed .qec-workbench__body {
+  grid-template-columns: 44px minmax(0, 1fr);
+}
+
+.qec-workbench--sources-collapsed .qec-workbench__body > .qec-resize-handle:nth-of-type(1) { display: none; }
+
+@media (max-width: 1179px) {
+  .qec-workbench.qec-workbench--sources-collapsed .qec-workbench__body { grid-template-columns: 44px minmax(0, 1fr); }
+}
+
+.qec-sources--rail { align-items: center; gap: 10px; padding: 8px 0; }
+.qec-sources__rail-icon { color: var(--qec-text-muted); }
+.qec-sources__rail-count { color: var(--qec-text-muted); font-size: var(--font-size-caption); }
+
+@media (max-width: 699px) {
+  .qec-workbench.qec-workbench--sources-collapsed .qec-workbench__body,
+  .qec-workbench.qec-workbench--sources-collapsed.qec-workbench--inspector-closed .qec-workbench__body {
+    grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .qec-sources--rail { flex-direction: row; justify-content: flex-start; padding: 4px 10px; }
+}
+
+/* The tray is as wide as the canvas, whatever the viewport: below ~720px the counts sit above the job list, never beside it. */
+@container qec-tray (max-width: 719px) {
+  .qec-tray__content { flex-direction: column; align-items: stretch; gap: 14px; }
+  .qec-tray__content > .qec-tray__lead, .qec-tray__content > .qec-tray__jobs { margin-block: 0; }
 }

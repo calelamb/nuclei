@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, X } from 'lucide-react';
 import { useThemeStore } from '../stores/themeStore';
-import { WHATS_NEW, type WhatsNewEntry } from '../data/whatsNew';
+import { WHATS_NEW, headlineFor, highlightsFor, type WhatsNewEntry } from '../data/whatsNew';
+import { useWorkspaceStore } from '../stores/workspaceStore';
 import { DURATION, EASING, prefersReducedMotion } from '../lib/animations';
 import { openExternal } from '../lib/openExternal';
+import { useWhatsNewStore } from '../stores/whatsNewStore';
+import { Button, IconButton } from './ui';
 import { WhatsNewHeader } from './WhatsNewHeader';
 import { WhatsNewHighlightRow } from './WhatsNewHighlightRow';
 
+import { TYPOGRAPHY } from '../styles/tokens';
 const SEEN_STORAGE_KEY = 'nuclei:whats_new_seen_version';
 const CHANGELOG_URL = 'https://github.com/calelamb/nuclei/releases';
 const TITLE_ID = 'whats-new-title';
@@ -25,11 +29,36 @@ export function shouldShowWhatsNew(
   currentVersion: string,
   entryVersion: string,
 ): boolean {
-  return (
-    storedVersion !== null &&
-    storedVersion !== currentVersion &&
-    entryVersion === currentVersion
-  );
+  if (storedVersion === null) return false;
+  // The notes are new to this user (newer than what they last saw) and already
+  // shipped (not newer than what is running). A patch release (0.14.1) that
+  // ships no notes of its own therefore still surfaces the 0.14.0 notes to
+  // anyone upgrading from 0.13.x, instead of silently skipping them.
+  return compareVersions(storedVersion, entryVersion) < 0 && compareVersions(entryVersion, currentVersion) <= 0;
+}
+
+/** Numeric dotted-version compare (ignores any pre-release suffix). */
+// eslint-disable-next-line react-refresh/only-export-components
+export function compareVersions(a: string, b: string): number {
+  const parse = (v: string) => v.split('-')[0].split('.').map((n) => Number.parseInt(n, 10) || 0);
+  const pa = parse(a);
+  const pb = parse(b);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (diff !== 0) return diff < 0 ? -1 : 1;
+  }
+  return 0;
+}
+
+/**
+ * What the version pill says. Notes written for a release the running build has not
+ * reached yet are labelled as upcoming, never as the version the person is on.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export function versionBadge(entryVersion: string, currentVersion: string): string {
+  if (compareVersions(entryVersion, currentVersion) <= 0) return `v${entryVersion}`;
+  const [major, minor] = entryVersion.split('.');
+  return `Coming in ${major}.${minor ?? '0'}`;
 }
 
 interface WhatsNewModalProps {
@@ -56,15 +85,13 @@ export function WhatsNewModal({
 }: WhatsNewModalProps = {}) {
   const colors = useThemeStore((s) => s.colors);
   const shadow = useThemeStore((s) => s.shadow);
-  const mode = useThemeStore((s) => s.mode);
+  const workspaceMode = useWorkspaceStore((s) => s.mode);
   const [visible, setVisible] = useState(false);
   const [entered, setEntered] = useState(false);
   const [leaving, setLeaving] = useState(false);
-  const [gotItHover, setGotItHover] = useState(false);
-  const [gotItFocus, setGotItFocus] = useState(false);
-  const [dismissHover, setDismissHover] = useState(false);
-  const [dismissFocus, setDismissFocus] = useState(false);
   const [linkHover, setLinkHover] = useState(false);
+  const requested = useWhatsNewStore((st) => st.requested);
+  const clearRequest = useWhatsNewStore((st) => st.clearRequest);
 
   const dialogRef = useRef<HTMLDivElement>(null);
   const primaryButtonRef = useRef<HTMLButtonElement>(null);
@@ -84,6 +111,14 @@ export function WhatsNewModal({
       setVisible(true);
     }
   }, [isDesktop, currentVersion, entry.version]);
+
+  // Re-open on demand (command palette / Settings > Help), on any platform.
+  useEffect(() => {
+    if (!requested) return;
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
+    setVisible(true);
+    clearRequest();
+  }, [requested, clearRequest]);
 
   // Flip to the "entered" state a tick after mount so the entrance
   // transition has an initial state to animate from.
@@ -153,7 +188,10 @@ export function WhatsNewModal({
 
   const reduced = prefersReducedMotion();
   const shown = entered && !leaving;
-  const scrim = mode === 'dark' ? 'rgba(3, 8, 20, 0.68)' : 'rgba(15, 23, 42, 0.4)';
+  const scrim = colors.scrim;
+  const context = { platform: isDesktop ? ('desktop' as const) : ('web' as const), mode: workspaceMode };
+  const highlights = highlightsFor(entry, context);
+  const headline = headlineFor(entry, context);
 
   return (
     <>
@@ -165,8 +203,8 @@ export function WhatsNewModal({
           inset: 0,
           zIndex: 3000,
           background: scrim,
-          backdropFilter: 'blur(3px)',
-          WebkitBackdropFilter: 'blur(3px)',
+          backdropFilter: 'blur(4px)',
+          WebkitBackdropFilter: 'blur(4px)',
           opacity: shown ? 1 : 0,
           transition: reduced ? 'none' : `opacity ${DURATION.normal}ms ${EASING.enter}`,
         }}
@@ -188,7 +226,7 @@ export function WhatsNewModal({
           role="dialog"
           aria-modal="true"
           aria-labelledby={TITLE_ID}
-          aria-label={`What's new in Nuclei ${currentVersion}`}
+          aria-label={`What's new in Nuclei ${entry.version}`}
           style={{
             pointerEvents: 'auto',
             position: 'relative',
@@ -202,7 +240,7 @@ export function WhatsNewModal({
             borderRadius: 16,
             boxShadow: `0 0 0 1px ${colors.accent}22, 0 24px 60px -20px ${colors.accent}40, ${shadow.lg}`,
             overflow: 'hidden',
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             opacity: shown ? 1 : 0,
             transform: reduced
               ? 'none'
@@ -225,36 +263,18 @@ export function WhatsNewModal({
               background: `linear-gradient(90deg, ${colors.accent}, transparent 70%)`,
             }}
           />
-          <button
-            onClick={handleDismiss}
+          <IconButton
             aria-label="Dismiss what's new"
-            onMouseEnter={() => setDismissHover(true)}
-            onMouseLeave={() => setDismissHover(false)}
-            onFocus={() => setDismissFocus(true)}
-            onBlur={() => setDismissFocus(false)}
-            style={{
-              position: 'absolute',
-              top: 14,
-              right: 14,
-              background: dismissHover ? colors.border : 'none',
-              border: 'none',
-              color: dismissHover || dismissFocus ? colors.text : colors.textDim,
-              cursor: 'pointer',
-              padding: 5,
-              display: 'flex',
-              alignItems: 'center',
-              borderRadius: 6,
-              outline: 'none',
-              boxShadow: dismissFocus ? `0 0 0 2px ${colors.accent}66` : 'none',
-              transition: `background ${DURATION.fast}ms ${EASING.enter}, color ${DURATION.fast}ms ${EASING.enter}, box-shadow ${DURATION.fast}ms ${EASING.enter}`,
-            }}
+            size="sm"
+            onClick={handleDismiss}
+            style={{ position: 'absolute', top: 14, right: 14 }}
           >
-            <X size={15} />
-          </button>
+            <X size={16} />
+          </IconButton>
 
           <div style={{ overflowY: 'auto', padding: '28px 28px 22px' }}>
             <WhatsNewHeader
-              currentVersion={currentVersion}
+              versionLabel={versionBadge(entry.version, currentVersion)}
               accent={colors.accent}
               textDim={colors.textDim}
               reduced={reduced}
@@ -264,26 +284,26 @@ export function WhatsNewModal({
               id={TITLE_ID}
               style={{
                 margin: 0,
-                fontSize: 24,
-                fontWeight: 650,
+                fontSize: 20,
+                fontWeight: 600,
                 letterSpacing: '-0.02em',
                 lineHeight: 1.25,
                 color: colors.text,
                 textWrap: 'balance',
               }}
             >
-              {entry.title}
+              {headline.title}
             </h2>
-            {entry.tagline && (
+            {headline.tagline && (
               <p
                 style={{
                   margin: '6px 0 0',
-                  fontSize: 13.5,
+                  fontSize: 13,
                   lineHeight: 1.5,
                   color: colors.textMuted,
                 }}
               >
-                {entry.tagline}
+                {headline.tagline}
               </p>
             )}
 
@@ -297,13 +317,12 @@ export function WhatsNewModal({
                 gap: 14,
               }}
             >
-              {entry.highlights.map((highlight, i) => (
+              {highlights.map((highlight, i) => (
                 <WhatsNewHighlightRow
                   key={highlight.title}
                   highlight={highlight}
                   index={i}
-                  accent={colors.accent}
-                  dirac={colors.dirac}
+                  accent={colors.accentText}
                   text={colors.text}
                   textMuted={colors.textMuted}
                 />
@@ -338,7 +357,7 @@ export function WhatsNewModal({
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: 4,
-                  fontSize: 12.5,
+                  fontSize: 13,
                   fontWeight: 500,
                   textDecoration: 'none',
                   color: linkHover ? colors.text : colors.textMuted,
@@ -346,37 +365,11 @@ export function WhatsNewModal({
                 }}
               >
                 Full changelog
-                <ArrowUpRight size={13} />
+                <ArrowUpRight size={14} />
               </a>
-              <button
-                ref={primaryButtonRef}
-                onClick={handleDismiss}
-                onMouseEnter={() => setGotItHover(true)}
-                onMouseLeave={() => setGotItHover(false)}
-                onFocus={() => setGotItFocus(true)}
-                onBlur={() => setGotItFocus(false)}
-                style={{
-                  background: gotItHover ? colors.accentLight : colors.accent,
-                  color: '#0a0f1a',
-                  border: 'none',
-                  borderRadius: 8,
-                  padding: '7px 16px',
-                  cursor: 'pointer',
-                  fontSize: 12.5,
-                  fontWeight: 600,
-                  fontFamily: "'Geist Sans', sans-serif",
-                  boxShadow: gotItFocus
-                    ? `0 0 0 2px ${colors.accent}66`
-                    : gotItHover
-                      ? shadow.md
-                      : shadow.sm,
-                  transform: gotItHover ? 'translateY(-1px)' : 'translateY(0)',
-                  outline: 'none',
-                  transition: `background ${DURATION.fast}ms ${EASING.enter}, box-shadow ${DURATION.fast}ms ${EASING.enter}, transform ${DURATION.fast}ms ${EASING.enter}`,
-                }}
-              >
+              <Button ref={primaryButtonRef} variant="primary" onClick={handleDismiss}>
                 Got it
-              </button>
+              </Button>
             </div>
           </div>
         </div>

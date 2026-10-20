@@ -2,11 +2,15 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useThemeStore, type ThemeColors } from '../../stores/themeStore';
 import {
   detectorNodeIndex,
+  fitGraphBox,
   edgeHeatColor,
   type DetectorGraphLayout,
   type DecodeOverlay,
 } from './qecGeometry';
 
+import { ICON_SIZE, ICON_STROKE, TYPOGRAPHY } from '../../styles/tokens';
+import { Info } from 'lucide-react';
+import { IconButton } from '../ui';
 interface DetectorGraphCanvasProps {
   layout: DetectorGraphLayout;
   overlay: DecodeOverlay | null;
@@ -25,6 +29,8 @@ interface HoverInfo {
 }
 
 const PAD = 16;
+const NODE_R = 3.5;
+const NODE_R_FIRED = 4.5;
 
 function edgeKey(a: number, b: number): string {
   return a <= b ? `${a}:${b}` : `${b}:${a}`;
@@ -44,6 +50,7 @@ export function DetectorGraphCanvas({ layout, overlay, onDetectorClick }: Detect
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hover, setHover] = useState<HoverInfo | null>(null);
+  const [legendOpen, setLegendOpen] = useState(false);
 
   // Precomputed once per layout: O(1) node lookup + incident-edge degree.
   const nodeIndex = useMemo(() => detectorNodeIndex(layout), [layout]);
@@ -76,8 +83,7 @@ export function DetectorGraphCanvas({ layout, overlay, onDetectorClick }: Detect
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, cssW, cssH);
 
-      const X = (nx: number) => PAD + nx * (cssW - 2 * PAD);
-      const Y = (ny: number) => PAD + ny * (cssH - 2 * PAD);
+      const { X, Y } = fitGraphBox(layout.aspect, cssW, cssH, PAD);
       const matched = new Set(overlay?.matchedEdges.map((m) => edgeKey(m.a, m.b)));
 
       // Edges — sorted so higher-probability (hotter) edges draw on top.
@@ -96,7 +102,7 @@ export function DetectorGraphCanvas({ layout, overlay, onDetectorClick }: Detect
         const y2 = Y(b.y);
 
         if (isMatched) {
-          ctx.strokeStyle = colors.dirac;
+          ctx.strokeStyle = colors.overlayMatching;
           ctx.lineWidth = 2.6;
           ctx.globalAlpha = 1;
           ctx.setLineDash([]);
@@ -105,7 +111,7 @@ export function DetectorGraphCanvas({ layout, overlay, onDetectorClick }: Detect
           ctx.strokeStyle = `rgb(${r},${g},${bl})`;
           ctx.lineWidth = 0.6 + 2.4 * t;
           ctx.globalAlpha = isBoundary ? 0.5 : 0.7;
-          ctx.setLineDash(isBoundary ? [3, 3] : []);
+          ctx.setLineDash(isBoundary ? [3, 3] : e.timelike ? [5, 3] : []);
         }
         ctx.beginPath();
         ctx.moveTo(x1, y1);
@@ -152,12 +158,12 @@ export function DetectorGraphCanvas({ layout, overlay, onDetectorClick }: Detect
         const fired = overlay?.firedDetectors.has(n.detector) ?? false;
         if (fired) {
           ctx.beginPath();
-          ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+          ctx.arc(cx, cy, NODE_R_FIRED + 3, 0, Math.PI * 2);
           ctx.fillStyle = `${colors.error}44`;
           ctx.fill();
         }
         ctx.beginPath();
-        ctx.arc(cx, cy, fired ? 3.4 : 2.1, 0, Math.PI * 2);
+        ctx.arc(cx, cy, fired ? NODE_R_FIRED : NODE_R, 0, Math.PI * 2);
         ctx.fillStyle = fired ? colors.error : colors.accent;
         ctx.fill();
         ctx.lineWidth = 0.5;
@@ -170,7 +176,7 @@ export function DetectorGraphCanvas({ layout, overlay, onDetectorClick }: Detect
         const n = layout.nodes.find((node) => node.detector === hover.detector);
         if (n) {
           ctx.beginPath();
-          ctx.arc(X(n.x), Y(n.y), 6.5, 0, Math.PI * 2);
+          ctx.arc(X(n.x), Y(n.y), NODE_R_FIRED + 3.5, 0, Math.PI * 2);
           ctx.strokeStyle = colors.text;
           ctx.lineWidth = 1.2;
           ctx.stroke();
@@ -194,8 +200,7 @@ export function DetectorGraphCanvas({ layout, overlay, onDetectorClick }: Detect
     const my = clientY - rect.top;
     const cssW = rect.width;
     const cssH = rect.height;
-    const X = (nx: number) => PAD + nx * (cssW - 2 * PAD);
-    const Y = (ny: number) => PAD + ny * (cssH - 2 * PAD);
+    const { X, Y } = fitGraphBox(layout.aspect, cssW, cssH, PAD);
 
     let best: HoverInfo | null = null;
     let bestDist = 11 * 11;
@@ -247,7 +252,15 @@ export function DetectorGraphCanvas({ layout, overlay, onDetectorClick }: Detect
         }}
       />
 
-      <GraphLegend colors={colors} />
+      {legendOpen && <GraphLegend colors={colors} />}
+      <IconButton
+        size="sm" variant="secondary" aria-label="Legend" aria-pressed={legendOpen}
+        title="What the colours and lines mean"
+        onClick={() => setLegendOpen((v) => !v)}
+        style={{ position: 'absolute', left: 10, bottom: 10, zIndex: 3 }}
+      >
+        <Info size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} aria-hidden="true" />
+      </IconButton>
 
       {hover && (
         <div
@@ -258,10 +271,10 @@ export function DetectorGraphCanvas({ layout, overlay, onDetectorClick }: Detect
             pointerEvents: 'none',
             background: colors.bgElevated,
             border: `1px solid ${colors.border}`,
-            borderRadius: 6,
+            borderRadius: 'var(--radius-soft)',
             padding: '5px 9px',
             fontSize: 11,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             color: colors.text,
             boxShadow: '0 4px 14px rgba(0,0,0,0.35)',
             zIndex: 3,
@@ -272,7 +285,7 @@ export function DetectorGraphCanvas({ layout, overlay, onDetectorClick }: Detect
             Detector D{hover.detector}
             {hover.fired && <span style={{ color: colors.error, marginLeft: 6 }}>fired</span>}
           </div>
-          <div style={{ color: colors.textMuted, fontFamily: "'Geist Mono', monospace", fontSize: 10 }}>
+          <div style={{ color: colors.textMuted, fontFamily: TYPOGRAPHY.fontMono, fontSize: 11 }}>
             {hover.degree} incident edge{hover.degree === 1 ? '' : 's'}
           </div>
         </div>
@@ -288,9 +301,9 @@ function GraphLegend({ colors }: { colors: ThemeColors }) {
     display: 'flex',
     alignItems: 'center',
     gap: 6,
-    fontSize: 9.5,
+    fontSize: 11,
     color: colors.textDim,
-    fontFamily: "'Geist Sans', sans-serif",
+    fontFamily: TYPOGRAPHY.fontSans,
   } as const;
 
   return (
@@ -298,14 +311,14 @@ function GraphLegend({ colors }: { colors: ThemeColors }) {
       style={{
         position: 'absolute',
         left: 10,
-        bottom: 10,
+        bottom: 42,
         display: 'flex',
         flexDirection: 'column',
         gap: 4,
         padding: '7px 9px',
         background: `${colors.bg}cc`,
         border: `1px solid ${colors.border}`,
-        borderRadius: 7,
+        borderRadius: 'var(--radius-soft)',
         backdropFilter: 'blur(3px)',
         zIndex: 2,
         pointerEvents: 'none',
@@ -326,7 +339,7 @@ function GraphLegend({ colors }: { colors: ThemeColors }) {
       <div style={row}>
         <span style={{ width: 8, height: 8, borderRadius: '50%', background: colors.error }} />
         fired
-        <span style={{ width: 14, height: 0, borderTop: `2px solid ${colors.dirac}`, marginLeft: 6 }} />
+        <span style={{ width: 14, height: 0, borderTop: `2px solid ${colors.overlayMatching}`, marginLeft: 6 }} />
         matched
       </div>
     </div>

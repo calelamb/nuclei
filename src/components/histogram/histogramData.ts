@@ -16,6 +16,17 @@ export function getProbabilityHistogramData(probabilities: Record<string, number
     .sort((a, b) => a.state.localeCompare(b.state));
 }
 
+/**
+ * The distribution the chip ranks by: what was actually measured (matching the panel's default
+ * Sampled view, so "+N more" agrees with the panel's count), or the ideal one if no shots ran.
+ */
+export function sampledProbabilities(result: SimulationResult): Record<string, number> {
+  const shots = getExecutedShotCount(result);
+  const entries = Object.entries(result.measurements);
+  if (shots <= 0 || entries.length === 0) return result.probabilities;
+  return Object.fromEntries(entries.map(([state, count]) => [state, count / shots]));
+}
+
 export function getHistogramData(result: SimulationResult, viewMode: HistogramViewMode) {
   if (viewMode === 'ideal') {
     return Object.entries(result.probabilities)
@@ -73,4 +84,14 @@ export function getMultiSeriesHistogramData(
     });
     return row;
   });
+}
+
+/** Evenly spaced y ticks for a 0..1 probability axis. */
+export const PROBABILITY_TICKS: readonly number[] = [0, 0.25, 0.5, 0.75, 1];
+
+/** Tick label that never rounds 0.25/0.75 to a misleading 0.3/0.8. */
+export function formatProbabilityTick(value: number): string {
+  if (value === 0) return '0';
+  if (value === 1) return '1';
+  return value.toFixed(2);
 }

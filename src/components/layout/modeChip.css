@@ -1,0 +1,16 @@
+/* The workspace chip answers the pointer: a stronger fill and a ring in the mode colour (the fill itself is capped by the 11px label's contrast). */
+.mode-chip {
+  background: var(--mode-chip-rest);
+  transition: background-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard);
+}
+.mode-chip:hover {
+  /* The same solid overlay fill the neighbouring status-bar controls get, with a faint mode tint on top
+     (modeChipTint.test.ts keeps the 11px label AA on tint-over-overlay), plus the ring: 1px in, 2px halo out. */
+  background: linear-gradient(var(--mode-chip-hover) 0 0), var(--color-surface-overlay);
+  box-shadow: inset 0 0 0 1px var(--mode-chip-accent), 0 0 0 2px color-mix(in srgb, var(--mode-chip-accent) 28%, transparent);
+}
+/* Pressed settles back toward rest; restates the hover background because this unlayered rule outranks it. */
+.mode-chip:active,
+.mode-chip:active:hover {
+  background: linear-gradient(var(--mode-chip-rest) 0 0), var(--color-surface-sunken, var(--color-surface-overlay));
+}

@@ -1,109 +1,176 @@
-import { useMemo } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useCircuitStore } from '../../stores/circuitStore';
 import { useDebugStore } from '../../stores/debugStore';
 import { activeDebugStep } from '../../lib/debugTrace';
-import { ClassicBlochSphere } from './ClassicBlochSphere';
+import { useThemeStore } from '../../stores/themeStore';
+import { useWorkspaceStore } from '../../stores/workspaceStore';
+import { useElementSize } from '../../hooks/useElementSize';
+import { blochGridLayout, CELL_CAPTION_PX } from '../../lib/blochGrid';
+import { IconButton } from '../ui';
+import { BlochCell } from './BlochCell';
+import { BlochStage } from './blochStage';
+import { blochPalette } from '../../lib/blochPalette';
+import { groundStateCoords, type BlochVector } from '../../lib/blochMath';
+import { prefersReducedMotion } from '../../lib/animations';
+import { BlochEmptyState } from './BlochEmptyState';
+import './bloch.css';
+
+const NO_COORDS: readonly BlochVector[] = [];
+const COMPACT_CELL_PX = 250;
+/** Matches --space-2 on .bloch-panel__canvas-host. */
+const STAGE_INSET_PX = 8;
 
 /**
- * Bloch sphere panel — a classic interactive sphere (one per qubit),
- * rotatable and zoomable, that updates from the Python kernel's
- * `bloch_coords` after a simulation run.
- *
- * The visual style is a faithful port of the bits-and-electrons
- * simulator (https://github.com/bits-and-electrons/bloch-sphere-simulator),
- * rewritten in React Three Fiber so it slots into Nuclei's panel layout.
+ * Bloch spheres for every qubit on ONE shared WebGL canvas: a responsive grid
+ * (spheres never shrink below a readable size, extra qubits become pages), drag
+ * to rotate each sphere, smooth transitions between states, and an explicit
+ * readout when a qubit is entangled and has no single-qubit Bloch vector.
  */
-export function BlochPanel() {
+export function BlochPanel({ initialQubits = 0 }: { initialQubits?: number } = {}) {
   const result = useSimulationStore((s) => s.result);
-  // Quantum Debugger (Phase 3): while stepping, show the Bloch state AT the
-  // cursor from the cached trace; otherwise the final simulation result.
   const stepMode = useCircuitStore((s) => s.stepMode);
   const stepIndex = useCircuitStore((s) => s.stepIndex);
   const trace = useDebugStore((s) => s.trace);
   const step = stepMode ? activeDebugStep(trace, stepIndex) : null;
+  const [measureRef, size] = useElementSize<HTMLDivElement>();
+  const [requestedPage, setRequestedPage] = useState(0);
+  const colors = useThemeStore((s) => s.colors);
+  const audience = useWorkspaceStore((s) => s.mode);
+  const themeMode = useThemeStore((s) => s.mode);
+  const [glFailure, setGlFailure] = useState<string | null>(null);
+  const stageRef = useRef<BlochStage | null>(null);
+  const viewportEls = useRef(new Map<number, HTMLDivElement>());
+  const themeModeRef = useRef(themeMode);
+  const shownRef = useRef<{ coords: readonly BlochVector[]; first: number }>({ coords: [], first: 0 });
 
+  const measured = useMemo(() => step?.bloch_coords ?? result?.bloch_coords ?? NO_COORDS, [step, result]);
+  // Before the first run the Balanced preset still shows each qubit's starting state, |0>.
+  const showInitial = measured.length === 0 && initialQubits > 0;
   const blochCoords = useMemo(
-    () => step?.bloch_coords ?? result?.bloch_coords ?? [],
-    [step, result],
+    () => (showInitial ? groundStateCoords(initialQubits) : measured),
+    [showInitial, initialQubits, measured],
   );
   const qubitCount = blochCoords.length;
 
-  if (qubitCount === 0) {
-    return <EmptyState />;
-  }
-
-  // Lay qubits out in a single row — at typical student scale (1–4
-  // qubits) this fits the rail, and each sphere gets its own
-  // OrbitControls so a user can inspect them independently.
-  return (
-    <div
-      style={{
-        height: '100%',
-        display: 'flex',
-        alignItems: 'stretch',
-        justifyContent: 'center',
-        gap: 6,
-        padding: '10px 10px 12px',
-        position: 'relative',
-      }}
-      role="region"
-      aria-label="Bloch sphere visualization"
-    >
-      {blochCoords.map((coord, i) => (
-        <div
-          key={i}
-          style={{
-            flex: 1,
-            minWidth: 0,
-            position: 'relative',
-            borderRadius: 10,
-            background:
-              'radial-gradient(circle at 50% 45%, rgba(20,28,44,0.85) 0%, rgba(8,12,22,0.82) 65%, rgba(5,8,16,0.9) 100%)',
-            border: '1px solid rgba(64, 86, 120, 0.28)',
-            overflow: 'hidden',
-          }}
-        >
-          <ClassicBlochSphere
-            coord={coord}
-            qubitLabel={qubitCount > 1 ? `q${i}` : undefined}
-          />
-        </div>
-      ))}
-    </div>
+  const layout = useMemo(
+    () => blochGridLayout({
+      count: Math.max(1, qubitCount),
+      width: Math.max(0, size.width - STAGE_INSET_PX * 2),
+      height: Math.max(0, size.height - STAGE_INSET_PX * 2),
+    }),
+    [qubitCount, size.width, size.height],
   );
-}
+  const page = Math.min(requestedPage, layout.pageCount - 1);
+  const first = page * layout.pageSize;
+  const visible = useMemo(
+    () => blochCoords.slice(first, first + layout.pageSize),
+    [blochCoords, first, layout.pageSize],
+  );
 
-function EmptyState() {
+  /** Hand the stage the boxes currently on screen. Reads refs only, so it is safe from any commit phase. */
+  const pushViews = useCallback(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const { coords, first: start } = shownRef.current;
+    stage.setViews(coords.flatMap((coord, i) => {
+      const element = viewportEls.current.get(start + i);
+      return element ? [{ element, coord }] : [];
+    }));
+  }, []);
+
+  // The canvas mounts once there is data to draw; the stage lives exactly as long as the canvas does.
+  const attachCanvas = useCallback((canvas: HTMLCanvasElement | null) => {
+    if (!canvas) return undefined;
+    try {
+      const stage = new BlochStage(canvas, blochPalette(themeModeRef.current), { reducedMotion: prefersReducedMotion() });
+      stageRef.current = stage;
+      // React StrictMode re-attaches the canvas after the layout effect ran: give the new stage its views.
+      pushViews();
+      return () => {
+        stage.dispose();
+        // A StrictMode re-attach keeps the canvas in the document; a real unmount does not. Without this every
+        // Run leaked a WebGL context and the console warned "Too many active WebGL contexts" from about Run 17.
+        queueMicrotask(() => { if (!canvas.isConnected) stage.releaseContext(); });
+        if (stageRef.current === stage) stageRef.current = null;
+      };
+    } catch (error) {
+      setGlFailure(error instanceof Error ? error.message : 'WebGL is unavailable');
+      return undefined;
+    }
+  }, [pushViews]);
+
+  useLayoutEffect(() => {
+    themeModeRef.current = themeMode;
+    stageRef.current?.setPalette(blochPalette(themeMode));
+  }, [themeMode]);
+
+  useLayoutEffect(() => {
+    shownRef.current = { coords: visible, first };
+    pushViews();
+  }, [visible, first, glFailure, size.width, size.height, pushViews]);
+
+  useEffect(() => {
+    stageRef.current?.resize();
+  }, [size.width, size.height]);
+
+  if (qubitCount === 0) return <BlochEmptyState />;
+
+  const needsPager = layout.pageCount > 1;
+
   return (
-    <div
-      style={{
-        height: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexDirection: 'column',
-        gap: 10,
-        color: '#475569',
-      }}
-    >
-      <svg width={72} height={72} viewBox="0 0 72 72" style={{ opacity: 0.15 }}>
-        <defs>
-          <radialGradient id="empty-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#00B4D8" stopOpacity="0.25" />
-            <stop offset="100%" stopColor="#00B4D8" stopOpacity="0" />
-          </radialGradient>
-        </defs>
-        <circle cx={36} cy={36} r={32} fill="url(#empty-glow)" />
-        <circle cx={36} cy={36} r={30} fill="none" stroke="#3D5A80" strokeWidth={1} />
-        <ellipse cx={36} cy={36} rx={30} ry={10} fill="none" stroke="#3D5A80" strokeWidth={0.5} />
-        <ellipse cx={36} cy={36} rx={10} ry={30} fill="none" stroke="#3D5A80" strokeWidth={0.5} />
-        <line x1={36} y1={4} x2={36} y2={68} stroke="#3D5A80" strokeWidth={0.5} strokeDasharray="2,2" />
-        <line x1={4} y1={36} x2={68} y2={36} stroke="#3D5A80" strokeWidth={0.5} strokeDasharray="2,2" />
-      </svg>
-      <span style={{ fontSize: 12, fontFamily: "'Geist Sans', sans-serif" }}>
-        Run a simulation to visualize qubit states
-      </span>
+    <div className="bloch-panel" role="region" aria-label="Bloch sphere visualization" style={{ background: colors.bg }}>
+      <div ref={measureRef} className="bloch-panel__stage">
+        {size.width > 0 && (
+          <div className="bloch-panel__canvas-host">
+            <div
+              className="bloch-grid"
+              style={{
+                gridTemplateColumns: `repeat(${layout.cols}, minmax(0, 1fr))`,
+                gridAutoRows: `${layout.cellHeight}px`,
+                ['--bloch-caption' as string]: `${CELL_CAPTION_PX}px`,
+              }}
+            >
+              {visible.map((coord, i) => (
+                <BlochCell
+                  key={first + i}
+                  ref={(el) => {
+                    if (el) viewportEls.current.set(first + i, el);
+                    else viewportEls.current.delete(first + i);
+                  }}
+                  qubit={first + i}
+                  label={`q${first + i}`}
+                  audience={audience}
+                  initial={showInitial}
+                  compact={layout.cellWidth < COMPACT_CELL_PX}
+                  coord={coord}
+                />
+              ))}
+            </div>
+            {glFailure ? (
+              <p className="bloch-panel__fallback" role="status">
+                3D view unavailable on this device. Each qubit&rsquo;s readout still shows its state.
+              </p>
+            ) : (
+              <canvas ref={attachCanvas} className="bloch-canvas" aria-hidden="true" />
+            )}
+          </div>
+        )}
+      </div>
+      {needsPager && (
+        <div className="bloch-pager">
+          <IconButton size="sm" aria-label="Previous qubits" disabled={page === 0} onClick={() => setRequestedPage(page - 1)}>
+            <ChevronLeft size={14} />
+          </IconButton>
+          <span className="bloch-pager__label" aria-live="polite">
+            q{first}&ndash;q{first + visible.length - 1} of {qubitCount}
+          </span>
+          <IconButton size="sm" aria-label="Next qubits" disabled={page >= layout.pageCount - 1} onClick={() => setRequestedPage(page + 1)}>
+            <ChevronRight size={14} />
+          </IconButton>
+        </div>
+      )}
     </div>
   );
 }

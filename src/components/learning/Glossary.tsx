@@ -1,7 +1,9 @@
-import { Search } from 'lucide-react';
+import { useRef } from 'react';
+import { Button, EmptyState, SearchField } from '../ui';
 import { useGlossaryStore } from '../../stores/glossaryStore';
-import { useThemeStore } from '../../stores/themeStore';
 import { GlossaryEntry } from './GlossaryEntry';
+import './learnSidebar.css';
+import './glossary.css';
 
 const CATEGORIES = [
   { key: 'all', label: 'All' },
@@ -9,77 +11,60 @@ const CATEGORIES = [
   { key: 'gates', label: 'Gates' },
   { key: 'entanglement', label: 'Entanglement' },
   { key: 'algorithms', label: 'Algorithms' },
-  { key: 'error-correction', label: 'Error Correction' },
+  { key: 'error-correction', label: 'Error correction' },
   { key: 'hardware', label: 'Hardware' },
 ];
 
-export function Glossary() {
-  const colors = useThemeStore((s) => s.colors);
+interface GlossaryProps {
+  /** `page` flows at natural height inside the chooser; `compact` fills the sidebar and scrolls its own list. */
+  variant?: 'compact' | 'page';
+}
+
+export function Glossary({ variant = 'compact' }: GlossaryProps) {
   const { searchQuery, selectedTerm, filteredTerms, selectedCategory, setSearch, selectTerm, setCategory } = useGlossaryStore();
 
+  const searchRef = useRef<HTMLInputElement>(null);
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Search input */}
-      <div style={{ padding: '8px 12px', flexShrink: 0 }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          background: colors.bgPanel,
-          border: `1px solid ${colors.border}`,
-          borderRadius: 4,
-          padding: '4px 8px',
-        }}>
-          <Search size={12} color={colors.textDim} />
-          <input
-            type="text"
-            placeholder="Search terms..."
-            aria-label="Search glossary terms"
-            value={searchQuery}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{
-              flex: 1,
-              background: 'transparent',
-              border: 'none',
-              outline: 'none',
-              color: colors.text,
-              fontSize: 12,
-              fontFamily: 'Geist Sans, Inter, sans-serif',
-            }}
-          />
-        </div>
+    <div className={variant === 'page' ? 'gloss gloss--page' : 'gloss'}>
+      <div className="gloss__head">
+      <div className="gloss__search">
+        <SearchField
+          ref={searchRef}
+          aria-label="Search glossary terms"
+          placeholder="Search terms..."
+          value={searchQuery}
+          onValueChange={setSearch}
+        />
       </div>
 
-      {/* Category pills */}
-      <div style={{ padding: '0 12px 8px', display: 'flex', gap: 4, flexWrap: 'wrap', flexShrink: 0 }}>
+      <div className="gloss__cats" role="group" aria-label="Filter by category">
         {CATEGORIES.map((cat) => (
           <button
             key={cat.key}
+            type="button"
+            className="gloss__cat"
+            aria-pressed={selectedCategory === cat.key}
             onClick={() => setCategory(cat.key)}
-            style={{
-              padding: '2px 8px',
-              fontSize: 10,
-              fontFamily: 'Geist Sans, Inter, sans-serif',
-              fontWeight: selectedCategory === cat.key ? 600 : 400,
-              background: selectedCategory === cat.key ? colors.accent + '22' : 'transparent',
-              color: selectedCategory === cat.key ? colors.accent : colors.textMuted,
-              border: `1px solid ${selectedCategory === cat.key ? colors.accent + '44' : colors.border}`,
-              borderRadius: 10,
-              cursor: 'pointer',
-              transition: 'all 0.15s',
-            }}
           >
             {cat.label}
           </button>
         ))}
       </div>
+      </div>
 
-      {/* Term list */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0 12px 12px' }}>
+      <div className="gloss__list">
         {filteredTerms.length === 0 ? (
-          <div style={{ color: colors.textDim, fontSize: 12, fontFamily: 'Geist Sans, Inter, sans-serif', textAlign: 'center', paddingTop: 24 }}>
-            No terms found.
-          </div>
+          <EmptyState
+            title={searchQuery.trim() ? `No terms match "${searchQuery.trim()}"` : 'No terms in this category'}
+            action={(
+              <Button size="sm" onClick={() => { setSearch(''); setCategory('all'); searchRef.current?.focus(); }}>
+                Show all terms
+              </Button>
+            )}
+          >
+            Try a shorter word, or browse by category.
+          </EmptyState>
         ) : (
           filteredTerms.map((term) => (
             <GlossaryEntry

@@ -1,6 +1,11 @@
 import { Component } from 'react';
 import type { ReactNode, ErrorInfo } from 'react';
 
+import { AlertTriangle } from 'lucide-react';
+import { ICON_SIZE, ICON_STROKE } from '../styles/tokens';
+import { Button } from './ui/Button';
+import { EmptyState } from './ui/EmptyState';
+
 interface ErrorBoundaryProps {
   children: ReactNode;
   fallback?: (error: Error, reset: () => void) => ReactNode;
@@ -40,58 +45,14 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         return this.props.fallback(this.state.error, this.reset);
       }
       return (
-        <div
-          role="alert"
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 16,
-            padding: 32,
-            height: '100%',
-            width: '100%',
-            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
-            color: '#64748B',
-            background: 'transparent',
-          }}
-        >
-          <div
-            style={{
-              fontSize: 14,
-              fontWeight: 600,
-              color: '#1A1A2E',
-            }}
+        <div role="alert" className="nuclei-error-boundary">
+          <EmptyState
+            icon={<AlertTriangle size={ICON_SIZE.lg} strokeWidth={ICON_STROKE} />}
+            title={`${this.props.label ?? 'Component'} failed to load`}
+            action={<Button variant="primary" size="sm" onClick={this.reset}>Retry</Button>}
           >
-            {this.props.label ?? 'Component'} failed to load
-          </div>
-          <div
-            style={{
-              fontSize: 12,
-              fontFamily: "'JetBrains Mono', 'Roboto Mono', monospace",
-              color: '#94A3B8',
-              maxWidth: 480,
-              textAlign: 'center',
-              wordBreak: 'break-word',
-            }}
-          >
-            {this.state.error.message}
-          </div>
-          <button
-            onClick={this.reset}
-            style={{
-              padding: '8px 16px',
-              fontSize: 13,
-              fontWeight: 500,
-              color: '#FFFFFF',
-              background: '#0891B2',
-              border: 'none',
-              borderRadius: 6,
-              cursor: 'pointer',
-            }}
-          >
-            Retry
-          </button>
+            <span className="nuclei-error-boundary__message">{this.state.error.message}</span>
+          </EmptyState>
         </div>
       );
     }

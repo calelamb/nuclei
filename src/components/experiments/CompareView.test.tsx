@@ -107,10 +107,11 @@ describe('CompareView', () => {
   });
 
   it('renders a smoke-test comparison of the fixture runs: title, histogram, diff, metrics', async () => {
-    const { getByText, getAllByText, container } = render(<CompareView />);
+    const { getByText, getAllByText, queryByText, container } = render(<CompareView />);
 
     expect(getByText(/Compare 2 runs/)).toBeTruthy();
-    expect(getByText(/theta-sweep/)).toBeTruthy();
+    // The location is named once, by the page header, not repeated in the title.
+    expect(queryByText(/theta-sweep/)).toBeNull();
 
     // Histogram — assert the recharts chart mounted (see RunDetail.test.tsx
     // for why: jsdom can't lay out ResponsiveContainer to draw actual bars).
@@ -124,9 +125,10 @@ describe('CompareView', () => {
     expect(getAllByText(RUN_B).length).toBeGreaterThanOrEqual(2);
 
     // Metrics table — one row per run, one column per metric.
-    expect(getByText('energy')).toBeTruthy();
-    expect(getByText('-1.0000')).toBeTruthy();
-    expect(getByText('-2.0000')).toBeTruthy();
+    expect(getByText('Energy')).toBeTruthy();
+    // One precision per metric, shared with the runs table: whole numbers print whole.
+    expect(getByText('-1')).toBeTruthy();
+    expect(getByText('-2')).toBeTruthy();
   });
 
   it('clear selection empties the compare selection and closes the view', async () => {
@@ -146,5 +148,26 @@ describe('CompareView', () => {
     useExperimentUiStore.setState({ compareSelection: [RUN_A] });
     const { getByText } = render(<CompareView />);
     expect(getByText(/select at least 2 runs/i)).toBeTruthy();
+  });
+
+  it('keeps a failed run to a full-width block and flags it in the legend (LR-06)', async () => {
+    const trace = 'Traceback (most recent call last):\n  File "run.py", line 12, in <module>\nValueError: ' + 'bad '.repeat(30);
+    const records: RunRecord[] = [
+      ...RECORDS,
+      { dir: '20261015-142150-a458', manifest: manifest({ params: { theta: 2 }, status: 'failed', error: trace }), metrics: {} },
+    ];
+    useExperimentStore.setState({ runsByExperiment: { [FILE_NAME]: records } });
+    useExperimentUiStore.setState({ compareSelection: [RUN_A, RUN_B, '20261015-142150-a458'] });
+    const { container, getAllByText } = render(<CompareView />);
+
+    const block = container.querySelector('.nuclei-compare-long[data-field="error"]');
+    expect(block).toBeTruthy();
+    expect(block!.textContent).toContain('ValueError');
+    // The error is not a grid cell, so the run columns stay equal width.
+    expect(container.querySelector('table')!.textContent).not.toContain('ValueError');
+    expect(container.querySelector('table')!.className).toContain('nuclei-compare-diff');
+    // One run label format everywhere: no raw run-dir id in the visible text.
+    expect(getAllByText(/Jul 12 \d\d:\d\d:\d\d · a458/).length).toBeGreaterThan(0);
+    expect(container.textContent).not.toContain('20261015-142150-a458 ');
   });
 });

@@ -14,6 +14,8 @@ export type LayoutPreset = 'clean' | 'balanced' | 'full';
 interface LayoutStoreState {
   preset: LayoutPreset;
   histogramChipDismissed: boolean;
+  /** The chip's expand control opened the full histogram; ends when the bottom panel collapses or leaves the Histogram tab. */
+  histogramExpanded: boolean;
   /**
    * Explicit per-project panel visibility overrides (PRD 11 Phase A). An
    * entry here wins over the reveal rule (subject to framework affinity —
@@ -24,14 +26,16 @@ interface LayoutStoreState {
   overrides: Partial<Record<PanelId, boolean>>;
   setPreset(p: LayoutPreset): void;
   dismissHistogramChip(): void;
+  setHistogramExpanded(expanded: boolean): void;
   resetRunArtifacts(): void;
   /** Force a panel visible/hidden (the PanelHeader "Hide panel" action, Phase C). */
   setPanelOverride(id: PanelId, visible: boolean): void;
-  /** Flip a panel's override — the command palette's "Toggle <panel>" (PRD 11
-   * Phase D). No prior override is read as "visible by default", so the first
-   * toggle hides it; subsequent toggles alternate. Framework affinity in
-   * `resolveVisiblePanels` still caps a force-show for an inapplicable panel. */
-  togglePanel(id: PanelId): void;
+  /** Flip a panel against what the user currently sees — the command palette's
+   * "Toggle <panel>" and the terminal shortcut. The caller passes the RESOLVED
+   * visibility (reveal rule + preset + override), so the first toggle of a
+   * hidden panel shows it. Framework affinity in `resolveVisiblePanels` still
+   * caps a force-show for an inapplicable panel. */
+  togglePanel(id: PanelId, currentlyVisible: boolean): void;
   /** Drop a single override, returning the panel to its reveal rule. */
   clearPanelOverride(id: PanelId): void;
   /** Drop every override ("Reset layout"). */
@@ -44,18 +48,16 @@ interface LayoutStoreState {
 export const useLayoutStore = create<LayoutStoreState>((set) => ({
   preset: 'clean',
   histogramChipDismissed: false,
+  histogramExpanded: false,
   overrides: {},
   setPreset: (preset) => set({ preset }),
   dismissHistogramChip: () => set({ histogramChipDismissed: true }),
+  setHistogramExpanded: (histogramExpanded) => set({ histogramExpanded }),
   resetRunArtifacts: () => set({ histogramChipDismissed: false }),
   setPanelOverride: (id, visible) =>
     set((state) => ({ overrides: { ...state.overrides, [id]: visible } })),
-  togglePanel: (id) =>
-    set((state) => {
-      const current = state.overrides[id];
-      const next = current === undefined ? false : !current;
-      return { overrides: { ...state.overrides, [id]: next } };
-    }),
+  togglePanel: (id, currentlyVisible) =>
+    set((state) => ({ overrides: { ...state.overrides, [id]: !currentlyVisible } })),
   clearPanelOverride: (id) =>
     set((state) => {
       if (!(id in state.overrides)) return state;

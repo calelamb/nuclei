@@ -17,6 +17,20 @@ qc.measure([0, 1], [0, 1])
 
 export type KernelStatus = 'idle' | 'connecting' | 'ready' | 'failed';
 
+/** Where a kernel boot is, in human terms (web: Python stages; desktop: connect attempts). */
+export interface KernelProgress {
+  step: number;
+  total: number;
+  label: string;
+  /**
+   * 'stages' are real boot phases (web); 'attempts' are desktop connect retries,
+   * which are not user-meaningful stages and must not read as "n of m".
+   */
+  kind?: 'stages' | 'attempts';
+  /** 0..1 overall completion. */
+  fraction: number;
+}
+
 interface EditorState {
   code: string;
   framework: Framework;
@@ -32,9 +46,15 @@ interface EditorState {
   kernelReady: boolean;
   kernelStatus: KernelStatus;
   kernelError: string | null;
-  /** Bumped by the Retry button; useKernel restarts the kernel when it changes. */
-  kernelRetryNonce: number;
+  kernelProgress: KernelProgress | null;
+  /** The package a lazy install (web Cirq) is fetching right now, or null. */
+  kernelInstalling: string | null;
+  /** How long the last run waited behind a lazy install; the kernel's own timing excludes it. */
+  lastInstallMs: number | null;
   errors: EditorError[];
+  /** Bumped by requestEditorFocus; the editor focuses itself when it changes. */
+  focusRequest: number;
+  requestEditorFocus: () => void;
   setCode: (code: string) => void;
   setFramework: (framework: Framework) => void;
   setFilePath: (path: string | null) => void;
@@ -42,7 +62,9 @@ interface EditorState {
   setKernelConnected: (connected: boolean) => void;
   setKernelReady: (ready: boolean) => void;
   setKernelStatus: (status: KernelStatus, error?: string | null) => void;
-  requestKernelRetry: () => void;
+  setKernelProgress: (progress: KernelProgress | null) => void;
+  setKernelInstalling: (pkg: string | null) => void;
+  setLastInstallMs: (ms: number | null) => void;
   setErrors: (errors: EditorError[]) => void;
   clearErrors: () => void;
 }
@@ -57,8 +79,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   kernelReady: false,
   kernelStatus: 'idle',
   kernelError: null,
-  kernelRetryNonce: 0,
+  kernelProgress: null,
+  kernelInstalling: null,
+  lastInstallMs: null,
   errors: [],
+  focusRequest: 0,
   setCode: (code) => {
     // Don't re-mark as dirty if the user hasn't actually changed anything
     // (e.g. restoring the same default text).
@@ -70,7 +95,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
   setFramework: (framework) =>
     set(
-      framework === 'qsharp'
+      framework === 'qsharp' || framework === 'stim'
         ? { framework }
         : { framework, lastPythonFramework: framework },
     ),
@@ -78,8 +103,17 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setIsDirty: (isDirty) => set({ isDirty }),
   setKernelConnected: (kernelConnected) => set({ kernelConnected }),
   setKernelReady: (kernelReady) => set({ kernelReady }),
-  setKernelStatus: (kernelStatus, kernelError = null) => set({ kernelStatus, kernelError }),
-  requestKernelRetry: () => set((state) => ({ kernelRetryNonce: state.kernelRetryNonce + 1 })),
+  // Progress only means something while connecting; any other status ends it.
+  setKernelStatus: (kernelStatus, kernelError = null) =>
+    set((s) => ({
+      kernelStatus,
+      kernelError,
+      kernelProgress: kernelStatus === 'connecting' ? s.kernelProgress : null,
+    })),
+  setKernelProgress: (kernelProgress) => set({ kernelProgress }),
+  setKernelInstalling: (kernelInstalling) => set({ kernelInstalling }),
+  setLastInstallMs: (lastInstallMs) => set({ lastInstallMs }),
   setErrors: (errors) => set({ errors }),
   clearErrors: () => set({ errors: [] }),
+  requestEditorFocus: () => set((s) => ({ focusRequest: s.focusRequest + 1 })),
 }));

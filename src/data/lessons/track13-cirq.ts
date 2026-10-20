@@ -158,7 +158,7 @@ Both frameworks can express any quantum circuit. The difference is in defaults a
 # print(result.histogram(key='ghz'))
 `,
         framework: 'cirq',
-        expectedMeasurements: { '0': 512, '7': 512 },
+        expectedMeasurements: { '000': 512, '111': 512 },
         tolerancePercent: 15,
         hints: [
           'Use cirq.LineQubit.range(3) to create q0, q1, q2.',
@@ -533,7 +533,7 @@ q0, q1 = cirq.LineQubit.range(2)
 # print(result.histogram(key='bell'))
 `,
         framework: 'cirq',
-        expectedMeasurements: { '0': 900, '3': 900 },
+        expectedMeasurements: { '00': 900, '11': 900 },
         tolerancePercent: 25,
         hints: [
           'Use cirq.depolarize(0.03).on(q0) after the H gate.',

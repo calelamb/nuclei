@@ -20,10 +20,21 @@ qc.measure([0, 1], [0, 1])
 
 // The kernel requires a per-launch token: $NUCLEI_KERNEL_TOKEN, or the
 // user-only runtime file the kernel writes at startup.
-function loadToken(): string {
+// With several kernels running, kernel-<port>.json holds the token for that
+// port; kernel.json only points at the newest kernel.
+function loadToken(kernelUrl: string): string {
   if (process.env.NUCLEI_KERNEL_TOKEN) return process.env.NUCLEI_KERNEL_TOKEN;
   const dir = process.env.NUCLEI_RUNTIME_DIR ?? join(homedir(), '.nuclei', 'runtime');
-  return JSON.parse(readFileSync(join(dir, 'kernel.json'), 'utf8')).token as string;
+  const port = Number(new URL(kernelUrl).port);
+  for (const name of [`kernel-${port}.json`, 'kernel.json']) {
+    try {
+      const info = JSON.parse(readFileSync(join(dir, name), 'utf8')) as { token: string; port: number };
+      if (info.port === port) return info.token;
+    } catch {
+      // Missing or unreadable: try the next candidate.
+    }
+  }
+  throw new Error(`no token for port ${port}: set NUCLEI_KERNEL_TOKEN or start a kernel`);
 }
 
 const url = process.argv[2] ?? 'ws://localhost:9742';
@@ -56,7 +67,7 @@ async function drainUntil(terminalType: string): Promise<KernelMessage> {
 ws.on('open', async () => {
   // Send a random nonce and verify the kernel's proof, HMAC-SHA256(token, nonce)
   // in hex, so a program squatting the port cannot pass as the kernel.
-  const token = loadToken();
+  const token = loadToken(url);
   const nonce = randomBytes(32).toString('hex');
   ws.send(JSON.stringify({ type: 'authenticate', token, nonce }));
   const ack = await drainUntil('authenticated');

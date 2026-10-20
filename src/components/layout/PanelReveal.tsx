@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from 'react';
 
 export type RevealFrom = 'right' | 'left' | 'bottom' | 'top';
 
@@ -6,6 +6,8 @@ interface PanelRevealProps {
   when: boolean;
   from?: RevealFrom;
   children: ReactNode;
+  /** Style for the reveal wrapper, e.g. so a panel can fill the column (flex: 1). */
+  style?: CSSProperties;
 }
 
 /**
@@ -17,7 +19,7 @@ interface PanelRevealProps {
  * `data-reveal-*` attributes so tests can verify structure without
  * depending on computed animation values.
  */
-export function PanelReveal({ when, from = 'right', children }: PanelRevealProps) {
+export function PanelReveal({ when, from = 'right', children, style }: PanelRevealProps) {
   const [mounted, setMounted] = useState(when);
   const [entered, setEntered] = useState(false);
   const exitTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -56,6 +58,7 @@ export function PanelReveal({ when, from = 'right', children }: PanelRevealProps
       data-reveal-root=""
       data-reveal-from={from}
       data-reveal-entered={entered ? '' : undefined}
+      style={style}
     >
       {children}
     </div>

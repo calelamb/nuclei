@@ -1,41 +1,29 @@
 /* Nuclei — Global Styles */
-/* Fonts: Geist Sans (UI) + JetBrains Mono (code) */
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
-
-/* Geist Sans font-face (from npm package) */
+/*
+ * Fonts: Geist Sans (UI) + Geist Mono (code). Both are bundled variable fonts
+ * (SIL OFL, from the `geist` package) so the desktop app works offline and
+ * under the strict Tauri CSP (font-src 'self' data:). Never @import from a CDN.
+ */
 @font-face {
   font-family: 'Geist Sans';
-  src: url('/node_modules/geist/dist/fonts/geist-sans/Geist-Regular.woff2') format('woff2');
-  font-weight: 400; font-style: normal; font-display: swap;
-}
-@font-face {
-  font-family: 'Geist Sans';
-  src: url('/node_modules/geist/dist/fonts/geist-sans/Geist-Medium.woff2') format('woff2');
-  font-weight: 500; font-style: normal; font-display: swap;
-}
-@font-face {
-  font-family: 'Geist Sans';
-  src: url('/node_modules/geist/dist/fonts/geist-sans/Geist-SemiBold.woff2') format('woff2');
-  font-weight: 600; font-style: normal; font-display: swap;
-}
-@font-face {
-  font-family: 'Geist Sans';
-  src: url('/node_modules/geist/dist/fonts/geist-sans/Geist-Bold.woff2') format('woff2');
-  font-weight: 700; font-style: normal; font-display: swap;
+  src: url('./assets/fonts/Geist-Variable.woff2') format('woff2');
+  font-weight: 100 900; font-style: normal; font-display: swap;
 }
 @font-face {
   font-family: 'Geist Mono';
-  src: url('/node_modules/geist/dist/fonts/geist-mono/GeistMono-Regular.woff2') format('woff2');
-  font-weight: 400; font-style: normal; font-display: swap;
+  src: url('./assets/fonts/GeistMono-Variable.woff2') format('woff2');
+  font-weight: 100 900; font-style: normal; font-display: swap;
 }
 
+/* Resets live in the lowest layer (declared in tokens.css) so any primitive or component rule beats them. */
+@layer reset {
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-body {
+html, body {
   overflow: hidden;
   background: var(--color-surface-base);
   color: var(--color-text-primary);
@@ -47,23 +35,43 @@ body {
   height: 100vh;
 }
 
-/* ── Accessibility: visible focus indicators ── */
+/* Form controls do not inherit typography by default (UA monospace textareas, Arial buttons). */
+button, input, select, textarea {
+  font: inherit;
+  color: inherit;
+}
+
+/* ── Icons: one stroke weight everywhere. CSS beats lucide's strokeWidth attribute, so per-icon props
+   cannot drift; intentional exceptions opt in with .nuclei-icon--thin / .nuclei-icon--bold (check and cross marks) (mirrors ICON_STROKE in tokens.ts). ── */
+.lucide { stroke-width: 1.75; }
+.lucide.nuclei-icon--thin { stroke-width: 1.25; }
+.lucide.nuclei-icon--bold { stroke-width: 2.5; }
+
+/* ── Accessibility: one focus ring for the whole app (see --focus-ring in tokens.css) ── */
 :focus-visible {
-  outline: 2px solid var(--color-accent-quantum);
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
 }
 
 button:focus:not(:focus-visible) {
   outline: none;
 }
+}
 
-/* ── Reduced motion: disable all animations ── */
+/* ── Reduced motion: disable all animations (OS preference or Settings › Animations off) ── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+:root[data-reduced-motion='true'] *,
+:root[data-reduced-motion='true'] *::before,
+:root[data-reduced-motion='true'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
 }
 
 /* ── Keyframes ── */
@@ -117,41 +125,20 @@ button:focus:not(:focus-visible) {
   }
 }
 
-/* ── Dirac markdown styling ── */
-.dirac-markdown p { margin: 0 0 8px 0; }
-.dirac-markdown p:last-child { margin-bottom: 0; }
-.dirac-markdown code {
-  background: var(--color-surface-overlay);
-  padding: 2px 6px;
-  border-radius: var(--radius-soft);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-code);
-  color: var(--color-accent-quantum);
+/* ── Interactive element defaults ── */
+@layer reset {
+button, [role="button"] {
+  transition: background-color var(--duration-fast) var(--ease-standard),
+              color var(--duration-fast) var(--ease-standard),
+              border-color var(--duration-fast) var(--ease-standard),
+              box-shadow var(--duration-fast) var(--ease-standard),
+              opacity var(--duration-fast) var(--ease-standard);
 }
-.dirac-markdown pre {
-  background: var(--color-surface-base);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-round);
-  padding: 10px;
-  margin: 8px 0;
-  overflow-x: auto;
-  position: relative;
-}
-.dirac-markdown pre code {
-  background: none;
-  padding: 0;
-  color: var(--color-text-primary);
-}
-.dirac-markdown ul, .dirac-markdown ol { padding-left: 20px; margin: 6px 0; }
-.dirac-markdown strong { color: var(--color-accent-quantum-soft); }
-.dirac-markdown h1, .dirac-markdown h2, .dirac-markdown h3 {
-  color: var(--color-accent-quantum);
-  margin: 8px 0 4px 0;
 }
 
-/* ── Interactive element defaults ── */
-button, [role="button"] {
-  transition: all var(--duration-fast) var(--ease-standard);
+/* Ket/bra labels: JetBrains-style ligatures turn "|-⟩" into a turnstile. Keep glyphs literal. */
+code, pre, kbd, samp, .nuclei-code, .nuclei-ket {
+  font-variant-ligatures: none;
 }
 
 /* ── Circuit gate hover ── */
@@ -159,10 +146,9 @@ button, [role="button"] {
   transition: filter var(--duration-fast) var(--ease-standard),
               transform var(--duration-fast) var(--ease-standard);
 }
+.nuclei-gate { transform-box: fill-box; transform-origin: center; }
 .nuclei-gate:hover {
-  filter: drop-shadow(0 0 8px rgba(0, 180, 216, 0.4));
-  transform: scale(1.05);
-  transform-origin: center;
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--color-accent-quantum) 45%, transparent));
 }
 
 /* ── Circuit dot grid background ── */
@@ -189,3 +175,13 @@ button, [role="button"] {
 .nuclei-secondary { font-size: var(--font-size-code); font-family: var(--font-sans); line-height: 1.5; }
 .nuclei-caption { font-size: var(--font-size-caption); font-family: var(--font-sans); line-height: 1.4; }
 .nuclei-code { font-size: var(--font-size-code); font-family: var(--font-mono); line-height: 1.5; }
+
+/* Click-to-source highlight (Circuit Explain → editor). */
+.nuclei-reveal-line {
+  background: rgba(245, 158, 11, 0.22);
+}
+.monaco-editor .margin .nuclei-reveal-line {
+  background: rgba(245, 158, 11, 0.85);
+  width: 3px !important;
+  margin-left: 3px;
+}

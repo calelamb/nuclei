@@ -14,8 +14,12 @@ import type {
 import { validateTestCase, validateValueTestCase } from './challengeValidation';
 import { createKernelSession, type KernelSession, type PlatformKind } from './kernelSession';
 import type { KernelTokenProvider } from './kernelSocket';
+import { errorLineFromTraceback, shiftLineMentions } from '../lib/errorLine';
+import { describeKernelFailure } from '../lib/kernelErrors';
 
 const TEST_TIMEOUT_MS = 35_000;
+// The browser build simulates Qiskit through a pure-Python subset, and Cirq natively.
+const WEB_CIRCUIT_FRAMEWORKS: ReadonlySet<Framework> = new Set<Framework>(['qiskit', 'cirq']);
 const VALUE_RESULT_MARKER = '__NUCLEI_CHALLENGE_VALUE__=';
 
 type FailureVerdict = Extract<
@@ -26,6 +30,10 @@ type FailureVerdict = Extract<
 interface ChallengeExecutionFailure {
   verdict: FailureVerdict;
   message: string;
+  /** Platform limit (e.g. outside the browser Qiskit subset), not a student error. */
+  unsupported?: boolean;
+  /** 1-based line in the student's own code, parsed from the traceback. */
+  line?: number | null;
 }
 
 interface ChallengeExecutionArtifact {
@@ -43,6 +51,7 @@ class ChallengeKernelError extends Error {
   code?: string;
   phase?: 'parse' | 'execute' | 'python';
   framework?: Framework;
+  traceback?: string;
 
   constructor(message: string, metadata: Partial<ChallengeKernelError> = {}) {
     super(message);
@@ -126,6 +135,9 @@ try:
 except Exception:
     __nuclei_fidelity = 0.0
 
+# Drop the reference circuit: the kernel simulates the LAST circuit in the namespace.
+__nuclei_ref_circuit = None
+
 record_metric("fidelity", __nuclei_fidelity)
 `;
 }
@@ -207,6 +219,9 @@ try:
     ))
 except Exception:
     __nuclei_fidelity = 0.0
+
+# Drop the reference circuit: the kernel simulates the LAST circuit in the namespace.
+__nuclei_ref_circuit = None
 
 record_metric("fidelity", __nuclei_fidelity)
 
@@ -293,6 +308,19 @@ function emitFailureResults(
   return results;
 }
 
+function emitUnavailableResults(
+  testCases: ReadonlyArray<TestCase>,
+  message: string,
+  onResult: (result: TestCaseResult, index: number) => void,
+): TestCaseResult[] {
+  const results = testCases.map((testCase) => ({
+    ...buildFailedResult(testCase, message),
+    engineUnavailable: true,
+  }));
+  results.forEach((result, index) => onResult(result, index));
+  return results;
+}
+
 function createExecutionDriver(session: KernelSession) {
   let pending:
     | {
@@ -367,6 +395,7 @@ function createExecutionDriver(session: KernelSession) {
         code: message.code,
         phase: message.phase,
         framework: message.framework,
+        traceback: message.traceback,
       });
 
       if (pending.kind === 'value') {
@@ -393,6 +422,7 @@ function createExecutionDriver(session: KernelSession) {
           { code: 'timeout', phase: 'execute' },
         ));
         pending = null;
+        session.abort?.();
       }, TEST_TIMEOUT_MS);
 
       pending = { kind: 'circuit', resolve, reject, timeoutId, snapshot: null, output: [] };
@@ -437,6 +467,7 @@ function createExecutionDriver(session: KernelSession) {
           { code: 'timeout', phase: 'python' },
         ));
         pending = null;
+        session.abort?.();
       }, TEST_TIMEOUT_MS);
 
       pending = { kind: 'value', resolve, reject, timeoutId, output: [], error: null };
@@ -472,25 +503,56 @@ function createExecutionDriver(session: KernelSession) {
     clearTimeout(pending.timeoutId);
     pending.reject(new ChallengeKernelError('Execution canceled'));
     pending = null;
+    session.abort?.();
   };
 
   return { handleMessage, execute, runPython, cancel };
 }
 
-function classifyExecutionFailure(error: unknown): ChallengeExecutionFailure {
+/**
+ * Where the student's code starts inside the wrapped program, so a traceback line can be
+ * reported in the student's own numbering. Null counts when the line falls in the harness.
+ */
+interface UserCodeSpan {
+  /** Harness lines placed before the student's first line. */
+  offset: number;
+  /** Lines the student wrote. */
+  lines: number;
+}
+
+export function locateUserCode(wrapped: string, userCode: string): UserCodeSpan {
+  const start = userCode.length > 0 ? wrapped.indexOf(userCode) : -1;
+  const offset = start <= 0 ? 0 : wrapped.slice(0, start).split('\n').length - 1;
+  return { offset, lines: userCode.split('\n').length };
+}
+
+function studentLine(error: unknown, span?: UserCodeSpan): number | null {
+  if (!(error instanceof ChallengeKernelError) || !span) return null;
+  const line = errorLineFromTraceback(error.traceback, span.offset);
+  return line !== null && line <= span.lines ? line : null;
+}
+
+function classifyExecutionFailure(error: unknown, span?: UserCodeSpan): ChallengeExecutionFailure {
   const message = error instanceof Error ? error.message : 'Unknown execution error';
 
   const code = error instanceof ChallengeKernelError ? error.code : undefined;
-  const normalizedMessage = message.trim();
+  const normalizedMessage = shiftLineMentions(message.trim(), span?.offset ?? 0);
+  const line = studentLine(error, span);
 
+  if (code === 'unsupported_framework') {
+    return {
+      verdict: 'runtime_error',
+      message: `Not supported in the browser: ${normalizedMessage}`,
+      unsupported: true,
+    };
+  }
+
+  // The verdict label ("Compile error", "Runtime error") already names the kind: the message is just the reason.
   if (
     code === 'timeout'
     || /timed out/i.test(normalizedMessage)
   ) {
-    return {
-      verdict: 'time_limit_exceeded',
-      message: `Time Limit Exceeded: ${normalizedMessage}`,
-    };
+    return { verdict: 'time_limit_exceeded', message: normalizedMessage };
   }
 
   if (
@@ -498,16 +560,10 @@ function classifyExecutionFailure(error: unknown): ChallengeExecutionFailure {
     || /SyntaxError|IndentationError/i.test(normalizedMessage)
     || /name 'solve' is not defined/i.test(normalizedMessage)
   ) {
-    return {
-      verdict: 'compile_error',
-      message: `Compile Error: ${normalizedMessage}`,
-    };
+    return { verdict: 'compile_error', message: normalizedMessage, line };
   }
 
-  return {
-    verdict: 'runtime_error',
-    message: `Runtime Error: ${normalizedMessage}`,
-  };
+  return { verdict: 'runtime_error', message: normalizedMessage, line };
 }
 
 export async function runTestCases(
@@ -525,8 +581,8 @@ export async function runTestCases(
 ): Promise<TestCaseResult[]> {
   const isValueContract = challenge.contract_kind === 'returns_value';
 
-  if (!isValueContract && platform === 'web' && framework !== 'cirq') {
-    const message = `This circuit challenge requires the desktop Qiskit kernel. QKD protocol challenges work in browser.`;
+  if (!isValueContract && platform === 'web' && !WEB_CIRCUIT_FRAMEWORKS.has(framework)) {
+    const message = `This circuit challenge requires the desktop app (the browser runs Qiskit and Cirq only). QKD protocol challenges work in browser.`;
     onError(message);
     return emitFailureResults(testCases, message, onResult);
   }
@@ -544,10 +600,13 @@ export async function runTestCases(
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Kernel connection failed';
     onError(message);
-    return emitFailureResults(testCases, `Connection error: ${message}`, onResult);
+    // Python never started: the program never ran, so these are not results at all.
+    const detail = describeKernelFailure(err, { isWeb: platform === 'web' });
+    return emitUnavailableResults(testCases, `${detail.title}. ${detail.detail}`, onResult);
   }
 
   const results: TestCaseResult[] = [];
+  let reportedUnsupported = false;
 
   try {
     for (let index = 0; index < testCases.length; index++) {
@@ -574,7 +633,11 @@ export async function runTestCases(
         }
       } catch (err: unknown) {
         const elapsed = performance.now() - startTime;
-        const failure = classifyExecutionFailure(err);
+        const failure = classifyExecutionFailure(err, locateUserCode(wrappedCode, userCode));
+        if (failure.unsupported && !reportedUnsupported) {
+          reportedUnsupported = true;
+          onError(failure.message);
+        }
         const failedResult: TestCaseResult = {
           testCaseId: testCase.id,
           passed: false,
@@ -582,6 +645,8 @@ export async function runTestCases(
           verdict: failure.verdict,
           message: failure.message,
           executionTimeMs: elapsed,
+          ...(failure.unsupported ? { unsupported: true } : {}),
+          ...(failure.line ? { errorLine: failure.line } : {}),
         };
         results.push(failedResult);
         onResult(failedResult, index);
@@ -611,14 +676,14 @@ export async function inspectChallengeCase(
 }> {
   const isValueContract = challenge.contract_kind === 'returns_value';
 
-  if (!isValueContract && platform === 'web' && framework !== 'cirq') {
+  if (!isValueContract && platform === 'web' && !WEB_CIRCUIT_FRAMEWORKS.has(framework)) {
     return {
       snapshot: null,
       result: null,
       stdout: '',
       failure: {
         verdict: 'runtime_error',
-        message: `Runtime Error: This circuit challenge requires the desktop Qiskit kernel. QKD protocol challenges work in browser.`,
+        message: `This circuit challenge requires the desktop app (the browser runs Qiskit and Cirq only). QKD protocol challenges work in browser.`,
       },
     };
   }
@@ -656,7 +721,7 @@ export async function inspectChallengeCase(
       snapshot: null,
       result: null,
       stdout: '',
-      failure: classifyExecutionFailure(error),
+      failure: classifyExecutionFailure(error, locateUserCode(buildTestCode(userCode, challenge, testCase.params, framework), userCode)),
     };
   } finally {
     driver?.cancel();

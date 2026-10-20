@@ -1,0 +1,145 @@
+---
+title: "Plot a sinter CSV"
+description: "Drop a sinter stats CSV onto the QEC Workbench to get logical error rate vs physical error, a Λ estimate with an interval and warnings, and exports that carry their own provenance. Read locally; nothing is uploaded."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Drop the CSV that `sinter collect --save_resume_filepath` (or `sinter.collect`
+called with `save_resume_filepath=`) wrote onto the plot in the **QEC Workbench**.
+Nuclei plots logical error rate against physical error rate for each code
+distance, estimates the error-suppression factor Λ, and lets you export the
+figure and the numbers behind it. It works in the desktop app and in the
+browser build at [getnuclei.dev/try](https://getnuclei.dev/try/).
+
+<Aside type="note" title="Privacy">
+The file is read and parsed on your machine, in the app or in your browser tab.
+Nothing is uploaded, and the web build makes no network request when you load a
+CSV.
+</Aside>
+
+## Which files work
+
+Any CSV in sinter's stats format. The header must contain these columns (extra
+columns are ignored):
+
+| Column | Meaning |
+| --- | --- |
+| `shots` | Shots sampled for the task. |
+| `errors` | Shots with a logical error. |
+| `discards` | Shots discarded by post-selection (may be 0). |
+| `seconds` | CPU core time sinter spent sampling and decoding the task, summed across workers (not wall-clock). Compare it between runs only on the same hardware and worker count. |
+| `decoder` | Decoder name. |
+| `strong_id` | Hash that identifies the task. |
+| `json_metadata` | JSON object describing the task (`d`, `p`, `r`, basis, noise model, ...). |
+| `custom_counts` | Optional extra counts; kept for export, not plotted. |
+
+Rows that share a `strong_id` are summed, exactly as sinter's own
+`--save_resume_filepath` merge does. The loader reports malformed rows by line
+number and plots the rest; a file with no usable header is rejected and your
+current data is left alone.
+
+## Check the column mapping
+
+Sinter does not define what keys live inside `json_metadata`, so Nuclei does not
+assume. After loading, the **CSV column mapping** strip shows what it will plot:
+
+- **p**: the numeric metadata key for the x-axis (noise strength).
+- **d**: the code distance.
+- **rounds**: the number of syndrome rounds, used for per-round rates.
+- **decoder**: the `decoder` column, or a metadata key.
+- **Series split by**: extra metadata keys (for example basis or noise model)
+  that separate tasks into their own series and their own Λ fits. Only keys
+  with at least two values are offered; keys that are the same in every row are
+  shown as read-only chips.
+- **Replicates**: seed-like keys (`s`, `seed`, `shard`, …) that pile several
+  tasks onto one point are summed into one task, as sinter pools replicates.
+  When tasks collide for another reason, the warning offers **Merge as
+  replicates** or **Split by** that key.
+
+After a file loads, the mapping collapses to one line (file, counts, what is
+mapped); **Edit mapping** opens the controls and the preview.
+
+Conventional key names (`p`, `d`, `r`/`rounds`, and so on) are pre-selected, but
+the selection is always shown and editable. If the choice for `p` is not a
+conventional name, the strip says it was guessed and asks you to confirm.
+Nothing is guessed silently: if two tasks land on the same plotted point, or a
+metadata key splits the tasks into blocks that are not used to separate series,
+the strip warns you instead of quietly pooling them. A preview table shows the
+first rows as they will be plotted.
+
+The current mapping is also shown in the sidebar next to the file name and row
+count.
+
+## Per shot or per round
+
+The toggle above the plot switches the y-axis units, and the Decoder Workbench table follows it. Your choice is kept while you move between views. Per round is the default whenever rounds are known; otherwise the plot falls back to per shot.
+
+- **Per shot** is the raw rate: `errors / (shots - discards)`.
+- **Per round** converts each point with the equivalent of
+  `sinter.shot_error_rate_to_piece_error_rate(rate, pieces=rounds)`, applied to
+  the best estimate and to both interval ends. It needs known `rounds`; rows
+  without rounds are hidden in per-round mode rather than mixed in at per-shot
+  units, and the plot says how many were hidden.
+
+Per-round rates are what you want when comparing runs with different numbers of
+rounds (for example `r = d` against `r = 3d`). A per-shot Λ is confounded when
+rounds change with distance, and the Λ readout says so.
+
+## Intervals
+
+Every point's whiskers are sinter's likelihood-ratio interval, the one
+`sinter.fit_binomial` produces, with `max_likelihood_factor = 1000` (about
+3.7σ). It is computed on the kept shots, `shots - discards`. This is a
+likelihood interval, not a normal approximation, so it stays sensible at zero
+or few errors. The factor appears in the plot footer and in every export.
+
+## Λ and its warnings
+
+Λ is the factor by which the logical error rate drops when the distance goes up
+by 2. For each series at a fixed `p`, Nuclei fits an ordinary least-squares line
+to `ln(rate)` against distance and reports `Λ = exp(-2 · slope)`. It needs at
+least three distinct distances with at least one logical error each; points with
+zero errors have no logarithm and are left out (and listed). The interval shown
+is a 95% Student-t interval on the slope with n−2 degrees of freedom, which is
+the same convention the [MCP `fit` tool](/docs/developer-tools/mcp-agent/)
+uses. The fit is unweighted, so it ignores how many errors each point has.
+
+Series and experiments are never pooled: rows with different decoders, metadata
+or rounds schemes get separate fits.
+
+Λ is shown as a table per decoder: `p`, Λ, 95% interval and r². A warning triangle on a row lists its caveats on hover. Rows whose interval is not meaningful (saturated or above threshold) fold into one line under the table. The warnings are also written into the SVG metadata, and the SVG `<desc>` carries one line per Λ; the CSV export does not carry Λ:
+
+| Warning | What it means |
+| --- | --- |
+| `saturated` | Some rates are near 0.5, which is pure noise. Λ and its interval carry no information; the interval is not printed. |
+| `Λ ≤ 1` | Logical errors do not fall with distance. You are above threshold at this `p`. |
+| `95% interval includes 1` | Suppression with distance is not established at this confidence. |
+| `r² < 0.5` | `ln(rate)` is poorly described by a line in distance; the Λ number is not a good summary. |
+| tasks collide / rounds vary | Several tasks share one plotted point and were fitted as replicates, or rounds change with distance, which confounds a per-shot Λ. |
+
+Nuclei does not estimate or claim a threshold `p_th`.
+
+## Exports
+
+- **SVG** is print-ready: a white page with dark text and the light-theme palette, whatever theme the app is in, and one short caption line (whisker convention and the Λ method). It carries its own data (colors are inlined; fonts are referenced by name, so a machine without
+  Fira Code and Geist Sans falls back to its defaults) and embeds a `<metadata>` block with the units, rate estimator,
+  interval method and factor, the Λ estimates with their warnings, and the source:
+  file name, task count and a digest of the sorted `strong_id`s.
+- **CSV** (the plot's export) has one row per task with the rate, interval ends,
+  units, `ci_method`, `max_likelihood_factor`, and the original `strong_id`,
+  `json_metadata` and `custom_counts` as they were in your file (not the
+  re-mapped copies). It has no `seconds` column; opening it again in Nuclei
+  re-imports it with `seconds` set to 0.
+- **Export stats.csv** writes the sinter-format file (`shots`, `errors`,
+  `discards`, `seconds`, `decoder`, `strong_id`, `json_metadata`,
+  `custom_counts`). That file can be dropped back onto the plot or fed to
+  `sinter plot`.
+- The **Decoder Workbench** table exports its own CSV with the discard-aware rate,
+  interval and time per shot for each decoder at each (d, p).
+
+## Use it from your own agent
+
+To run the same statistics from Claude Code, Cursor or another MCP client, with
+every number tied to a run ID and manifest, see
+[Use Nuclei from your AI agent (MCP)](/docs/developer-tools/mcp-agent/).

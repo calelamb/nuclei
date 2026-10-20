@@ -1,12 +1,23 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, cleanup, fireEvent } from '@testing-library/react';
+import { render, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { ExperimentsPanel } from './ExperimentsPanel';
 import { useExperimentStore } from '../../services/experimentStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useExperimentUiStore } from '../../stores/experimentUiStore';
 import { useExperimentRunStore } from '../../stores/experimentRunStore';
 import type { ExperimentSpec } from '../../types/experiment';
+
+const SECOND_SPEC: ExperimentSpec = {
+  schema: 1,
+  name: 'depth-grid',
+  entry: 'bell.py',
+  language: 'python',
+  backend: { provider: 'simulator', target: 'statevector' },
+  shots: 2048,
+  seed: 7,
+  sweep: { depth: { values: [1, 2] } },
+};
 
 const FIXTURE_SPEC: ExperimentSpec = {
   schema: 1,
@@ -28,6 +39,7 @@ function installFixtureStore() {
     loading: false,
     experiments: [
       { fileName: 'theta-sweep.experiment.yaml', path: '/proj/experiments/theta-sweep.experiment.yaml', spec: FIXTURE_SPEC },
+      { fileName: 'depth-grid.experiment.yaml', path: '/proj/experiments/depth-grid.experiment.yaml', spec: SECOND_SPEC },
     ],
     validationErrors: [
       { fileName: 'broken.experiment.yaml', path: '/proj/experiments/broken.experiment.yaml', errors: ['shots: Invalid input: expected number, received string'] },
@@ -60,19 +72,21 @@ describe('ExperimentsPanel', () => {
   });
 
   it('renders discovered experiments with name, entry, backend, and grid size', () => {
-    const { getByText } = render(<ExperimentsPanel />);
+    const { getByText, getAllByText } = render(<ExperimentsPanel />);
     expect(getByText('theta-sweep')).toBeTruthy();
     expect(getByText(/run\.py/)).toBeTruthy();
-    expect(getByText(/simulator\/statevector/)).toBeTruthy();
+    expect(getAllByText(/simulator\/statevector/).length).toBeGreaterThan(0);
     expect(getByText(/3 points/)).toBeTruthy();
   });
 
   it('renders malformed experiments as a validation-error card, not a crash', () => {
-    const { getByText, getAllByRole } = render(<ExperimentsPanel />);
+    const { getByRole, getAllByRole, queryByText } = render(<ExperimentsPanel />);
     const alerts = getAllByRole('alert');
     expect(alerts).toHaveLength(1);
-    expect(alerts[0].textContent).toContain('broken.experiment.yaml');
-    expect(getByText(/shots: Invalid input/)).toBeTruthy();
+    expect(alerts[0].textContent).toContain('broken');
+    expect(alerts[0].textContent).toMatch(/\d+ problems?/);
+    fireEvent.click(getByRole('button', { name: /broken.experiment.yaml/ }));
+    expect(queryByText(/Invalid input/)).toBeNull();
   });
 
   it('clicking an experiment row selects it in the UI store', () => {
@@ -86,5 +100,73 @@ describe('ExperimentsPanel', () => {
     const state = useExperimentStore.getState();
     expect(state.reload).toHaveBeenCalledWith('/proj', expect.anything());
     expect(state.startWatching).toHaveBeenCalledWith('/proj', expect.anything());
+  });
+
+  it('editing experiment B after A loads B into the form (research-01)', () => {
+    const { getByLabelText, container } = render(<ExperimentsPanel />);
+    fireEvent.click(getByLabelText('Edit theta-sweep'));
+    expect((container.querySelector('#exp-name') as HTMLInputElement).value).toBe('theta-sweep');
+    fireEvent.click(getByLabelText('Edit depth-grid'));
+    expect((container.querySelector('#exp-name') as HTMLInputElement).value).toBe('depth-grid');
+    expect((container.querySelector('#exp-entry') as HTMLInputElement).value).toBe('bell.py');
+    expect((container.querySelector('#exp-shots') as HTMLInputElement).value).toBe('2048');
+  });
+
+  it('asks before discarding dirty edits when switching to another experiment (research-01, research-r-07)', async () => {
+    const nativeConfirm = vi.spyOn(window, 'confirm');
+    const { getByLabelText, container } = render(<ExperimentsPanel />);
+    fireEvent.click(getByLabelText('Edit theta-sweep'));
+    fireEvent.change(container.querySelector('#exp-shots') as HTMLInputElement, { target: { value: '555' } });
+    fireEvent.click(getByLabelText('Edit depth-grid'));
+    expect(await screen.findByRole('alertdialog', { name: 'Discard your unsaved changes?' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect((container.querySelector('#exp-name') as HTMLInputElement).value).toBe('theta-sweep');
+    fireEvent.click(getByLabelText('Edit depth-grid'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Discard' }));
+    await waitFor(() => expect((container.querySelector('#exp-name') as HTMLInputElement).value).toBe('depth-grid'));
+    expect(nativeConfirm).not.toHaveBeenCalled();
+    nativeConfirm.mockRestore();
+  });
+
+  it('"New experiment" while editing switches to a blank form instead of closing (research-17)', () => {
+    const { getByLabelText, getByText, container } = render(<ExperimentsPanel />);
+    fireEvent.click(getByLabelText('Edit theta-sweep'));
+    fireEvent.click(getByText('New experiment', { selector: 'button' }));
+    const name = container.querySelector('#exp-name') as HTMLInputElement;
+    expect(name).toBeTruthy();
+    expect(name.value).toBe('');
+  });
+
+  it('offers exactly one New experiment action while the list is empty (rq-r3-13)', () => {
+    useExperimentStore.setState({ experiments: [], validationErrors: [] });
+    const { getAllByRole } = render(<ExperimentsPanel />);
+    expect(getAllByRole('button', { name: /New experiment/ })).toHaveLength(1);
+  });
+
+  it('shows the header New experiment as pressed while its blank form is open (rq-r3-13)', () => {
+    const { getByRole } = render(<ExperimentsPanel />);
+    const button = getByRole('button', { name: /New experiment/ });
+    expect(button.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(button);
+    expect(getByRole('button', { name: /New experiment/ }).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('marks the open experiment as selected (research-24)', () => {
+    useExperimentUiStore.setState({ selectedExperimentFileName: 'depth-grid.experiment.yaml' });
+    const { getByTestId } = render(<ExperimentsPanel />);
+    expect(getByTestId('experiment-row-depth-grid.experiment.yaml').getAttribute('aria-current')).toBe('true');
+    expect(getByTestId('experiment-row-theta-sweep.experiment.yaml').getAttribute('aria-current')).toBeNull();
+  });
+
+  it('keeps the noise-model entry reachable by accessible name (research-06)', () => {
+    const { getByLabelText } = render(<ExperimentsPanel />);
+    expect(getByLabelText('Noise models')).toBeTruthy();
+  });
+
+  it('surfaces a failed sweep start instead of staying silent (research-02)', () => {
+    useExperimentRunStore.setState({ active: null, lastSummary: null, lastError: 'Failed to connect to kernel' });
+    const { getByRole } = render(<ExperimentsPanel />);
+    expect(getByRole('status').textContent).toContain("The kernel isn't connected");
   });
 });

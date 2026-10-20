@@ -1,80 +1,43 @@
-import { useState, type CSSProperties, type ReactNode } from 'react';
-import { ChevronDown, ChevronRight, RotateCcw, Sun, Moon, Eye, EyeOff, ExternalLink } from 'lucide-react';
-import { useThemeStore } from '../../stores/themeStore';
+import { useContext, useEffect, useRef, useState } from 'react';
+import { RotateCcw, Sun, Moon, Monitor, ExternalLink } from 'lucide-react';
+import { useThemeStore, type ThemePreference } from '../../stores/themeStore';
+import { useNavigationStore } from '../../stores/navigationStore';
 import { useUIModeStore, type UIMode } from '../../stores/uiModeStore';
+import { useWorkspaceStore } from '../../stores/workspaceStore';
+import { useLearnGateStore } from '../../stores/learnGateStore';
+import { useModeSwitchStore } from '../../stores/modeSwitchStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useDiracStore } from '../../stores/diracStore';
 import { useFrameworksStore } from '../../stores/frameworksStore';
 import { EnvironmentPanel } from './EnvironmentPanel';
+import { Button, IconButton, SecretField, SegmentedControl, Select, Switch, TextInput, useConfirm } from '../ui';
+import { WorkspaceSection, HelpSection } from './SettingsWorkspaceHelp';
+import { Section, SettingRow, RowLabelContext } from './SettingsPrimitives';
+import { LANDING_ATTR } from '../../hooks/useLandingRef';
+import { onSettingsFocusRequest, takeSettingsFocusRequest } from './settingsFocus';
+import { featuresFor } from '../../layout/uiModeFeatures';
+import { isWebBuild } from '../../platform/buildTarget';
+import { kernelEngineName } from '../../lib/kernelErrors';
+import { validateApiKey } from '../../lib/apiKey';
+import { API_KEY_PRIVACY_NOTE } from '../../config/apiKeyCopy';
 
-/* ── Toggle Switch ──────────────────────────────────────── */
-
-function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
-  const colors = useThemeStore((s) => s.colors);
-  return (
-    <button
-      onClick={() => onChange(!value)}
-      style={{
-        width: 32, height: 18, borderRadius: 9, padding: 2,
-        border: 'none', cursor: 'pointer',
-        background: value ? colors.accent : colors.borderStrong,
-        display: 'flex', alignItems: 'center',
-        justifyContent: value ? 'flex-end' : 'flex-start',
-        transition: 'background 0.2s, justify-content 0.2s',
-        flexShrink: 0,
-      }}
-    >
-      <div style={{
-        width: 14, height: 14, borderRadius: '50%',
-        background: value ? '#fff' : colors.textDim,
-        transition: 'background 0.2s',
-      }} />
-    </button>
-  );
-}
-
+import { TYPOGRAPHY } from '../../styles/tokens';
 /* ── Shared Controls ────────────────────────────────────── */
 
-function SettingRow({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
-  const colors = useThemeStore((s) => s.colors);
-  return (
-    <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '6px 0', gap: 8,
-    }}>
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <span style={{ fontSize: 12, color: colors.textMuted, fontFamily: "'Geist Sans', sans-serif" }}>
-          {label}
-        </span>
-        {hint && (
-          <span style={{ fontSize: 10, color: colors.textDim, fontFamily: "'Geist Sans', sans-serif", lineHeight: 1.4 }}>
-            {hint}
-          </span>
-        )}
-      </div>
-      {children}
-    </div>
-  );
+function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+  const label = useContext(RowLabelContext);
+  return <Switch checked={value} onCheckedChange={onChange} aria-label={label} />;
 }
 
-function Select<T extends string>({ value, options, onChange }: {
+function SettingSelect<T extends string>({ value, options, onChange }: {
   value: T; options: { value: T; label: string }[]; onChange: (v: T) => void;
 }) {
-  const colors = useThemeStore((s) => s.colors);
+  const label = useContext(RowLabelContext);
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value as T)}
-      style={{
-        background: colors.bgElevated, color: colors.text,
-        border: `1px solid ${colors.border}`, borderRadius: 4,
-        padding: '3px 6px', fontSize: 11, cursor: 'pointer',
-        fontFamily: "'Geist Sans', sans-serif", outline: 'none',
-      }}
-    >
+    <Select size="sm" aria-label={label} value={value} onChange={(e) => onChange(e.target.value as T)}>
       {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-    </select>
+    </Select>
   );
 }
 
@@ -82,20 +45,15 @@ function NumberStepper({ value, min, max, step, onChange }: {
   value: number; min: number; max: number; step: number; onChange: (v: number) => void;
 }) {
   const colors = useThemeStore((s) => s.colors);
-  const btnStyle: CSSProperties = {
-    width: 20, height: 20, border: `1px solid ${colors.border}`,
-    background: colors.bgElevated, color: colors.textMuted,
-    borderRadius: 3, cursor: 'pointer', fontSize: 12,
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontFamily: "'Geist Sans', sans-serif", padding: 0,
-  };
+  // Name the steppers from their row ("Decrease font size"), not a bare "Decrease".
+  const subject = (useContext(RowLabelContext) ?? 'value').toLowerCase();
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-      <button style={btnStyle} onClick={() => onChange(Math.max(min, value - step))}>-</button>
-      <span style={{ fontSize: 11, color: colors.text, minWidth: 28, textAlign: 'center', fontFamily: "'Geist Sans', sans-serif" }}>
+      <IconButton size="sm" variant="secondary" aria-label={`Decrease ${subject}`} onClick={() => onChange(Math.max(min, value - step))}>{'\u2212'}</IconButton>
+      <span style={{ fontSize: 11, color: colors.text, minWidth: 28, textAlign: 'center', fontFamily: TYPOGRAPHY.fontSans }}>
         {value}
       </span>
-      <button style={btnStyle} onClick={() => onChange(Math.min(max, value + step))}>+</button>
+      <IconButton size="sm" variant="secondary" aria-label={`Increase ${subject}`} onClick={() => onChange(Math.min(max, value + step))}>+</IconButton>
     </div>
   );
 }
@@ -104,19 +62,16 @@ function CurrencyInput({ value, onChange }: { value: number; onChange: (v: numbe
   const colors = useThemeStore((s) => s.colors);
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-      <span style={{ fontSize: 11, color: colors.textDim, fontFamily: "'Geist Sans', sans-serif" }}>$</span>
-      <input
+      <span style={{ fontSize: 11, color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans }}>$</span>
+      <TextInput
         type="number"
+        size="sm"
         min={0}
         step={1}
         value={value}
+        aria-label="Maximum spend in dollars"
         onChange={(e) => onChange(Math.max(0, Number(e.target.value) || 0))}
-        style={{
-          width: 56, background: colors.bgElevated, color: colors.text,
-          border: `1px solid ${colors.border}`, borderRadius: 4,
-          padding: '3px 6px', fontSize: 11, fontFamily: "'Geist Sans', sans-serif",
-          outline: 'none',
-        }}
+        style={{ width: 64 }}
       />
     </div>
   );
@@ -127,56 +82,19 @@ function Slider({ value, min, max, step, onChange, displayValue }: {
   onChange: (v: number) => void; displayValue?: string;
 }) {
   const colors = useThemeStore((s) => s.colors);
+  const label = useContext(RowLabelContext);
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
       <input
         type="range" min={min} max={max} step={step} value={value}
+        aria-label={label}
+        aria-valuetext={displayValue}
         onChange={(e) => onChange(Number(e.target.value))}
         style={{ width: 80, accentColor: colors.accent, cursor: 'pointer' }}
       />
-      <span style={{ fontSize: 10, color: colors.textDim, minWidth: 32, textAlign: 'right', fontFamily: "'Geist Sans', sans-serif" }}>
+      <span style={{ fontSize: 11, color: colors.textDim, minWidth: 32, textAlign: 'right', fontFamily: TYPOGRAPHY.fontSans }}>
         {displayValue ?? value}
       </span>
-    </div>
-  );
-}
-
-/* ── Collapsible Section ────────────────────────────────── */
-
-function Section({ title, defaultOpen = false, children }: {
-  title: string; defaultOpen?: boolean; children: ReactNode;
-}) {
-  const [open, setOpen] = useState(defaultOpen);
-  const colors = useThemeStore((s) => s.colors);
-  const Icon = open ? ChevronDown : ChevronRight;
-
-  return (
-    <div style={{ borderBottom: `1px solid ${colors.border}` }}>
-      <button
-        onClick={() => setOpen(!open)}
-        style={{
-          width: '100%', display: 'flex', alignItems: 'center', gap: 6,
-          padding: '8px 12px', border: 'none', background: 'transparent',
-          cursor: 'pointer', color: colors.textMuted,
-        }}
-      >
-        <Icon size={12} />
-        <span style={{
-          fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
-          letterSpacing: 0.5, fontFamily: "'Geist Sans', sans-serif",
-        }}>
-          {title}
-        </span>
-      </button>
-      <div style={{
-        overflow: 'hidden',
-        maxHeight: open ? 600 : 0,
-        transition: 'max-height 0.25s ease',
-      }}>
-        <div style={{ padding: '0 12px 10px' }}>
-          {children}
-        </div>
-      </div>
     </div>
   );
 }
@@ -187,15 +105,10 @@ function ApiKeyInput() {
   const colors = useThemeStore((s) => s.colors);
   const currentKey = useDiracStore((s) => s.apiKey);
   const [keyValue, setKeyValue] = useState(currentKey ?? '');
-  const [visible, setVisible] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
 
-  const validate = (key: string): string => {
-    if (key.trim() === '') return '';
-    if (!key.startsWith('sk-ant-')) return 'Key should start with "sk-ant-"';
-    return '';
-  };
+  const validate = validateApiKey;
 
   const handleSave = () => {
     const trimmed = keyValue.trim();
@@ -219,52 +132,22 @@ function ApiKeyInput() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <div style={{
-          flex: 1, display: 'flex', alignItems: 'center',
-          background: colors.bgElevated,
-          border: `1px solid ${error ? colors.error : colors.border}`,
-          borderRadius: 4, overflow: 'hidden',
-        }}>
-          <input
-            type={visible ? 'text' : 'password'}
-            value={keyValue}
-            onChange={(e) => handleChange(e.target.value)}
-            placeholder="sk-ant-..."
-            style={{
-              flex: 1, padding: '5px 8px', fontSize: 11,
-              fontFamily: "'JetBrains Mono', monospace",
-              background: 'transparent', border: 'none', outline: 'none',
-              color: colors.text,
-            }}
-          />
-          <button
-            onClick={() => setVisible(!visible)}
-            style={{
-              background: 'transparent', border: 'none', cursor: 'pointer',
-              color: colors.textDim, padding: '2px 6px', display: 'flex',
-              alignItems: 'center', flexShrink: 0,
-            }}
-            aria-label={visible ? 'Hide API key' : 'Show API key'}
-          >
-            {visible ? <EyeOff size={12} /> : <Eye size={12} />}
-          </button>
-        </div>
-        <button
-          onClick={handleSave}
-          style={{
-            padding: '4px 10px', fontSize: 11, fontWeight: 500,
-            fontFamily: "'Geist Sans', sans-serif",
-            background: saved ? colors.success : colors.accent,
-            color: '#fff', border: 'none', borderRadius: 4,
-            cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap',
-            transition: 'background 150ms ease',
-          }}
-        >
+        <SecretField
+          size="lg"
+          noun="API key"
+          value={keyValue}
+          invalid={Boolean(error)}
+          onChange={(e) => handleChange(e.target.value)}
+          placeholder="sk-ant-..."
+          data-settings-autofocus=""
+          aria-label="Anthropic API key"
+        />
+        <Button size="lg" className="nuclei-btn--dirac" onClick={handleSave}>
           {saved ? 'Saved' : 'Save'}
-        </button>
+        </Button>
       </div>
       {error && (
-        <span style={{ fontSize: 10, color: colors.error, fontFamily: "'Geist Sans', sans-serif" }}>
+        <span style={{ fontSize: 11, color: colors.error, fontFamily: TYPOGRAPHY.fontSans }}>
           {error}
         </span>
       )}
@@ -274,17 +157,17 @@ function ApiKeyInput() {
         rel="noopener noreferrer"
         style={{
           display: 'inline-flex', alignItems: 'center', gap: 4,
-          fontSize: 10, color: colors.accent, textDecoration: 'none',
-          fontFamily: "'Geist Sans', sans-serif",
+          fontSize: 11, color: colors.accentText, textDecoration: 'none',
+          fontFamily: TYPOGRAPHY.fontSans,
         }}
       >
-        Get an API key <ExternalLink size={9} />
+        Get an API key <ExternalLink size={12} />
       </a>
       <span style={{
-        fontSize: 10, color: colors.textDim, lineHeight: 1.4,
-        fontFamily: "'Geist Sans', sans-serif",
+        fontSize: 11, color: colors.textDim, lineHeight: 1.4,
+        fontFamily: TYPOGRAPHY.fontSans,
       }}>
-        Your key is stored locally and never leaves your machine.
+        {API_KEY_PRIVACY_NOTE}
       </span>
     </div>
   );
@@ -292,11 +175,25 @@ function ApiKeyInput() {
 
 /* ── Main Panel ─────────────────────────────────────────── */
 
+const FOCUS_SETTLE_MS = 400;
+
+const KERNEL_FRAMEWORK_OPTIONS: ReadonlyArray<{ value: 'qiskit' | 'cirq' | 'cuda-q' | 'qsharp'; label: string; webSupported: boolean }> = [
+  { value: 'qiskit', label: 'Qiskit', webSupported: true },
+  { value: 'cirq', label: 'Cirq', webSupported: true },
+  { value: 'cuda-q', label: 'CUDA-Q', webSupported: false },
+  { value: 'qsharp', label: 'Q# (QDK)', webSupported: false },
+];
+
 export function SettingsPanel() {
+  const { confirm, confirmDialog } = useConfirm();
   const colors = useThemeStore((s) => s.colors);
-  const themeMode = useThemeStore((s) => s.mode);
-  const setThemeMode = useThemeStore((s) => s.setMode);
+  const themePreference = useThemeStore((s) => s.preference);
+  const setThemePreference = useThemeStore((s) => s.setPreference);
   const uiMode = useUIModeStore((s) => s.mode);
+  const workspaceMode = useWorkspaceStore((s) => s.mode);
+  const learnEnabled = useLearnGateStore((s) => s.learnEnabled);
+  // Through modeSwitchStore so turning it off from Learn lands in Research with focus kept.
+  const setLearnEnabled = useModeSwitchStore((s) => s.setLearnEnabled);
   const setUIMode = useUIModeStore((s) => s.setMode);
 
   const editor = useSettingsStore((s) => s.editor);
@@ -310,105 +207,160 @@ export function SettingsPanel() {
   const updateGeneral = useSettingsStore((s) => s.updateGeneral);
   const updateAgentHardware = useSettingsStore((s) => s.updateAgentHardware);
   const resetAll = useSettingsStore((s) => s.resetAll);
+  const isWeb = isWebBuild();
+  // Paid-hardware autonomy is a researcher's choice, and the browser build has no hardware to spend on.
+  const showHardwareAutonomy = !isWeb && featuresFor(workspaceMode, uiMode).agentEntry;
+  const frameworkOptions = KERNEL_FRAMEWORK_OPTIONS.filter((o) => !isWeb || o.webSupported);
   const setSimShots = useSimulationStore((s) => s.setShots);
+  const settingsTarget = useNavigationStore((s) => s.settingsTarget);
+  const clearSettingsTarget = useNavigationStore((s) => s.clearSettingsTarget);
+  // Sections consume the target in their own effects first; clear it afterwards.
+  useEffect(() => {
+    if (settingsTarget) clearSettingsTarget();
+  }, [settingsTarget, clearSettingsTarget]);
+
+  // Opened from the keyboard: move focus onto the Settings heading, once the frame has settled
+  // (a closing palette hands focus back to the editor in the same tick).
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    let frame = 0;
+    let settleTimer = 0;
+    let stopGuard: (() => void) | null = null;
+    // Like every other sidebar, Settings lands on its heading (no ring; Tab then reaches the first section). Without a
+    // sidebar around it (a bare panel), the first control is the fallback.
+    const scopeOf = (root: HTMLElement) => root.closest<HTMLElement>('[data-tour-sidebar]') ?? root;
+    const focusTarget = (root: HTMLElement) =>
+      scopeOf(root).querySelector<HTMLElement>(`[${LANDING_ATTR}]`)
+      ?? root.querySelector<HTMLElement>('button:not([disabled]), input, select');
+    // A view that mounts after Settings (the editor, from Challenges) grabs focus for itself. For a short settle window,
+    // anything outside the panel that takes focus hands it straight back, so the next Tab does not indent code.
+    const guardFocus = (root: HTMLElement) => {
+      stopGuard?.();
+      const onFocusIn = (e: FocusEvent) => {
+        if (e.target instanceof Node && !scopeOf(root).contains(e.target)) focusTarget(root)?.focus({ focusVisible: true } as FocusOptions);
+      };
+      document.addEventListener('focusin', onFocusIn);
+      const stop = () => {
+        window.clearTimeout(settleTimer);
+        document.removeEventListener('focusin', onFocusIn);
+        stopGuard = null;
+      };
+      settleTimer = window.setTimeout(stop, FOCUS_SETTLE_MS);
+      stopGuard = stop;
+    };
+    // The request is consumed inside the frame, not before it: a StrictMode remount (or a quick re-render) cancels
+    // the first frame, and the surviving effect must still find the request.
+    const focusFirst = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const root = rootRef.current;
+        if (!root || !takeSettingsFocusRequest()) return; // a frame from an unmounted panel must not eat the request
+        focusTarget(root)?.focus({ focusVisible: true } as FocusOptions);
+        guardFocus(root);
+      });
+    };
+    focusFirst();
+    const off = onSettingsFocusRequest(focusFirst);
+    return () => { off(); cancelAnimationFrame(frame); stopGuard?.(); };
+  }, []);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div ref={rootRef} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
         {/* ── Appearance ── */}
-        <Section title="Appearance" defaultOpen>
-          <SettingRow label="Theme">
-            <div style={{ display: 'flex', gap: 2 }}>
-              {(['dark', 'light'] as const).map((m) => (
-                <button
-                  key={m}
-                  onClick={() => setThemeMode(m)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 4,
-                    padding: '3px 8px', border: `1px solid ${themeMode === m ? colors.accent : colors.border}`,
-                    borderRadius: 4, cursor: 'pointer', fontSize: 11,
-                    background: themeMode === m ? `${colors.accent}18` : 'transparent',
-                    color: themeMode === m ? colors.accent : colors.textMuted,
-                    fontFamily: "'Geist Sans', sans-serif",
-                  }}
-                >
-                  {m === 'dark' ? <Moon size={11} /> : <Sun size={11} />}
-                  {m[0].toUpperCase() + m.slice(1)}
-                </button>
-              ))}
-            </div>
-          </SettingRow>
-          <SettingRow label="UI Mode">
-            <Select<UIMode>
-              value={uiMode}
+        <Section id="appearance" title="Appearance" defaultOpen>
+          <SettingRow label="Theme" stacked>
+            <SegmentedControl<ThemePreference>
+              aria-label="Theme"
+              value={themePreference}
+              onChange={setThemePreference}
               options={[
-                { value: 'beginner', label: 'Beginner' },
-                { value: 'intermediate', label: 'Intermediate' },
-                { value: 'advanced', label: 'Advanced' },
+                { value: 'system', label: 'System', icon: <Monitor size={12} /> },
+                { value: 'dark', label: 'Dark', icon: <Moon size={12} /> },
+                { value: 'light', label: 'Light', icon: <Sun size={12} /> },
               ]}
-              onChange={setUIMode}
             />
           </SettingRow>
+          {workspaceMode === 'learn' && (
+            <SettingRow label="Level" hint="How much of the IDE is shown">
+              <SettingSelect<UIMode>
+                value={uiMode}
+                options={[
+                  { value: 'beginner', label: 'Beginner' },
+                  { value: 'intermediate', label: 'Intermediate' },
+                  { value: 'advanced', label: 'Advanced' },
+                ]}
+                onChange={setUIMode}
+              />
+            </SettingRow>
+          )}
         </Section>
 
+        <WorkspaceSection />
+
         {/* ── Editor ── */}
-        <Section title="Editor" defaultOpen>
-          <SettingRow label="Font Size">
+        <Section id="editor" title="Editor" defaultOpen>
+          <SettingRow label="Font size">
             <NumberStepper value={editor.fontSize} min={10} max={24} step={1}
               onChange={(v) => updateEditor({ fontSize: v })} />
           </SettingRow>
-          <SettingRow label="Tab Size">
-            <Select value={String(editor.tabSize) as '2' | '4'}
+          <SettingRow label="Tab size">
+            <SettingSelect value={String(editor.tabSize) as '2' | '4'}
               options={[{ value: '2', label: '2' }, { value: '4', label: '4' }]}
               onChange={(v) => updateEditor({ tabSize: Number(v) })} />
           </SettingRow>
-          <SettingRow label="Word Wrap">
+          <SettingRow label="Word wrap">
             <Toggle value={editor.wordWrap} onChange={(v) => updateEditor({ wordWrap: v })} />
           </SettingRow>
           <SettingRow label="Minimap">
             <Toggle value={editor.minimap} onChange={(v) => updateEditor({ minimap: v })} />
           </SettingRow>
-          <SettingRow label="Line Numbers">
+          <SettingRow label="Line numbers">
             <Toggle value={editor.lineNumbers} onChange={(v) => updateEditor({ lineNumbers: v })} />
           </SettingRow>
-          <SettingRow label="Bracket Colorization">
+          <SettingRow label="Bracket colorization">
             <Toggle value={editor.bracketPairColorization}
               onChange={(v) => updateEditor({ bracketPairColorization: v })} />
           </SettingRow>
-          <SettingRow label="Auto-Close Brackets">
+          <SettingRow label="Auto-close brackets">
             <Toggle value={editor.autoCloseBrackets}
               onChange={(v) => updateEditor({ autoCloseBrackets: v })} />
           </SettingRow>
         </Section>
 
         {/* ── Dirac AI ── */}
-        <Section title="Dirac AI">
+        <Section id="dirac" title="Dirac AI">
           <div style={{ marginBottom: 8 }}>
             <span style={{
               fontSize: 11, color: colors.textMuted,
-              fontFamily: "'Geist Sans', sans-serif", display: 'block',
+              fontFamily: TYPOGRAPHY.fontSans, display: 'block',
               marginBottom: 4,
             }}>
-              API Key
+              API key
             </span>
             <ApiKeyInput />
           </div>
-          <SettingRow label="Ghost Completions">
+          <SettingRow label="Ghost completions">
             <Toggle value={dirac.ghostCompletions}
               onChange={(v) => updateDirac({ ghostCompletions: v })} />
           </SettingRow>
-          <SettingRow label="Auto-Explain Errors">
+          <SettingRow label="Auto-explain errors">
             <Toggle value={dirac.autoExplainErrors}
               onChange={(v) => updateDirac({ autoExplainErrors: v })} />
           </SettingRow>
-          <SettingRow label="Extended Thinking"
+          <SettingRow label="Ambient narration"
+            hint="Dirac comments on your circuit after you pause typing. Each comment is a paid Claude call, so it is off by default and limited to one every 10 seconds.">
+            <Toggle value={dirac.ambientNarration}
+              onChange={(v) => updateDirac({ ambientNarration: v })} />
+          </SettingRow>
+          <SettingRow label="Extended thinking"
             hint="Auto-escalate hard chat questions to deep reasoning. /think always works.">
             <Toggle value={dirac.extendedThinking}
               onChange={(v) => updateDirac({ extendedThinking: v })} />
           </SettingRow>
-          <SettingRow label="Preferred Model"
+          <SettingRow label="Preferred model"
             hint="Chat only. Auto picks per message; actions that use tools always run Sonnet.">
-            <Select value={dirac.preferredModel}
+            <SettingSelect value={dirac.preferredModel}
               options={[
                 { value: 'auto', label: 'Auto' },
                 { value: 'haiku', label: 'Haiku' },
@@ -416,9 +368,9 @@ export function SettingsPanel() {
               ]}
               onChange={(v) => updateDirac({ preferredModel: v })} />
           </SettingRow>
-          <SettingRow label="Context Depth"
+          <SettingRow label="Context depth"
             hint="IDE state sent with chat. Minimal: code, circuit, errors. Standard: + results, exercise, hardware. Full: extra detail.">
-            <Select value={dirac.contextDepth}
+            <SettingSelect value={dirac.contextDepth}
               options={[
                 { value: 'minimal', label: 'Minimal' },
                 { value: 'standard', label: 'Standard' },
@@ -429,56 +381,51 @@ export function SettingsPanel() {
         </Section>
 
         {/* ── Agent Hardware Autonomy ── */}
-        <Section title="Agent Hardware Autonomy">
+        {showHardwareAutonomy && <Section title="Agent hardware autonomy">
           <div style={{
             marginBottom: 8, padding: '8px 10px', borderRadius: 4,
             background: `${colors.error}12`, border: `1px solid ${colors.error}40`,
           }}>
             <span style={{
-              fontSize: 10, color: colors.textMuted, lineHeight: 1.5,
-              fontFamily: "'Geist Sans', sans-serif", display: 'block',
+              fontSize: 11, color: colors.textMuted, lineHeight: 1.5,
+              fontFamily: TYPOGRAPHY.fontSans, display: 'block',
             }}>
               Enabling this lets Dirac submit jobs to real, paid quantum hardware on your behalf,
               within the budget below, without asking first. This is off by default — leave it off
               unless you understand the cost implications.
             </span>
           </div>
-          <SettingRow label="Autonomous Hardware Submission"
+          <SettingRow label="Autonomous hardware submission"
             hint="When off, any hardware job Dirac proposes always needs your approval first.">
             <Toggle value={agentHardware.autonomousHardwareEnabled}
               onChange={(v) => updateAgentHardware({ autonomousHardwareEnabled: v })} />
           </SettingRow>
-          <SettingRow label="Max Spend"
+          <SettingRow label="Max spend"
             hint="Per-run budget ceiling for autonomous hardware jobs, in USD.">
             <CurrencyInput value={agentHardware.maxSpend}
               onChange={(v) => updateAgentHardware({ maxSpend: v })} />
           </SettingRow>
-        </Section>
+        </Section>}
 
         {/* ── Frameworks ── */}
-        <FrameworksSection />
+        {!isWeb && <FrameworksSection />}
 
         {/* ── Kernel ── */}
-        <Section title="Kernel">
-          <SettingRow label="Default Framework">
-            <Select value={kernel.defaultFramework}
-              options={[
-                { value: 'qiskit', label: 'Qiskit' },
-                { value: 'cirq', label: 'Cirq' },
-                { value: 'cuda-q', label: 'CUDA-Q' },
-                { value: 'qsharp', label: 'Q# (QDK)' },
-              ]}
+        <Section title={kernelEngineName(isWeb)}>
+          <SettingRow label="Default framework" hint={isWeb ? 'The web version runs Python in your browser via Pyodide.' : undefined}>
+            <SettingSelect value={kernel.defaultFramework}
+              options={frameworkOptions}
               onChange={(v) => updateKernel({ defaultFramework: v })} />
           </SettingRow>
-          <SettingRow label="Default Shots">
+          <SettingRow label="Default shots">
             <NumberStepper value={kernel.defaultShots} min={100} max={100000} step={100}
               onChange={(v) => { updateKernel({ defaultShots: v }); setSimShots(v); }} />
           </SettingRow>
-          <SettingRow label="Auto-Parse on Type">
+          <SettingRow label="Auto-parse on type">
             <Toggle value={kernel.autoParseOnType}
               onChange={(v) => updateKernel({ autoParseOnType: v })} />
           </SettingRow>
-          <SettingRow label="Parse Debounce">
+          <SettingRow label="Parse debounce">
             <Slider value={kernel.parseDebounceMs} min={100} max={1000} step={50}
               onChange={(v) => updateKernel({ parseDebounceMs: v })}
               displayValue={`${kernel.parseDebounceMs}ms`} />
@@ -491,31 +438,9 @@ export function SettingsPanel() {
             <Toggle value={general.animationsEnabled}
               onChange={(v) => updateGeneral({ animationsEnabled: v })} />
           </SettingRow>
-          <SettingRow label="Show Welcome on Start">
-            <Toggle value={general.showWelcomeOnStart}
-              onChange={(v) => updateGeneral({ showWelcomeOnStart: v })} />
-          </SettingRow>
-          <SettingRow label="Auto Save">
-            <Toggle value={general.autoSave}
-              onChange={(v) => updateGeneral({ autoSave: v })} />
-          </SettingRow>
-          <SettingRow label="Language">
-            <Select value={general.language}
-              options={[
-                { value: 'en', label: 'English' },
-                { value: 'es', label: 'Español' },
-                { value: 'zh', label: '中文' },
-                { value: 'ja', label: '日本語' },
-              ]}
-              onChange={(v) => updateGeneral({ language: v })} />
-          </SettingRow>
-          <SettingRow label="Anonymous Telemetry">
-            <Toggle value={general.telemetryEnabled}
-              onChange={(v) => updateGeneral({ telemetryEnabled: v })} />
-          </SettingRow>
-          <SettingRow label="Educator Mode">
-            <Toggle value={general.educatorMode}
-              onChange={(v) => updateGeneral({ educatorMode: v })} />
+          <SettingRow label="Learning workspace"
+            hint="Lessons, challenges and the tutor, for teaching a course. Off by default.">
+            <Toggle value={learnEnabled} onChange={setLearnEnabled} />
           </SettingRow>
           <SettingRow label="Developer views"
             hint="Adds the Search and Circuit-inspector views to the activity bar in both modes. Everything else is chosen by workspace mode.">
@@ -523,30 +448,30 @@ export function SettingsPanel() {
               onChange={(v) => updateGeneral({ experimentalFeatures: v })} />
           </SettingRow>
         </Section>
+
+        <HelpSection />
       </div>
 
       {/* ── Reset Button ── */}
       <div style={{ padding: 12, borderTop: `1px solid ${colors.border}`, flexShrink: 0 }}>
-        <button
-          onClick={() => { if (window.confirm('Reset all settings to their defaults? This cannot be undone.')) resetAll(); }}
-          style={{
-            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            gap: 6, padding: '6px 0', border: `1px solid ${colors.border}`,
-            borderRadius: 4, background: 'transparent', color: colors.textMuted,
-            fontSize: 11, cursor: 'pointer', fontFamily: "'Geist Sans', sans-serif",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.borderColor = colors.error;
-            e.currentTarget.style.color = colors.error;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = colors.border;
-            e.currentTarget.style.color = colors.textMuted;
+        <Button
+          variant="secondary"
+          icon={<RotateCcw size={12} />}
+          style={{ width: '100%' }}
+          onClick={async () => {
+            const ok = await confirm({
+              title: 'Reset all settings?',
+              description: 'Every setting goes back to its default. This cannot be undone.',
+              confirmLabel: 'Reset',
+              cancelLabel: 'Keep settings',
+              tone: 'danger',
+            });
+            if (ok) resetAll();
           }}
         >
-          <RotateCcw size={12} />
-          Reset to Defaults
-        </button>
+          Reset to defaults
+        </Button>
+        {confirmDialog}
       </div>
     </div>
   );
@@ -555,27 +480,16 @@ export function SettingsPanel() {
 /* ── Frameworks section (desktop-only) ────────────────────── */
 
 function FrameworksSection() {
-  const colors = useThemeStore((s) => s.colors);
   const openModal = useFrameworksStore((s) => s.openModal);
 
   return (
     <Section title="Environment" defaultOpen={false}>
       <EnvironmentPanel />
-      <button
-        onClick={() => openModal(false)}
-        style={{
-          marginTop: 12,
-          background: 'transparent',
-          border: 'none',
-          padding: 0,
-          color: colors.accent,
-          fontSize: 12,
-          fontFamily: "'Geist Sans', sans-serif",
-          cursor: 'pointer',
-        }}
-      >
-        Open the setup wizard…
-      </button>
+      {!isWebBuild() && (
+        <Button variant="ghost" size="sm" className="nuclei-framework-btn settings-link" onClick={() => openModal(false)}>
+          Open the setup wizard…
+        </Button>
+      )}
     </Section>
   );
 }
