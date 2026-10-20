@@ -17,6 +17,7 @@ TODO(R-A follow-up): fold the lean path into the adapters once R-A's ``Simulatio
 
 from __future__ import annotations
 
+import dataclasses
 import os
 import sys
 import time
@@ -95,6 +96,7 @@ class SimulationPlan:
     estimate_bytes: int = 0
     budget_bytes: int = 0
     budget_source: str = "ram_25pct"
+    width_known: bool = True
 
     @property
     def refused(self) -> bool:
@@ -105,24 +107,71 @@ def has_measurements(snapshot) -> bool:
     return any(gate.type == "Measure" for gate in snapshot.gates)
 
 
+def circuit_facts(framework: str, circuit) -> tuple[int | None, bool | None]:
+    """``(width, measured)`` read off the circuit itself; ``None`` where it cannot be known.
+
+    Used when the snapshot (the diagram) failed: the memory policy must never plan from an empty
+    stand-in, because "no gates" reads as "no measurements".
+    """
+    width: int | None = getattr(circuit, "num_qubits", None)
+    if not isinstance(width, int):
+        try:
+            width = len(circuit.all_qubits())
+        except Exception:  # noqa: BLE001 - unknown width is a planning input, handled conservatively
+            width = None
+    measured: bool | None = None
+    try:
+        if framework == "qiskit":
+            from kernel.adapters._qiskit_aer import has_measurements as qiskit_measured
+
+            measured = bool(qiskit_measured(circuit))
+        elif framework == "cirq":
+            import cirq
+
+            measured = bool(cirq.is_measurement(circuit))
+    except Exception:  # noqa: BLE001 - unknown measurement status is handled conservatively
+        measured = None
+    return width, measured
+
+
 def plan_simulation(
-    snapshot, framework: str, *, method: str | None = None, memory_limit_mb: int | None = None
+    snapshot, framework: str, *, method: str | None = None, memory_limit_mb: int | None = None, circuit=None
 ) -> SimulationPlan:
-    n = snapshot.qubit_count
-    measured = has_measurements(snapshot)
+    """Plan from ``snapshot``; with no snapshot (extraction failed) from the ``circuit`` itself.
+
+    An unknown width, or measurements that cannot be determined for a framework the lean path would
+    drive, plan ``adapter``: the adapter runs and its result is shaped (never a raw state vector).
+    """
+    if snapshot is not None:
+        width, measured = snapshot.qubit_count, has_measurements(snapshot)
+    else:
+        width, measured = circuit_facts(framework, circuit)
     if framework in NATIVE_FRAMEWORKS:
-        return SimulationPlan(n, framework, "native", measured)
-    if n <= FULL_RESULT_MAX_QUBITS:
-        return SimulationPlan(n, framework, "full", measured)
-    if framework not in LEAN_FRAMEWORKS:
+        return SimulationPlan(width or 0, framework, "native", bool(measured))
+    if width is None:
+        return SimulationPlan(0, framework, "adapter", bool(measured), width_known=False)
+    if width <= FULL_RESULT_MAX_QUBITS:
+        return SimulationPlan(width, framework, "full", bool(measured))
+    if framework not in LEAN_FRAMEWORKS or measured is None:
         # CUDA-Q (GPU targets, tensor networks) and third-party adapters own their simulation and their
         # memory model: a 2^n x 16 B estimate would be fiction.  The adapter runs; its result is shaped.
-        return SimulationPlan(n, framework, "adapter", measured)
+        return SimulationPlan(width, framework, "adapter", bool(measured))
     if method == MPS_METHOD and framework == "qiskit" and measured:
-        return SimulationPlan(n, framework, "mps", measured)
+        return SimulationPlan(width, framework, "mps", measured)
     copies = COPIES_SAMPLED if measured else COPIES_EXACT
     budget, source = simulation_budget(memory_limit_mb)
-    return SimulationPlan(n, framework, "lean", measured, copies, copies * (2 ** n) * AMPLITUDE_BYTES, budget, source)
+    return SimulationPlan(width, framework, "lean", measured, copies, copies * (2 ** width) * AMPLITUDE_BYTES, budget, source)
+
+
+def resolve_unknown_width(plan: SimulationPlan, result: SimulationResult) -> SimulationPlan:
+    """A plan made without a known width, completed from the adapter's own result (so it can be shaped)."""
+    if plan.width_known:
+        return plan
+    sizes = [len(key) for key in result.probabilities] + [len(key) for key in result.measurements]
+    amplitudes = len(result.state_vector)
+    if amplitudes > 1:
+        sizes.append(amplitudes.bit_length() - 1)
+    return dataclasses.replace(plan, qubits=max(sizes, default=0), width_known=True)
 
 
 def _gigabytes(value: int) -> str:

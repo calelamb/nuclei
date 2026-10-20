@@ -51,6 +51,16 @@ def send(kernel, message: dict) -> list[dict]:
     return frames
 
 
+def assert_run_id_echo(frames: list[dict], extra: dict) -> None:
+    """Every frame of a run echoes the caller's ``run_id``; a run without one carries none."""
+    assert frames
+    for frame in frames:
+        if "run_id" in extra:
+            assert frame.get("run_id") == extra["run_id"], frame
+        else:
+            assert "run_id" not in frame, frame
+
+
 def error_frames(frames: list[dict]) -> list[dict]:
     return [f for f in frames if f.get("type") == "error"]
 
@@ -59,6 +69,7 @@ def error_frames(frames: list[dict]) -> list[dict]:
 @pytest.mark.parametrize("extra", [{"run_id": "ub1"}, {}], ids=["with_run_id", "without_run_id"])
 def test_unbound_parameters_reach_the_wire_as_an_info_error(kernel, extra) -> None:
     frames = send(kernel, execute(ANSATZ, **extra))
+    assert_run_id_echo(frames, extra)
     (error,) = error_frames(frames)
     assert error["code"] == "unbound_parameters"
     assert error["severity"] == "info"
@@ -69,6 +80,7 @@ def test_unbound_parameters_reach_the_wire_as_an_info_error(kernel, extra) -> No
 @pytest.mark.parametrize("extra", [{"run_id": "us1"}, {}], ids=["with_run_id", "without_run_id"])
 def test_unsupported_instruction_names_the_gate_on_the_wire(kernel, extra) -> None:
     frames = send(kernel, execute(MYSTERY, **extra))
+    assert_run_id_echo(frames, extra)
     (error,) = error_frames(frames)
     assert error["code"] == "unsupported_instruction"
     assert error["instruction"] == "mystery_gate"
@@ -80,6 +92,7 @@ def test_unsupported_instruction_names_the_gate_on_the_wire(kernel, extra) -> No
 def test_parameter_values_bind_through_adapters_binding_and_report_bound_at(kernel, extra) -> None:
     frames = send(kernel, execute(ANSATZ, parameter_values={"theta": 3.141592653589793}, **extra))
     assert not error_codes(frames)
+    assert_run_id_echo(frames, extra)
     result = [f for f in frames if f["type"] == "result"][0]
     assert result["data"]["bound_at"] == {"theta": 3.141592653589793}
     assert result["data"]["measurements"].get("1", 0) == 64  # RY(pi)|0> = |1>
@@ -93,6 +106,14 @@ def test_a_snapshot_failure_still_lets_the_circuit_run(kernel) -> None:
     assert result["data"]["probabilities"], "the simulation must still produce a result"
     (snapshot,) = [f for f in frames if f["type"] == "snapshot"]
     assert snapshot["data"] is None and "snapshot unavailable" in snapshot["snapshot_error"]
+
+
+@linux_only
+def test_a_parse_snapshot_failure_degrades_like_a_run(kernel) -> None:
+    (frames,) = run(converse(kernel, [({"type": "parse", "code": SNAPSHOT_BROKEN, "language": "python"}, {"snapshot"})]))
+    (snapshot,) = [f for f in frames if f["type"] == "snapshot"]
+    assert snapshot["data"] is None and "snapshot unavailable" in snapshot["snapshot_error"]
+    assert not error_codes(frames)
 
 
 @linux_only
@@ -118,7 +139,7 @@ def test_lean_path_uses_the_adapter_aer_helpers(monkeypatch) -> None:
     assert "prepare" in calls and "run" in calls
 
 
-def test_lean_path_runs_a_library_gate_circuit(monkeypatch) -> None:
+def test_lean_path_runs_a_library_gate_circuit() -> None:
     from kernel.executor import Executor
 
     code = (

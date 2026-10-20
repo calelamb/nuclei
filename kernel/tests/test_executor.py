@@ -3,6 +3,7 @@ import subprocess
 import sys
 from types import SimpleNamespace
 
+from kernel.adapters.base import FrameworkAdapter
 from kernel.executor import AdapterSpec, Executor
 from kernel.models import CircuitSnapshot, Gate, KernelError, SimulationResult
 
@@ -10,7 +11,10 @@ from kernel.models import CircuitSnapshot, Gate, KernelError, SimulationResult
 ROOT = Path(__file__).resolve().parents[2]
 
 
-class StubAdapter:
+class StubAdapter(FrameworkAdapter):
+    def detect(self, code: str) -> bool:
+        return True
+
     def __init__(self, circuit=None, snapshot=None, result=None, simulate_error=None):
         self._circuit = circuit
         self._snapshot = snapshot

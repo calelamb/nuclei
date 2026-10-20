@@ -352,6 +352,8 @@ class RunRoutes:
             return
         reply = result.reply or {}
         snapshot = {"type": "snapshot", "data": reply.get("snapshot")}
+        if reply.get("snapshot_error"):
+            snapshot["snapshot_error"] = reply["snapshot_error"]
         if run_id:
             snapshot.update({k: reply[k] for k in ("preview", "elapsed_ms", "slow") if k in reply})
         self._send(snapshot, run_id)

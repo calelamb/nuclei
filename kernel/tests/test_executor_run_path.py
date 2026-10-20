@@ -142,7 +142,7 @@ def test_parameter_values_use_the_binding_module(monkeypatch) -> None:
     executor = Executor()
     result, _s, _o, _e, error = executor.execute(BELL, 16, parameter_values={"theta": 0.5})
     assert error is None and result is not None
-    assert calls == [{"theta": 0.5}] and executor.result_extras["bound_at"] == {"theta": 0.5}
+    assert calls == [{"theta": 0.5}] and result.bound_at == {"theta": 0.5}
 
 
 class _Unbound(ValueError):

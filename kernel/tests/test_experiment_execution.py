@@ -21,6 +21,7 @@ from types import SimpleNamespace
 import pytest
 
 from kernel.adapters.qsharp_adapter import QsharpAdapter
+from kernel.adapters.base import FrameworkAdapter
 from kernel.executor import AdapterSpec, Executor
 from kernel.models import CircuitSnapshot, Gate, SimulationResult
 
@@ -302,7 +303,10 @@ def test_seed_honored_is_false_when_adapter_cannot_seed(monkeypatch):
     honored — mirrors an installed backend with no seeding API (e.g. an
     older cudaq build without `set_random_seed`)."""
 
-    class UnseedableAdapter:
+    class UnseedableAdapter(FrameworkAdapter):
+        def detect(self, code: str) -> bool:
+            return True
+
         def find_circuit(self, namespace: dict):
             return SimpleNamespace()
 
@@ -355,7 +359,10 @@ def test_seed_honored_omitted_when_no_seed_requested(monkeypatch):
     pops it when None) — verified at the to_dict layer here since the
     Executor-level object always carries the field, just as None."""
 
-    class SimpleAdapter:
+    class SimpleAdapter(FrameworkAdapter):
+        def detect(self, code: str) -> bool:
+            return True
+
         def find_circuit(self, namespace: dict):
             return SimpleNamespace()
 

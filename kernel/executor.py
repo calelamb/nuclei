@@ -26,28 +26,6 @@ TYPED_ADAPTER_ERRORS = {
 # Frameworks whose circuit objects ``bind_parameters`` understands.
 BINDABLE_FRAMEWORKS = frozenset({"qiskit", "cirq"})
 MAX_DEBUG_QUBITS = 12
-
-
-def _try_snapshot(adapter, circuit):
-    """``adapter.try_extract_snapshot``, tolerating duck-typed third-party adapters that lack it."""
-    try_extract = getattr(adapter, "try_extract_snapshot", None)
-    if try_extract is not None:
-        return try_extract(circuit, expand_blocks=False)
-    try:
-        return adapter.extract_snapshot(circuit), None
-    except Exception as exc:  # noqa: BLE001 - a missing diagram must not stop the run
-        return None, f"snapshot unavailable: {exc}"
-
-
-def _stand_in_snapshot(framework: str, circuit) -> CircuitSnapshot:
-    """Just enough of a snapshot (width only) for the memory policy when the real one failed."""
-    count = getattr(circuit, "num_qubits", None)
-    if not isinstance(count, int):
-        try:
-            count = len(circuit.all_qubits())
-        except Exception:  # noqa: BLE001 - width is advisory; 0 plans a plain full run
-            count = 0
-    return CircuitSnapshot(framework=framework, qubit_count=count, classical_bit_count=0, depth=0, gates=[])
 MAX_DEBUG_GATES = 200
 
 # Editor lint/format (dev tools Phase 4): ruff runs fast, but bound it anyway.
@@ -194,8 +172,6 @@ class Executor:
         # PRD 10 Phase A). Lets the qec_snapshot message re-derive the DEM
         # payload at a different edge cap without re-running user code.
         self._last_qec_circuit = None
-        # Extra result fields a run computed outside SimulationResult (R-4 `bound_at`).
-        self.result_extras: dict[str, Any] = {}
         # Why the last run's circuit diagram is missing ("snapshot unavailable: ..."), else None (R-13).
         self.snapshot_error: str | None = None
         # The LoadedProgram of the most recent worker-mode run (figures, cache entry); None in-process.
@@ -503,6 +479,7 @@ class Executor:
     def parse(
         self, code: str, *, language: str | None = None
     ) -> tuple[CircuitSnapshot | None, str, str, KernelError | None]:
+        self.snapshot_error = None
         specs = self._candidate_specs(code, language)
         if specs and specs[0].source_mode:
             return self._parse_source(specs[0], code)
@@ -515,10 +492,8 @@ class Executor:
             self._last_qec_circuit = loc.circuit
         if loc.circuit is None:
             return None, loc.stdout, loc.stderr, None
-        try:
-            snapshot = loc.adapter.extract_snapshot(loc.circuit)
-        except Exception as exc:
-            return None, loc.stdout, loc.stderr, self._capability_error(loc.spec, exc, "adapter_error")
+        # R-13: the same degradation as a run: no diagram, the reason in `snapshot_error`, no error.
+        snapshot, self.snapshot_error = loc.adapter.try_extract_snapshot(loc.circuit, expand_blocks=False)
         return snapshot, loc.stdout, loc.stderr, None
 
     def _parse_source(self, spec: AdapterSpec, code: str):
@@ -556,11 +531,10 @@ class Executor:
         `SimulationResult.seed_honored`. Any `record_metric(name, value)` calls the user's code
         made are merged into the returned result's `metrics` (empty dict when none).
 
-        PRD 15 R-B: `parameter_values` binds free circuit parameters first (R-4, `bound_at` goes to
-        `result_extras`); above 16 qubits the memory-estimate policy (`kernel.run_memory`, R-11)
+        PRD 15 R-B: `parameter_values` binds free circuit parameters first (R-4, `bound_at` is set on the
+        returned `SimulationResult`); above 16 qubits the memory-estimate policy (`kernel.run_memory`, R-11)
         either refuses with `too_many_qubits` before allocating or runs the lean path.
         """
-        self.result_extras = {}
         self.snapshot_error = None
         specs = self._candidate_specs(code, language)
         if specs and specs[0].source_mode:
@@ -579,18 +553,21 @@ class Executor:
                 code="no_circuit", message="No quantum circuit found in code.", framework=spec.framework,
             )
         # R-13: a diagram that cannot be drawn never blocks the run; the reason travels as `snapshot_error`.
-        snapshot, self.snapshot_error = _try_snapshot(adapter, circuit)
-        plan_snapshot = snapshot if snapshot is not None else _stand_in_snapshot(spec.framework, circuit)
+        snapshot, self.snapshot_error = adapter.try_extract_snapshot(circuit, expand_blocks=False)
 
-        circuit, bind_error = self._bind_parameters(circuit, parameter_values, spec)
+        circuit, bind_error, bound_at = self._bind_parameters(circuit, parameter_values, spec)
         if bind_error is not None:
             return None, snapshot, stdout, stderr, bind_error
-        result, sim_error = self._simulate(spec, adapter, circuit, plan_snapshot, shots, seed, simulation_method, memory_limit_mb)
+        # With no snapshot the memory policy reads width and measurements off the circuit itself.
+        result, sim_error = self._simulate(spec, adapter, circuit, snapshot, shots, seed, simulation_method, memory_limit_mb)
         if sim_error is not None:
             return None, snapshot, stdout, stderr, sim_error
         # Merge whatever the user's code recorded via record_metric — always present on the wire
-        # (empty dict when nothing was recorded).
-        return dataclasses.replace(result, metrics=dict(self._metrics)), snapshot, stdout, stderr, None
+        # (empty dict when nothing was recorded) — and the parameter point the circuit was bound at.
+        changes: dict[str, Any] = {"metrics": dict(self._metrics)}
+        if bound_at or parameter_values:
+            changes["bound_at"] = bound_at
+        return dataclasses.replace(result, **changes), snapshot, stdout, stderr, None
 
     def _execute_source(self, spec: AdapterSpec, code: str, shots: int, params, seed):
         adapter, adapter_error = self._load_adapter(spec)
@@ -605,7 +582,7 @@ class Executor:
         return outcome
 
     def _bind_parameters(self, circuit, parameter_values: dict | None, spec: AdapterSpec | None = None):
-        """R-4: bind free parameters via R-A's ``kernel.adapters.binding``.
+        """R-4: bind free parameters via R-A's ``kernel.adapters.binding``; returns ``(circuit, error, bound_at)``.
 
         Always consulted for Qiskit/Cirq circuits (also with no ``parameter_values``), so a circuit
         that still has free parameters fails with the typed ``unbound_parameters`` info error rather
@@ -613,28 +590,21 @@ class Executor:
         """
         framework = spec.framework if spec else None
         if not parameter_values and framework not in BINDABLE_FRAMEWORKS:
-            return circuit, None
-        try:
-            from kernel.adapters.binding import bind_parameters
-        except ImportError:
-            if not parameter_values:
-                return circuit, None
-            return circuit, KernelError(
-                code="parameter_binding_unavailable",
-                message="This kernel build cannot bind circuit parameters (kernel.adapters.binding is missing).",
-            )
+            return circuit, None, {}
+        from kernel.adapters.binding import bind_parameters
+
         try:
             bound, bound_at = bind_parameters(circuit, parameter_values or None)
         except Exception as exc:
-            return circuit, self._capability_error(spec, exc, "adapter_error")
-        if bound_at or parameter_values:
-            self.result_extras["bound_at"] = bound_at
-        return bound, None
+            return circuit, self._capability_error(spec, exc, "adapter_error"), {}
+        return bound, None, bound_at
 
     def _simulate(self, spec, adapter, circuit, snapshot, shots, seed, method, memory_limit_mb):
         from kernel import run_memory
 
-        plan = run_memory.plan_simulation(snapshot, spec.framework, method=method, memory_limit_mb=memory_limit_mb)
+        plan = run_memory.plan_simulation(
+            snapshot, spec.framework, method=method, memory_limit_mb=memory_limit_mb, circuit=circuit
+        )
         if plan.refused:
             return None, run_memory.refusal_error(plan)
         try:
@@ -642,7 +612,9 @@ class Executor:
                 return run_memory.simulate_lean(circuit, plan, shots, seed), None
             result = adapter.simulate(circuit, shots, seed=seed)
             if plan.mode == "adapter":
-                result = run_memory.shape_adapter_result(result, plan)
+                plan = run_memory.resolve_unknown_width(plan, result)
+                if plan.qubits > run_memory.FULL_RESULT_MAX_QUBITS:
+                    result = run_memory.shape_adapter_result(result, plan)
             return result, None
         except Exception as exc:
             return None, self._capability_error(spec, exc, "simulation_error")

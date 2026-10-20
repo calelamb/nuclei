@@ -80,6 +80,8 @@ def parse_op(runtime: Any, args: dict) -> tuple[dict, dict | None]:
     snapshot, stdout, stderr, error = executor.parse(args.get("code", ""), language=args.get("language"))
     _emit(stdout, stderr)
     reply: dict[str, Any] = {"snapshot": snapshot.to_dict() if snapshot else None, **_preview_fields(runtime)}
+    if executor.snapshot_error:
+        reply["snapshot_error"] = executor.snapshot_error
     if snapshot is not None and snapshot.framework == "stim":
         reply.update(_qec_sidecar(executor))
     return reply, _wire(error)
@@ -98,7 +100,6 @@ def execute_op(runtime: Any, args: dict) -> tuple[dict, dict | None]:
     data = result.to_dict() if result is not None else None
     program = executor.program
     if data is not None:
-        data.update(executor.result_extras)
         if program is not None and program.figures:
             data["figures"] = program.figures
             if program.figures_dropped:
