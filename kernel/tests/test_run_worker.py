@@ -473,3 +473,112 @@ def test_workers_die_with_the_server_process(tmp_path) -> None:
     finally:
         if host.poll() is None:
             host.kill()
+
+
+# -- master E-1: every exec path survives the four hazards ------------------------------------------------------
+
+import importlib.util  # noqa: E402
+
+from kernel.tests._run_server_helpers import BELL, converse, error_codes, run, start_kernel, warm_up  # noqa: E402
+
+BODIES = {
+    "sibling": "import rb_sibling_helper\nout = rb_sibling_helper.VALUE\n",
+    "data": "import json\nout = json.load(open('data.json'))['n']\n",
+    "spin": "while True:\n    pass\n",
+    "exit": "import os\nos._exit(7)\n",
+}
+EXPECTED = {"sibling": None, "data": None, "spin": "timeout", "exit": "worker_died"}
+BAD_CODES = {"timeout", "worker_died", "execution_error", "compile_error"}
+
+
+@pytest.fixture(scope="module")
+def hazard_kernel():
+    instance = start_kernel(env={"NUCLEI_RUN_WALL_S": "3"})
+    warm_up(instance)
+    yield instance
+    # E-4's tripwire: a missed exec path would have run in the server process and said so here.
+    leaked = [line for line in instance.stderr_lines if "InProcessExecForbidden" in line]
+    instance.stop()
+    assert not leaked, leaked[:3]
+
+
+def _project(tmp_path) -> dict:
+    (tmp_path / "rb_sibling_helper.py").write_text("VALUE = 41\n")
+    (tmp_path / "data.json").write_text('{"n": 2}')
+    return {"project_root": str(tmp_path), "file_path": str(tmp_path / "main.py")}
+
+
+def _stim_available() -> bool:
+    return importlib.util.find_spec("stim") is not None
+
+
+#: path -> (builds the request for a hazard body, frame types that end the exchange)
+PATHS = {
+    "parse": (lambda body, extra: {"type": "parse", "code": body + BELL, "language": "python", **extra}, {"snapshot", "error"}),
+    "execute": (lambda body, extra: {"type": "execute", "code": body + BELL, "language": "python", "shots": 16, **extra}, {"result"}),
+    "run_python": (lambda body, extra: {"type": "run_python", "code": body, **extra}, {"python_result"}),
+    "transpile": (lambda body, extra: {"type": "transpile", "code": body + BELL, "language": "python", **extra}, {"transpile_result"}),
+    "debug_trace": (lambda body, extra: {"type": "debug_trace", "code": body + BELL, "language": "python", **extra}, {"debug_trace_result"}),
+    "trainability_inspect": (lambda body, extra: {"type": "trainability_inspect", "code": body + BELL, **extra}, {"trainability_inspected", "error"}),
+    "trainability_lint": (lambda body, extra: {"type": "trainability_lint", "code": body + BELL, **extra}, {"trainability_lint_result", "error"}),
+    "qec_snapshot": (lambda body, extra: {"type": "qec_snapshot", "code": "import stim\n" + body + 'circuit = stim.Circuit("H 0\\nM 0")\n', "language": "python", **extra}, {"qec_snapshot", "error"}),
+    "qec_materialize": (lambda body, extra: {"type": "qec_materialize", "code": "import stim\n\ndef nuclei_circuits(noise):\n" + "".join(f"    {line}\n" for line in body.splitlines()) + '    return {"a": stim.Circuit("H 0\\nM 0")}\n', **extra}, {"qec_circuits", "error"}),
+    "qec_estimate": (lambda body, extra: {"type": "qec_estimate", "code": body + BELL, "language": "qiskit", **extra}, {"qec_estimate_result", "error"}),
+    "hardware_submit_device": (lambda body, extra: {"type": "hardware_submit", "provider": "ibm", "backend": "ibm_brisbane", "shots": 16, "code": body + BELL, "language": "python", **extra}, {"hardware_job_submitted", "error"}),
+    "hardware_submit_simulator": (lambda body, extra: {"type": "hardware_submit", "provider": "simulator", "backend": "sim_qasm", "shots": 16, "code": body + BELL, "language": "python", **extra}, {"hardware_job_submitted", "error"}),
+}
+
+
+def _verdict(path: str, frames: list[dict], kernel_for_job=None) -> set[str]:
+    """The error codes a path reported, looking inside a failed simulator job and a failed device submit."""
+    codes = set(error_codes(frames))
+    for frame in frames:
+        if frame.get("type") == "error" and path.startswith("hardware_submit"):
+            message = frame.get("message", "")
+            codes.update(c for c, text in (("timeout", "ran longer than"), ("worker_died", "exited")) if text in message)
+    return codes
+
+
+@pytest.mark.parametrize("hazard", sorted(BODIES))
+@pytest.mark.parametrize("path", sorted(PATHS))
+def test_every_exec_path_survives(hazard_kernel, tmp_path, path: str, hazard: str) -> None:
+    if path.startswith("qec_") and path != "qec_estimate" and not _stim_available():
+        pytest.skip("stim is not installed")
+    if path == "qec_estimate" and importlib.util.find_spec("qdk") is None and hazard in ("sibling", "data"):
+        pytest.skip("qdk is not installed; the program itself would still be fine, the estimator is not")
+    build, terminal = PATHS[path]
+    request = build(BODIES[hazard], _project(tmp_path))
+    started = time.monotonic()
+    frames, probe = run(converse(hazard_kernel, [(request, terminal), ({"type": "parse", "code": BELL, "language": "python"}, {"snapshot", "error"})], timeout=30))
+    assert time.monotonic() - started < 20
+    codes = _verdict(path, frames)
+    expected = EXPECTED[hazard]
+    if path.startswith("hardware_submit_simulator") and expected:
+        assert frames[-1]["type"] == "hardware_job_submitted" and frames[-1]["job"]["status"] == "failed"
+    elif expected:
+        assert expected in codes, (path, hazard, frames[-3:])
+    else:
+        assert not (codes & BAD_CODES) or path in ("qec_estimate",), (path, hazard, frames[-3:])
+    assert probe[-1]["type"] == "snapshot" and not error_codes(probe), "the next request on the same socket failed"
+
+
+@pytest.mark.parametrize("hazard", sorted(BODIES))
+@pytest.mark.parametrize("op", ["fake_symmetry_detect", "fake_symmetry_propose", "fake_deploy_inspect", "fake_qec_learned_sources"])
+def test_future_lab_ops_inherit_every_guarantee(pool, tmp_path, op: str, hazard: str) -> None:
+    import kernel.tests._fake_lab_ops  # noqa: F401 - registers the stand-ins in this process (workers import them by ref)
+    from kernel.run_ops import spec_of
+    from kernel.run_worker import RunRequest
+
+    spec = spec_of(op)
+    paths = _project(tmp_path)
+    request = RunRequest(
+        op=spec.ref, owner=7_000, args={"code": BODIES[hazard] + BELL, "language": "python"}, lane=spec.lane, wall_s=3,
+        ctx={"project_root": paths["project_root"], "file_path": paths["file_path"], "cache": "use"}, streaming=False,
+    )
+    result = pool.submit(request).result(timeout=60)
+    expected = EXPECTED[hazard]
+    if expected:
+        assert result.error["code"] == expected
+    else:
+        assert result.error is None and result.reply["ok"] is True
+    assert call(pool, "t_echo").error is None

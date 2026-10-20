@@ -143,3 +143,484 @@ def test_parameter_values_use_the_binding_module(monkeypatch) -> None:
     result, _s, _o, _e, error = executor.execute(BELL, 16, parameter_values={"theta": 0.5})
     assert error is None and result is not None
     assert calls == [{"theta": 0.5}] and executor.result_extras["bound_at"] == {"theta": 0.5}
+
+
+# ======================================================================================================
+# The routed run path, through a real kernel process (PRD 15 R-B steps 5-10)
+# ======================================================================================================
+
+import asyncio  # noqa: E402
+import json  # noqa: E402
+import os  # noqa: E402
+import statistics  # noqa: E402
+import sys  # noqa: E402
+import time  # noqa: E402
+
+from kernel.tests._kernel_client import connect, drain, exchange  # noqa: E402
+from kernel.tests._run_server_helpers import (  # noqa: E402
+    BELL as BELL_CODE, SPIN, converse, error_codes, linux_only, run, running_descendants, start_kernel, types, warm_up,
+)
+
+
+@pytest.fixture(scope="module")
+def kernel():
+    instance = start_kernel()
+    warm_up(instance)
+    yield instance
+    instance.stop()
+
+
+@pytest.fixture(scope="module")
+def short_wall_kernel():
+    """A kernel whose every user-code wall limit is 3 s (the every-path timeout tests)."""
+    instance = start_kernel(env={"NUCLEI_RUN_WALL_S": "3"})
+    warm_up(instance)
+    yield instance
+    instance.stop()
+
+
+def parse_msg(code: str, **extra) -> dict:
+    return {"type": "parse", "code": code, "language": "python", **extra}
+
+
+def exec_msg(code: str, **extra) -> dict:
+    return {"type": "execute", "code": code, "language": "python", "shots": 64, **extra}
+
+
+# -- R-6 / R-7: cancel, stale cancel ----------------------------------------------------------------------
+
+
+@linux_only
+def test_run_cancel_kills_within_1s(kernel) -> None:
+    async def scenario():
+        ws = await connect(kernel)
+        await ws.send(json.dumps(exec_msg(SPIN, run_id="c1")))
+        await asyncio.sleep(1.5)
+        sent = time.monotonic()
+        await ws.send(json.dumps({"type": "run_cancel", "run_id": "c1"}))
+        frames, _ = await exchange(ws, {"type": "environment"}, {"result"}, 10)  # drains until the run's result frame
+        elapsed = time.monotonic() - sent
+        await asyncio.sleep(0.5)
+        spinning = running_descendants(kernel._proc.pid)
+        await ws.close()
+        return frames, elapsed, spinning
+
+    frames, elapsed, spinning = run(scenario())
+    assert "run_cancelled" in types(frames)
+    assert next(f for f in frames if f["type"] == "run_cancelled") == {"type": "run_cancelled", "run_id": "c1", "accepted": True}
+    assert "cancelled" in error_codes(frames) and types(frames)[-1] in ("result", "environment")
+    assert elapsed < 1.0, elapsed
+    assert spinning == [], "a process is still burning CPU after the cancel"
+
+
+def test_stale_run_cancel_is_ignored(kernel) -> None:
+    async def scenario():
+        ws = await connect(kernel)
+        first, _ = await exchange(ws, exec_msg(BELL_CODE, run_id="s1"), {"result"}, 60)
+        stale = []
+        for run_id in ("s1", "never-started", None):
+            frames, _ = await exchange(ws, {"type": "run_cancel", "run_id": run_id}, {"run_cancelled"}, 10)
+            stale.append(frames[-1])
+        slow = "import time\n" + BELL_CODE + "time.sleep(1.0)\n"
+        await ws.send(json.dumps(exec_msg(slow, run_id="s2")))
+        await asyncio.sleep(0.3)
+        await ws.send(json.dumps({"type": "run_cancel", "run_id": "s1"}))  # a late Stop for the run that already finished
+        rest, _ = await exchange(ws, {"type": "environment"}, {"result"}, 60)
+        await ws.close()
+        return first, stale, rest
+
+    first, stale, rest = run(scenario())
+    assert types(first)[-1] == "result" and not error_codes(first)
+    assert [f["accepted"] for f in stale] == [False, False, False]
+    assert next(f for f in rest if f["type"] == "run_cancelled")["accepted"] is False
+    assert not error_codes(rest) and [f for f in rest if f["type"] == "result"][0]["data"] is not None
+
+
+# -- R-8: queued parses never delay Run, and a program executes once ---------------------------------------
+
+
+def test_queued_parses_do_not_delay_run(kernel) -> None:
+    program = "import time\ntime.sleep(2.0)\n" + BELL_CODE
+
+    async def scenario():
+        ws = await connect(kernel)
+        for _ in range(5):
+            await ws.send(json.dumps(parse_msg(program)))
+            await asyncio.sleep(0.3)
+        frames, elapsed = await exchange(ws, exec_msg(program), {"result"}, 60)
+        await ws.close()
+        return frames, elapsed
+
+    frames, elapsed = run(scenario())
+    assert not error_codes(frames)
+    simulate_s = [f for f in frames if f["type"] == "result"][0]["data"]["execution_time_ms"] / 1000
+    assert elapsed <= 2.0 + 0.5 + simulate_s, f"Run took {elapsed:.2f}s behind five queued parses"
+
+
+def test_single_exec_with_lab_open(kernel, tmp_path) -> None:
+    log = tmp_path / "exec_log.txt"
+    main = tmp_path / "main.py"
+    code = f"with open({str(log)!r}, 'a') as handle:\n    handle.write('x')\n" + BELL_CODE
+    main.write_text(code)
+    paths = {"project_root": str(tmp_path), "file_path": str(main)}
+
+    async def scenario():
+        editor = await connect(kernel)
+        lab = await connect(kernel)
+        parsed, _ = await exchange(editor, parse_msg(code, **paths), {"snapshot"}, 60)
+        inspected, _ = await exchange(lab, {"type": "trainability_inspect", "code": code, **paths}, {"trainability_inspected"}, 60)
+        linted, _ = await exchange(lab, {"type": "trainability_lint", "code": code, **paths}, {"trainability_lint_result"}, 60)
+        again, _ = await exchange(editor, parse_msg(code, **paths), {"snapshot"}, 60)
+        await editor.close()
+        await lab.close()
+        return parsed, inspected, linted, again
+
+    parsed, inspected, linted, again = run(scenario())
+    assert types(parsed)[-1] == "snapshot" and not error_codes(parsed)
+    assert inspected[-1]["type"] == "trainability_inspected" and linted[-1]["type"] == "trainability_lint_result"
+    assert again[-1]["type"] == "snapshot"
+    assert log.read_text() == "x", "the program executed more than once for one code version"
+
+
+# -- R-9: paths --------------------------------------------------------------------------------------------
+
+
+def test_path_traversal_refused(kernel, tmp_path) -> None:
+    project = tmp_path / "proj"
+    outside = tmp_path / "outside"
+    project.mkdir()
+    outside.mkdir()
+    os.symlink(outside, project / "link")
+    cases = {
+        "file_dotdot": {"project_root": str(project), "file_path": "../x.py"},
+        "run_dir_dotdot": {"project_root": str(project), "run_dir": "../escaped"},
+        "symlink_escape": {"project_root": str(project), "file_path": "link/main.py"},
+        "relative_root": {"project_root": "relative/dir"},
+        "missing_root": {"project_root": str(tmp_path / "nope")},
+    }
+
+    async def scenario():
+        out = {}
+        for name, fields in cases.items():
+            out[name] = await converse(kernel, [(exec_msg(BELL_CODE, **fields), {"result"}), (parse_msg(BELL_CODE, **{k: v for k, v in fields.items() if k != "run_dir"}), {"error", "snapshot"})])
+        return out
+
+    results = run(scenario())
+    for name, (execute_frames, parse_frames) in results.items():
+        assert error_codes(execute_frames) == ["invalid_path"], name
+        assert types(execute_frames)[-1] == "result" and execute_frames[-1]["data"] is None, name
+        if name != "run_dir_dotdot":  # parse takes no run_dir
+            assert error_codes(parse_frames) == ["invalid_path"], name
+        assert any(f.get("field") for f in execute_frames if f["type"] == "error"), name
+    assert not (tmp_path / "escaped").exists() and not list(outside.iterdir())
+
+
+def test_write_into_run_dir_and_project_files(kernel, tmp_path) -> None:
+    (tmp_path / "hamiltonian.json").write_text('{"qubits": 2}')
+    (tmp_path / "ansatz_lib_rbrp.py").write_text("from qiskit import QuantumCircuit\n\ndef build(n):\n    qc = QuantumCircuit(n, n)\n    qc.h(0)\n    qc.measure(range(n), range(n))\n    return qc\n")
+    code = (
+        "import json, os\nfrom ansatz_lib_rbrp import build\n"
+        "n = json.load(open('hamiltonian.json'))['qubits']\n"
+        "open(os.path.join(os.environ['NUCLEI_RUN_DIR'], 'energy.txt'), 'w').write('-1.1')\nqc = build(n)\n"
+    )
+    paths = {"project_root": str(tmp_path), "file_path": str(tmp_path / "main.py")}
+    (frames,) = run(converse(kernel, [(exec_msg(code, run_id="w1", run_dir="experiments/t/runs/r1", **paths), {"result"})]))
+    assert not error_codes(frames)
+    result = [f for f in frames if f["type"] == "result"][0]
+    assert (tmp_path / "experiments" / "t" / "runs" / "r1" / "energy.txt").read_text() == "-1.1"
+    assert result["data"]["run_dir"] == str(tmp_path / "experiments" / "t" / "runs" / "r1")
+    assert result["run_id"] == "w1" and {"queue_ms", "spawn_wait_ms", "exec_ms", "simulate_ms", "serialize_ms", "total_ms"} <= set(result["timing"])
+
+
+def test_main_guard_runs(kernel) -> None:
+    code = "from qiskit import QuantumCircuit\n\nif __name__ == '__main__':\n    qc = QuantumCircuit(2, 2)\n    qc.h(0)\n    qc.measure([0, 1], [0, 1])\n"
+    parsed, executed = run(converse(kernel, [(parse_msg(code), {"snapshot"}), (exec_msg(code), {"result"})]))
+    assert parsed[0]["data"]["qubit_count"] == 2 and not error_codes(parsed) and not error_codes(executed)
+
+
+# -- R-11 --------------------------------------------------------------------------------------------------
+
+
+def test_n30_too_many_qubits_fast(kernel) -> None:
+    code = "from qiskit import QuantumCircuit\nn = 30\nqc = QuantumCircuit(n, n)\nqc.h(0)\nqc.measure(range(n), range(n))\n"
+
+    async def scenario():
+        ws = await connect(kernel)
+        frames, elapsed = await exchange(ws, exec_msg(code), {"result"}, 30)
+        await ws.close()
+        return frames, elapsed
+
+    frames, elapsed = run(scenario())
+    assert elapsed < 1.0, elapsed
+    assert types(frames) == ["snapshot", "error", "result"] and frames[-1]["data"] is None
+    error = frames[1]
+    assert error["code"] == "too_many_qubits" and error["estimate"]["qubits"] == 30
+    assert [a["id"] for a in error["actions"]] == ["rerun_mps", "open_lab"]
+    assert max(len(json.dumps(f)) for f in frames) < 20_000
+
+
+def test_mps_rerun_action_runs_the_circuit(kernel) -> None:
+    code = "from qiskit import QuantumCircuit\nn = 30\nqc = QuantumCircuit(n, n)\nqc.h(0)\nfor q in range(1, n):\n    qc.cx(0, q)\nqc.measure(range(n), range(n))\n"
+    (frames,) = run(converse(kernel, [(exec_msg(code, simulation_method="matrix_product_state"), {"result"})]))
+    assert not error_codes(frames)
+    data = [f for f in frames if f["type"] == "result"][0]["data"]
+    assert sum(data["measurements"].values()) == 64 and data["state_vector"] == []
+
+
+def test_n24_sampled_run_ok(kernel) -> None:
+    code = "from qiskit import QuantumCircuit\nn = 24\nqc = QuantumCircuit(n, n)\nqc.h(0)\nfor q in range(1, n):\n    qc.cx(0, q)\nqc.measure(range(n), range(n))\n"
+    (frames,) = run(converse(kernel, [(exec_msg(code, shots=256), {"result"})], timeout=120))
+    assert not error_codes(frames)
+    data = [f for f in frames if f["type"] == "result"][0]["data"]
+    assert data["measurements_source"] == "sampled" and data["state_vector"] == []
+    assert data["truncated"]["state_vector"] is True and sum(data["measurements"].values()) == 256
+    assert max(len(json.dumps(f)) for f in frames) < 4_000_000
+
+
+# -- R-12 / R-22 -------------------------------------------------------------------------------------------
+
+
+def test_plt_show_with_display_returns_fast() -> None:
+    kernel = start_kernel(display=":99")  # nothing listens on :99: a GUI backend would hang or die here
+    try:
+        warm_up(kernel)
+        code = "import matplotlib.pyplot as plt\nfrom qiskit import QuantumCircuit\nplt.plot([0, 1], [1, 0])\nplt.title('convergence')\nplt.show()\nqc = QuantumCircuit(1, 1)\nqc.h(0)\nqc.measure(0, 0)\n"
+
+        async def scenario():
+            ws = await connect(kernel)
+            frames, elapsed = await exchange(ws, exec_msg(code), {"result"}, 30)
+            await ws.close()
+            return frames, elapsed
+
+        frames, elapsed = run(scenario())
+        assert elapsed < 2.0 and not error_codes(frames)
+        figures = [f for f in frames if f["type"] == "result"][0]["data"]["figures"]
+        assert len(figures) == 1 and figures[0]["title"] == "convergence" and figures[0]["png_base64"].startswith("iVBOR")
+    finally:
+        kernel.stop()
+
+
+def test_output_truncated_100k_lines(kernel) -> None:
+    code = "from qiskit import QuantumCircuit\nfor i in range(100000):\n    print('line', i)\nqc = QuantumCircuit(1, 1)\nqc.measure(0, 0)\n"
+    (frames,) = run(converse(kernel, [(exec_msg(code), {"result"})], timeout=120))
+    outputs = [f for f in frames if f["type"] == "output"]
+    assert sum(len(f["text"].encode()) for f in outputs if not f.get("output_truncated")) <= 256 * 1024
+    notes = [f for f in outputs if f.get("output_truncated")]
+    assert len(notes) == 1 and "output truncated" in notes[0]["text"] and notes[0]["dropped_bytes"] > 500_000
+    assert max(len(json.dumps(f)) for f in frames) < 400_000 and not error_codes(frames)
+
+
+# -- compatibility: no run_id means today's frames -----------------------------------------------------------
+
+
+def test_no_run_id_frame_sequence_unchanged(kernel) -> None:
+    # a loop keeps the program off the static fast path, which never runs (or prints from) the program
+    printing = "for _ in range(1):\n    print('hi')\n" + BELL_CODE
+    cases = [
+        (parse_msg(BELL_CODE), {"snapshot"}, ["snapshot"]),
+        (parse_msg(printing), {"snapshot"}, ["output", "snapshot"]),
+        (exec_msg(BELL_CODE), {"result"}, ["snapshot", "result"]),
+        (exec_msg(printing), {"result"}, ["output", "snapshot", "result"]),
+        (exec_msg("raise ValueError('x')\n"), {"result"}, ["snapshot", "error", "result"]),
+        (exec_msg("def (:\n"), {"result"}, ["snapshot", "error", "result"]),
+        (exec_msg("x = 1\n"), {"result"}, ["snapshot", "error", "result"]),
+        ({"type": "run_python", "code": "print('py')\n"}, {"python_result"}, ["output", "python_result"]),
+        ({"type": "run_python", "code": "1/0\n"}, {"python_result"}, ["error", "python_result"]),
+    ]
+    results = run(converse(kernel, [(m, t) for m, t, _ in cases]))
+    for (message, _terminal, expected), frames in zip(cases, results):
+        assert types(frames) == expected, (message["type"], message["code"][:30], types(frames))
+        assert not [f for f in frames if "run_id" in f or "timing" in f or "preview" in f], frames
+
+
+def test_run_id_requests_echo_it_and_describe_the_preview(kernel) -> None:
+    (parsed, executed) = run(converse(kernel, [(parse_msg(BELL_CODE, run_id="v1-a"), {"snapshot"}), (exec_msg(BELL_CODE, run_id="v1-b"), {"result"})]))
+    snap = [f for f in parsed if f["type"] == "snapshot"][0]
+    assert snap["run_id"] == "v1-a" and snap["preview"] in ("static", "exec", "cache") and snap["slow"] is False
+    assert all(f.get("run_id") == "v1-b" for f in executed)
+
+
+def test_bad_or_duplicate_run_ids_are_invalid_requests(kernel) -> None:
+    async def scenario():
+        ws = await connect(kernel)
+        bad, _ = await exchange(ws, exec_msg(BELL_CODE, run_id="has space"), {"result"}, 10)
+        slow = "import time\n" + BELL_CODE + "time.sleep(1.5)\n"
+        await ws.send(json.dumps(exec_msg(slow, run_id="dup")))
+        await asyncio.sleep(0.4)
+        dup, _ = await exchange(ws, exec_msg(BELL_CODE, run_id="dup"), {"result"}, 30)
+        rest = await drain(ws, 3.0)
+        await ws.close()
+        return bad, dup, rest
+
+    bad, dup, rest = run(scenario())
+    assert error_codes(bad) == ["invalid_request"]
+    assert "invalid_request" in error_codes(dup)
+    assert "result" in types(rest + dup)
+
+
+# -- every exec path survives a runaway, an os._exit, a sibling import, a data read --------------------------------
+
+
+TERMINALS = {
+    "execute": ({"result"}, "result"), "run_python": ({"python_result"}, "python_result"),
+    "transpile": ({"transpile_result"}, "transpile_result"), "debug_trace": ({"debug_trace_result"}, "debug_trace_result"),
+    "parse": ({"snapshot", "error"}, None),
+}
+
+
+@pytest.mark.parametrize("op", sorted(TERMINALS))
+@pytest.mark.parametrize("hazard, expected", [("spin", "timeout"), ("exit", "worker_died")])
+def test_terminal_frames_on_timeout_or_death(short_wall_kernel, op: str, hazard: str, expected: str) -> None:
+    body = SPIN if hazard == "spin" else "import os\n" + BELL_CODE + "os._exit(7)\n"
+    message = {"type": op, "code": body, "language": "python", "shots": 16}
+    terminal, closing = TERMINALS[op]
+    started = time.monotonic()
+    frames, probe = run(converse(short_wall_kernel, [(message, terminal), (exec_msg(BELL_CODE), {"result"})], timeout=30))
+    assert expected in error_codes(frames), types(frames)
+    assert time.monotonic() - started < 15
+    if closing is not None:
+        assert types(frames)[-1] == closing
+    elif op == "parse":
+        assert "snapshot" not in types(frames)  # the last diagram stays
+    assert not error_codes(probe) and probe[-1]["type"] == "result", "the next request on the same socket failed"
+
+
+def test_hardware_simulator_submit_runs_off_the_event_loop(short_wall_kernel) -> None:
+    async def scenario():
+        slow = await connect(short_wall_kernel)
+        other = await connect(short_wall_kernel)
+        await slow.send(json.dumps({"type": "hardware_submit", "provider": "simulator", "backend": "sim_qasm", "shots": 16, "code": SPIN, "language": "python"}))
+        await asyncio.sleep(0.5)
+        frames, elapsed = await exchange(other, parse_msg(BELL_CODE), {"snapshot"}, 10)
+        submitted, _ = await exchange(slow, {"type": "environment"}, {"hardware_job_submitted", "error"}, 30)
+        job = [f for f in submitted if f["type"] == "hardware_job_submitted"][0]["job"]
+        results, _ = await exchange(slow, {"type": "hardware_results", "job_id": job["id"]}, {"hardware_result"}, 10)
+        await slow.close()
+        await other.close()
+        return frames, elapsed, job, results
+
+    frames, elapsed, job, results = run(scenario())
+    assert types(frames)[-1] == "snapshot" and elapsed < 2.0, "another connection stalled behind a simulator submit"
+    assert job["status"] == "failed"
+    assert results[-1]["data"]["error"]["code"] == "timeout"
+
+
+def test_hardware_python_submit_failure_is_a_friendly_error(short_wall_kernel) -> None:
+    message = {"type": "hardware_submit", "provider": "ibm", "backend": "ibm_brisbane", "shots": 16, "code": SPIN, "language": "python"}
+    (frames,) = run(converse(short_wall_kernel, [(message, {"error", "hardware_job_submitted"})], timeout=30))
+    assert frames[-1]["type"] == "error" and "Hardware submit failed" in frames[-1]["message"]
+    assert "ran longer than" in frames[-1]["message"]
+
+
+# -- the tripwire: the server process never executes user code --------------------------------------------------
+
+
+def test_server_main_forbids_inprocess_exec() -> None:
+    from kernel import run_context
+
+    run_context.forbid_inprocess_exec()
+    try:
+        with pytest.raises(run_context.InProcessExecForbidden):
+            Executor().parse(BELL_CODE)
+        with pytest.raises(run_context.InProcessExecForbidden):
+            from kernel.trainability._usercode import run_namespace
+
+            run_namespace("x = 1", None)
+        with pytest.raises(run_context.InProcessExecForbidden):
+            from kernel.qec.estimate import _qiskit_code_to_qasm3
+
+            _qiskit_code_to_qasm3("x = 1")
+    finally:
+        run_context.allow_inprocess_exec()
+
+
+def test_kernel_launched_as_a_module_works(tmp_path) -> None:
+    instance = start_kernel(launch="module")
+    try:
+        (frames,) = run(converse(instance, [(parse_msg(BELL_CODE), {"snapshot"})]))
+        assert not error_codes(frames) and frames[-1]["data"]["qubit_count"] == 2
+        assert not [line for line in instance.stderr_lines if "Traceback" in line]
+    finally:
+        instance.stop()
+
+
+# -- performance budgets (design note section 5) --------------------------------------------------------------------
+
+TOLERANCE = 1.5 if sys.platform == "darwin" else 1.0  # the macOS runners are slower
+
+
+@pytest.mark.slow
+def test_latency_parse_p50(kernel) -> None:
+    program = "total = 0\nfor i in range(20000):\n    total += i\n" + BELL_CODE  # a loop defeats the static fast path
+
+    async def scenario():
+        ws = await connect(kernel)
+        overheads = []
+        for index in range(20):
+            started = time.monotonic()
+            frames, _ = await exchange(ws, parse_msg(program + f"# edit {index}\n", run_id=f"lat-{index}"), {"snapshot"}, 30)
+            snap = [f for f in frames if f["type"] == "snapshot"][0]
+            assert snap["preview"] == "exec"
+            overheads.append((time.monotonic() - started) * 1000 - snap["elapsed_ms"])
+        await ws.close()
+        return overheads
+
+    overheads = run(scenario())
+    assert statistics.median(overheads) <= 150 * TOLERANCE, overheads
+
+
+@pytest.mark.slow
+def test_latency_parse_static_p50(kernel) -> None:
+    async def scenario():
+        ws = await connect(kernel)
+        times = []
+        for index in range(20):
+            started = time.monotonic()
+            frames, _ = await exchange(ws, parse_msg(BELL_CODE + f"# {index}\n", run_id=f"st-{index}"), {"snapshot"}, 30)
+            assert [f for f in frames if f["type"] == "snapshot"][0]["preview"] == "static"
+            times.append((time.monotonic() - started) * 1000)
+        await ws.close()
+        return times
+
+    assert statistics.median(run(scenario())) <= 150 * TOLERANCE
+
+
+@pytest.mark.slow
+def test_latency_run_overhead(kernel) -> None:
+    async def scenario():
+        ws = await connect(kernel)
+        worst = 0.0
+        for index in range(10):
+            await asyncio.sleep(1.8)  # let the replacement spare finish importing
+            frames, _ = await exchange(ws, exec_msg(BELL_CODE, run_id=f"ro-{index}"), {"result"}, 30)
+            result = [f for f in frames if f["type"] == "result"][0]
+            timing = result["timing"]
+            assert timing["spawn_wait_ms"] == 0 or timing["spawn_wait_ms"] < 50, timing
+            worst = max(worst, timing["total_ms"] - timing["exec_ms"] - timing["simulate_ms"])
+        await ws.close()
+        return worst
+
+    assert run(scenario()) <= 300 * TOLERANCE
+
+
+@pytest.mark.slow
+def test_latency_lint_warm(kernel) -> None:
+    from pathlib import Path
+
+    source = Path(__file__).resolve().parents[2] / "tests" / "e2e" / "fixtures" / "lab-project" / "ansatz" / "hardware_efficient.py"
+    if not source.is_file():
+        pytest.skip("the lab-project fixture is not in this checkout")
+    code = source.read_text()
+
+    async def scenario():
+        ws = await connect(kernel)
+        await exchange(ws, {"type": "trainability_inspect", "code": code}, {"trainability_inspected", "error"}, 60)
+        started = time.monotonic()
+        frames, _ = await exchange(ws, {"type": "trainability_lint", "code": code}, {"trainability_lint_result", "error"}, 30)
+        elapsed = time.monotonic() - started
+        await ws.close()
+        return frames, elapsed
+
+    frames, elapsed = run(scenario())
+    assert frames[-1]["type"] == "trainability_lint_result", frames[-1]
+    assert elapsed <= 0.35 * TOLERANCE, elapsed

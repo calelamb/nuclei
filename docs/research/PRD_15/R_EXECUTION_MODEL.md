@@ -25,6 +25,22 @@ Binding sources: master §2.1 item 7, §2.5, §4.2, §5.1 (R-B row); audit R-3, 
   R-B also creates the files in §9, including unit-test files beyond the three named in the brief. The controller must add these to `check-wave-ownership.py`'s view of Run 0b.
 - **D12 Tripwire.** In-process exec of user code is forbidden in the server process (§1). It stays legal in Lab job workers, the agent worker and tests.
 
+### Implementation decisions (recorded while building R-B)
+
+- **D13 Memory policy lives in `Executor.execute`.** The R-11 plan and lean path run inside the executor (`kernel/run_memory.py`), not only in the worker op, so the disposable agent worker, the simulator provider and any embedder get the same guard. `Executor.result_extras` carries `bound_at`; figures ride on the worker's `LoadedProgram`.
+- **D14 Un-id'd requests are answered in order.** Only a request that carries a `run_id` (v1.4 clients, whose frames echo it) and every `parse` run as concurrent tasks; any other routed request is awaited inline and its reply is drained before the next message is read, so replies keep today's order and the docs fixtures replay unchanged. This narrows risk 9 to v1.4 clients. A stream that merely ends (in-process fakes) lets in-flight tasks finish; a closed connection cancels them.
+- **D15 Workers never write bytecode.** `sys.dont_write_bytecode = True`: an imported sibling must not leave a `.pyc` that a same-second, same-size edit would resurrect, and the project is not littered with `__pycache__`. Library bytecode is unaffected (already compiled).
+- **D16 Deferred detection is bounded.** A program whose own imports name no framework is still run and scanned by circuit type only when it imports something non-stdlib (`Detection.foreign_imports`). `print('hello')` is still `unsupported_framework` without running anything. Third-party adapters registered in `ADAPTER_SPECS` keep routing through their own `detect_pattern`, ahead of the built-ins.
+- **D17 `limits.wall_s` applies to every op.** The request limit (clamped 1..86 400) beats `NUCLEI_RUN_WALL_S`, which beats the op default. Scout `z04` is flipped with `limits.wall_s: 3` in `r_b/overrides.yaml`; the run lane default stays 600 s.
+- **D18 File split.** `run_worker.py` (pool) is accompanied by `run_worker_proc.py` (spawn, control channel, marker splitting, output budget, group scans), `run_ipc.py` (framing), `run_ops_builtin.py` (the editor ops), `run_hardware.py` (circuit selection and QPY / Cirq-JSON transport) and `run_winjob.py` (Windows Job Object, untested off Windows). `kernel/tests/_pool_test_ops.py`, `_run_pool_fixtures.py`, `_run_server_helpers.py` and `_fake_lab_ops.py` are test infrastructure.
+- **D19 Linux group scans read `/proc`.** One pass yields process count and RSS for the dirty check and the ceiling poll (no `ps` fork); macOS falls back to `ps`.
+- **D20 `KernelError.extra`** is merged into the top level of the wire error (`to_dict`, `error_payload`) and omitted when empty; `KernelError.from_dict` is its inverse. `error_payload` moved to `kernel/models/errors.py` (re-imported by `server.py`).
+- **D21 Exact lean path returns Bloch coordinates** for n <= 20 (Qiskit little-endian, Cirq big-endian); sampled lean results return none.
+- **D22 Server keeps the stim text, not a circuit.** `qec_snapshot` without `code` rebuilds the payload from the connection's last stim text (`qec_snapshot_text` op). `Executor._last_qec_circuit` stays for in-process callers.
+- **D23 `kernel.trainability.handlers` ops** are registered as `trainability_inspect` / `trainability_lint` message ops (`@worker_op`, `error_mapper`); a Lab handler awaits `run_worker.call_op`. `run_worker.set_inprocess_ops(True)` (fixture `inprocess_mode`) lets tests that monkeypatch what the op calls keep doing so.
+- **D24 Figures are rendered inside the user context** (`RequestState.figures`, true for `execute` / `run_python`), because leaving it closes every figure.
+- **Open items.** macOS and Windows code paths are written to this note and unexercised here (the macOS CI job is added to `kernel-tests.yml`); docs-site pages that still describe the SIGALRM timeout and the v1.4 fields belong to unit X.
+
 ## 1. Every exec path (current → new route)
 
 Walls are defaults (§2.7). "Cached" means the op reads and writes the preview worker's loaded-circuit cache (§3.3).

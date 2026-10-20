@@ -291,3 +291,27 @@ jobs:
 
       - name: Run QEC tests (spawn semantics)
         run: pytest kernel/tests/test_qec_campaign.py kernel/tests/test_stim_adapter.py -v
+
+  # The warm run-worker pool (PRD 15 R-B) on macOS: workers are spawned (never forked) because fork
+  # after Accelerate/libdispatch initialisation is unsafe there, there is no PR_SET_PDEATHSIG, and
+  # group RSS comes from `ps`. Linux-only mechanisms skip themselves; latency budgets get x1.5.
+  run-worker-macos:
+    name: run-worker pool (macOS)
+    runs-on: macos-14
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install the kernel requirements plus test runners
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r kernel/requirements.txt
+          pip install pytest pytest-asyncio pyyaml
+
+      - name: Run the pool and run-path tests
+        run: pytest kernel/tests/test_run_worker.py kernel/tests/test_executor_run_path.py kernel/tests/test_run_cache.py kernel/tests/test_run_memory.py -q

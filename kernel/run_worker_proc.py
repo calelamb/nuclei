@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from kernel import auth, lab_proc, run_ipc
+from kernel.run_winjob import WindowsJob
 
 logger = logging.getLogger(__name__)
 
@@ -196,6 +197,7 @@ class WorkerProc:
     served: int = 0
     kill_reason: str | None = None
     active: ActiveOutput | None = None
+    job: Any = None  # Windows Job Object holding the worker and its children
     _seq: int = 0
     _markers: set = field(default_factory=set)
     _marker_cv: threading.Condition = field(default_factory=threading.Condition)
@@ -226,6 +228,8 @@ class WorkerProc:
             if os.name == "posix":
                 os.killpg(self.pgid, signal.SIGKILL)
             else:  # pragma: no cover - Windows
+                if self.job is not None:
+                    self.job.terminate()
                 self.proc.kill()
         except (ProcessLookupError, PermissionError, OSError):
             try:
@@ -301,36 +305,75 @@ class WorkerProc:
         threading.Thread(target=self._read_control, daemon=True).start()
 
 
-def spawn_worker(lane: str, repo_root: str, sys_path: list[str], session_preimports: tuple[str, ...] = ()) -> WorkerProc:
+def _control_channel() -> tuple[socket.socket | None, dict, Any]:
+    """POSIX: a socketpair passed as an inherited fd. Windows: a loopback listener plus a 256-bit token."""
+    if os.name == "posix":
+        parent, child = socket.socketpair()
+        return parent, {"control_fd": child.fileno()}, child
+    listener = socket.socket()  # pragma: no cover - Windows
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(1)
+    return None, {"port": listener.getsockname()[1], "token": secrets.token_hex(32)}, listener
+
+
+def _accept_control(listener: socket.socket, token: str) -> socket.socket:  # pragma: no cover - Windows
+    listener.settimeout(SPAWN_TIMEOUT_SECONDS)
+    connection, _ = listener.accept()
+    listener.close()
+    received = b""
+    while len(received) < 32:
+        chunk = connection.recv(32 - len(received))
+        if not chunk:
+            break
+        received += chunk
+    if received != bytes.fromhex(token):
+        connection.close()
+        raise WorkerSpawnError("a process that is not the run worker connected to the control port")
+    connection.settimeout(None)
+    return connection
+
+
+def spawn_worker(
+    lane: str, repo_root: str, sys_path: list[str], session_preimports: tuple[str, ...] = (),
+    memory_limit_bytes: int | None = None,
+) -> WorkerProc:
     """Start one worker and wait for its ``ready`` frame.  Call from a long-lived thread (PDEATHSIG)."""
     marker = secrets.token_hex(16)
-    parent_sock, child_sock = socket.socketpair()
+    parent_sock, channel_fields, child_end = _control_channel()
     hello = {
         "lane": lane, "marker": marker, "base_sys_path": sys_path, "parent_pid": os.getpid(),
-        "control_fd": child_sock.fileno() if os.name == "posix" else None,
-        "session_preimports": list(session_preimports),
+        "session_preimports": list(session_preimports), **channel_fields,
     }
-    kwargs: dict[str, Any] = {"pass_fds": (child_sock.fileno(),)} if os.name == "posix" else {}
+    kwargs: dict[str, Any] = {"pass_fds": (child_end.fileno(),)} if os.name == "posix" else {}
+    if os.name != "posix":  # pragma: no cover - Windows
+        kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    else:
+        kwargs["start_new_session"] = True
     try:
         proc = subprocess.Popen(
             [sys.executable, "-I", "-c", BOOTSTRAP, repo_root],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=worker_env(),
-            cwd=os.path.dirname(repo_root) or None, start_new_session=True, close_fds=True, **kwargs,
+            cwd=os.path.dirname(repo_root) or None, close_fds=True, **kwargs,
         )
     except OSError as exc:
-        parent_sock.close()
-        child_sock.close()
+        child_end.close()
+        if parent_sock is not None:
+            parent_sock.close()
         raise WorkerSpawnError(f"could not start a run worker: {exc}") from exc
-    child_sock.close()
+    job = WindowsJob.assign(proc.pid, memory_limit_bytes)
     try:
         assert proc.stdin is not None
         proc.stdin.write((json.dumps(hello) + "\n").encode("utf-8"))
         proc.stdin.flush()
         proc.stdin.close()
-    except OSError as exc:
-        parent_sock.close()
+        if parent_sock is None:  # pragma: no cover - Windows
+            parent_sock = _accept_control(child_end, channel_fields["token"])
+        else:
+            child_end.close()
+    except (OSError, WorkerSpawnError) as exc:
+        proc.kill()
         raise WorkerSpawnError(f"could not talk to the run worker: {exc}") from exc
-    worker = WorkerProc(lane=lane, proc=proc, control=parent_sock, marker=marker)
+    worker = WorkerProc(lane=lane, proc=proc, control=parent_sock, marker=marker, job=job)
     worker.start_readers()
     try:
         ready = worker.frames.get(timeout=SPAWN_TIMEOUT_SECONDS)

@@ -7,7 +7,6 @@ thread (``asyncio.to_thread``, like parse/execute); jobs run in a subprocess (se
 
 from __future__ import annotations
 
-import asyncio
 import importlib
 import logging
 import time

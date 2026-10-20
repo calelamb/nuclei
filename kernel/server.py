@@ -33,7 +33,6 @@ from websockets.asyncio.server import serve as ws_serve
 from kernel import auth, framework_detect, run_context, run_worker
 from kernel.executor import Executor, ruff_base_cmd
 from kernel.hardware.manager import HardwareManager
-from kernel.models import KernelError
 from kernel.models.errors import error_payload
 from kernel.run_hardware import extract_circuit_for_provider as _extract_circuit_for_provider
 from kernel.run_routes import ROUTED_TYPES, RunRoutes

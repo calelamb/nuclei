@@ -301,7 +301,10 @@ class RunPool:
             if not future.set_running_or_notify_cancel():
                 continue
             try:
-                worker = spawn_worker(lane, self.config.repo_root, list(self.config.sys_path), tuple(sorted(self._session_preimports)))
+                worker = spawn_worker(
+                    lane, self.config.repo_root, list(self.config.sys_path), tuple(sorted(self._session_preimports)),
+                    self.config.max_rss_bytes,
+                )
                 worker.packages_stamp = self._stamp
                 worker.baseline_rss = scan_group(worker.pgid)[1]
             except Exception as exc:  # noqa: BLE001 - reported to whoever waits on the future
