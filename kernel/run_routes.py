@@ -167,6 +167,25 @@ def _seed(raw: Any) -> int | None:
         return None
 
 
+def _transpile_target(msg: dict) -> dict:
+    """Validate a transpile request's target at the boundary: anything malformed degrades to the default."""
+    basis_gates = msg.get("basis_gates")
+    if not (isinstance(basis_gates, list) and all(isinstance(g, str) for g in basis_gates)):
+        basis_gates = None
+    coupling_map = msg.get("coupling_map")
+    if isinstance(coupling_map, list) and all(
+        isinstance(edge, (list, tuple)) and len(edge) == 2 and all(isinstance(q, int) and not isinstance(q, bool) for q in edge)
+        for edge in coupling_map
+    ):
+        coupling_map = [[int(a), int(b)] for a, b in coupling_map]
+    else:
+        coupling_map = None
+    level = msg.get("optimization_level", 1)
+    if isinstance(level, bool) or not isinstance(level, int) or level not in (0, 1, 2, 3):
+        level = 1
+    return {"basis_gates": basis_gates, "coupling_map": coupling_map, "optimization_level": level}
+
+
 def _parameter_values(raw: Any) -> dict | None:
     if not isinstance(raw, dict) or not raw:
         return None
@@ -289,7 +308,7 @@ class RunRoutes:
                 limits=_limits(msg.get("limits")),
             )
         elif kind == "transpile":
-            args.update({k: msg.get(k) for k in ("basis_gates", "coupling_map", "optimization_level")})
+            args.update(_transpile_target(msg))
         elif kind == "qec_snapshot":
             args["max_edges"] = _seed(msg.get("max_edges"))
             if isinstance(msg.get("circuit_text"), str):

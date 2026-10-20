@@ -26,6 +26,7 @@ import collections
 import concurrent.futures
 import itertools
 import logging
+import math
 import os
 import queue
 import signal
@@ -35,8 +36,10 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from kernel import project_paths, run_memory, run_ops
+from kernel.discovery.procrun import group_scan
+from kernel.run_context import CPU_HEADROOM_SECONDS
 from kernel.run_worker_proc import (
-    ActiveOutput, NullSink, Sink, WorkerProc, WorkerSpawnError, base_sys_path, scan_group, spawn_worker,
+    ActiveOutput, NullSink, Sink, WorkerProc, WorkerSpawnError, base_sys_path, spawn_worker,
 )
 
 logger = logging.getLogger(__name__)
@@ -74,6 +77,7 @@ class PoolConfig:
     spare_idle_s: float = 1800.0
     supersede_kill_after_s: float = 2.0
     rss_poll_s: float = 0.25
+    cpu_headroom_s: float = CPU_HEADROOM_SECONDS
 
     @classmethod
     def from_env(cls, repo_root: str | None = None) -> "PoolConfig":
@@ -306,7 +310,7 @@ class RunPool:
                     self.config.max_rss_bytes,
                 )
                 worker.packages_stamp = self._stamp
-                worker.baseline_rss = scan_group(worker.pgid)[1]
+                worker.baseline_rss = group_scan(worker.pgid)[1]
             except Exception as exc:  # noqa: BLE001 - reported to whoever waits on the future
                 if lane == run_ops.PREVIEW:
                     self._preview_ready(None, exc)
@@ -472,7 +476,7 @@ class RunPool:
     def _after_preview(self, worker: WorkerProc, result: PoolResult) -> None:
         reusable = bool(result.stats.get("reusable")) and not result.pool_error and worker.alive()
         if reusable:
-            count, rss = scan_group(worker.pgid)
+            count, rss = group_scan(worker.pgid)
             reusable = count <= 1 and rss <= worker.baseline_rss + DIRTY_RSS_GROWTH_BYTES
             if not reusable:
                 result.stats["dirty_reason"] = "children" if count > 1 else "rss"
@@ -553,6 +557,17 @@ class RunPool:
             wall = min(max(float(requested), MIN_WALL_S), MAX_WALL_S)
         return wall
 
+    def _ctx_with_cpu(self, req: RunRequest, wall: float) -> dict:
+        """The request ctx with ``limits.cpu_s`` armed: wall + headroom, unless the caller set one.
+
+        RLIMIT_CPU is the backstop that bounds a worker the pool can no longer reach (macOS has no
+        PDEATHSIG), so every request carries one. Returns a copy; the caller's ctx is untouched.
+        """
+        limits = dict(req.ctx.get("limits") or {})
+        if limits.get("cpu_s") is None:
+            limits["cpu_s"] = max(1, math.ceil(wall + self.config.cpu_headroom_s))
+        return {**req.ctx, "limits": limits}
+
     def _supervise(self, worker: WorkerProc, handle: _Handle, spawn_wait_ms: float) -> PoolResult:
         req = handle.req
         seq = worker.next_seq()
@@ -564,7 +579,8 @@ class RunPool:
         done: dict | None = None
         verdict: dict | None = None
         try:
-            worker.send({"t": "req", "seq": seq, "op": req.op, "run_id": req.run_id or "", "ctx": req.ctx, "args": req.args})
+            ctx = self._ctx_with_cpu(req, wall)
+            worker.send({"t": "req", "seq": seq, "op": req.op, "run_id": req.run_id or "", "ctx": ctx, "args": req.args})
             next_rss = started + self.config.rss_poll_s
             while done is None and verdict is None:
                 done, verdict = self._tick(worker, handle, seq, started, wall)
@@ -641,7 +657,7 @@ class RunPool:
         return self._died(worker, "exited")
 
     def _check_memory(self, worker: WorkerProc) -> dict | None:
-        _count, rss = scan_group(worker.pgid)
+        _count, rss = group_scan(worker.pgid)
         limit = self.config.max_rss_bytes
         if rss <= limit:
             return None

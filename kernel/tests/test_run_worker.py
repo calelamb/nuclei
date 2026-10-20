@@ -523,7 +523,7 @@ PATHS = {
     "trainability_lint": (lambda body, extra: {"type": "trainability_lint", "code": body + BELL, **extra}, {"trainability_lint_result", "error"}),
     "qec_snapshot": (lambda body, extra: {"type": "qec_snapshot", "code": "import stim\n" + body + 'circuit = stim.Circuit("H 0\\nM 0")\n', "language": "python", **extra}, {"qec_snapshot", "error"}),
     "qec_materialize": (lambda body, extra: {"type": "qec_materialize", "code": "import stim\n\ndef nuclei_circuits(noise):\n" + "".join(f"    {line}\n" for line in body.splitlines()) + '    return {"a": stim.Circuit("H 0\\nM 0")}\n', **extra}, {"qec_circuits", "error"}),
-    "qec_estimate": (lambda body, extra: {"type": "qec_estimate", "code": body + BELL, "language": "qiskit", **extra}, {"qec_estimate_result", "error"}),
+    "qec_estimate": (lambda body, extra: {"type": "qec_estimate", "code": body + BELL + "qc.t(0)\n", "language": "qiskit", **extra}, {"qec_estimate_result", "error"}),
     "hardware_submit_device": (lambda body, extra: {"type": "hardware_submit", "provider": "ibm", "backend": "ibm_brisbane", "shots": 16, "code": body + BELL, "language": "python", **extra}, {"hardware_job_submitted", "error"}),
     "hardware_submit_simulator": (lambda body, extra: {"type": "hardware_submit", "provider": "simulator", "backend": "sim_qasm", "shots": 16, "code": body + BELL, "language": "python", **extra}, {"hardware_job_submitted", "error"}),
 }
@@ -537,6 +537,35 @@ def _verdict(path: str, frames: list[dict], kernel_for_job=None) -> set[str]:
             message = frame.get("message", "")
             codes.update(c for c, text in (("timeout", "ran longer than"), ("worker_died", "exited")) if text in message)
     return codes
+
+
+#: What a path that survived a benign hazard (sibling import, relative data read) must have produced: proof
+#: that the user's program really ran there, not merely that no known error code showed up.
+SUCCESS_FRAME = {
+    "parse": "snapshot", "execute": "result", "run_python": "python_result", "transpile": "transpile_result",
+    "debug_trace": "debug_trace_result", "trainability_inspect": "trainability_inspected",
+    "trainability_lint": "trainability_lint_result", "qec_snapshot": "qec_snapshot", "qec_materialize": "qec_circuits",
+    "qec_estimate": "qec_estimate_result", "hardware_submit_simulator": "hardware_job_submitted",
+}
+#: A device submit with no provider connected: the program was prepared (run by a worker) first, so reaching this
+#: message proves the sibling import / data read worked; a failure there would have replaced it.
+DEVICE_NOT_CONNECTED = "Hardware submit failed: Provider 'ibm' is not connected"
+PROGRAM_FAILURE_MARKERS = ("ModuleNotFoundError", "FileNotFoundError", "rb_sibling_helper", "data.json")
+
+
+def _assert_program_ran(path: str, hazard: str, frames: list[dict]) -> None:
+    errors = [f for f in frames if f.get("type") == "error"]
+    for frame in errors:
+        text = frame.get("message", "") + frame.get("traceback", "")
+        assert not any(marker in text for marker in PROGRAM_FAILURE_MARKERS), (path, hazard, frame)
+    if path == "hardware_submit_device":
+        assert [f.get("message") for f in errors] == [DEVICE_NOT_CONNECTED], (path, hazard, frames[-3:])
+        return
+    assert not errors, (path, hazard, errors)
+    final = next((f for f in reversed(frames) if f.get("type") == SUCCESS_FRAME[path]), None)
+    assert final is not None, (path, hazard, [f.get("type") for f in frames])
+    if path == "hardware_submit_simulator":
+        assert final["job"]["status"] == "complete" and final["job"]["error"] is None, final
 
 
 @pytest.mark.parametrize("hazard", sorted(BODIES))
@@ -558,7 +587,8 @@ def test_every_exec_path_survives(hazard_kernel, tmp_path, path: str, hazard: st
     elif expected:
         assert expected in codes, (path, hazard, frames[-3:])
     else:
-        assert not (codes & BAD_CODES) or path in ("qec_estimate",), (path, hazard, frames[-3:])
+        assert not (codes & BAD_CODES), (path, hazard, frames[-3:])
+        _assert_program_ran(path, hazard, frames)
     assert probe[-1]["type"] == "snapshot" and not error_codes(probe), "the next request on the same socket failed"
 
 
@@ -582,3 +612,59 @@ def test_future_lab_ops_inherit_every_guarantee(pool, tmp_path, op: str, hazard:
     else:
         assert result.error is None and result.reply["ok"] is True
     assert call(pool, "t_echo").error is None
+
+
+def test_future_lab_ops_share_one_execution_per_code_version(pool, tmp_path) -> None:
+    """Design note section 7: parse + symmetry_detect/propose + deploy_inspect + learned sources run the program once."""
+    import kernel.tests._fake_lab_ops  # noqa: F401 - registers the stand-ins in this process
+    from kernel.run_ops import spec_of
+    from kernel.run_worker import RunRequest
+
+    log = tmp_path / "exec_log.txt"
+    main = tmp_path / "main.py"
+    code = f"with open({str(log)!r}, 'a') as handle:\n    handle.write('x')\n" + BELL
+    main.write_text(code)
+    ctx = {"project_root": str(tmp_path), "file_path": str(main), "cache": "use"}
+    parsed = call(pool, "t_run_code", {"code": code}, ctx=ctx)
+    assert parsed.reply["error"] is None and parsed.reply["exec_count"] == 1
+    for op in ("fake_symmetry_detect", "fake_symmetry_propose", "fake_deploy_inspect", "fake_qec_learned_sources"):
+        spec = spec_of(op)
+        loaded = pool.submit(RunRequest(
+            op=spec.ref, owner=7_100, args={"code": code, "language": "python"}, lane=spec.lane, wall_s=30,
+            ctx=ctx, streaming=False,
+        )).result(timeout=60)
+        assert loaded.error is None and loaded.reply["ok"] is True, (op, loaded.error)
+    assert log.read_text() == "x", "a Lab op re-executed a program the loaded-circuit cache already held"
+
+
+# -- RLIMIT_CPU (armed by the pool for every request) -----------------------------------------------------
+
+SPIN_CODE = "while True:\n    pass\n"
+
+
+@linux_only
+def test_cpu_limit_is_armed_and_kills_a_spinning_program_as_a_cpu_timeout(pool) -> None:
+    started = time.monotonic()
+    result = call(pool, "t_run_code_run", {"code": SPIN_CODE}, wall_s=60, ctx={"limits": {"cpu_s": 1}})
+    assert result.error["code"] == "timeout" and result.error["reason"] == "cpu", result.error
+    assert time.monotonic() - started < 15
+    assert call(pool, "t_echo_run").error is None
+
+
+def test_pool_arms_cpu_as_wall_plus_headroom_unless_the_request_carries_one(isolated_pool) -> None:
+    from kernel.run_context import CPU_HEADROOM_SECONDS
+
+    armed = isolated_pool()
+    probe = request("t_probe", wall_s=20)
+    ctx = armed._ctx_with_cpu(probe, armed._wall_for(probe))
+    assert ctx["limits"]["cpu_s"] == 20 + CPU_HEADROOM_SECONDS
+    assert "cpu_s" not in (probe.ctx.get("limits") or {}), "the caller's ctx must not be mutated"
+    explicit = request("t_probe", wall_s=20, ctx={"limits": {"cpu_s": 3}})
+    assert armed._ctx_with_cpu(explicit, 20)["limits"]["cpu_s"] == 3
+
+
+@linux_only
+def test_headroom_override_makes_a_default_cpu_limit_reachable(isolated_pool) -> None:
+    short = isolated_pool(cpu_headroom_s=-58)  # wall 60 s + (-58) = 2 s of CPU
+    result = call(short, "t_run_code_run", {"code": SPIN_CODE}, wall_s=60)
+    assert result.error["code"] == "timeout" and result.error["reason"] == "cpu", result.error

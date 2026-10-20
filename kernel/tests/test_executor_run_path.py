@@ -145,6 +145,124 @@ def test_parameter_values_use_the_binding_module(monkeypatch) -> None:
     assert calls == [{"theta": 0.5}] and executor.result_extras["bound_at"] == {"theta": 0.5}
 
 
+class _Unbound(ValueError):
+    """Mirrors R-A's ``kernel.adapters.errors.UnboundParametersError`` (code/severity/parameters)."""
+
+    code = "unbound_parameters"
+    severity = "info"
+
+    def __init__(self, parameters):
+        self.parameters = list(parameters)
+        super().__init__(f"{len(self.parameters)} free parameters ({', '.join(self.parameters)}); nothing to simulate.")
+
+
+class _Unsupported(RuntimeError):
+    """Mirrors R-A's ``UnsupportedInstructionError``."""
+
+    code = "unsupported_instruction"
+    severity = "error"
+
+    def __init__(self, instruction):
+        self.instruction = instruction
+        super().__init__(f"The simulator cannot run the instruction '{instruction}'.")
+
+
+def _stub_binding(monkeypatch, fn) -> list:
+    import sys
+    import types
+
+    calls: list = []
+    stub = types.ModuleType("kernel.adapters.binding")
+
+    def bind_parameters(circuit, values=None, **kwargs):
+        calls.append(values)
+        return fn(circuit, values)
+
+    stub.bind_parameters = bind_parameters
+    monkeypatch.setitem(sys.modules, "kernel.adapters.binding", stub)
+    return calls
+
+
+def test_binding_is_consulted_even_without_parameter_values(monkeypatch) -> None:
+    calls = _stub_binding(monkeypatch, lambda circuit, values: (circuit, {}))
+    result, _s, _o, _e, error = Executor().execute(BELL, 16)
+    assert error is None and result is not None and calls == [None]
+
+
+def test_unbound_parameters_keep_their_typed_wire_shape(monkeypatch) -> None:
+    def raise_unbound(circuit, values):
+        raise _Unbound(["phi", "theta"])
+
+    _stub_binding(monkeypatch, raise_unbound)
+    snapshot_error = Executor().execute(BELL, 16)
+    _result, snapshot, _out, _err, error = snapshot_error
+    assert snapshot is not None, "the circuit still renders while the prompt is shown"
+    assert error.code == "unbound_parameters" and error.framework == "qiskit"
+    assert error.to_dict()["severity"] == "info" and error.to_dict()["parameters"] == ["phi", "theta"]
+
+
+def test_unsupported_instruction_from_the_simulator_keeps_its_name(monkeypatch) -> None:
+    from kernel.adapters import qiskit_adapter
+
+    def refuse(self, circuit, shots, seed=None):
+        raise _Unsupported("mystery_gate")
+
+    monkeypatch.setattr(qiskit_adapter.QiskitAdapter, "simulate", refuse)
+    _result, _snapshot, _out, _err, error = Executor().execute(BELL, 16)
+    wire = error.to_dict()
+    assert wire["code"] == "unsupported_instruction" and wire["instruction"] == "mystery_gate"
+    assert wire["severity"] == "error" and "mystery_gate" in wire["message"]
+
+
+def test_untyped_adapter_failures_are_still_classified_as_before(monkeypatch) -> None:
+    def explode(circuit, values):
+        raise RuntimeError("boom")
+
+    _stub_binding(monkeypatch, explode)
+    error = Executor().execute(BELL, 16, parameter_values={"theta": 1.0})[4]
+    assert error.code == "adapter_error" and "severity" not in error.to_dict()
+
+
+def test_execute_op_error_frame_is_the_ruled_unbound_parameters_shape(monkeypatch) -> None:
+    """The exact frame `run_routes._fail` builds from the worker op's error: the ruled wire shape."""
+    from types import SimpleNamespace
+
+    from kernel.models import KernelError
+    from kernel.models.errors import error_payload
+    from kernel.run_ops_builtin import execute_op
+
+    def raise_unbound(circuit, values):
+        raise _Unbound(["theta"])
+
+    _stub_binding(monkeypatch, raise_unbound)
+    reply, error = execute_op(SimpleNamespace(request=None), {"code": BELL, "shots": 8})
+    assert reply["snapshot"] is not None and reply["result"] is None
+    frame = error_payload(KernelError.from_dict(error), "execute")
+    assert frame["type"] == "error" and frame["phase"] == "execute"
+    assert frame["code"] == "unbound_parameters" and frame["severity"] == "info" and frame["parameters"] == ["theta"]
+
+
+@pytest.mark.parametrize(
+    "msg,expected_level",
+    [({}, 1), ({"optimization_level": None}, 1), ({"optimization_level": 9}, 1), ({"optimization_level": True}, 1),
+     ({"optimization_level": "2"}, 1), ({"optimization_level": 0}, 0), ({"optimization_level": 3}, 3)],
+)
+def test_transpile_target_is_validated_at_the_boundary(msg: dict, expected_level: int) -> None:
+    from kernel.run_routes import _transpile_target
+
+    target = _transpile_target(msg)
+    assert target == {"basis_gates": None, "coupling_map": None, "optimization_level": expected_level}
+
+
+def test_transpile_target_keeps_well_formed_gates_and_coupling() -> None:
+    from kernel.run_routes import _transpile_target
+
+    good = _transpile_target({"basis_gates": ["cx", "rz"], "coupling_map": [(0, 1), [1, 2]]})
+    assert good["basis_gates"] == ["cx", "rz"] and good["coupling_map"] == [[0, 1], [1, 2]]
+    bad = _transpile_target({"basis_gates": ["cx", 3], "coupling_map": [[0, 1, 2]]})
+    assert bad["basis_gates"] is None and bad["coupling_map"] is None
+
+
 # ======================================================================================================
 # The routed run path, through a real kernel process (PRD 15 R-B steps 5-10)
 # ======================================================================================================
@@ -341,7 +459,17 @@ def test_main_guard_runs(kernel) -> None:
 # -- R-11 --------------------------------------------------------------------------------------------------
 
 
-def test_n30_too_many_qubits_fast(kernel) -> None:
+@pytest.fixture(scope="module")
+def limited_memory_kernel():
+    """A kernel with the documented 2 GiB simulation limit, so the refusal does not depend on host RAM."""
+    instance = start_kernel(env={"NUCLEI_SIM_MEMORY_LIMIT_MB": "2048"})
+    warm_up(instance)
+    yield instance
+    instance.stop()
+
+
+def test_n30_too_many_qubits_fast(limited_memory_kernel) -> None:
+    kernel = limited_memory_kernel
     code = "from qiskit import QuantumCircuit\nn = 30\nqc = QuantumCircuit(n, n)\nqc.h(0)\nqc.measure(range(n), range(n))\n"
 
     async def scenario():

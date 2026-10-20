@@ -28,11 +28,15 @@ FULL_RESULT_MAX_QUBITS = 16
 MAX_PROBABILITIES = 65_536
 AMPLITUDE_BYTES = 16
 COPIES_SAMPLED = 2  # Aer/Cirq sampling keeps the state plus one working copy
-COPIES_EXACT = 3  # exact probabilities: the state, Aer's result copy and |amplitude|^2
+# Exact probabilities, counted in 16-byte amplitudes: the state, Aer's result copy (2), |amplitude|^2 as
+# float64 (0.5), the selection scratch of np.partition (0.5) and the worst-case tie/index array (0.5).
+COPIES_EXACT = 4
 RAM_FRACTION = 0.25
 SIM_MEMORY_ENV = "NUCLEI_SIM_MEMORY_LIMIT_MB"
 MPS_METHOD = "matrix_product_state"
 NATIVE_FRAMEWORKS = frozenset({"stim", "qsharp"})  # stabilizer / sparse simulators: no 2^n estimate
+LEAN_FRAMEWORKS = frozenset({"qiskit", "cirq"})  # the only simulators the lean (numpy-only) path drives
+PROBABILITY_FLOOR = 1e-10
 
 
 def physical_ram_bytes() -> int:
@@ -85,7 +89,7 @@ def simulation_budget(memory_limit_mb: int | None = None) -> tuple[int, str]:
 class SimulationPlan:
     qubits: int
     framework: str
-    mode: str  # "full" | "lean" | "mps" | "native"
+    mode: str  # "full" | "lean" | "mps" | "native" | "adapter"
     has_measurements: bool
     copies: int = 0
     estimate_bytes: int = 0
@@ -110,6 +114,10 @@ def plan_simulation(
         return SimulationPlan(n, framework, "native", measured)
     if n <= FULL_RESULT_MAX_QUBITS:
         return SimulationPlan(n, framework, "full", measured)
+    if framework not in LEAN_FRAMEWORKS:
+        # CUDA-Q (GPU targets, tensor networks) and third-party adapters own their simulation and their
+        # memory model: a 2^n x 16 B estimate would be fiction.  The adapter runs; its result is shaped.
+        return SimulationPlan(n, framework, "adapter", measured)
     if method == MPS_METHOD and framework == "qiskit" and measured:
         return SimulationPlan(n, framework, "mps", measured)
     copies = COPIES_SAMPLED if measured else COPIES_EXACT
@@ -179,22 +187,51 @@ def _empirical(counts: dict[str, int], shots: int) -> dict[str, float]:
     return {bits: count / shots for bits, count in counts.items()} if shots else {}
 
 
+def _aer_runner():
+    """``(prepare, run)`` for Aer: R-A's helpers when merged, else a plain ``optimization_level=0`` transpile.
+
+    Aer only accepts its own basis, so a circuit holding ``EfficientSU2``/``TwoLocal``/``QFT`` blocks
+    must be rewritten into it first (audit R-2).  The lean path (above 16 qubits) must behave exactly
+    like the adapter path at 16 qubits or fewer, so it goes through the same helper.
+    """
+    try:
+        from kernel.adapters._qiskit_aer import prepare_for_aer, run_on_aer
+
+        return prepare_for_aer, run_on_aer
+    except ImportError:
+        pass
+
+    def prepare(circuit, backend):
+        from qiskit import transpile
+
+        return transpile(circuit, backend, optimization_level=0)
+
+    def run(backend, circuit, shots):
+        return backend.run(circuit, shots=shots).result()
+
+    return prepare, run
+
+
 def _qiskit_sampled(circuit, shots: int, seed: int | None, mps: bool) -> dict[str, int]:
     from qiskit_aer import AerSimulator
 
+    prepare, run = _aer_runner()
     simulator = AerSimulator(method=MPS_METHOD, seed_simulator=seed) if mps else AerSimulator(seed_simulator=seed)
-    return {k: int(v) for k, v in simulator.run(circuit, shots=shots).result().get_counts().items()}
+    counts = run(simulator, prepare(circuit, simulator), shots).get_counts()
+    return {k: int(v) for k, v in counts.items()}
 
 
 def _qiskit_exact(circuit, seed: int | None):
     import numpy as np
     from qiskit_aer import AerSimulator
 
+    prepare, run = _aer_runner()
     unmeasured = circuit.copy()
     unmeasured.remove_final_measurements()
-    unmeasured.save_statevector()
-    vector = np.asarray(AerSimulator(method="statevector", seed_simulator=seed).run(unmeasured, shots=1).result().get_statevector().data)
-    return vector
+    simulator = AerSimulator(method="statevector", seed_simulator=seed)
+    prepared = prepare(unmeasured, simulator)
+    prepared.save_statevector()
+    return np.asarray(run(simulator, prepared, 1).get_statevector().data)
 
 
 def _cirq_sampled(circuit, shots: int, seed: int | None) -> dict[str, int]:
@@ -222,14 +259,34 @@ def _cirq_exact(circuit):
     return np.asarray(cirq.Simulator().simulate(stripped, qubit_order=qubits).final_state_vector)
 
 
-def _exact_payload(vector, n: int, little_endian: bool) -> tuple[dict[str, float], list[dict]]:
+def top_indices(probs, limit: int = MAX_PROBABILITIES):
+    """``(indices, cut)``: the ``limit`` most probable outcomes above the floor, best first (ties by index).
+
+    Selection happens on the numpy array, so a dense state never becomes 2^n Python objects: only the
+    ``limit`` survivors are ever formatted.  ``cut`` says whether anything above the floor was dropped.
+    """
+    import numpy as np
+
+    live = int(np.count_nonzero(probs > PROBABILITY_FLOOR))
+    if live <= limit:
+        keep = np.flatnonzero(probs > PROBABILITY_FLOOR)
+    else:
+        threshold = np.partition(probs, -limit)[-limit]
+        above = np.flatnonzero(probs > threshold)
+        ties = np.flatnonzero(probs == threshold)[: limit - len(above)]
+        keep = np.concatenate([above, ties])
+    order = np.lexsort((keep, -probs[keep]))
+    return keep[order], live > limit
+
+
+def _exact_payload(vector, n: int, little_endian: bool) -> tuple[dict[str, float], list[dict], bool]:
     import numpy as np
     from kernel.adapters._math import bloch_coords_from_statevector
 
     probs = np.abs(vector) ** 2
-    keep = np.nonzero(probs > 1e-10)[0]
+    keep, cut = top_indices(probs, MAX_PROBABILITIES)
     mapping = {format(int(i), f"0{n}b"): float(probs[i]) for i in keep}
-    return mapping, bloch_coords_from_statevector(vector, n, little_endian) if n <= 20 else []
+    return mapping, bloch_coords_from_statevector(vector, n, little_endian) if n <= 20 else [], cut
 
 
 def simulate_lean(circuit, plan: SimulationPlan, shots: int, seed: int | None) -> LeanSimulationResult:
@@ -250,11 +307,38 @@ def simulate_lean(circuit, plan: SimulationPlan, shots: int, seed: int | None) -
         )
     little = plan.framework == "qiskit"
     vector = _qiskit_exact(circuit, seed) if plan.framework == "qiskit" else _cirq_exact(circuit)
-    exact, bloch = _exact_payload(vector, n, little)
-    probabilities, cut = top_probabilities(exact)
+    probabilities, bloch, cut = _exact_payload(vector, n, little)
     reason = f"{n} qubits: the state vector is not returned above {FULL_RESULT_MAX_QUBITS} qubits; exact probabilities are listed."
     return LeanSimulationResult(
         state_vector=[], probabilities=probabilities, measurements={}, bloch_coords=bloch,
         execution_time_ms=round((time.time() - started) * 1000, 1), shot_count=shots, seed_honored=honored,
         truncated=_truncation(plan, cut, reason), measurements_source="none", probabilities_exact=True,
+    )
+
+
+def shape_adapter_result(result: SimulationResult, plan: SimulationPlan) -> LeanSimulationResult:
+    """An adapter's own result for a circuit above ``FULL_RESULT_MAX_QUBITS``, held to the same wire policy.
+
+    The adapter ran (CUDA-Q, a third-party framework), so there is no estimate to enforce, but the frame
+    obeys the same rules as the lean path: no state vector, at most ``MAX_PROBABILITIES`` outcome
+    probabilities, and every withheld piece announced in ``truncated``.
+    """
+    import dataclasses
+
+    probabilities, cut = top_probabilities(dict(result.probabilities))
+    base = {f.name: getattr(result, f.name) for f in dataclasses.fields(SimulationResult)}
+    # Fields this wrapper owns (an R-A SimulationResult may already carry some): keep the adapter's word.
+    source = base.pop("measurements_source", None) or ("sampled" if result.measurements else "none")
+    exact = bool(base.pop("probabilities_exact", False))
+    for owned in ("truncated", "extras"):
+        base.pop(owned, None)
+    base.update(state_vector=[], probabilities=probabilities)
+    reason = (
+        f"{plan.qubits} qubits: the state vector is not returned above {FULL_RESULT_MAX_QUBITS} qubits"
+        + ("; outcome probabilities were limited to the most probable " + str(MAX_PROBABILITIES) if cut else "")
+        + "."
+    )
+    return LeanSimulationResult(
+        **base, truncated={"state_vector": True, "probabilities": cut, "reason": reason},
+        measurements_source=source, probabilities_exact=exact,
     )

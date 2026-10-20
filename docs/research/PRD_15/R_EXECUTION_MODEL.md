@@ -39,6 +39,7 @@ Binding sources: master §2.1 item 7, §2.5, §4.2, §5.1 (R-B row); audit R-3, 
 - **D22 Server keeps the stim text, not a circuit.** `qec_snapshot` without `code` rebuilds the payload from the connection's last stim text (`qec_snapshot_text` op). `Executor._last_qec_circuit` stays for in-process callers.
 - **D23 `kernel.trainability.handlers` ops** are registered as `trainability_inspect` / `trainability_lint` message ops (`@worker_op`, `error_mapper`); a Lab handler awaits `run_worker.call_op`. `run_worker.set_inprocess_ops(True)` (fixture `inprocess_mode`) lets tests that monkeypatch what the op calls keep doing so.
 - **D24 Figures are rendered inside the user context** (`RequestState.figures`, true for `execute` / `run_python`), because leaving it closes every figure.
+- **D25 (review r1 fixes)** Decision: (a) the pool arms `RLIMIT_CPU` for every request (`limits.cpu_s = ceil(wall) + CPU_HEADROOM_SECONDS` unless the ctx carries one; `PoolConfig.cpu_headroom_s` for tests). (b) The pool's group-RSS scan is `kernel.discovery.procrun.group_scan` (the /proc fast path moved there; `_ps_scan` lives only there). (c) `Executor._capability_error` passes an adapter exception that declares `code in {unbound_parameters, unsupported_instruction}` through as that code with `severity` and `parameters`/`instruction` in `extra`, and `_bind_parameters` always consults `bind_parameters` for Qiskit/Cirq. (d) The lean path is for Qiskit and Cirq only; every other framework above 16 qubits (CUDA-Q, third-party adapters) is planned `adapter`: no 2ⁿ estimate (the adapter owns its memory model), `adapter.simulate` runs, and `shape_adapter_result` applies the same wire policy (no state vector, probabilities capped, `truncated`). (e) The lean Aer path goes through R-A's `prepare_for_aer`/`run_on_aer` when merged (fallback: `transpile(optimization_level=0)`), so library blocks behave the same above and below 16 qubits. (f) The exact lean path selects the top K with numpy (`top_indices`) before formatting anything, and counts four copies (state, Aer result copy, float64 probabilities, selection scratch) instead of three.
 - **Open items.** macOS and Windows code paths are written to this note and unexercised here (the macOS CI job is added to `kernel-tests.yml`); docs-site pages that still describe the SIGALRM timeout and the v1.4 fields belong to unit X.
 
 ## 1. Every exec path (current → new route)
@@ -223,7 +224,7 @@ The cache lives only inside the preview worker, and a recycle drops it.
 |---|---|---|---|
 | wall | pool timer per request → kill group → `timeout` (reason `wall`) | per op (§1) | env `NUCLEI_RUN_WALL_S` (all ops; tests); request `limits.wall_s` for execute/run_python (clamp 1..86 400) |
 | CPU | `RLIMIT_CPU` soft per request; `SIGXCPU` → `timeout` (reason `cpu`). POSIX only | wall + 60 s | — |
-| memory (hard) | group RSS: `procrun.group_rss_bytes(pgid)` every 0.25 s while busy (Linux/macOS); Windows Job Object with `JOB_OBJECT_LIMIT_JOB_MEMORY` and `KILL_ON_JOB_CLOSE` (ctypes, `kernel/run_winjob.py`) | 40 % of RAM, min 1 GiB; RAM = min(physical, cgroup v2 `memory.max` / v1 `limit_in_bytes`) | env `NUCLEI_RUN_MAX_RSS_MB` |
+| memory (hard) | group RSS: `procrun.group_scan(pgid)` (count, RSS; `group_rss_bytes` is its RSS half) every 0.25 s while busy (Linux/macOS); Windows Job Object with `JOB_OBJECT_LIMIT_JOB_MEMORY` and `KILL_ON_JOB_CLOSE` (ctypes, `kernel/run_winjob.py`) | 40 % of RAM, min 1 GiB; RAM = min(physical, cgroup v2 `memory.max` / v1 `limit_in_bytes`) | env `NUCLEI_RUN_MAX_RSS_MB` |
 | memory (estimate) | §2.10, before simulating | min(25 % RAM, setting) | request `limits.memory_mb`; env `NUCLEI_SIM_MEMORY_LIMIT_MB` |
 | output | pool-side byte count | 256 KiB per request | env `NUCLEI_RUN_OUTPUT_CAP_KB` |
 | reply | framing cap | 32 MiB | — |
@@ -266,9 +267,10 @@ After `find_circuit` and before any simulation, the worker takes n from the circ
 - **n ≤ 16** → the adapter's `simulate` (full result; ≤ 65 536 amplitudes, ≈ 30 MB peak).
 - **n > 16, no `simulation_method`** → the lean path. Estimate = **copies × 2ⁿ × 16 B**:
   - copies = 2 when the circuit has measurements: sampled (Aer `run(shots, seed_simulator)` / `cirq.Simulator(seed).run`);
-  - copies = 3 when it has none: exact probabilities from Aer `save_probabilities` or a numpy statevector; top-K.
+  - copies = 4 when it has none: exact probabilities from a numpy statevector (the state, Aer's result copy, float64 probabilities, selection scratch); top-K is selected in numpy before any bitstring is formatted (D25).
 - **`simulation_method: "matrix_product_state"`** (Qiskit only) → Aer MPS sampling. No 2ⁿ estimate; the RSS ceiling still applies.
 - **Stabilizer or sparse frameworks** (stim, Q# sparse simulator) → no 2ⁿ estimate; the RSS ceiling applies.
+- **Any other framework above 16 qubits** (CUDA-Q, third-party adapters) → mode `adapter`: no estimate, `adapter.simulate` runs, the result is shaped like a lean one; the RSS ceiling applies (D25).
 - **Budget** = `min(0.25 × RAM, limits.memory_mb or env)`. An estimate above the budget → `too_many_qubits` *before allocating*. The snapshot frame is still sent first.
 
 ```json

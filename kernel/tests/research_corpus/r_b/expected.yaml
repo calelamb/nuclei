@@ -117,3 +117,11 @@ programs:
     execute: ok
     max_seconds: 3.5
     options: {queued_parses: 5, phases: [execute], timeout: 60}
+  rb24-efficientsu2-18-measured:
+    # Review r1: the lean path (above 16 qubits) used to hand the untranspiled library block to Aer.
+    parse: ok
+    execute: ok
+    options: {timeout: 60}
+    facts:
+      snapshot: {framework: qiskit, qubit_count: 18}
+      result: {measured: 1024, bloch: 0, state_vector: 0}

@@ -7,6 +7,8 @@ import sys
 import threading
 import time
 
+import pytest
+
 from kernel.discovery.procrun import run_process
 
 
@@ -161,3 +163,44 @@ def test_procrun_uses_the_shared_kill_helper():
     from kernel.discovery import procrun
 
     assert procrun.kill_process_group is lab_proc.kill_process_group
+
+
+# -- group scan (shared by the discovery sandbox and the run-worker pool) ------------------------------------
+
+
+def test_group_scan_counts_and_sizes_a_live_process_group() -> None:
+    import subprocess
+    import sys
+
+    from kernel.discovery import procrun
+
+    child = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(30)"], start_new_session=True,
+    ) if sys.platform != "win32" else None
+    if child is None:
+        pytest.skip("process groups are POSIX-only")
+    try:
+        deadline = time.monotonic() + 10
+        count, rss = procrun.group_scan(child.pid)
+        while rss == 0 and time.monotonic() < deadline:
+            time.sleep(0.05)
+            count, rss = procrun.group_scan(child.pid)
+        assert count == 1 and rss > 1_000_000
+        assert procrun.group_rss_bytes(child.pid) > 1_000_000
+    finally:
+        child.kill()
+        child.wait()
+
+
+def test_group_scan_of_an_unknown_group_is_empty() -> None:
+    from kernel.discovery import procrun
+
+    assert procrun.group_scan(2**22 + 12345) == (0, 0)
+
+
+def test_the_run_pool_uses_procruns_scan_not_its_own() -> None:
+    from kernel import run_worker, run_worker_proc
+    from kernel.discovery import procrun
+
+    assert run_worker.group_scan is procrun.group_scan
+    assert not hasattr(run_worker_proc, "_ps_scan") and not hasattr(run_worker_proc, "scan_group")

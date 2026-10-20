@@ -17,6 +17,14 @@ from kernel.models import CircuitSnapshot, KernelError, SimulationResult
 # Quantum Debugger (dev tools Phase 3): frameworks with a statevector path, and
 # the caps that keep a per-step trace payload bounded.
 DEBUG_TRACE_FRAMEWORKS = {"qiskit", "cirq"}
+# Adapter failures that carry their own wire contract (R-A's ``kernel.adapters.errors``): the executor
+# passes ``code`` through and lifts the detail fields into the error frame instead of re-classifying.
+TYPED_ADAPTER_ERRORS = {
+    "unbound_parameters": ("parameters",),
+    "unsupported_instruction": ("instruction",),
+}
+# Frameworks whose circuit objects ``bind_parameters`` understands.
+BINDABLE_FRAMEWORKS = frozenset({"qiskit", "cirq"})
 MAX_DEBUG_QUBITS = 12
 MAX_DEBUG_GATES = 200
 
@@ -252,9 +260,28 @@ class Executor:
                 dependency=dependency,
             )
 
+    @staticmethod
+    def _typed_adapter_error(spec: AdapterSpec | None, exc: Exception) -> KernelError | None:
+        """The wire error for an adapter exception that declares its own ``code`` (else ``None``)."""
+        code = getattr(exc, "code", None)
+        fields = TYPED_ADAPTER_ERRORS.get(code) if isinstance(code, str) else None
+        if fields is None:
+            return None
+        extra = {"severity": getattr(exc, "severity", "error")}
+        for name in fields:
+            value = getattr(exc, name, None)
+            if value is not None:
+                extra[name] = list(value) if isinstance(value, (list, tuple, set)) else value
+        return KernelError(
+            code=code, message=str(exc), framework=spec.framework if spec else None, extra=extra,
+        )
+
     def _capability_error(
         self, spec: AdapterSpec | None, exc: Exception, fallback_code: str = "execution_error"
     ) -> KernelError:
+        typed = self._typed_adapter_error(spec, exc)
+        if typed is not None:
+            return typed
         dependency = getattr(exc, "name", None)
         if isinstance(exc, ImportError) or dependency:
             dependency = dependency or (spec.dependencies[0] if spec else None)
@@ -531,7 +558,7 @@ class Executor:
         except Exception as exc:
             return None, None, stdout, stderr, self._capability_error(spec, exc, "adapter_error")
 
-        circuit, bind_error = self._bind_parameters(circuit, parameter_values)
+        circuit, bind_error = self._bind_parameters(circuit, parameter_values, spec)
         if bind_error is not None:
             return None, snapshot, stdout, stderr, bind_error
         result, sim_error = self._simulate(spec, adapter, circuit, snapshot, shots, seed, simulation_method, memory_limit_mb)
@@ -553,22 +580,31 @@ class Executor:
             self._last_qec_circuit = getattr(adapter, "last_circuit", None)
         return outcome
 
-    def _bind_parameters(self, circuit, parameter_values: dict | None):
-        """R-4: bind free parameters (`parameter_values`) via R-A's `kernel.adapters.binding`."""
-        if not parameter_values:
+    def _bind_parameters(self, circuit, parameter_values: dict | None, spec: AdapterSpec | None = None):
+        """R-4: bind free parameters via R-A's ``kernel.adapters.binding``.
+
+        Always consulted for Qiskit/Cirq circuits (also with no ``parameter_values``), so a circuit
+        that still has free parameters fails with the typed ``unbound_parameters`` info error rather
+        than an opaque simulator failure. Typed adapter errors keep their code/severity/detail.
+        """
+        framework = spec.framework if spec else None
+        if not parameter_values and framework not in BINDABLE_FRAMEWORKS:
             return circuit, None
         try:
             from kernel.adapters.binding import bind_parameters
         except ImportError:
+            if not parameter_values:
+                return circuit, None
             return circuit, KernelError(
                 code="parameter_binding_unavailable",
                 message="This kernel build cannot bind circuit parameters (kernel.adapters.binding is missing).",
             )
         try:
-            bound, bound_at = bind_parameters(circuit, parameter_values)
+            bound, bound_at = bind_parameters(circuit, parameter_values or None)
         except Exception as exc:
-            return circuit, self._capability_error(None, exc, "adapter_error")
-        self.result_extras["bound_at"] = bound_at
+            return circuit, self._capability_error(spec, exc, "adapter_error")
+        if bound_at or parameter_values:
+            self.result_extras["bound_at"] = bound_at
         return bound, None
 
     def _simulate(self, spec, adapter, circuit, snapshot, shots, seed, method, memory_limit_mb):
@@ -580,7 +616,10 @@ class Executor:
         try:
             if plan.mode in ("lean", "mps"):
                 return run_memory.simulate_lean(circuit, plan, shots, seed), None
-            return adapter.simulate(circuit, shots, seed=seed), None
+            result = adapter.simulate(circuit, shots, seed=seed)
+            if plan.mode == "adapter":
+                result = run_memory.shape_adapter_result(result, plan)
+            return result, None
         except Exception as exc:
             return None, self._capability_error(spec, exc, "simulation_error")
 
