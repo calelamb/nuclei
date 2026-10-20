@@ -34,8 +34,23 @@ def _walk(circuit):
             yield from _walk(block)
 
 
-def has_measurements(circuit) -> bool:
-    return any(op.name == "measure" for op in _walk(circuit))
+_MAX_DEFINITION_DEPTH = 4  # shared with `_contains_reset` and `_instruction_names`
+
+
+def has_measurements(circuit, depth: int = 0) -> bool:
+    """True when a ``measure`` runs anywhere in `circuit`: control-flow blocks and instruction definitions included."""
+    for op in _walk(circuit):
+        if op.name == "measure":
+            return True
+        if depth > _MAX_DEFINITION_DEPTH:
+            continue
+        try:
+            definition = op.definition
+        except Exception:  # noqa: BLE001 - a block whose synthesis fails has nothing to look inside
+            continue
+        if definition is not None and has_measurements(definition, depth + 1):
+            return True
+    return False
 
 
 def _instruction_names(circuit, depth: int = 0) -> frozenset[str]:

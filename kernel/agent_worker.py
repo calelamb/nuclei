@@ -82,6 +82,7 @@ def bounded_response(
     stdout: str,
     stderr: str,
     error: dict[str, Any] | None,
+    snapshot_error: str | None = None,
 ) -> bytes:
     candidate = response_bytes(
         request_id,
@@ -91,6 +92,7 @@ def bounded_response(
         stdout,
         stderr,
         error,
+        snapshot_error,
     )
     if len(candidate) < MAX_RESPONSE_BYTES:
         return candidate
@@ -200,6 +202,7 @@ def execute_request(request, limits: WorkerLimits) -> bytes:
         truncate_utf8(stdout, limits.output_bytes),
         truncate_utf8(stderr, limits.output_bytes),
         error.to_dict() if error else None,
+        truncate_utf8(executor.snapshot_error or "", 1024) or None,
     )
 
 

@@ -602,9 +602,12 @@ class Executor:
     def _simulate(self, spec, adapter, circuit, snapshot, shots, seed, method, memory_limit_mb):
         from kernel import run_memory
 
-        plan = run_memory.plan_simulation(
-            snapshot, spec.framework, method=method, memory_limit_mb=memory_limit_mb, circuit=circuit
-        )
+        try:
+            plan = run_memory.plan_simulation(
+                snapshot, spec.framework, method=method, memory_limit_mb=memory_limit_mb, circuit=circuit
+            )
+        except Exception as exc:  # noqa: BLE001 - a hostile circuit object must not escape the run
+            return None, self._capability_error(spec, exc, "simulation_error")
         if plan.refused:
             return None, run_memory.refusal_error(plan)
         try:

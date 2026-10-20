@@ -340,3 +340,30 @@ def test_two_finite_qsharp_workers_are_fresh() -> None:
     assert first_completed.returncode == second_completed.returncode == 0
     assert first["status"] == second["status"] == "ok"
     assert first["result"]["shot_count"] == second["result"]["shot_count"] == 4
+
+
+# -- fix round 2 (A5): a degraded diagram keeps its reason on the worker wire ---------------------------------
+
+BELL_QISKIT = "from qiskit import QuantumCircuit\nqc = QuantumCircuit(2)\nqc.h(0)\nqc.cx(0, 1)\n"
+
+
+@pytest.mark.parametrize("action", ["parse", "simulate"])
+def test_snapshot_degradation_reason_reaches_the_worker_response(monkeypatch, action) -> None:
+    from kernel.adapters.qiskit_adapter import QiskitAdapter
+    from kernel.agent_protocol import parse_request
+    from kernel.agent_worker import execute_request
+
+    def boom(self, circuit_obj, *, expand_blocks=False):
+        raise RuntimeError("snapshot exploded")
+
+    monkeypatch.setattr(QiskitAdapter, "extract_snapshot", boom)
+    raw = json.dumps(make_request(BELL_QISKIT, action=action, framework="qiskit", language="python", shots=8 if action == "simulate" else None)).encode()
+    response = json.loads(execute_request(parse_request(raw), WorkerLimits.testing()))
+    assert response["status"] == "ok" and response["snapshot"] is None
+    assert "snapshot unavailable" in response["snapshot_error"]
+
+
+def test_healthy_snapshot_adds_no_snapshot_error_key() -> None:
+    from kernel.agent_protocol import response_bytes
+
+    assert "snapshot_error" not in json.loads(response_bytes("r", "ok", None, None, "", "", None))

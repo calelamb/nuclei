@@ -705,7 +705,7 @@ async def _message_loop(websocket, executor: Executor, routes: RunRoutes):
                 if field in msg:
                     request[field] = msg.get(field)
             worker_response = await run_agent_worker(request)
-            await websocket.send(json.dumps({
+            reply = {
                 "type": "agent_result",
                 "request_id": worker_response.get("request_id", request["request_id"]),
                 "status": worker_response.get("status", "error"),
@@ -714,7 +714,10 @@ async def _message_loop(websocket, executor: Executor, routes: RunRoutes):
                 "stdout": worker_response.get("stdout", ""),
                 "stderr": worker_response.get("stderr", ""),
                 "error": worker_response.get("error"),
-            }))
+            }
+            if worker_response.get("snapshot_error"):
+                reply["snapshot_error"] = worker_response["snapshot_error"]
+            await websocket.send(json.dumps(reply))
 
         elif isinstance(msg_type, str) and msg_type.startswith(_LAB_MESSAGE_PREFIXES):
             # Protocol v1.3 (PRD 14): Trainability Lab + Discovery Engine.

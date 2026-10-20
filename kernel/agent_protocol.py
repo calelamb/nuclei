@@ -176,8 +176,9 @@ def response_bytes(
     stdout: str,
     stderr: str,
     error: dict[str, Any] | None,
+    snapshot_error: str | None = None,
 ) -> bytes:
-    value = {
+    value: dict[str, Any] = {
         "protocol_version": PROTOCOL_VERSION,
         "request_id": request_id,
         "status": status,
@@ -187,4 +188,6 @@ def response_bytes(
         "stderr": stderr,
         "error": error,
     }
+    if snapshot_error:  # only when a diagram degraded: healthy responses stay byte-identical
+        value["snapshot_error"] = snapshot_error
     return json.dumps(value, separators=(",", ":"), allow_nan=False).encode("utf-8") + b"\n"

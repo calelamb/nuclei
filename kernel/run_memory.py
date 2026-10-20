@@ -97,10 +97,11 @@ class SimulationPlan:
     budget_bytes: int = 0
     budget_source: str = "ram_25pct"
     width_known: bool = True
+    nondeterministic: bool = False  # unmeasured, but reset/channel/classical control: one sampled trajectory
 
     @property
     def refused(self) -> bool:
-        return self.mode == "lean" and self.estimate_bytes > self.budget_bytes
+        return self.mode in ("lean", "adapter") and self.estimate_bytes > self.budget_bytes
 
 
 def has_measurements(snapshot) -> bool:
@@ -113,7 +114,10 @@ def circuit_facts(framework: str, circuit) -> tuple[int | None, bool | None]:
     Used when the snapshot (the diagram) failed: the memory policy must never plan from an empty
     stand-in, because "no gates" reads as "no measurements".
     """
-    width: int | None = getattr(circuit, "num_qubits", None)
+    try:
+        width: int | None = getattr(circuit, "num_qubits", None)
+    except Exception:  # noqa: BLE001 - a property that raises (not just AttributeError) is an unknown width
+        width = None
     if not isinstance(width, int):
         try:
             width = len(circuit.all_qubits())
@@ -134,33 +138,75 @@ def circuit_facts(framework: str, circuit) -> tuple[int | None, bool | None]:
     return width, measured
 
 
+def is_nondeterministic(framework: str, circuit) -> bool:
+    """True when an UNMEASURED circuit is still one random trajectory (reset, noise channel, classical control).
+
+    An unknowable answer counts as non-deterministic: the honest default is "sampled", never "exact".
+    """
+    if circuit is None:
+        return False
+    try:
+        if framework == "qiskit":
+            from kernel.adapters._qiskit_aer import is_deterministic
+
+            return not is_deterministic(circuit)
+        if framework == "cirq":
+            import cirq
+
+            return not all(cirq.has_unitary(op) for op in circuit.all_operations())
+    except Exception:  # noqa: BLE001 - cannot tell: do not claim exactness
+        return True
+    return False
+
+
+def _snapshot_or_circuit_facts(snapshot, framework: str, circuit) -> tuple[int | None, bool | None]:
+    """Width from the snapshot when there is one; measurements from the CIRCUIT whenever there is one.
+
+    A snapshot lists only top-level gates, so a ``measure`` inside a control-flow block or a sub-instruction
+    is invisible to it; the circuit is the only honest source for Qiskit and Cirq.
+    """
+    if circuit is not None and framework in LEAN_FRAMEWORKS:
+        circuit_width, measured = circuit_facts(framework, circuit)
+        return (snapshot.qubit_count if snapshot is not None else circuit_width), measured
+    if snapshot is not None:
+        return snapshot.qubit_count, has_measurements(snapshot)
+    return circuit_facts(framework, circuit)
+
+
 def plan_simulation(
     snapshot, framework: str, *, method: str | None = None, memory_limit_mb: int | None = None, circuit=None
 ) -> SimulationPlan:
-    """Plan from ``snapshot``; with no snapshot (extraction failed) from the ``circuit`` itself.
+    """Plan from the ``circuit`` (measurements) and the ``snapshot`` (width); with no snapshot, from the circuit alone.
 
-    An unknown width, or measurements that cannot be determined for a framework the lean path would
-    drive, plan ``adapter``: the adapter runs and its result is shaped (never a raw state vector).
+    An unknown width plans ``adapter``: the adapter runs and its result is shaped (never a raw state
+    vector).  A known width above the cap with measurements that cannot be determined also plans ``adapter``
+    but keeps the lean 2^n estimate (exact-state copies) so the R-11 refusal check still applies.
     """
-    if snapshot is not None:
-        width, measured = snapshot.qubit_count, has_measurements(snapshot)
-    else:
-        width, measured = circuit_facts(framework, circuit)
+    width, measured = _snapshot_or_circuit_facts(snapshot, framework, circuit)
     if framework in NATIVE_FRAMEWORKS:
         return SimulationPlan(width or 0, framework, "native", bool(measured))
     if width is None:
         return SimulationPlan(0, framework, "adapter", bool(measured), width_known=False)
     if width <= FULL_RESULT_MAX_QUBITS:
         return SimulationPlan(width, framework, "full", bool(measured))
-    if framework not in LEAN_FRAMEWORKS or measured is None:
+    if framework not in LEAN_FRAMEWORKS:
         # CUDA-Q (GPU targets, tensor networks) and third-party adapters own their simulation and their
         # memory model: a 2^n x 16 B estimate would be fiction.  The adapter runs; its result is shaped.
         return SimulationPlan(width, framework, "adapter", bool(measured))
+    budget, source = simulation_budget(memory_limit_mb)
+    if measured is None:
+        copies = COPIES_EXACT
+        return SimulationPlan(
+            width, framework, "adapter", False, copies, copies * (2 ** width) * AMPLITUDE_BYTES, budget, source
+        )
     if method == MPS_METHOD and framework == "qiskit" and measured:
         return SimulationPlan(width, framework, "mps", measured)
-    copies = COPIES_SAMPLED if measured else COPIES_EXACT
-    budget, source = simulation_budget(memory_limit_mb)
-    return SimulationPlan(width, framework, "lean", measured, copies, copies * (2 ** width) * AMPLITUDE_BYTES, budget, source)
+    nondeterministic = not measured and is_nondeterministic(framework, circuit)
+    copies = COPIES_SAMPLED if measured or nondeterministic else COPIES_EXACT
+    return SimulationPlan(
+        width, framework, "lean", measured, copies, copies * (2 ** width) * AMPLITUDE_BYTES, budget, source,
+        nondeterministic=nondeterministic,
+    )
 
 
 def resolve_unknown_width(plan: SimulationPlan, result: SimulationResult) -> SimulationPlan:
@@ -283,6 +329,18 @@ def _cirq_sampled(circuit, shots: int, seed: int | None) -> dict[str, int]:
     return counts
 
 
+def _measured_copy(framework: str, circuit):
+    """A copy that measures every qubit at the end, so a non-deterministic unmeasured circuit can be sampled."""
+    if framework == "qiskit":
+        copy = circuit.copy()
+        copy.measure_all()
+        return copy
+    import cirq
+
+    qubits = sorted(circuit.all_qubits())
+    return circuit + cirq.Circuit(cirq.measure(*qubits, key="m"))
+
+
 def _cirq_exact(circuit):
     import cirq
     import numpy as np
@@ -329,8 +387,10 @@ def simulate_lean(circuit, plan: SimulationPlan, shots: int, seed: int | None) -
     started = time.time()
     n = plan.qubits
     honored = True if seed is not None else None
-    if plan.has_measurements:
+    if plan.has_measurements or plan.nondeterministic:
         mps = plan.mode == "mps"
+        if plan.nondeterministic and not plan.has_measurements:
+            circuit = _measured_copy(plan.framework, circuit)
         counts = _qiskit_sampled(circuit, shots, seed, mps) if plan.framework == "qiskit" else _cirq_sampled(circuit, shots, seed)
         probabilities, cut = top_probabilities(_empirical(counts, shots))
         method = "MPS sampling" if mps else "sampling"

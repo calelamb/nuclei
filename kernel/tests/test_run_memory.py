@@ -265,3 +265,145 @@ def test_big_non_lean_adapter_probabilities_are_capped(monkeypatch) -> None:
     )
     assert list(shaped.probabilities) == ["00000", "00001", "00010"]
     assert shaped.truncated["probabilities"] is True
+
+
+# -- fix round 2: the plan reads the circuit, never the diagram, and never claims exactness it lacks --------
+
+
+def _run(code: str, shots: int = 64):
+    from kernel.executor import Executor
+
+    result, snap, _out, _err, error = Executor().execute(code, shots, seed=5)
+    assert error is None, error
+    return result.to_dict(), snap
+
+
+LOOP_MEASURE = """from qiskit import QuantumCircuit
+qc = QuantumCircuit({n}, 1)
+qc.h(0)
+with qc.for_loop(range(1)):
+    qc.measure(0, 0)
+qc.h(1)
+"""
+RESET_QISKIT = """from qiskit import QuantumCircuit
+qc = QuantumCircuit({n})
+qc.h(0)
+qc.cx(0, 1)
+qc.reset(1)
+"""
+SUBMEAS_QISKIT = """from qiskit import QuantumCircuit
+sub = QuantumCircuit(1, 1)
+sub.h(0)
+sub.measure(0, 0)
+qc = QuantumCircuit({n}, 1)
+qc.append(sub.to_instruction(), [0], [0])
+qc.h(1)
+"""
+RESET_CIRQ = """import cirq
+q = cirq.LineQubit.range({n})
+circuit = cirq.Circuit([cirq.H.on_each(*q), cirq.CNOT(q[0], q[1]), cirq.ResetChannel().on(q[1])])
+"""
+
+
+def test_a1_measure_inside_a_loop_is_sampled_above_the_full_path() -> None:
+    pytest.importorskip("qiskit_aer")
+    wire, snap = _run(LOOP_MEASURE.format(n=17))
+    assert [g.type for g in snap.gates][:2] == ["H", "FOR_LOOP"]  # the measure is hidden from the diagram
+    assert wire["measurements_source"] == "sampled" and wire["probabilities_exact"] is False
+    assert wire["measurements"]
+
+
+def test_a1_circuit_facts_beat_the_snapshot_when_a_circuit_is_given() -> None:
+    from qiskit import QuantumCircuit
+
+    qc = QuantumCircuit(17, 1)
+    qc.h(0)
+    qc.measure(0, 0)
+    plan = run_memory.plan_simulation(snapshot(17, False), "qiskit", circuit=qc)  # snapshot says "no measure"
+    assert plan.has_measurements is True
+
+
+def test_a2_unmeasured_reset_circuit_is_sampled_not_exact_qiskit() -> None:
+    pytest.importorskip("qiskit_aer")
+    wire, _ = _run(RESET_QISKIT.format(n=17))
+    assert wire["probabilities_exact"] is False and wire["measurements_source"] == "sampled"
+
+
+def test_a2_unmeasured_reset_circuit_is_sampled_not_exact_cirq() -> None:
+    pytest.importorskip("cirq")
+    wire, _ = _run(RESET_CIRQ.format(n=17))
+    assert wire["probabilities_exact"] is False and wire["measurements_source"] == "sampled"
+
+
+def test_a2_deterministic_unmeasured_circuit_stays_exact() -> None:
+    pytest.importorskip("qiskit_aer")
+    wire, _ = _run("from qiskit import QuantumCircuit\nqc = QuantumCircuit(17)\nqc.h(0)\nqc.cx(0, 1)\n")
+    assert wire["probabilities_exact"] is True and wire["measurements_source"] == "none"
+
+
+def test_a3_unknown_measurement_status_still_gets_the_refusal_check(monkeypatch) -> None:
+    from qiskit import QuantumCircuit
+    import kernel.adapters._qiskit_aer as aer
+
+    monkeypatch.setattr(run_memory, "physical_ram_bytes", lambda: 1 << 20)
+
+    def boom(circuit):
+        raise RuntimeError("cannot inspect")
+
+    monkeypatch.setattr(aer, "has_measurements", boom)
+    plan = run_memory.plan_simulation(snapshot(30, False), "qiskit", circuit=QuantumCircuit(30))
+    assert plan.mode == "adapter" and plan.estimate_bytes == run_memory.COPIES_EXACT * 2**30 * 16
+    assert plan.refused
+
+
+def test_a4_a_raising_num_qubits_does_not_escape_the_executor() -> None:
+    class Hostile:
+        @property
+        def num_qubits(self):
+            raise RuntimeError("num_qubits exploded")
+
+        def all_qubits(self):
+            raise RuntimeError("no qubits either")
+
+    plan = run_memory.plan_simulation(None, "qiskit", circuit=Hostile())
+    assert plan.width_known is False and plan.mode == "adapter"
+
+
+def test_a6_measure_inside_an_instruction_definition_is_found() -> None:
+    from qiskit import QuantumCircuit
+    from kernel.adapters._qiskit_aer import has_measurements
+
+    sub = QuantumCircuit(1, 1)
+    sub.h(0)
+    sub.measure(0, 0)
+    qc = QuantumCircuit(2, 1)
+    qc.append(sub.to_instruction(), [0], [0])
+    assert has_measurements(qc) is True
+
+
+def test_a6_nested_measure_is_sampled_at_17_qubits() -> None:
+    pytest.importorskip("qiskit_aer")
+    wire, _ = _run(SUBMEAS_QISKIT.format(n=17))
+    assert wire["measurements_source"] == "sampled" and wire["probabilities_exact"] is False
+
+
+def test_a4_executor_simulate_survives_a_hostile_circuit_object() -> None:
+    from kernel.executor import Executor
+
+    class Hostile:
+        @property
+        def num_qubits(self):
+            raise RuntimeError("num_qubits exploded")
+
+        def all_qubits(self):
+            raise RuntimeError("boom")
+
+    class Spec:
+        framework = "qiskit"
+
+    class Adapter:
+        def simulate(self, circuit, shots, seed=None):
+            raise RuntimeError("simulate also refuses")
+
+    result, error = Executor()._simulate(Spec(), Adapter(), Hostile(), None, 8, 1, None, None)
+    assert result is None and error is not None
