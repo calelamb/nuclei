@@ -69,6 +69,25 @@ async function openWorkbench(page: Page): Promise<Locator> {
   return workbench;
 }
 
+/** The tray hides its resize handle while it has nothing to show; seed one finished job for the open project. */
+async function seedTrayJob(page: Page): Promise<void> {
+  await expect(page.getByRole('region', { name: 'QEC jobs and streams' })).toContainText('No active jobs');
+  await page.evaluate(async () => {
+    const { useQecJobStore } = await import('/src/stores/qecJobStore.ts');
+    const { useProjectStore } = await import('/src/stores/projectStore.ts');
+    useQecJobStore.setState({
+      jobs: {
+        a: {
+          id: 'f2c0b7d1-5b0e-4c36-9a3b-0d6a8d2e4b11', kind: 'import', status: 'complete', message: 'ok',
+          source: 'circuits/repetition.stim', adapterId: 'stim-circuit', sessionId: '0b6c1f3e-aaaa-4bbb-cccc-1234567890ab',
+          sourceByteSize: 8701, sourceHash: '0'.repeat(64), provenanceId: 'prov-7788',
+          projectRoot: useProjectStore.getState().projectRoot ?? undefined,
+        },
+      },
+    });
+  });
+}
+
 async function expectFocusAfterTab(page: Page, target: Locator, limit = 8): Promise<void> {
   for (let index = 0; index < limit; index += 1) {
     await page.keyboard.press('Tab');
@@ -109,6 +128,9 @@ test('@qec exposes four ordered landmarks and keyboard zones', async ({ page }) 
   const canvas = page.getByRole('main', { name: 'QEC investigation canvas' });
   const inspector = page.getByRole('complementary', { name: 'Research inspector' });
   const tray = page.getByRole('region', { name: 'QEC jobs and streams' });
+  // Below the drawer breakpoint (1179px) the inspector starts closed behind its Show button.
+  const showInspector = canvas.getByRole('button', { name: 'Show research inspector' });
+  if (await showInspector.count()) await showInspector.click();
 
   await expect(sources).toBeVisible();
   await expect(canvas).toBeVisible();
@@ -151,11 +173,14 @@ test('@qec uses a focused inspector drawer at laptop width', async ({ page }, te
   const workbench = await openWorkbench(page);
   await page.getByRole('combobox', { name: 'Active QEC Study' }).selectOption('surface-memory');
   const inspector = page.getByRole('complementary', { name: 'Research inspector' });
+  const show = page.getByRole('button', { name: 'Show research inspector' });
+  // At laptop width the drawer starts closed so the canvas keeps the width.
+  await expect(inspector).toHaveCount(0);
+  await show.click();
   await expect(inspector).toHaveCSS('position', 'absolute');
 
   const close = inspector.getByRole('button', { name: 'Close research inspector' });
   await close.click();
-  const show = page.getByRole('button', { name: 'Show research inspector' });
   await expect(show).toBeFocused();
   await show.press('Enter');
   await expect(page.getByRole('complementary', { name: 'Research inspector' })).toBeVisible();
@@ -173,6 +198,7 @@ test('@qec uses a focused inspector drawer at laptop width', async ({ page }, te
 test('@qec maps the jobs tray separator value to visible laptop height', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'chromium-laptop', 'Tray geometry is verified at 1024×768.');
   await openWorkbench(page);
+  await seedTrayJob(page);
   const tray = page.getByRole('region', { name: 'QEC jobs and streams' });
   const separator = page.getByRole('separator', { name: 'Resize jobs tray' });
 
