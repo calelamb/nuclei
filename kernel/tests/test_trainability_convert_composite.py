@@ -416,3 +416,133 @@ def test_the_discovery_sandbox_pins_the_switch_the_converter_reads():
     from kernel.discovery import sandbox
 
     assert sandbox.IR_DECOMPOSE_ENV == DECOMPOSE_ENV
+
+
+# ------------------------------------------------------------- fix round 2: the Pauli note, wherever it expands
+
+NC_OP = SparsePauliOp(["ZZI", "IXX", "YIZ"], [0.5, -0.3, 0.2])
+COMMUTING_OP = SparsePauliOp(["ZZI", "IZZ", "ZIZ"], [0.5, -0.3, 0.2])
+
+
+def _pauli_notes(ir):
+    return [n for n in ir.notes if "PauliEvolutionGate" in n]
+
+
+def test_b1_evolved_operator_ansatz_of_a_non_commuting_operator_is_flagged():
+    try:
+        from qiskit.circuit.library import EvolvedOperatorAnsatz
+    except ImportError:
+        pytest.skip("EvolvedOperatorAnsatz is not available on this Qiskit")
+    ansatz = EvolvedOperatorAnsatz([NC_OP], reps=1)
+    ir = from_qiskit(ansatz)
+    assert any("do not commute" in n for n in _pauli_notes(ir)), ir.notes
+
+
+def test_b1_pauli_evolution_inside_a_user_block_is_flagged():
+    inner = QuantumCircuit(3)
+    inner.append(PauliEvolutionGate(NC_OP, time=0.7), [0, 1, 2])
+    qc = QuantumCircuit(3)
+    qc.append(inner.to_gate(label="blk"), [0, 1, 2])
+    ir = from_qiskit(qc)
+    assert any("do not commute" in n for n in _pauli_notes(ir)), ir.notes
+
+
+def test_b1_commuting_pauli_evolution_inside_a_block_gets_no_note():
+    inner = QuantumCircuit(3)
+    inner.append(PauliEvolutionGate(COMMUTING_OP, time=0.7), [0, 1, 2])
+    qc = QuantumCircuit(3)
+    qc.append(inner.to_gate(label="blk"), [0, 1, 2])
+    assert not _pauli_notes(from_qiskit(qc))
+
+
+def test_b3_qdrift_is_always_noted_even_with_commuting_terms():
+    from qiskit.synthesis import QDrift
+
+    qc = QuantumCircuit(3)
+    qc.append(PauliEvolutionGate(COMMUTING_OP, time=1.3, synthesis=QDrift(reps=1, seed=1)), [0, 1, 2])
+    notes = _pauli_notes(from_qiskit(qc))
+    assert len(notes) == 1 and "QDrift" in notes[0] and "random" in notes[0]
+
+
+def test_b4_unverifiable_commutation_says_so_instead_of_claiming_non_commuting(monkeypatch):
+    import kernel.trainability._decompose as dec
+
+    def cannot(operators):
+        raise TypeError("unknown operator type")
+
+    monkeypatch.setattr(dec, "_all_terms_commute", cannot)
+    qc = QuantumCircuit(3)
+    qc.append(PauliEvolutionGate(COMMUTING_OP, time=0.5), [0, 1, 2])
+    notes = _pauli_notes(from_qiskit(qc))
+    assert len(notes) == 1 and "could not be verified" in notes[0] and "do not commute" not in notes[0]
+
+
+def test_b4_pauli_only_sparse_observable_is_checked_not_assumed():
+    from qiskit.quantum_info import SparseObservable
+
+    if not hasattr(SparsePauliOp, "from_sparse_observable"):
+        pytest.skip("SparseObservable conversion needs Qiskit 2.x")
+    qc = QuantumCircuit(3)
+    qc.append(PauliEvolutionGate(SparseObservable.from_sparse_pauli_op(COMMUTING_OP), time=0.5), [0, 1, 2])
+    assert not _pauli_notes(from_qiskit(qc))
+    qc2 = QuantumCircuit(3)
+    qc2.append(PauliEvolutionGate(SparseObservable.from_sparse_pauli_op(NC_OP), time=0.5), [0, 1, 2])
+    assert any("do not commute" in n for n in _pauli_notes(from_qiskit(qc2)))
+
+
+def test_b5_the_note_bounds_a_huge_label():
+    gate = PauliEvolutionGate(NC_OP, time=0.5, label="x" * 5000)
+    qc = QuantumCircuit(3)
+    qc.append(gate, [0, 1, 2])
+    (note,) = _pauli_notes(from_qiskit(qc))
+    assert len(note) < 400 and "x" * 100 not in note
+
+
+def test_b6_the_note_reaches_the_user_through_trainability_inspect():
+    code = (
+        "from qiskit import QuantumCircuit\n"
+        "from qiskit.circuit import Parameter\n"
+        "from qiskit.circuit.library import PauliEvolutionGate\n"
+        "from qiskit.quantum_info import SparsePauliOp\n"
+        "t = Parameter('t')\n"
+        "qc = QuantumCircuit(3)\n"
+        "qc.append(PauliEvolutionGate(SparsePauliOp(['ZZI','IXX','YIZ'],[0.5,-0.3,0.2]), time=t), [0,1,2])\n"
+    )
+    payload = inspect_code(code)
+    assert any("PauliEvolutionGate" in n and "do not commute" in n for n in payload["notes"]), payload["notes"]
+
+
+def test_b2_commutation_check_of_an_all_to_all_zz_operator_is_fast():
+    import itertools
+    import time
+
+    from kernel.trainability._decompose import pauli_evolution_note
+
+    n = 40
+    labels = []
+    for i, j in itertools.combinations(range(n), 2):
+        s = ["I"] * n
+        s[i] = s[j] = "Z"
+        labels.append("".join(s))
+    gate = PauliEvolutionGate(SparsePauliOp(labels), time=0.3)
+    assert len(labels) == 780
+    started = time.perf_counter()
+    assert pauli_evolution_note(gate) is None  # all-ZZ commutes
+    first = time.perf_counter() - started
+    started = time.perf_counter()
+    pauli_evolution_note(gate)
+    second = time.perf_counter() - started
+    assert first < 0.1, first
+    assert second < first + 0.01 and second < 0.05, second  # the per-operator cache
+
+
+def test_b2_vectorised_check_agrees_with_pairwise_commutes():
+    from kernel.trainability._decompose import _all_terms_commute
+
+    rng = np.random.default_rng(7)
+    for _ in range(25):
+        labels = ["".join(rng.choice(list("IXYZ"), 5)) for _ in range(6)]
+        op = SparsePauliOp(labels)
+        terms = list(op.paulis)
+        expected = all(a.commutes(b) for i, a in enumerate(terms) for b in terms[i + 1:])
+        assert _all_terms_commute([op]) is expected

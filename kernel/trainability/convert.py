@@ -182,6 +182,17 @@ class _QiskitState:
         _qiskit_gates(self.b, name, qubits, angles, idx, line)
 
 
+def _pauli_noter(builder: _Builder):
+    """An ``on_expand`` hook: a PauliEvolutionGate expanded at ANY depth leaves its honesty note."""
+
+    def note_it(expanded: Any) -> None:
+        note = pauli_evolution_note(expanded)
+        if note and note not in builder.notes:
+            builder.notes.append(note)
+
+    return note_it
+
+
 def from_qiskit(circuit: Any, line_map: GateLineMap | None = None, *, decompose: bool | None = None) -> ParamCircuit:
     """Convert a Qiskit ``QuantumCircuit`` (free parameters allowed).
 
@@ -200,15 +211,12 @@ def from_qiskit(circuit: Any, line_map: GateLineMap | None = None, *, decompose:
             raise IrError("unsupported_gate", f"classically conditioned '{op.name}' is not supported")
         line = line_map.qiskit_line(circuit, idx) if line_map else None
         deepest = 0
-        leaves = qiskit_leaves(op, qubits, _QISKIT_KNOWN) if expand else iter([(op, qubits, 0)])
+        leaves = qiskit_leaves(op, qubits, _QISKIT_KNOWN, on_expand=_pauli_noter(b)) if expand else iter([(op, qubits, 0)])
         for leaf, leaf_qubits, depth in leaves:
             state.lower_leaf(leaf, leaf_qubits, idx, line, depth, op.name)
             deepest = max(deepest, depth)
         if deepest:
             state.log.record(op.name, deepest)
-            note = pauli_evolution_note(op)
-            if note and note not in b.notes:
-                b.notes.append(note)
     b.note_dropped("measurement", state.n_meas)
     b.note_dropped("barrier", state.n_barrier)
     b.notes.extend(state.log.notes())
