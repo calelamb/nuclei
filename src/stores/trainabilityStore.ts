@@ -536,7 +536,7 @@ export const useTrainabilityStore = create<TrainabilityState>((set, get) => {
     effectiveAnalyses() {
       const { analysesOverride, inspect } = get();
       const available = availableAnalyses(inspect.data);
-      const chosen = analysesOverride ?? available;
+      const chosen = analysesOverride ?? defaultAnalyses(inspect.data);
       return chosen.filter((a) => available.includes(a));
     },
 

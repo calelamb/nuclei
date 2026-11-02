@@ -1,4 +1,4 @@
-import { Activity, Atom, Layers, LineChart, Mountain } from 'lucide-react';
+import { Activity, Atom, Grid3x3, Layers, LineChart, Mountain, Sigma } from 'lucide-react';
 import { LabErrorBoundary, LabSegmented, type LabSegmentedItem } from '../lab';
 import { useTrainabilityStore } from '../../stores/trainabilityStore';
 import type { TrainabilityJobRecord, TrainabilityTabId } from '../../types/trainability';
@@ -9,6 +9,8 @@ import { ScalingTab } from './tabs/ScalingTab';
 import { LieTab } from './tabs/LieTab';
 import { EntanglementPanel, ExpressibilityPanel } from './tabs/DistributionsTab';
 import { LandscapeTab } from './tabs/LandscapeTab';
+import { QmlKernelTab } from './tabs/QmlKernelTab';
+import { VariationalTrainTab } from './tabs/VariationalTrainTab';
 
 const TAB_ITEMS: Array<LabSegmentedItem<TrainabilityTabId>> = [
   { id: 'gradients', label: 'Gradients', icon: Activity },
@@ -16,6 +18,8 @@ const TAB_ITEMS: Array<LabSegmentedItem<TrainabilityTabId>> = [
   { id: 'lie', label: 'Lie algebra', icon: Atom },
   { id: 'expressibility', label: 'Expressibility', icon: Layers },
   { id: 'landscape', label: 'Landscape', icon: Mountain },
+  { id: 'kernel', label: 'Kernel', icon: Grid3x3 },
+  { id: 'training', label: 'Training', icon: Sigma },
 ];
 
 const ID_PREFIX = 'trainability-tabs';
@@ -59,6 +63,16 @@ export function AnalysisTabs({ job }: { job: TrainabilityJobRecord | null }) {
         {activeTab === 'landscape' && (
           <AnalysisPanel view={analysisView(job, 'landscape')} title="Landscape" emptyBody="Run the analyses to slice the loss landscape along two random directions.">
             {(data) => <LandscapeTab data={data} />}
+          </AnalysisPanel>
+        )}
+        {activeTab === 'kernel' && (
+          <AnalysisPanel view={analysisView(job, 'quantum_kernel')} title="Quantum kernel" emptyBody="Run the analyses to compute the fidelity kernel of this feature map on a built-in dataset, with alignment and kernel-ridge accuracy.">
+            {(data) => <QmlKernelTab data={data} />}
+          </AnalysisPanel>
+        )}
+        {activeTab === 'training' && (
+          <AnalysisPanel view={analysisView(job, 'variational_train')} title="Variational training" emptyBody="Run the analyses to train this classifier end to end: x-prefixed parameters encode the data, the rest are optimized with the chosen optimizer.">
+            {(data) => <VariationalTrainTab data={data} />}
           </AnalysisPanel>
         )}
         </LabErrorBoundary>

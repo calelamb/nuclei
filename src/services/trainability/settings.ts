@@ -2,7 +2,12 @@
 
 import {
   TRAINABILITY_ANALYSES,
+  type ChannelNoiseEcho,
+  type ChannelNoiseSettings,
   type GradientInit,
+  type GradientMethod,
+  type QmlDataset,
+  type QmlOptimizer,
   type TrainabilityAnalysis,
   type TrainabilityInspection,
   type TrainabilityMethod,
@@ -16,6 +21,18 @@ export const STATEVECTOR_UI_CAP = 14;
 export const DEFAULT_SCALING_QUBITS_TEXT = '2, 3, 4, 5, 6, 7, 8';
 export const DEFAULT_SCALING_LAYERS_TEXT = '4';
 
+export const QML_SAMPLES_RANGE = { min: 8, max: 200, default: 48 } as const;
+export const QML_EPOCHS_RANGE = { min: 1, max: 500, default: 60 } as const;
+export const EARLY_STOP_RANGE = { min: 0, max: 100, default: 0 } as const;
+export const SPSA_A_RANGE = { min: 0.001, max: 2, default: 0.05 } as const;
+export const SPSA_C_RANGE = { min: 0.001, max: 2, default: 0.1 } as const;
+export const NOISE_SHOTS_MIN_FINITE = 32;
+export const NOISE_SHOTS_MAX = 100_000;
+export const NOISE_P_RANGE = { min: 0, max: 0.5, default: 0 } as const;
+
+/** Analyses that honour the simulated channel; others ignore it with a note. */
+export const NOISE_AWARE_ANALYSES: readonly TrainabilityAnalysis[] = ['gradients', 'quantum_kernel', 'variational_train'];
+
 export interface TargetSettings {
   samples: number;
   seed: number;
@@ -23,6 +40,21 @@ export interface TargetSettings {
   method: TrainabilityMethod;
   scalingQubitsText: string;
   scalingLayersText: string;
+  qmlDataset: QmlDataset;
+  qmlSamples: number;
+  qmlNoise: number;
+  qmlTrainFraction: number;
+  ridgeLambda: number;
+  epochs: number;
+  learningRate: number;
+  optimizer: QmlOptimizer;
+  gradientMethod: GradientMethod;
+  earlyStopPatience: number;
+  spsaA: number;
+  spsaC: number;
+  noiseShots: number;
+  noiseDepolarizingP: number;
+  noiseReadoutFlipP: number;
 }
 
 export const DEFAULT_TARGET_SETTINGS: TargetSettings = {
@@ -32,7 +64,79 @@ export const DEFAULT_TARGET_SETTINGS: TargetSettings = {
   method: 'auto',
   scalingQubitsText: DEFAULT_SCALING_QUBITS_TEXT,
   scalingLayersText: DEFAULT_SCALING_LAYERS_TEXT,
+  qmlDataset: 'moons',
+  qmlSamples: QML_SAMPLES_RANGE.default,
+  qmlNoise: 0.1,
+  qmlTrainFraction: 0.7,
+  ridgeLambda: 1,
+  epochs: QML_EPOCHS_RANGE.default,
+  learningRate: 0.1,
+  optimizer: 'adam',
+  gradientMethod: 'adjoint',
+  earlyStopPatience: EARLY_STOP_RANGE.default,
+  spsaA: SPSA_A_RANGE.default,
+  spsaC: SPSA_C_RANGE.default,
+  noiseShots: 0,
+  noiseDepolarizingP: 0,
+  noiseReadoutFlipP: 0,
 };
+
+function clampNumber(value: number, min: number, max: number, fallback: number): number {
+  return Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
+}
+
+/** Kernel shots rule: 0 = exact, otherwise 32..100000 (1..31 is invalid_request). */
+export function clampNoiseShots(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  const rounded = Math.round(value);
+  if (rounded <= 0) return 0;
+  if (rounded < NOISE_SHOTS_MIN_FINITE) return NOISE_SHOTS_MIN_FINITE;
+  return Math.min(NOISE_SHOTS_MAX, rounded);
+}
+
+export function clampNoiseProbability(value: number): number {
+  return clampNumber(value, NOISE_P_RANGE.min, NOISE_P_RANGE.max, 0);
+}
+
+export function clampEarlyStopPatience(value: number): number {
+  if (!Number.isFinite(value)) return EARLY_STOP_RANGE.default;
+  return Math.min(EARLY_STOP_RANGE.max, Math.max(EARLY_STOP_RANGE.min, Math.round(value)));
+}
+
+export function clampSpsaGain(value: number, kind: 'a' | 'c'): number {
+  const range = kind === 'a' ? SPSA_A_RANGE : SPSA_C_RANGE;
+  return clampNumber(value, range.min, range.max, range.default);
+}
+
+export function isChannelNoiseActive(settings: Pick<TargetSettings, 'noiseShots' | 'noiseDepolarizingP' | 'noiseReadoutFlipP'>): boolean {
+  return clampNoiseShots(settings.noiseShots) > 0 || clampNoiseProbability(settings.noiseDepolarizingP) > 0 || clampNoiseProbability(settings.noiseReadoutFlipP) > 0;
+}
+
+/** Clamped `settings.noise` payload, or null when the channel is exact (omit for back-compat). */
+export function channelNoiseSettings(
+  settings: Pick<TargetSettings, 'noiseShots' | 'noiseDepolarizingP' | 'noiseReadoutFlipP'>,
+): ChannelNoiseSettings | null {
+  const echo: ChannelNoiseEcho = {
+    shots: clampNoiseShots(settings.noiseShots),
+    depolarizing_p: clampNoiseProbability(settings.noiseDepolarizingP),
+    readout_flip_p: clampNoiseProbability(settings.noiseReadoutFlipP),
+  };
+  return echo.shots === 0 && echo.depolarizing_p === 0 && echo.readout_flip_p === 0 ? null : echo;
+}
+
+export function isExactChannelNoise(echo: ChannelNoiseEcho | undefined | null): boolean {
+  return !echo || (echo.shots === 0 && echo.depolarizing_p === 0 && echo.readout_flip_p === 0);
+}
+
+export function formatChannelNoise(echo: ChannelNoiseEcho | undefined | null): string {
+  if (isExactChannelNoise(echo)) return 'exact (no simulated noise)';
+  const e = echo as ChannelNoiseEcho;
+  const parts: string[] = [];
+  parts.push(e.shots === 0 ? 'exact expectations' : `${e.shots} shots`);
+  if (e.depolarizing_p > 0) parts.push(`depolarizing p=${e.depolarizing_p}`);
+  if (e.readout_flip_p > 0) parts.push(`readout flip q=${e.readout_flip_p}`);
+  return parts.join(', ');
+}
 
 export interface IntListResult {
   values: number[];
@@ -75,7 +179,9 @@ export function availableAnalyses(inspection: TrainabilityInspection | null): Tr
 }
 
 export function defaultAnalyses(inspection: TrainabilityInspection | null): TrainabilityAnalysis[] {
-  return availableAnalyses(inspection);
+  // QML analyses are opt-in: they only make sense for feature-map / classifier
+  // circuits, so a default run keeps the original six analyses.
+  return availableAnalyses(inspection).filter((a) => a !== 'quantum_kernel' && a !== 'variational_train');
 }
 
 export function toKernelSettings(
@@ -89,6 +195,32 @@ export function toKernelSettings(
     init: settings.init,
     method: settings.method,
   };
+  if (analyses.includes('quantum_kernel') || analyses.includes('variational_train')) {
+    out.qml = {
+      dataset: settings.qmlDataset,
+      samples: Math.min(QML_SAMPLES_RANGE.max, Math.max(QML_SAMPLES_RANGE.min, Math.round(settings.qmlSamples))),
+      noise: Math.min(0.5, Math.max(0, settings.qmlNoise)),
+      train_fraction: Math.min(0.9, Math.max(0.5, settings.qmlTrainFraction)),
+    };
+  }
+  if (analyses.includes('quantum_kernel')) {
+    out.kernel = { ridge_lambda: Math.min(100, Math.max(1e-4, settings.ridgeLambda)) };
+  }
+  if (analyses.includes('variational_train')) {
+    out.variational = {
+      epochs: Math.min(QML_EPOCHS_RANGE.max, Math.max(QML_EPOCHS_RANGE.min, Math.round(settings.epochs))),
+      learning_rate: Math.min(2, Math.max(1e-4, settings.learningRate)),
+      optimizer: settings.optimizer,
+      gradient_method: settings.gradientMethod,
+      early_stop_patience: clampEarlyStopPatience(settings.earlyStopPatience),
+      spsa_a: clampSpsaGain(settings.spsaA, 'a'),
+      spsa_c: clampSpsaGain(settings.spsaC, 'c'),
+    };
+  }
+  if (analyses.some((a) => NOISE_AWARE_ANALYSES.includes(a))) {
+    const noise = channelNoiseSettings(settings);
+    if (noise) out.noise = noise;
+  }
   if (analyses.includes('scaling') && inspection) {
     const { qubits, layers } = validateScaling(settings);
     const sweep = inspection.sweepable_params;

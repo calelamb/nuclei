@@ -13,6 +13,7 @@ import type {
 import { diagnosticMessage } from './diagnosticCopy';
 import { TRAINABILITY_CITATIONS, type TrainabilityCitation } from './citations';
 import { intervalKindOf, intervalNounForKind, isNumber, methodDescription, validInterval, type IntervalSource } from './intervals';
+import { formatChannelNoise, isExactChannelNoise } from './settings';
 import { deriveSimulabilityVerdict, deriveTrainabilityVerdict, primaryFit, stripVerdictPrefix } from './verdict';
 
 export interface CertificateInput {
@@ -118,6 +119,9 @@ function gradientsSection(job: TrainabilityJobRecord): string[] {
     ...(isNumber(g.gradient_norm_mean) ? [`Mean gradient norm ${sci(g.gradient_norm_mean)}.`] : []),
     ...(isNumber(g.cost_variance)
       ? [`Empirical cost variance Var[C] ${sci(g.cost_variance)}${validInterval(g.cost_variance_ci95) ? `, 95% CI ${formatInterval(g.cost_variance_ci95, 3)}` : ''}.`]
+      : []),
+    ...(!isExactChannelNoise(g.channel_noise)
+      ? [`Simulated noise: ${formatChannelNoise(g.channel_noise)}${isNumber(g.shot_noise_variance) ? `; shot-noise variance ${sci(g.shot_noise_variance)}` : ''}. Simulated channel, not a device calibration.`]
       : []),
     ...(g.notes ?? []).map((n) => `Note: ${n}`),
     '',
@@ -235,6 +239,31 @@ function distributionSections(job: TrainabilityJobRecord): string[] {
       '### Landscape',
       '',
       `${ls.resolution}×${ls.resolution} slice, span ±${sci(ls.span)} rad along two random orthonormal directions. Cost range [${sci(ls.min)}, ${sci(ls.max)}], value at center ${sci(ls.center_value)}.`,
+      '',
+    );
+  }
+  const qk = job.results.quantum_kernel;
+  if (qk) {
+    const noiseLine = !isExactChannelNoise(qk.channel_noise)
+      ? ` Simulated noise: ${formatChannelNoise(qk.channel_noise)}${isNumber(qk.kernel_shot_variance) ? `; kernel shot variance ${sci(qk.kernel_shot_variance)}` : ''}.`
+      : '';
+    out.push(
+      '### Quantum kernel',
+      '',
+      `Fidelity kernel on the ${qk.dataset} dataset (${qk.n_samples} samples, ${qk.n_train} train / ${qk.n_test} test). Centred alignment ${sci(qk.alignment)}, effective dimension ${sci(qk.effective_dimension)}, kernel-ridge test accuracy ${(qk.test_accuracy * 100).toFixed(1)}% (λ = ${qk.ridge_lambda}).${noiseLine}`,
+      '',
+    );
+  }
+  const vt = job.results.variational_train;
+  if (vt) {
+    const run = vt.epochs_run ?? vt.history.length;
+    const method = vt.gradient_method ?? 'adjoint';
+    const early = vt.stopped_early ? ` Early stopped at ${run} of ${vt.epochs} epochs.` : '';
+    const noiseLine = !isExactChannelNoise(vt.channel_noise) ? ` Simulated noise: ${formatChannelNoise(vt.channel_noise)}.` : '';
+    out.push(
+      '### Variational training',
+      '',
+      `${vt.optimizer} (${method}) for ${run} epochs (requested ${vt.epochs}, lr ${vt.learning_rate}) on the ${vt.dataset} dataset. Loss ${sci(vt.initial_loss)} → ${sci(vt.final_loss)}; train accuracy ${(vt.final_train_accuracy * 100).toFixed(1)}%, test accuracy ${(vt.final_test_accuracy * 100).toFixed(1)}%.${early}${noiseLine}`,
       '',
     );
   }

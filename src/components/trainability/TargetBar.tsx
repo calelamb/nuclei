@@ -15,12 +15,26 @@ import { useEditorStore } from '../../stores/editorStore';
 import { useTrainabilityStore } from '../../stores/trainabilityStore';
 import { OBSERVABLE_PRESETS, presetForSpec } from '../../services/trainability/observablePresets';
 import {
+  EARLY_STOP_RANGE,
+  NOISE_P_RANGE,
+  NOISE_SHOTS_MAX,
+  NOISE_SHOTS_MIN_FINITE,
+  QML_EPOCHS_RANGE,
+  QML_SAMPLES_RANGE,
   SAMPLES_RANGE,
+  SPSA_A_RANGE,
+  SPSA_C_RANGE,
   availableAnalyses,
+  clampNoiseShots,
+  defaultAnalyses,
+  isChannelNoiseActive,
   validateScaling,
 } from '../../services/trainability/settings';
 import { RUN_SHORTCUT_LABEL, overallFraction, runDisabledReason } from './targetBarMath';
-import { TRAINABILITY_ANALYSES, ACTIVE_JOB_STATUSES, type TrainabilityAnalysis, type TrainabilityMethod, type GradientInit } from '../../types/trainability';
+import { GRADIENT_METHODS, QML_DATASETS, QML_OPTIMIZERS, TRAINABILITY_ANALYSES, ACTIVE_JOB_STATUSES, type GradientMethod, type QmlDataset, type QmlOptimizer, type TrainabilityAnalysis, type TrainabilityMethod, type GradientInit } from '../../types/trainability';
+
+const OPTIMIZER_LABELS: Record<QmlOptimizer, string> = { adam: 'Adam', gd: 'Gradient descent', spsa: 'SPSA' };
+const GRADIENT_METHOD_LABELS: Record<GradientMethod, string> = { adjoint: 'Adjoint', parameter_shift: 'Parameter-shift' };
 
 const ANALYSIS_LABELS: Record<TrainabilityAnalysis, string> = {
   gradients: 'Gradients',
@@ -29,6 +43,8 @@ const ANALYSIS_LABELS: Record<TrainabilityAnalysis, string> = {
   expressibility: 'Expressibility',
   entanglement: 'Entanglement',
   landscape: 'Landscape',
+  quantum_kernel: 'Quantum kernel',
+  variational_train: 'Variational training',
 };
 
 function fileLabel(filePath: string | null): string {
@@ -51,7 +67,7 @@ export function TargetBar({ onRun }: { onRun: () => void }) {
 
   const info = inspect.data;
   const available = availableAnalyses(info);
-  const chosen = (analysesOverride ?? available).filter((a) => available.includes(a));
+  const chosen = (analysesOverride ?? defaultAnalyses(info)).filter((a) => available.includes(a));
   const job = activeJobId ? jobs[activeJobId] : undefined;
   const running = !!job && ACTIVE_JOB_STATUSES.includes(job.status);
   const scalingCheck = validateScaling(settings);
@@ -230,6 +246,97 @@ export function TargetBar({ onRun }: { onRun: () => void }) {
             <LabField label="Layers" htmlFor="trainability-scaling-layers" hint="Up to 4 values" error={scalingCheck.layers.error ?? undefined}>
               <LabInput id="trainability-scaling-layers" mono value={settings.scalingLayersText} onChange={(e) => setSettings({ scalingLayersText: e.target.value })} />
             </LabField>
+          </div>
+        )}
+
+        {(chosen.includes('quantum_kernel') || chosen.includes('variational_train')) && (
+          <div className="lab-row" style={{ alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
+            <LabField label="QML dataset" htmlFor="trainability-qml-dataset" hint="Binary, 2 features in [0, 2π)">
+              <LabSelect id="trainability-qml-dataset" value={settings.qmlDataset} onChange={(e) => setSettings({ qmlDataset: e.target.value as QmlDataset })}>
+                {QML_DATASETS.map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </LabSelect>
+            </LabField>
+            <LabField label="Dataset size" htmlFor="trainability-qml-samples" hint={`${QML_SAMPLES_RANGE.min}–${QML_SAMPLES_RANGE.max}`}>
+              <LabNumber id="trainability-qml-samples" aria-label="Dataset size" value={settings.qmlSamples} min={QML_SAMPLES_RANGE.min} max={QML_SAMPLES_RANGE.max} onCommit={(qmlSamples) => setSettings({ qmlSamples })} />
+            </LabField>
+            {chosen.includes('quantum_kernel') && (
+              <LabField label="Ridge λ" htmlFor="trainability-ridge" hint="Kernel ridge regularization">
+                <LabNumber id="trainability-ridge" aria-label="Ridge lambda" value={settings.ridgeLambda} min={0} max={100} onCommit={(ridgeLambda) => setSettings({ ridgeLambda })} />
+              </LabField>
+            )}
+            {chosen.includes('variational_train') && (
+              <>
+                <LabField label="Epochs" htmlFor="trainability-epochs" hint={`${QML_EPOCHS_RANGE.min}–${QML_EPOCHS_RANGE.max}`}>
+                  <LabNumber id="trainability-epochs" aria-label="Epochs" value={settings.epochs} min={QML_EPOCHS_RANGE.min} max={QML_EPOCHS_RANGE.max} onCommit={(epochs) => setSettings({ epochs })} />
+                </LabField>
+                <LabField label="Learning rate" htmlFor="trainability-lr" hint={settings.optimizer === 'spsa' ? 'Unused by SPSA' : 'Optimizer step size'}>
+                  <LabNumber id="trainability-lr" aria-label="Learning rate" value={settings.learningRate} min={0} max={2} onCommit={(learningRate) => setSettings({ learningRate })} />
+                </LabField>
+                <LabField label="Optimizer" htmlFor="trainability-optimizer" hint="Full-batch optimizer">
+                  <LabSelect id="trainability-optimizer" value={settings.optimizer} onChange={(e) => setSettings({ optimizer: e.target.value as QmlOptimizer })}>
+                    {QML_OPTIMIZERS.map((o) => (
+                      <option key={o} value={o}>{OPTIMIZER_LABELS[o]}</option>
+                    ))}
+                  </LabSelect>
+                </LabField>
+                <LabField
+                  label="Gradient method"
+                  htmlFor="trainability-gradient-method"
+                  hint={settings.optimizer === 'spsa' ? 'SPSA estimates its own gradient' : 'How ∂⟨O⟩/∂θ is computed'}
+                >
+                  <LabSelect
+                    id="trainability-gradient-method"
+                    value={settings.gradientMethod}
+                    disabled={settings.optimizer === 'spsa'}
+                    onChange={(e) => setSettings({ gradientMethod: e.target.value as GradientMethod })}
+                  >
+                    {GRADIENT_METHODS.map((m) => (
+                      <option key={m} value={m}>{GRADIENT_METHOD_LABELS[m]}</option>
+                    ))}
+                  </LabSelect>
+                </LabField>
+                <LabField label="Early stop" htmlFor="trainability-early-stop" hint={`Patience ${EARLY_STOP_RANGE.min}–${EARLY_STOP_RANGE.max}, 0 = off`}>
+                  <LabNumber id="trainability-early-stop" aria-label="Early stop patience" value={settings.earlyStopPatience} min={EARLY_STOP_RANGE.min} max={EARLY_STOP_RANGE.max} onCommit={(earlyStopPatience) => setSettings({ earlyStopPatience })} />
+                </LabField>
+                {settings.optimizer === 'spsa' && (
+                  <>
+                    <LabField label="SPSA a" htmlFor="trainability-spsa-a" hint={`${SPSA_A_RANGE.min}–${SPSA_A_RANGE.max}`}>
+                      <LabNumber id="trainability-spsa-a" aria-label="SPSA a" value={settings.spsaA} min={SPSA_A_RANGE.min} max={SPSA_A_RANGE.max} integer={false} step={0.01} onCommit={(spsaA) => setSettings({ spsaA })} />
+                    </LabField>
+                    <LabField label="SPSA c" htmlFor="trainability-spsa-c" hint={`${SPSA_C_RANGE.min}–${SPSA_C_RANGE.max}`}>
+                      <LabNumber id="trainability-spsa-c" aria-label="SPSA c" value={settings.spsaC} min={SPSA_C_RANGE.min} max={SPSA_C_RANGE.max} integer={false} step={0.01} onCommit={(spsaC) => setSettings({ spsaC })} />
+                    </LabField>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {(chosen.includes('gradients') || chosen.includes('quantum_kernel') || chosen.includes('variational_train')) && (
+          <div className="lab-stack" style={{ gap: 'var(--space-2)' }}>
+            <div className="lab-row" style={{ alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-3)' }} role="group" aria-label="Noise (simulated)">
+              <span className="lab-muted" style={{ flex: '0 0 auto', paddingTop: 18 }}>Noise (simulated)</span>
+              <LabField label="Shots" htmlFor="trainability-noise-shots" hint={`0 = exact, else ${NOISE_SHOTS_MIN_FINITE}–${NOISE_SHOTS_MAX}`}>
+                <LabNumber id="trainability-noise-shots" aria-label="Noise shots" value={settings.noiseShots} min={0} max={NOISE_SHOTS_MAX} onCommit={(noiseShots) => setSettings({ noiseShots: clampNoiseShots(noiseShots) })} />
+              </LabField>
+              <LabField label="Depolarizing p" htmlFor="trainability-noise-depol" hint={`${NOISE_P_RANGE.min}–${NOISE_P_RANGE.max}, global channel`}>
+                <LabNumber id="trainability-noise-depol" aria-label="Depolarizing p" value={settings.noiseDepolarizingP} min={NOISE_P_RANGE.min} max={NOISE_P_RANGE.max} integer={false} step={0.01} onCommit={(noiseDepolarizingP) => setSettings({ noiseDepolarizingP })} />
+              </LabField>
+              <LabField label="Readout flip q" htmlFor="trainability-noise-readout" hint={`${NOISE_P_RANGE.min}–${NOISE_P_RANGE.max}, symmetric flip`}>
+                <LabNumber id="trainability-noise-readout" aria-label="Readout flip q" value={settings.noiseReadoutFlipP} min={NOISE_P_RANGE.min} max={NOISE_P_RANGE.max} integer={false} step={0.01} onCommit={(noiseReadoutFlipP) => setSettings({ noiseReadoutFlipP })} />
+              </LabField>
+            </div>
+            {isChannelNoiseActive(settings) && settings.method === 'ppe' && chosen.includes('gradients') && (
+              <LabCallout tone="warning" title="Noise needs sampling">
+                Pauli propagation is exact and noiseless, so gradients with simulated noise will fail with <span className="lab-mono">noise_unsupported</span>. Switch Method to Sampling or Auto, or clear the noise fields.
+              </LabCallout>
+            )}
+            {isChannelNoiseActive(settings) && (
+              <span className="lab-muted">Simulated channel, not a device calibration. Applies to gradients, quantum kernel and variational training; other analyses note it as ignored.</span>
+            )}
           </div>
         )}
 
