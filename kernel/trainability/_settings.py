@@ -7,12 +7,13 @@ from typing import Any
 
 from kernel.trainability._errors import TrainabilityError
 
-ANALYSES = ("gradients", "scaling", "lie", "expressibility", "entanglement", "landscape", "quantum_kernel", "variational_train")
+ANALYSES = ("gradients", "scaling", "lie", "expressibility", "entanglement", "landscape", "quantum_kernel", "variational_train", "classical_baseline", "kernel_alignment_search", "variational_qng")
 INITS = ("uniform", "small")
 METHODS = ("auto", "sampling", "ppe")
 BACKENDS = ("auto", "numpy", "cupy", "jax")
 QML_DATASETS = ("moons", "circles", "blobs", "xor")
 OPTIMIZERS = ("adam", "gd", "spsa")
+ALIGN_MODES = ("bandwidth", "embedding", "both")
 GRADIENT_METHODS = ("adjoint", "parameter_shift")
 
 SAMPLES_RANGE = (16, 4096)
@@ -37,6 +38,10 @@ LEARNING_RATE_RANGE = (1e-4, 2.0)
 EARLY_STOP_RANGE = (0, 100)
 SPSA_A_RANGE = (0.001, 2.0)
 SPSA_C_RANGE = (0.001, 2.0)
+ALIGN_STEPS_RANGE = (1, 500)
+METRIC_REG_RANGE = (1e-6, 1.0)
+METRIC_EVERY_RANGE = (1, 50)
+MAX_METRIC_PARAMS_RANGE = (1, 64)
 NOISE_SHOTS_MIN = 32
 NOISE_SHOTS_MAX = 100_000
 NOISE_P_MAX = 0.5
@@ -84,6 +89,14 @@ def _choice(raw: Any, path: str, default: str, allowed: tuple[str, ...]) -> str:
         return default
     if raw not in allowed:
         raise _bad(path, f"must be one of {', '.join(allowed)}")
+    return raw
+
+
+def _bool(raw: Any, path: str, default: bool) -> bool:
+    if raw is None:
+        return default
+    if not isinstance(raw, bool):
+        raise _bad(path, "must be a boolean")
     return raw
 
 
@@ -164,6 +177,9 @@ def normalize_settings(raw: Any) -> dict[str, Any]:
     qml = _section(raw, "qml")
     kernel_sec = _section(raw, "kernel")
     variational = _section(raw, "variational")
+    baseline = _section(raw, "baseline")
+    align = _section(raw, "align")
+    qng = _section(raw, "qng")
     noise_sec = _section(raw, "noise")
     qubit_param = _identifier(scaling.get("qubit_param"), "scaling.qubit_param", "n_qubits")
     layer_param = _identifier(scaling.get("layer_param"), "scaling.layer_param", "n_layers")
@@ -222,6 +238,25 @@ def normalize_settings(raw: Any) -> dict[str, Any]:
             ),
             "spsa_a": _float(variational.get("spsa_a"), "variational.spsa_a", 0.05, SPSA_A_RANGE),
             "spsa_c": _float(variational.get("spsa_c"), "variational.spsa_c", 0.1, SPSA_C_RANGE),
+        },
+        "baseline": {
+            "include_linear": _bool(baseline.get("include_linear"), "baseline.include_linear", True),
+        },
+        "align": {
+            "mode": _choice(align.get("mode"), "align.mode", "bandwidth", ALIGN_MODES),
+            "steps": _int(align.get("steps"), "align.steps", 40, ALIGN_STEPS_RANGE),
+            "learning_rate": _float(align.get("learning_rate"), "align.learning_rate", 0.1, LEARNING_RATE_RANGE),
+            "spsa_a": _float(align.get("spsa_a"), "align.spsa_a", 0.05, SPSA_A_RANGE),
+            "spsa_c": _float(align.get("spsa_c"), "align.spsa_c", 0.1, SPSA_C_RANGE),
+        },
+        "qng": {
+            "metric_regularization": _float(
+                qng.get("metric_regularization"), "qng.metric_regularization", 1e-3, METRIC_REG_RANGE
+            ),
+            "metric_every": _int(qng.get("metric_every"), "qng.metric_every", 1, METRIC_EVERY_RANGE),
+            "max_metric_params": _int(
+                qng.get("max_metric_params"), "qng.max_metric_params", 32, MAX_METRIC_PARAMS_RANGE
+            ),
         },
         "noise": {
             "shots": _noise_shots(noise_sec.get("shots")),

@@ -102,14 +102,14 @@ def _check_width(job: JobData, analysis: str) -> None:
                 f"Sampling needs a statevector; {n} qubits exceeds the limit of {MAX_STATEVECTOR_QUBITS}. "
                 "Use method 'ppe' or 'auto'.",
             )
-    elif analysis in ("expressibility", "entanglement", "landscape", "quantum_kernel", "variational_train") and n > MAX_STATEVECTOR_QUBITS:
+    elif analysis in ("expressibility", "entanglement", "landscape", "quantum_kernel", "variational_train", "classical_baseline", "kernel_alignment_search", "variational_qng") and n > MAX_STATEVECTOR_QUBITS:
         raise IrError(
             "too_many_qubits",
             f"{n} qubits exceeds the statevector limit of {MAX_STATEVECTOR_QUBITS} for {analysis}.",
         )
     if analysis in _NEEDS_PARAMETERS and not job.circuit.parameters:
         raise TrainabilityError("no_parameters", "The circuit has no free parameters.")
-    if analysis in ("quantum_kernel", "variational_train") and not job.circuit.parameters:
+    if analysis in ("quantum_kernel", "variational_train", "kernel_alignment_search", "variational_qng") and not job.circuit.parameters:
         raise TrainabilityError("no_parameters", "The circuit has no free parameters.")
 
 
@@ -211,10 +211,51 @@ def _dispatch_analysis(job: JobData, analysis: str, progress: Callable[[float, s
             spsa_c=vcfg.get("spsa_c", 0.1),
             channel_noise=s.get("noise"), **common,
         )
+    if analysis == "classical_baseline":
+        from kernel.trainability.qml_baseline import classical_baseline
+
+        qml, kcfg, bcfg = s["qml"], s["kernel"], s.get("baseline") or {}
+        return classical_baseline(
+            job.circuit, dataset=qml["dataset"], dataset_samples=qml["samples"],
+            noise=qml["noise"], train_fraction=qml["train_fraction"],
+            ridge_lambda=kcfg["ridge_lambda"],
+            include_linear=bcfg.get("include_linear", True),
+            seed=s["seed"], backend=s["backend"],
+            channel_noise=s.get("noise"), **common,
+        )
+    if analysis == "kernel_alignment_search":
+        from kernel.trainability.qml_align import kernel_alignment_search
+
+        qml, kcfg, acfg, vcfg = s["qml"], s["kernel"], s.get("align") or {}, s["variational"]
+        return kernel_alignment_search(
+            job.circuit, dataset=qml["dataset"], dataset_samples=qml["samples"],
+            noise=qml["noise"], train_fraction=qml["train_fraction"],
+            ridge_lambda=kcfg["ridge_lambda"], data_params=vcfg["data_params"],
+            mode=acfg.get("mode", "bandwidth"), steps=acfg.get("steps", 40),
+            learning_rate=acfg.get("learning_rate", 0.1),
+            spsa_a=acfg.get("spsa_a", 0.05), spsa_c=acfg.get("spsa_c", 0.1),
+            seed=s["seed"], backend=s["backend"],
+            channel_noise=s.get("noise"), **common,
+        )
+    if analysis == "variational_qng":
+        from kernel.trainability.qml_qng import variational_qng
+
+        qml, vcfg, qcfg = s["qml"], s["variational"], s.get("qng") or {}
+        return variational_qng(
+            job.circuit, job.observable_sum, dataset=qml["dataset"],
+            dataset_samples=qml["samples"], noise=qml["noise"],
+            train_fraction=qml["train_fraction"], epochs=vcfg["epochs"],
+            learning_rate=vcfg["learning_rate"], data_params=vcfg["data_params"],
+            metric_regularization=qcfg.get("metric_regularization", 1e-3),
+            metric_every=qcfg.get("metric_every", 1),
+            max_metric_params=qcfg.get("max_metric_params", 32),
+            seed=s["seed"], backend=s["backend"],
+            channel_noise=s.get("noise"), **common,
+        )
     raise TrainabilityError("unknown_analysis", f"Unknown analysis '{analysis}'.")
 
 
-_NOISE_AWARE = ("gradients", "quantum_kernel", "variational_train")
+_NOISE_AWARE = ("gradients", "quantum_kernel", "variational_train", "classical_baseline", "kernel_alignment_search", "variational_qng")
 
 
 def run_analysis(job: JobData, analysis: str, progress: Callable[[float, str], None], cancel: Callable[[], bool]) -> dict:
