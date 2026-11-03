@@ -5,6 +5,44 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0] - 2026-11-03
+
+Quantum machine learning release: the Trainability Lab learns to train.
+
+### Added — Quantum ML in the Trainability Lab
+
+- **Variational training** (`variational_train`): train a parameterized
+  circuit end to end on built-in binary datasets (moons, circles, blobs,
+  xor). Encoding parameters are the `x`-prefixed circuit parameters (or an
+  explicit `data_params` list); the rest are optimized by full-batch Adam,
+  gradient descent, or SPSA, with exact batched adjoint gradients or
+  parameter-shift gradients, deterministic given the seed.
+- **Quantum kernel** (`quantum_kernel`): fidelity kernel with centred
+  kernel-target alignment, eigenspectrum, and kernel-ridge train/test
+  accuracy, rendered as a heatmap with KPIs.
+- **Classical baseline** (`classical_baseline`): RBF (gamma sweep selected
+  by train alignment only) and linear kernels on the identical split, the
+  geometric difference `g_CQ`, effective dimension, and an honest verdict —
+  no quantum number ships without its classical comparison.
+- **Kernel-alignment search** (`kernel_alignment_search`): SPSA maximization
+  of train centred alignment over feature-map bandwidths and/or embedding
+  parameters — the feature map itself becomes trainable, with best-iterate
+  restore.
+- **Quantum natural gradient** (`variational_qng`): variational training
+  preconditioned by the Fubini–Study metric, with per-epoch natural-gradient
+  norms and metric conditioning.
+- **Calibrated trainer** (`qml_calibrated`, kernel API): best-theta restore
+  on train MSE plus a decision threshold fitted on train scores only.
+- **Simulated device noise** across gradients, kernel, and training:
+  finite shots, global depolarizing, and symmetric readout flips, echoed in
+  results and certificates and labelled as a simulated channel.
+
+All QML analyses are opt-in, numpy-only, run through the Lab's existing
+job/settings machinery (statevector cap 20 qubits), and ship with an
+88-configuration quantum-vs-classical benchmark in
+`docs/qml-benchmark-results/` plus a first-model guide in
+`docs/train-your-first-quantum-ml-model.md`.
+
 ## [0.15.0] - 2026-10-19
 
 Research-first release: a full UI pass across every workspace, the Learn

@@ -1,4 +1,4 @@
-import { Activity, Atom, Layers, LineChart, Mountain } from 'lucide-react';
+import { Activity, Atom, Compass, Crosshair, Grid3x3, Layers, LineChart, Mountain, Scale, Sigma } from 'lucide-react';
 import { LabErrorBoundary, LabSegmented, type LabSegmentedItem } from '../lab';
 import { useTrainabilityStore } from '../../stores/trainabilityStore';
 import type { TrainabilityJobRecord, TrainabilityTabId } from '../../types/trainability';
@@ -9,6 +9,11 @@ import { ScalingTab } from './tabs/ScalingTab';
 import { LieTab } from './tabs/LieTab';
 import { EntanglementPanel, ExpressibilityPanel } from './tabs/DistributionsTab';
 import { LandscapeTab } from './tabs/LandscapeTab';
+import { QmlKernelTab } from './tabs/QmlKernelTab';
+import { VariationalTrainTab } from './tabs/VariationalTrainTab';
+import { ClassicalBaselineTab } from './tabs/ClassicalBaselineTab';
+import { KernelAlignmentTab } from './tabs/KernelAlignmentTab';
+import { VariationalQngTab } from './tabs/VariationalQngTab';
 
 const TAB_ITEMS: Array<LabSegmentedItem<TrainabilityTabId>> = [
   { id: 'gradients', label: 'Gradients', icon: Activity },
@@ -16,6 +21,11 @@ const TAB_ITEMS: Array<LabSegmentedItem<TrainabilityTabId>> = [
   { id: 'lie', label: 'Lie algebra', icon: Atom },
   { id: 'expressibility', label: 'Expressibility', icon: Layers },
   { id: 'landscape', label: 'Landscape', icon: Mountain },
+  { id: 'kernel', label: 'Kernel', icon: Grid3x3 },
+  { id: 'training', label: 'Training', icon: Sigma },
+  { id: 'baseline', label: 'Baseline', icon: Scale },
+  { id: 'alignment', label: 'Alignment', icon: Crosshair },
+  { id: 'qng', label: 'QNG', icon: Compass },
 ];
 
 const ID_PREFIX = 'trainability-tabs';
@@ -59,6 +69,31 @@ export function AnalysisTabs({ job }: { job: TrainabilityJobRecord | null }) {
         {activeTab === 'landscape' && (
           <AnalysisPanel view={analysisView(job, 'landscape')} title="Landscape" emptyBody="Run the analyses to slice the loss landscape along two random directions.">
             {(data) => <LandscapeTab data={data} />}
+          </AnalysisPanel>
+        )}
+        {activeTab === 'kernel' && (
+          <AnalysisPanel view={analysisView(job, 'quantum_kernel')} title="Quantum kernel" emptyBody="Run the analyses to compute the fidelity kernel of this feature map on a built-in dataset, with alignment and kernel-ridge accuracy.">
+            {(data) => <QmlKernelTab data={data} />}
+          </AnalysisPanel>
+        )}
+        {activeTab === 'training' && (
+          <AnalysisPanel view={analysisView(job, 'variational_train')} title="Variational training" emptyBody="Run the analyses to train this classifier end to end: x-prefixed parameters encode the data, the rest are optimized with the chosen optimizer.">
+            {(data) => <VariationalTrainTab data={data} />}
+          </AnalysisPanel>
+        )}
+        {activeTab === 'baseline' && (
+          <AnalysisPanel view={analysisView(job, 'classical_baseline')} title="Classical baseline" emptyBody="Run the analyses to score RBF and linear kernels on the identical dataset split the quantum kernel sees, with a verdict and the geometric difference.">
+            {(data) => <ClassicalBaselineTab data={data} />}
+          </AnalysisPanel>
+        )}
+        {activeTab === 'alignment' && (
+          <AnalysisPanel view={analysisView(job, 'kernel_alignment_search')} title="Kernel alignment search" emptyBody="Run the analyses to tune this feature map itself: per-feature bandwidths (and optionally the non-data parameters) are optimized for centred kernel-target alignment on the train split.">
+            {(data) => <KernelAlignmentTab data={data} />}
+          </AnalysisPanel>
+        )}
+        {activeTab === 'qng' && (
+          <AnalysisPanel view={analysisView(job, 'variational_qng')} title="Variational QNG" emptyBody="Run the analyses to train this classifier with quantum natural gradient: x-prefixed parameters encode the data, and each step is preconditioned by the Fubini–Study metric.">
+            {(data) => <VariationalQngTab data={data} />}
           </AnalysisPanel>
         )}
         </LabErrorBoundary>

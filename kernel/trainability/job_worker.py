@@ -102,12 +102,14 @@ def _check_width(job: JobData, analysis: str) -> None:
                 f"Sampling needs a statevector; {n} qubits exceeds the limit of {MAX_STATEVECTOR_QUBITS}. "
                 "Use method 'ppe' or 'auto'.",
             )
-    elif analysis in ("expressibility", "entanglement", "landscape") and n > MAX_STATEVECTOR_QUBITS:
+    elif analysis in ("expressibility", "entanglement", "landscape", "quantum_kernel", "variational_train", "classical_baseline", "kernel_alignment_search", "variational_qng") and n > MAX_STATEVECTOR_QUBITS:
         raise IrError(
             "too_many_qubits",
             f"{n} qubits exceeds the statevector limit of {MAX_STATEVECTOR_QUBITS} for {analysis}.",
         )
     if analysis in _NEEDS_PARAMETERS and not job.circuit.parameters:
+        raise TrainabilityError("no_parameters", "The circuit has no free parameters.")
+    if analysis in ("quantum_kernel", "variational_train", "kernel_alignment_search", "variational_qng") and not job.circuit.parameters:
         raise TrainabilityError("no_parameters", "The circuit has no free parameters.")
 
 
@@ -134,7 +136,7 @@ def _scaling_builder(job: JobData) -> Callable[[int, int], ParamCircuit]:
     return build
 
 
-def run_analysis(job: JobData, analysis: str, progress: Callable[[float, str], None], cancel: Callable[[], bool]) -> dict:
+def _dispatch_analysis(job: JobData, analysis: str, progress: Callable[[float, str], None], cancel: Callable[[], bool]) -> dict:
     """Dispatch one analysis; raises on failure."""
     s = job.settings
     common = {"progress": progress, "cancel": cancel}
@@ -143,7 +145,8 @@ def run_analysis(job: JobData, analysis: str, progress: Callable[[float, str], N
         return call_filtered(
             _external("gradients"), job.circuit, job.observable_sum,
             samples=s["samples"], seed=s["seed"], init=s["init"],
-            method=s["method"], backend=s["backend"], **common,
+            method=s["method"], backend=s["backend"],
+            channel_noise=s.get("noise"), **common,
         )
     if analysis == "scaling":
         cfg = s["scaling"]
@@ -181,7 +184,103 @@ def run_analysis(job: JobData, analysis: str, progress: Callable[[float, str], N
             job.circuit, job.observable_sum, resolution=cfg["resolution"], span=cfg["span"],
             seed=s["seed"], backend=s["backend"], **common,
         )
+    if analysis == "quantum_kernel":
+        from kernel.trainability.qml_kernel import quantum_kernel
+
+        qml, kcfg = s["qml"], s["kernel"]
+        return quantum_kernel(
+            job.circuit, dataset=qml["dataset"], dataset_samples=qml["samples"],
+            noise=qml["noise"], train_fraction=qml["train_fraction"],
+            ridge_lambda=kcfg["ridge_lambda"], seed=s["seed"], backend=s["backend"],
+            channel_noise=s.get("noise"), **common,
+        )
+    if analysis == "variational_train":
+        from kernel.trainability.qml_train import variational_train
+
+        qml, vcfg = s["qml"], s["variational"]
+        return variational_train(
+            job.circuit, job.observable_sum, dataset=qml["dataset"],
+            dataset_samples=qml["samples"], noise=qml["noise"],
+            train_fraction=qml["train_fraction"], epochs=vcfg["epochs"],
+            learning_rate=vcfg["learning_rate"], data_params=vcfg["data_params"],
+            seed=s["seed"], backend=s["backend"],
+            optimizer=vcfg.get("optimizer", "adam"),
+            gradient_method=vcfg.get("gradient_method", "adjoint"),
+            early_stop_patience=vcfg.get("early_stop_patience", 0),
+            spsa_a=vcfg.get("spsa_a", 0.05),
+            spsa_c=vcfg.get("spsa_c", 0.1),
+            channel_noise=s.get("noise"), **common,
+        )
+    if analysis == "classical_baseline":
+        from kernel.trainability.qml_baseline import classical_baseline
+
+        qml, kcfg, bcfg = s["qml"], s["kernel"], s.get("baseline") or {}
+        return classical_baseline(
+            job.circuit, dataset=qml["dataset"], dataset_samples=qml["samples"],
+            noise=qml["noise"], train_fraction=qml["train_fraction"],
+            ridge_lambda=kcfg["ridge_lambda"],
+            include_linear=bcfg.get("include_linear", True),
+            seed=s["seed"], backend=s["backend"],
+            channel_noise=s.get("noise"), **common,
+        )
+    if analysis == "kernel_alignment_search":
+        from kernel.trainability.qml_align import kernel_alignment_search
+
+        qml, kcfg, acfg, vcfg = s["qml"], s["kernel"], s.get("align") or {}, s["variational"]
+        return kernel_alignment_search(
+            job.circuit, dataset=qml["dataset"], dataset_samples=qml["samples"],
+            noise=qml["noise"], train_fraction=qml["train_fraction"],
+            ridge_lambda=kcfg["ridge_lambda"], data_params=vcfg["data_params"],
+            mode=acfg.get("mode", "bandwidth"), steps=acfg.get("steps", 40),
+            learning_rate=acfg.get("learning_rate", 0.1),
+            spsa_a=acfg.get("spsa_a", 0.05), spsa_c=acfg.get("spsa_c", 0.1),
+            seed=s["seed"], backend=s["backend"],
+            channel_noise=s.get("noise"), **common,
+        )
+    if analysis == "variational_qng":
+        from kernel.trainability.qml_qng import variational_qng
+
+        qml, vcfg, qcfg = s["qml"], s["variational"], s.get("qng") or {}
+        return variational_qng(
+            job.circuit, job.observable_sum, dataset=qml["dataset"],
+            dataset_samples=qml["samples"], noise=qml["noise"],
+            train_fraction=qml["train_fraction"], epochs=vcfg["epochs"],
+            learning_rate=vcfg["learning_rate"], data_params=vcfg["data_params"],
+            metric_regularization=qcfg.get("metric_regularization", 1e-3),
+            metric_every=qcfg.get("metric_every", 1),
+            max_metric_params=qcfg.get("max_metric_params", 32),
+            seed=s["seed"], backend=s["backend"],
+            channel_noise=s.get("noise"), **common,
+        )
     raise TrainabilityError("unknown_analysis", f"Unknown analysis '{analysis}'.")
+
+
+_NOISE_AWARE = ("gradients", "quantum_kernel", "variational_train", "classical_baseline", "kernel_alignment_search", "variational_qng")
+
+
+def run_analysis(job: JobData, analysis: str, progress: Callable[[float, str], None], cancel: Callable[[], bool]) -> dict:
+    """Dispatch one analysis; simulated noise is honoured or noted, never silently dropped."""
+    result = _dispatch_analysis(job, analysis, progress, cancel)
+    noise_cfg = job.settings.get("noise") or {}
+    try:
+        if isinstance(noise_cfg, dict):
+            shots = int(noise_cfg.get("shots", 0) or 0)
+            depol = float(noise_cfg.get("depolarizing_p", 0.0) or 0.0)
+            readout = float(noise_cfg.get("readout_flip_p", 0.0) or 0.0)
+        else:  # a NoiseSpec-like object from a direct (unnormalized) caller
+            shots = int(getattr(noise_cfg, "shots", 0) or 0)
+            depol = float(getattr(noise_cfg, "depolarizing_p", 0.0) or 0.0)
+            readout = float(getattr(noise_cfg, "readout_flip_p", 0.0) or 0.0)
+    except (TypeError, ValueError, AttributeError):
+        shots, depol, readout = 0, 0.0, 0.0
+    if analysis not in _NOISE_AWARE and (shots or depol or readout):
+        if isinstance(result, dict):
+            result = dict(result)
+            result["channel_noise"] = {"shots": shots, "depolarizing_p": depol, "readout_flip_p": readout}
+            notes = list(result.get("notes") or [])
+            notes.append("Simulated noise settings were ignored for this analysis (noise applies to gradients, quantum_kernel and variational_train).")
+            result["notes"] = notes
+    return result
 
 
 def prepare(spec: dict) -> JobData:

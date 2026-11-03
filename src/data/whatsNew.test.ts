@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { headlineFor, highlightsFor, WHATS_NEW } from './whatsNew';
 
 describe('WHATS_NEW', () => {
-  it('describes the 0.15.0 release', () => {
-    expect(WHATS_NEW.version).toBe('0.15.0');
+  it('describes the 0.16.0 release', () => {
+    expect(WHATS_NEW.version).toBe('0.16.0');
   });
 
-  it('covers kernel token, CSV plotting, statistics, Explain and nuclei-mcp', () => {
+  it('covers variational training, quantum kernels, baselines, alignment, natural gradients and noise', () => {
     const text = WHATS_NEW.highlights.map((h) => `${h.title} ${h.text}`).join('\n').toLowerCase();
-    for (const needle of ['token', 'sinter csv', 'λ', 'warning', 'explain', 'nuclei-mcp']) {
+    for (const needle of ['variational', 'quantum kernel', 'classical rbf', 'alignment', 'natural gradient', 'noise']) {
       expect(text).toContain(needle);
     }
   });

@@ -54,4 +54,14 @@ describe('focusAfterUnmount', () => {
     vi.advanceTimersByTime(100);
     expect(document.activeElement?.id).toBe('chip');
   });
+
+  it('stops quietly when the document is gone before the next frame', () => {
+    mount('<button id="origin">x</button><button id="chip">c</button>');
+    const origin = document.getElementById('origin') as HTMLElement;
+    origin.focus();
+    focusAfterUnmount(origin, ['#chip']);
+    vi.stubGlobal('document', undefined);
+    expect(() => vi.advanceTimersByTime(1000)).not.toThrow();
+    vi.unstubAllGlobals();
+  });
 });

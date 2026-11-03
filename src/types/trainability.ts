@@ -13,7 +13,12 @@ export type TrainabilityAnalysis =
   | 'lie'
   | 'expressibility'
   | 'entanglement'
-  | 'landscape';
+  | 'landscape'
+  | 'quantum_kernel'
+  | 'variational_train'
+  | 'classical_baseline'
+  | 'kernel_alignment_search'
+  | 'variational_qng';
 
 export const TRAINABILITY_ANALYSES: readonly TrainabilityAnalysis[] = [
   'gradients',
@@ -22,7 +27,43 @@ export const TRAINABILITY_ANALYSES: readonly TrainabilityAnalysis[] = [
   'expressibility',
   'entanglement',
   'landscape',
+  'quantum_kernel',
+  'variational_train',
+  'classical_baseline',
+  'kernel_alignment_search',
+  'variational_qng',
 ];
+
+export type QmlDataset = 'moons' | 'circles' | 'blobs' | 'xor';
+
+export const QML_DATASETS: readonly QmlDataset[] = ['moons', 'circles', 'blobs', 'xor'];
+
+export type QmlOptimizer = 'adam' | 'gd' | 'spsa';
+
+export const QML_OPTIMIZERS: readonly QmlOptimizer[] = ['adam', 'gd', 'spsa'];
+
+/** What `kernel_alignment_search` optimizes: per-feature bandwidths, the
+ * circuit's non-data (embedding) parameters, or both. */
+export type KernelAlignmentMode = 'bandwidth' | 'embedding' | 'both';
+
+export const KERNEL_ALIGNMENT_MODES: readonly KernelAlignmentMode[] = ['bandwidth', 'embedding', 'both'];
+
+export type GradientMethod = 'adjoint' | 'parameter_shift';
+
+export const GRADIENT_METHODS: readonly GradientMethod[] = ['adjoint', 'parameter_shift'];
+
+export interface ChannelNoiseSettings {
+  shots?: number;
+  depolarizing_p?: number;
+  readout_flip_p?: number;
+}
+
+/** Echo of the simulated channel that produced a result (kernel `channel_noise`). */
+export interface ChannelNoiseEcho {
+  shots: number;
+  depolarizing_p: number;
+  readout_flip_p: number;
+}
 
 export type GradientInit = 'uniform' | 'small';
 
@@ -48,6 +89,28 @@ export interface TrainabilitySettings {
   entanglement?: { samples?: number };
   landscape?: { resolution?: number; span?: number };
   lie?: { max_dimension?: number; time_budget_s?: number };
+  qml?: { dataset?: QmlDataset; samples?: number; noise?: number; train_fraction?: number };
+  kernel?: { ridge_lambda?: number };
+  variational?: {
+    epochs?: number;
+    learning_rate?: number;
+    data_params?: string[] | null;
+    optimizer?: QmlOptimizer;
+    gradient_method?: GradientMethod;
+    early_stop_patience?: number;
+    spsa_a?: number;
+    spsa_c?: number;
+  };
+  baseline?: { include_linear?: boolean };
+  align?: {
+    mode?: KernelAlignmentMode;
+    steps?: number;
+    learning_rate?: number;
+    spsa_a?: number;
+    spsa_c?: number;
+  };
+  qng?: { metric_regularization?: number; metric_every?: number; max_metric_params?: number };
+  noise?: ChannelNoiseSettings;
 }
 
 export type Interval = [number, number];
@@ -102,6 +165,11 @@ export interface GradientStatistics {
   cost_variance?: number | null;
   cost_variance_ci95?: Interval | null;
   cost_mean?: number | null;
+  /** Simulated channel echo; absent on older kernels, exact channel when present. */
+  channel_noise?: ChannelNoiseEcho;
+  /** Per-estimate shot variance (numerator/shots); null when exact, absent on older kernels. */
+  shot_noise_variance?: number | null;
+  fallback_reason?: string | null;
 }
 
 export type ScalingVerdict = 'barren_plateau' | 'polynomial' | 'inconclusive';
@@ -138,6 +206,8 @@ export interface ScalingStudy {
   fits: ScalingFit[];
   observable?: string;
   notes?: string[];
+  /** Present when simulated noise was requested but ignored for this analysis. */
+  channel_noise?: ChannelNoiseEcho;
 }
 
 export interface LieAlgebraResult {
@@ -168,6 +238,8 @@ export interface LieAlgebraResult {
   assumptions: string[];
   simulability: { kind: 'g_sim_feasible' | 'exponential_dla' | 'unknown'; summary: string };
   elapsed_ms: number;
+  channel_noise?: ChannelNoiseEcho;
+  notes?: string[];
 }
 
 export interface ExpressibilityResult {
@@ -178,6 +250,8 @@ export interface ExpressibilityResult {
   dimension: number;
   histogram: Array<{ lo: number; hi: number; observed: number; haar: number }>;
   reference: { idle_kl: number; note: string };
+  channel_noise?: ChannelNoiseEcho;
+  notes?: string[];
 }
 
 export interface EntanglingCapabilityResult {
@@ -186,6 +260,8 @@ export interface EntanglingCapabilityResult {
   ci95: Interval;
   histogram: Array<{ lo: number; hi: number; count: number }>;
   haar_mean: number;
+  channel_noise?: ChannelNoiseEcho;
+  notes?: string[];
 }
 
 export interface LandscapeResult {
@@ -198,6 +274,173 @@ export interface LandscapeResult {
   min: number;
   max: number;
   center_value: number;
+  channel_noise?: ChannelNoiseEcho;
+  notes?: string[];
+}
+
+export interface QuantumKernelResult {
+  dataset: string;
+  n_samples: number;
+  n_features: number;
+  noise: number;
+  n_train: number;
+  n_test: number;
+  parameters: string[];
+  labels: number[];
+  train_indices: number[];
+  kernel: number[][];
+  alignment: number;
+  eigenvalues: number[];
+  effective_dimension: number;
+  top_eigenvalue_share: number;
+  ridge_lambda: number;
+  train_accuracy: number;
+  test_accuracy: number;
+  n_qubits: number;
+  backend: string;
+  elapsed_ms: number;
+  notes: string[];
+  channel_noise?: ChannelNoiseEcho;
+  kernel_shot_variance?: number | null;
+}
+
+export interface VariationalTrainResult {
+  dataset: string;
+  n_samples: number;
+  n_features: number;
+  noise: number;
+  n_train: number;
+  n_test: number;
+  data_params: string[];
+  trainable_params: string[];
+  observable: string;
+  epochs: number;
+  learning_rate: number;
+  optimizer: QmlOptimizer;
+  gradient_method?: GradientMethod;
+  epochs_run?: number;
+  stopped_early?: boolean;
+  early_stop_patience?: number;
+  spsa_a?: number;
+  spsa_c?: number;
+  channel_noise?: ChannelNoiseEcho;
+  initial_parameters: Record<string, number>;
+  final_parameters: Record<string, number>;
+  initial_loss: number | null;
+  final_loss: number;
+  final_train_accuracy: number;
+  final_test_accuracy: number;
+  final_test_loss: number;
+  history: Array<{ epoch: number; loss: number; train_accuracy: number; test_accuracy: number }>;
+  n_qubits: number;
+  backend: string;
+  elapsed_ms: number;
+  notes: string[];
+}
+
+export type ClassicalBaselineVerdict = 'quantum_ahead' | 'classical_ahead' | 'tie' | 'no_quantum_kernel';
+
+export interface ClassicalBaselineResult {
+  dataset: string;
+  n_samples: number;
+  n_features: number;
+  noise: number;
+  channel_noise?: ChannelNoiseEcho;
+  n_train: number;
+  n_test: number;
+  labels: number[];
+  train_indices: number[];
+  gamma_median_heuristic: number;
+  ridge_lambda: number;
+  baselines: Array<{
+    name: 'rbf' | 'linear';
+    /** Null for the linear kernel, which has no bandwidth. */
+    gamma: number | null;
+    alignment: number;
+    train_accuracy: number;
+    test_accuracy: number;
+    effective_dimension: number;
+  }>;
+  best_baseline: 'rbf' | 'linear';
+  best_baseline_gamma: number | null;
+  /** Null when the circuit is not a pure feature map (parameter count != n_features). */
+  quantum: {
+    alignment: number;
+    train_accuracy: number;
+    test_accuracy: number;
+    effective_dimension: number;
+  } | null;
+  geometric_difference: number | null;
+  /** Quantum minus best-classical test accuracy; null with no quantum kernel. */
+  delta_test_accuracy: number | null;
+  verdict: ClassicalBaselineVerdict;
+  n_qubits: number;
+  backend: string;
+  elapsed_ms: number;
+  notes: string[];
+}
+
+/** One alignment-search checkpoint (initial / final / best iterate). */
+export interface KernelAlignmentScores {
+  alignment: number;
+  train_accuracy: number;
+  test_accuracy: number;
+}
+
+export interface KernelAlignmentResult {
+  dataset: string;
+  n_samples: number;
+  n_features: number;
+  noise: number;
+  channel_noise?: ChannelNoiseEcho;
+  n_train: number;
+  n_test: number;
+  mode: KernelAlignmentMode;
+  data_params: string[];
+  trainable_params: string[];
+  initial: KernelAlignmentScores;
+  final: KernelAlignmentScores;
+  /** Best iterate by train alignment (the restored one `kernel`/`bandwidth` describe). */
+  best: KernelAlignmentScores;
+  bandwidth: number[];
+  final_parameters: Record<string, number>;
+  history: Array<{ step: number; alignment: number; train_accuracy: number; test_accuracy: number }>;
+  concentration: {
+    before: { offdiag_mean: number; offdiag_var: number; effective_dimension: number };
+    after: { offdiag_mean: number; offdiag_var: number; effective_dimension: number };
+  };
+  rbf_baseline_test_accuracy: number;
+  kernel: number[][];
+  labels: number[];
+  train_indices: number[];
+  steps: number;
+  steps_run: number;
+  ridge_lambda: number;
+  n_qubits: number;
+  backend: string;
+  elapsed_ms: number;
+  notes: string[];
+}
+
+export interface VariationalQngResult extends Omit<VariationalTrainResult, 'optimizer' | 'history' | 'epochs_run'> {
+  optimizer: 'qng';
+  epochs_run: number;
+  metric_regularization: number;
+  metric_every: number;
+  max_metric_params: number;
+  history: Array<{
+    epoch: number;
+    loss: number;
+    train_accuracy: number;
+    test_accuracy: number;
+    grad_norm: number;
+    natural_grad_norm: number;
+    /** Null when the regularized metric's condition number is not finite. */
+    metric_condition: number | null;
+  }>;
+  metric_eigenvalues: number[];
+  metric_effective_dimension: number;
+  fallbacks: number;
 }
 
 export interface TrainabilityResults {
@@ -207,6 +450,11 @@ export interface TrainabilityResults {
   expressibility?: ExpressibilityResult;
   entanglement?: EntanglingCapabilityResult;
   landscape?: LandscapeResult;
+  quantum_kernel?: QuantumKernelResult;
+  variational_train?: VariationalTrainResult;
+  classical_baseline?: ClassicalBaselineResult;
+  kernel_alignment_search?: KernelAlignmentResult;
+  variational_qng?: VariationalQngResult;
 }
 
 // ── Lint ────────────────────────────────────────────────────────────────
@@ -324,7 +572,17 @@ export type TrainabilityResponse =
 
 // ── UI types ────────────────────────────────────────────────────────────
 
-export type TrainabilityTabId = 'gradients' | 'scaling' | 'lie' | 'expressibility' | 'landscape';
+export type TrainabilityTabId =
+  | 'gradients'
+  | 'scaling'
+  | 'lie'
+  | 'expressibility'
+  | 'landscape'
+  | 'kernel'
+  | 'training'
+  | 'baseline'
+  | 'alignment'
+  | 'qng';
 
 export type TrainabilityJobStatus = 'starting' | 'running' | 'cancelling' | 'complete' | 'cancelled' | 'failed';
 

@@ -17,6 +17,7 @@ import {
 } from '../../lab';
 import type { GradientStatistics } from '../../../types/trainability';
 import { intervalKindOf, intervalNounOf, isNumber, methodDescription, validInterval } from '../../../services/trainability/intervals';
+import { formatChannelNoise, isExactChannelNoise } from '../../../services/trainability/settings';
 import { MethodPill } from '../pills';
 
 /** Smallest plottable variance; zero-variance (dead) parameters pin here. */
@@ -95,6 +96,16 @@ export function GradientsTab({ data }: { data: GradientStatistics }) {
       </LabKpiStrip>
       <div className="lab-row" style={{ flexWrap: 'wrap' }}>
         <MethodPill method={data.method} />
+        {!isExactChannelNoise(data.channel_noise) && (
+          <LabPill tone="dirac" outline title="Simulated channel, not a device calibration">
+            noise: {formatChannelNoise(data.channel_noise)}
+          </LabPill>
+        )}
+        {data.shot_noise_variance != null && (
+          <LabPill outline title="Shot-noise variance added per gradient component (numerator/shots)">
+            shot variance {formatSci(data.shot_noise_variance)}
+          </LabPill>
+        )}
         {ppe && (
           <span className="lab-muted">
             Exact Pauli propagation, no sampling. Whiskers are {kind === 'truncation' ? 'the rigorous truncation interval' : 'an interval'}, not a confidence interval.

@@ -33,6 +33,12 @@
       "job_id": "docs-job-1",
       "analysis": "gradients",
       "result": {
+        "channel_noise": {
+          "shots": 0,
+          "depolarizing_p": 0.0,
+          "readout_flip_p": 0.0
+        },
+        "shot_noise_variance": null,
         "samples": null,
         "init": "uniform",
         "method": "ppe",
@@ -246,6 +252,12 @@
       "status": "complete",
       "results": {
         "gradients": {
+          "channel_noise": {
+            "shots": 0,
+            "depolarizing_p": 0.0,
+            "readout_flip_p": 0.0
+          },
+          "shot_noise_variance": null,
           "samples": null,
           "init": "uniform",
           "method": "ppe",
@@ -490,6 +502,45 @@
           "lie": {
             "max_dimension": 4096,
             "time_budget_s": "<approx:10:0.001>"
+          },
+          "qml": {
+            "dataset": "moons",
+            "samples": 48,
+            "noise": "<approx:0.1:0.00001>",
+            "train_fraction": "<approx:0.7:0.00001>"
+          },
+          "kernel": {
+            "ridge_lambda": "<approx:1.0:0.0001>"
+          },
+          "variational": {
+            "epochs": 60,
+            "learning_rate": "<approx:0.1:0.00001>",
+            "data_params": null,
+            "optimizer": "adam",
+            "gradient_method": "adjoint",
+            "early_stop_patience": 0,
+            "spsa_a": "<approx:0.05:0.00001>",
+            "spsa_c": "<approx:0.1:0.00001>"
+          },
+          "baseline": {
+            "include_linear": true
+          },
+          "align": {
+            "mode": "bandwidth",
+            "steps": 40,
+            "learning_rate": "<approx:0.1:0.00001>",
+            "spsa_a": "<approx:0.05:0.00001>",
+            "spsa_c": "<approx:0.1:0.00001>"
+          },
+          "qng": {
+            "metric_regularization": "<approx:0.001:0.000001>",
+            "metric_every": 1,
+            "max_metric_params": 32
+          },
+          "noise": {
+            "shots": 0,
+            "depolarizing_p": 0.0,
+            "readout_flip_p": 0.0
           }
         },
         "kernel": "<any>",

@@ -54,6 +54,7 @@ from kernel.trainability._analysis_common import (
 from kernel.trainability._circuit_walk import source_key
 from kernel.trainability.compiler import MAX_STATEVECTOR_QUBITS, compile_circuit
 from kernel.trainability.ir import ParamCircuit, ParamRef
+from kernel.trainability.noise import NOISE_NOTE, NoiseSpec, coerce_noise, perturb_costs_grads
 from kernel.trainability.pauli import PauliSum
 from kernel.trainability.pauliprop import ppe_applicable, ppe_gradient_variances
 
@@ -121,12 +122,19 @@ def _percentile(a: np.ndarray, axis: int = 0) -> np.ndarray:
     return np.percentile(a, [2.5, 97.5], axis=axis)
 
 
-def _sampling_result(circuit, observable, samples, seed, init, backend, progress, cancel) -> dict[str, Any]:
+def _sampling_result(circuit, observable, samples, seed, init, backend, progress, cancel,
+                     noise_spec: NoiseSpec | None = None) -> dict[str, Any]:
+    spec = noise_spec if noise_spec is not None else NoiseSpec()
     program = compile_circuit(circuit, backend=backend)
     m = len(circuit.parameters)
     rng = np.random.default_rng(seed)
     values = _draw_values(rng, samples, m, init)
     cost, g = _gradients(program, values, observable, progress, cancel)
+    shot_noise_variance: float | None = None
+    if not spec.is_exact:
+        noise_rng = np.random.default_rng((int(seed) + 4_000_003) % (2**63))
+        cost, g, _sv = perturb_costs_grads(cost, g, observable, spec, noise_rng)
+        shot_noise_variance = float(_sv) if spec.shots > 0 else 0.0
     mean = g.mean(axis=0)
     var = g.var(axis=0, ddof=1)
     abs_mean = np.abs(g).mean(axis=0)
@@ -152,6 +160,8 @@ def _sampling_result(circuit, observable, samples, seed, init, backend, progress
         "per_parameter": rows,
         "variance_mean": float(var.mean()), "variance_mean_ci95": [float(vm_ci[0]), float(vm_ci[1])],
         "gradient_norm_mean": float(norms.mean()), "gradient_norm_rms": float(math.sqrt((norms ** 2).mean())),
+        "channel_noise": spec.echo(),
+        "shot_noise_variance": shot_noise_variance,
         "_variance": var, "_abs_mean": abs_mean,
     }
 
@@ -198,6 +208,8 @@ def _ppe_result(circuit, observable, init, budget, progress, cancel) -> dict[str
         "variance_mean_ci95": vm_ci,
         "gradient_norm_mean": None,
         "gradient_norm_rms": None if headline is None else float(math.sqrt(var.sum())),
+        "channel_noise": NoiseSpec().echo(),
+        "shot_noise_variance": None,
         "_variance": var, "_abs_mean": np.full(len(rows), np.nan), "_raw": res,
     }
 
@@ -264,6 +276,7 @@ def gradient_statistics(
     backend: str = "auto",
     progress: Progress | None = None,
     cancel: Cancel | None = None,
+    channel_noise: NoiseSpec | dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Gradient statistics of ``C = <O>`` (see the module docstring).
 
@@ -282,16 +295,29 @@ def gradient_statistics(
     """
     t0 = time.perf_counter()
     _validate(circuit, observable, samples, init, method)
+    noise_spec = coerce_noise(channel_noise)
+    if not noise_spec.is_exact and method == "ppe":
+        raise AnalysisError(
+            "noise_unsupported",
+            "PPE is an exact noiseless Pauli propagation and cannot include simulated noise; "
+            "use method 'sampling' (or 'auto') with settings.noise, or clear the noise settings",
+        )
     n = circuit.n_qubits
     ok, reason = ppe_applicable(circuit, observable, init=init)
     notes: list[str] = []
+    if not noise_spec.is_exact:
+        notes.append(NOISE_NOTE)
     if method == "ppe":
         if not ok:
             raise AnalysisError("ppe_not_applicable", reason or "PPE not applicable")
         res = _ppe_result(circuit, observable, init, _FORCED_PPE, progress, cancel)
         return _finish(res, circuit, seed, notes, None, t0)
     fallback = None
-    if method == "auto":
+    if method == "auto" and not noise_spec.is_exact:
+        # PPE is noiseless: with simulated noise requested, auto must sample
+        # (explicit ppe + noise above is an error, never a silent ignore).
+        fallback = "simulated noise requested; PPE is noiseless"
+    elif method == "auto":
         if ok:
             can_sample = n <= MAX_STATEVECTOR_QUBITS
             res = _ppe_result(circuit, observable, init, _AUTO_PPE if can_sample else _FORCED_PPE, progress, cancel)
@@ -310,7 +336,7 @@ def gradient_statistics(
             f"{n} qubits exceeds the statevector limit of {MAX_STATEVECTOR_QUBITS}"
             + (f" and the PPE does not apply: {reason}" if reason else ""),
         )
-    res = _sampling_result(circuit, observable, samples, seed, init, backend, progress, cancel)
+    res = _sampling_result(circuit, observable, samples, seed, init, backend, progress, cancel, noise_spec)
     if fallback:
         notes.append(f"Fell back to statevector sampling: {fallback}.")
     return _finish(res, circuit, seed, notes, fallback, t0)

@@ -1,0 +1,810 @@
+[
+  {
+    "dataset": "moons",
+    "n": 48,
+    "model": "vqc_adam_L2",
+    "test_acc": 0.35714285714285715,
+    "train_acc": 0.7352941176470589,
+    "loss": 0.8240654977127979,
+    "wall_s": 0.048
+  },
+  {
+    "dataset": "moons",
+    "n": 48,
+    "model": "vqc_spsa_L2",
+    "test_acc": 0.5,
+    "train_acc": 0.5882352941176471,
+    "loss": 0.876591735284056,
+    "wall_s": 0.05
+  },
+  {
+    "dataset": "moons",
+    "n": 48,
+    "model": "vqc_qng_L2",
+    "test_acc": 0.35714285714285715,
+    "train_acc": 0.7352941176470589,
+    "loss": 0.8239343607257082,
+    "wall_s": 0.119
+  },
+  {
+    "dataset": "moons",
+    "n": 48,
+    "model": "vqc_adam_L2_noisy",
+    "test_acc": 0.42857142857142855,
+    "train_acc": 0.6764705882352942,
+    "loss": 0.8755035400390625,
+    "wall_s": 0.061
+  },
+  {
+    "dataset": "moons",
+    "n": 48,
+    "model": "quantum_kernel",
+    "test_acc": 0.7142857142857143,
+    "train_acc": 0.9117647058823529,
+    "alignment": 0.30855955094572085,
+    "wall_s": 0.001
+  },
+  {
+    "dataset": "moons",
+    "n": 48,
+    "model": "classical_best[rbf]",
+    "test_acc": 0.9285714285714286,
+    "train_acc": 0.9705882352941176,
+    "verdict": "classical_ahead",
+    "geometric_difference": 2.79862916322025,
+    "wall_s": 0.007
+  },
+  {
+    "dataset": "moons",
+    "n": 120,
+    "model": "vqc_adam_L2",
+    "test_acc": 0.6388888888888888,
+    "train_acc": 0.5714285714285714,
+    "loss": 0.916263186065906,
+    "wall_s": 0.085
+  },
+  {
+    "dataset": "moons",
+    "n": 120,
+    "model": "vqc_spsa_L2",
+    "test_acc": 0.5277777777777778,
+    "train_acc": 0.4880952380952381,
+    "loss": 1.0676469324112285,
+    "wall_s": 0.061
+  },
+  {
+    "dataset": "moons",
+    "n": 120,
+    "model": "vqc_qng_L2",
+    "test_acc": 0.6111111111111112,
+    "train_acc": 0.6071428571428571,
+    "loss": 0.9124237920453001,
+    "wall_s": 0.152
+  },
+  {
+    "dataset": "moons",
+    "n": 120,
+    "model": "vqc_adam_L2_noisy",
+    "test_acc": 0.6111111111111112,
+    "train_acc": 0.6190476190476191,
+    "loss": 0.8944947378976005,
+    "wall_s": 0.078
+  },
+  {
+    "dataset": "moons",
+    "n": 120,
+    "model": "quantum_kernel",
+    "test_acc": 0.8055555555555556,
+    "train_acc": 0.8452380952380952,
+    "alignment": 0.28302899484245214,
+    "wall_s": 0.003
+  },
+  {
+    "dataset": "moons",
+    "n": 120,
+    "model": "classical_best[rbf]",
+    "test_acc": 0.9722222222222222,
+    "train_acc": 0.9523809523809523,
+    "verdict": "classical_ahead",
+    "geometric_difference": 4.658765370311056,
+    "wall_s": 0.009
+  },
+  {
+    "dataset": "moons",
+    "n": 200,
+    "model": "vqc_adam_L2",
+    "test_acc": 0.45,
+    "train_acc": 0.6071428571428571,
+    "loss": 0.9551930035528549,
+    "wall_s": 0.099
+  },
+  {
+    "dataset": "moons",
+    "n": 200,
+    "model": "vqc_spsa_L2",
+    "test_acc": 0.5333333333333333,
+    "train_acc": 0.44285714285714284,
+    "loss": 1.1794807469684936,
+    "wall_s": 0.076
+  },
+  {
+    "dataset": "moons",
+    "n": 200,
+    "model": "vqc_qng_L2",
+    "test_acc": 0.43333333333333335,
+    "train_acc": 0.5642857142857143,
+    "loss": 0.938469216510571,
+    "wall_s": 0.191
+  },
+  {
+    "dataset": "moons",
+    "n": 200,
+    "model": "vqc_adam_L2_noisy",
+    "test_acc": 0.4166666666666667,
+    "train_acc": 0.5857142857142857,
+    "loss": 0.939149911063058,
+    "wall_s": 0.099
+  },
+  {
+    "dataset": "moons",
+    "n": 200,
+    "model": "quantum_kernel",
+    "test_acc": 0.7666666666666667,
+    "train_acc": 0.8714285714285714,
+    "alignment": 0.2737675852389021,
+    "wall_s": 0.006
+  },
+  {
+    "dataset": "moons",
+    "n": 200,
+    "model": "classical_best[rbf]",
+    "test_acc": 1.0,
+    "train_acc": 0.9928571428571429,
+    "verdict": "classical_ahead",
+    "geometric_difference": 6.085520022526416,
+    "wall_s": 0.02
+  },
+  {
+    "dataset": "circles",
+    "n": 48,
+    "model": "vqc_adam_L2",
+    "test_acc": 1.0,
+    "train_acc": 1.0,
+    "loss": 0.10257779284982876,
+    "wall_s": 0.072
+  },
+  {
+    "dataset": "circles",
+    "n": 48,
+    "model": "vqc_spsa_L2",
+    "test_acc": 1.0,
+    "train_acc": 0.9117647058823529,
+    "loss": 0.3152352567545105,
+    "wall_s": 0.048
+  },
+  {
+    "dataset": "circles",
+    "n": 48,
+    "model": "vqc_qng_L2",
+    "test_acc": 1.0,
+    "train_acc": 1.0,
+    "loss": 0.10419472853905269,
+    "wall_s": 0.117
+  },
+  {
+    "dataset": "circles",
+    "n": 48,
+    "model": "vqc_adam_L2_noisy",
+    "test_acc": 1.0,
+    "train_acc": 1.0,
+    "loss": 0.15180116541245403,
+    "wall_s": 0.062
+  },
+  {
+    "dataset": "circles",
+    "n": 48,
+    "model": "quantum_kernel",
+    "test_acc": 1.0,
+    "train_acc": 1.0,
+    "alignment": 0.38652475515560214,
+    "wall_s": 0.001
+  },
+  {
+    "dataset": "circles",
+    "n": 48,
+    "model": "classical_best[rbf]",
+    "test_acc": 1.0,
+    "train_acc": 1.0,
+    "verdict": "tie",
+    "geometric_difference": 1.3681214448713477,
+    "wall_s": 0.002
+  },
+  {
+    "dataset": "circles",
+    "n": 120,
+    "model": "vqc_adam_L2",
+    "test_acc": 1.0,
+    "train_acc": 1.0,
+    "loss": 0.14186529229306885,
+    "wall_s": 0.087
+  },
+  {
+    "dataset": "circles",
+    "n": 120,
+    "model": "vqc_spsa_L2",
+    "test_acc": 0.9166666666666666,
+    "train_acc": 0.9404761904761905,
+    "loss": 0.2936270480916787,
+    "wall_s": 0.064
+  },
+  {
+    "dataset": "circles",
+    "n": 120,
+    "model": "vqc_qng_L2",
+    "test_acc": 1.0,
+    "train_acc": 1.0,
+    "loss": 0.13840695662008265,
+    "wall_s": 0.155
+  },
+  {
+    "dataset": "circles",
+    "n": 120,
+    "model": "vqc_adam_L2_noisy",
+    "test_acc": 0.9722222222222222,
+    "train_acc": 1.0,
+    "loss": 0.20476241338820683,
+    "wall_s": 0.085
+  },
+  {
+    "dataset": "circles",
+    "n": 120,
+    "model": "quantum_kernel",
+    "test_acc": 1.0,
+    "train_acc": 1.0,
+    "alignment": 0.3938245877616346,
+    "wall_s": 0.004
+  },
+  {
+    "dataset": "circles",
+    "n": 120,
+    "model": "classical_best[rbf]",
+    "test_acc": 1.0,
+    "train_acc": 1.0,
+    "verdict": "tie",
+    "geometric_difference": 1.4709554217215322,
+    "wall_s": 0.013
+  },
+  {
+    "dataset": "circles",
+    "n": 200,
+    "model": "vqc_adam_L2",
+    "test_acc": 0.95,
+    "train_acc": 0.9928571428571429,
+    "loss": 0.15953084295274128,
+    "wall_s": 0.102
+  },
+  {
+    "dataset": "circles",
+    "n": 200,
+    "model": "vqc_spsa_L2",
+    "test_acc": 0.9166666666666666,
+    "train_acc": 0.9285714285714286,
+    "loss": 0.3146065949178378,
+    "wall_s": 0.084
+  },
+  {
+    "dataset": "circles",
+    "n": 200,
+    "model": "vqc_qng_L2",
+    "test_acc": 0.95,
+    "train_acc": 0.9928571428571429,
+    "loss": 0.15943257113053266,
+    "wall_s": 0.194
+  },
+  {
+    "dataset": "circles",
+    "n": 200,
+    "model": "vqc_adam_L2_noisy",
+    "test_acc": 0.9666666666666667,
+    "train_acc": 0.9928571428571429,
+    "loss": 0.21853016444614956,
+    "wall_s": 0.098
+  },
+  {
+    "dataset": "circles",
+    "n": 200,
+    "model": "quantum_kernel",
+    "test_acc": 0.9833333333333333,
+    "train_acc": 1.0,
+    "alignment": 0.3960921523031926,
+    "wall_s": 0.006
+  },
+  {
+    "dataset": "circles",
+    "n": 200,
+    "model": "classical_best[rbf]",
+    "test_acc": 0.9833333333333333,
+    "train_acc": 1.0,
+    "verdict": "tie",
+    "geometric_difference": 1.5263605127315156,
+    "wall_s": 0.02
+  },
+  {
+    "dataset": "blobs",
+    "n": 48,
+    "model": "vqc_adam_L2",
+    "test_acc": 0.7142857142857143,
+    "train_acc": 0.7058823529411765,
+    "loss": 0.8310800096118611,
+    "wall_s": 0.072
+  },
+  {
+    "dataset": "blobs",
+    "n": 48,
+    "model": "vqc_spsa_L2",
+    "test_acc": 0.7142857142857143,
+    "train_acc": 0.6764705882352942,
+    "loss": 0.9966622055587027,
+    "wall_s": 0.049
+  },
+  {
+    "dataset": "blobs",
+    "n": 48,
+    "model": "vqc_qng_L2",
+    "test_acc": 0.7142857142857143,
+    "train_acc": 0.7058823529411765,
+    "loss": 0.8308435156836215,
+    "wall_s": 0.118
+  },
+  {
+    "dataset": "blobs",
+    "n": 48,
+    "model": "vqc_adam_L2_noisy",
+    "test_acc": 0.6428571428571429,
+    "train_acc": 0.6470588235294118,
+    "loss": 0.8666440178366268,
+    "wall_s": 0.062
+  },
+  {
+    "dataset": "blobs",
+    "n": 48,
+    "model": "quantum_kernel",
+    "test_acc": 1.0,
+    "train_acc": 1.0,
+    "alignment": 0.8704598576663188,
+    "wall_s": 0.001
+  },
+  {
+    "dataset": "blobs",
+    "n": 48,
+    "model": "classical_best[rbf]",
+    "test_acc": 0.9285714285714286,
+    "train_acc": 0.9705882352941176,
+    "verdict": "tie",
+    "geometric_difference": 1.5192337419898962,
+    "wall_s": 0.002
+  },
+  {
+    "dataset": "blobs",
+    "n": 120,
+    "model": "vqc_adam_L2",
+    "test_acc": 0.5555555555555556,
+    "train_acc": 0.5714285714285714,
+    "loss": 0.9526682216973089,
+    "wall_s": 0.085
+  },
+  {
+    "dataset": "blobs",
+    "n": 120,
+    "model": "vqc_spsa_L2",
+    "test_acc": 0.4444444444444444,
+    "train_acc": 0.5119047619047619,
+    "loss": 1.0974546317633178,
+    "wall_s": 0.062
+  },
+  {
+    "dataset": "blobs",
+    "n": 120,
+    "model": "vqc_qng_L2",
+    "test_acc": 0.5277777777777778,
+    "train_acc": 0.5833333333333334,
+    "loss": 0.9492879045401508,
+    "wall_s": 0.151
+  },
+  {
+    "dataset": "blobs",
+    "n": 120,
+    "model": "vqc_adam_L2_noisy",
+    "test_acc": 0.5833333333333334,
+    "train_acc": 0.5952380952380952,
+    "loss": 0.9417839050292969,
+    "wall_s": 0.079
+  },
+  {
+    "dataset": "blobs",
+    "n": 120,
+    "model": "quantum_kernel",
+    "test_acc": 0.9722222222222222,
+    "train_acc": 1.0,
+    "alignment": 0.855684420675115,
+    "wall_s": 0.002
+  },
+  {
+    "dataset": "blobs",
+    "n": 120,
+    "model": "classical_best[rbf]",
+    "test_acc": 0.9444444444444444,
+    "train_acc": 1.0,
+    "verdict": "quantum_ahead",
+    "geometric_difference": 2.0405186643892144,
+    "wall_s": 0.008
+  },
+  {
+    "dataset": "blobs",
+    "n": 200,
+    "model": "vqc_adam_L2",
+    "test_acc": 0.5833333333333334,
+    "train_acc": 0.6214285714285714,
+    "loss": 0.923800394342438,
+    "wall_s": 0.099
+  },
+  {
+    "dataset": "blobs",
+    "n": 200,
+    "model": "vqc_spsa_L2",
+    "test_acc": 0.6,
+    "train_acc": 0.6214285714285714,
+    "loss": 0.9597405684436422,
+    "wall_s": 0.077
+  },
+  {
+    "dataset": "blobs",
+    "n": 200,
+    "model": "vqc_qng_L2",
+    "test_acc": 0.5833333333333334,
+    "train_acc": 0.6142857142857143,
+    "loss": 0.9238922251610416,
+    "wall_s": 0.191
+  },
+  {
+    "dataset": "blobs",
+    "n": 200,
+    "model": "vqc_adam_L2_noisy",
+    "test_acc": 0.5666666666666667,
+    "train_acc": 0.6071428571428571,
+    "loss": 0.9292157854352678,
+    "wall_s": 0.098
+  },
+  {
+    "dataset": "blobs",
+    "n": 200,
+    "model": "quantum_kernel",
+    "test_acc": 1.0,
+    "train_acc": 1.0,
+    "alignment": 0.871769646513191,
+    "wall_s": 0.006
+  },
+  {
+    "dataset": "blobs",
+    "n": 200,
+    "model": "classical_best[rbf]",
+    "test_acc": 1.0,
+    "train_acc": 0.9928571428571429,
+    "verdict": "tie",
+    "geometric_difference": 1.6883194027744903,
+    "wall_s": 0.02
+  },
+  {
+    "dataset": "xor",
+    "n": 48,
+    "model": "vqc_adam_L2",
+    "test_acc": 1.0,
+    "train_acc": 0.9705882352941176,
+    "loss": 0.21537517900357028,
+    "wall_s": 0.072
+  },
+  {
+    "dataset": "xor",
+    "n": 48,
+    "model": "vqc_spsa_L2",
+    "test_acc": 0.7857142857142857,
+    "train_acc": 0.8235294117647058,
+    "loss": 0.7281224290568162,
+    "wall_s": 0.048
+  },
+  {
+    "dataset": "xor",
+    "n": 48,
+    "model": "vqc_qng_L2",
+    "test_acc": 1.0,
+    "train_acc": 0.9705882352941176,
+    "loss": 0.21505704597348121,
+    "wall_s": 0.115
+  },
+  {
+    "dataset": "xor",
+    "n": 48,
+    "model": "vqc_adam_L2_noisy",
+    "test_acc": 1.0,
+    "train_acc": 0.9411764705882353,
+    "loss": 0.2686067468979779,
+    "wall_s": 0.062
+  },
+  {
+    "dataset": "xor",
+    "n": 48,
+    "model": "quantum_kernel",
+    "test_acc": 0.9285714285714286,
+    "train_acc": 0.9705882352941176,
+    "alignment": 0.2878364015941369,
+    "wall_s": 0.001
+  },
+  {
+    "dataset": "xor",
+    "n": 48,
+    "model": "classical_best[rbf]",
+    "test_acc": 1.0,
+    "train_acc": 0.8823529411764706,
+    "verdict": "tie",
+    "geometric_difference": 1.359004164507105,
+    "wall_s": 0.002
+  },
+  {
+    "dataset": "xor",
+    "n": 120,
+    "model": "vqc_adam_L2",
+    "test_acc": 0.9722222222222222,
+    "train_acc": 0.9880952380952381,
+    "loss": 0.163304034415501,
+    "wall_s": 0.085
+  },
+  {
+    "dataset": "xor",
+    "n": 120,
+    "model": "vqc_spsa_L2",
+    "test_acc": 0.9722222222222222,
+    "train_acc": 0.7857142857142857,
+    "loss": 0.6724258092678175,
+    "wall_s": 0.061
+  },
+  {
+    "dataset": "xor",
+    "n": 120,
+    "model": "vqc_qng_L2",
+    "test_acc": 0.9722222222222222,
+    "train_acc": 0.9880952380952381,
+    "loss": 0.16232531264614294,
+    "wall_s": 0.152
+  },
+  {
+    "dataset": "xor",
+    "n": 120,
+    "model": "vqc_adam_L2_noisy",
+    "test_acc": 0.9722222222222222,
+    "train_acc": 0.9880952380952381,
+    "loss": 0.22229712350027903,
+    "wall_s": 0.079
+  },
+  {
+    "dataset": "xor",
+    "n": 120,
+    "model": "quantum_kernel",
+    "test_acc": 0.9722222222222222,
+    "train_acc": 0.9761904761904762,
+    "alignment": 0.3897844329235306,
+    "wall_s": 0.002
+  },
+  {
+    "dataset": "xor",
+    "n": 120,
+    "model": "classical_best[rbf]",
+    "test_acc": 1.0,
+    "train_acc": 0.9761904761904762,
+    "verdict": "classical_ahead",
+    "geometric_difference": 1.434239663237394,
+    "wall_s": 0.008
+  },
+  {
+    "dataset": "xor",
+    "n": 200,
+    "model": "vqc_adam_L2",
+    "test_acc": 0.9833333333333333,
+    "train_acc": 0.9857142857142858,
+    "loss": 0.12923895888731424,
+    "wall_s": 0.099
+  },
+  {
+    "dataset": "xor",
+    "n": 200,
+    "model": "vqc_spsa_L2",
+    "test_acc": 0.9333333333333333,
+    "train_acc": 0.9,
+    "loss": 0.5055089378934873,
+    "wall_s": 0.077
+  },
+  {
+    "dataset": "xor",
+    "n": 200,
+    "model": "vqc_qng_L2",
+    "test_acc": 0.9833333333333333,
+    "train_acc": 0.9928571428571429,
+    "loss": 0.13378041247873154,
+    "wall_s": 0.193
+  },
+  {
+    "dataset": "xor",
+    "n": 200,
+    "model": "vqc_adam_L2_noisy",
+    "test_acc": 0.9833333333333333,
+    "train_acc": 0.9857142857142858,
+    "loss": 0.18431908743722097,
+    "wall_s": 0.098
+  },
+  {
+    "dataset": "xor",
+    "n": 200,
+    "model": "quantum_kernel",
+    "test_acc": 0.9833333333333333,
+    "train_acc": 0.9857142857142858,
+    "alignment": 0.41830091474446246,
+    "wall_s": 0.006
+  },
+  {
+    "dataset": "xor",
+    "n": 200,
+    "model": "classical_best[rbf]",
+    "test_acc": 0.9833333333333333,
+    "train_acc": 0.9928571428571429,
+    "verdict": "tie",
+    "geometric_difference": 1.4797045914038727,
+    "wall_s": 0.02
+  },
+  {
+    "dataset": "moons",
+    "n": 120,
+    "model": "vqc_adam_L1",
+    "test_acc": 0.5,
+    "train_acc": 0.5476190476190477,
+    "loss": 0.9938178901899464,
+    "wall_s": 0.055
+  },
+  {
+    "dataset": "moons",
+    "n": 120,
+    "model": "vqc_adam_L3",
+    "test_acc": 0.5833333333333334,
+    "train_acc": 0.5833333333333334,
+    "loss": 0.8769966255581052,
+    "wall_s": 0.086
+  },
+  {
+    "dataset": "moons",
+    "n": 120,
+    "model": "vqc_adam_L4",
+    "test_acc": 0.6388888888888888,
+    "train_acc": 0.6309523809523809,
+    "loss": 0.9456348739281762,
+    "wall_s": 0.102
+  },
+  {
+    "dataset": "moons",
+    "n": 120,
+    "model": "kernel_alignment_search",
+    "test_acc": 0.7777777777777778,
+    "train_acc": 0.8333333333333334,
+    "alignment_before": 0.29085908535301175,
+    "alignment_after": 0.3277062285612624,
+    "wall_s": 0.052
+  },
+  {
+    "dataset": "circles",
+    "n": 120,
+    "model": "vqc_adam_L1",
+    "test_acc": 0.9166666666666666,
+    "train_acc": 0.9166666666666666,
+    "loss": 0.4318035960161173,
+    "wall_s": 0.055
+  },
+  {
+    "dataset": "circles",
+    "n": 120,
+    "model": "vqc_adam_L3",
+    "test_acc": 1.0,
+    "train_acc": 1.0,
+    "loss": 0.13030831453294814,
+    "wall_s": 0.086
+  },
+  {
+    "dataset": "circles",
+    "n": 120,
+    "model": "vqc_adam_L4",
+    "test_acc": 0.8611111111111112,
+    "train_acc": 0.9404761904761905,
+    "loss": 0.25459385538899887,
+    "wall_s": 0.102
+  },
+  {
+    "dataset": "circles",
+    "n": 120,
+    "model": "kernel_alignment_search",
+    "test_acc": 1.0,
+    "train_acc": 1.0,
+    "alignment_before": 0.3907401391786553,
+    "alignment_after": 0.3948349734202648,
+    "wall_s": 0.053
+  },
+  {
+    "dataset": "blobs",
+    "n": 120,
+    "model": "vqc_adam_L1",
+    "test_acc": 0.5277777777777778,
+    "train_acc": 0.5595238095238095,
+    "loss": 0.9602294171586352,
+    "wall_s": 0.055
+  },
+  {
+    "dataset": "blobs",
+    "n": 120,
+    "model": "vqc_adam_L3",
+    "test_acc": 0.6111111111111112,
+    "train_acc": 0.6071428571428571,
+    "loss": 0.9318603921910781,
+    "wall_s": 0.086
+  },
+  {
+    "dataset": "blobs",
+    "n": 120,
+    "model": "vqc_adam_L4",
+    "test_acc": 0.5,
+    "train_acc": 0.6547619047619048,
+    "loss": 0.9191477038819028,
+    "wall_s": 0.101
+  },
+  {
+    "dataset": "blobs",
+    "n": 120,
+    "model": "kernel_alignment_search",
+    "test_acc": 1.0,
+    "train_acc": 1.0,
+    "alignment_before": 0.853237860287975,
+    "alignment_after": 0.8869829842373143,
+    "wall_s": 0.052
+  },
+  {
+    "dataset": "xor",
+    "n": 120,
+    "model": "vqc_adam_L1",
+    "test_acc": 0.4444444444444444,
+    "train_acc": 0.5595238095238095,
+    "loss": 0.9422860082335075,
+    "wall_s": 0.054
+  },
+  {
+    "dataset": "xor",
+    "n": 120,
+    "model": "vqc_adam_L3",
+    "test_acc": 0.9444444444444444,
+    "train_acc": 0.9880952380952381,
+    "loss": 0.12990164783387462,
+    "wall_s": 0.085
+  },
+  {
+    "dataset": "xor",
+    "n": 120,
+    "model": "vqc_adam_L4",
+    "test_acc": 0.9444444444444444,
+    "train_acc": 0.9642857142857143,
+    "loss": 0.30430489849935977,
+    "wall_s": 0.102
+  },
+  {
+    "dataset": "xor",
+    "n": 120,
+    "model": "kernel_alignment_search",
+    "test_acc": 1.0,
+    "train_acc": 0.9880952380952381,
+    "alignment_before": 0.38730821182702346,
+    "alignment_after": 0.4538080935672388,
+    "wall_s": 0.052
+  }
+]
