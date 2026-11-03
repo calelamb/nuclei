@@ -15,7 +15,10 @@ import { useEditorStore } from '../../stores/editorStore';
 import { useTrainabilityStore } from '../../stores/trainabilityStore';
 import { OBSERVABLE_PRESETS, presetForSpec } from '../../services/trainability/observablePresets';
 import {
+  ALIGN_STEPS_RANGE,
   EARLY_STOP_RANGE,
+  METRIC_EVERY_RANGE,
+  METRIC_REGULARIZATION_RANGE,
   NOISE_P_RANGE,
   NOISE_SHOTS_MAX,
   NOISE_SHOTS_MIN_FINITE,
@@ -31,7 +34,7 @@ import {
   validateScaling,
 } from '../../services/trainability/settings';
 import { RUN_SHORTCUT_LABEL, overallFraction, runDisabledReason } from './targetBarMath';
-import { GRADIENT_METHODS, QML_DATASETS, QML_OPTIMIZERS, TRAINABILITY_ANALYSES, ACTIVE_JOB_STATUSES, type GradientMethod, type QmlDataset, type QmlOptimizer, type TrainabilityAnalysis, type TrainabilityMethod, type GradientInit } from '../../types/trainability';
+import { GRADIENT_METHODS, KERNEL_ALIGNMENT_MODES, QML_DATASETS, QML_OPTIMIZERS, TRAINABILITY_ANALYSES, ACTIVE_JOB_STATUSES, type GradientMethod, type KernelAlignmentMode, type QmlDataset, type QmlOptimizer, type TrainabilityAnalysis, type TrainabilityMethod, type GradientInit } from '../../types/trainability';
 
 const OPTIMIZER_LABELS: Record<QmlOptimizer, string> = { adam: 'Adam', gd: 'Gradient descent', spsa: 'SPSA' };
 const GRADIENT_METHOD_LABELS: Record<GradientMethod, string> = { adjoint: 'Adjoint', parameter_shift: 'Parameter-shift' };
@@ -45,6 +48,9 @@ const ANALYSIS_LABELS: Record<TrainabilityAnalysis, string> = {
   landscape: 'Landscape',
   quantum_kernel: 'Quantum kernel',
   variational_train: 'Variational training',
+  classical_baseline: 'Classical baseline',
+  kernel_alignment_search: 'Kernel alignment search',
+  variational_qng: 'Variational QNG',
 };
 
 function fileLabel(filePath: string | null): string {
@@ -249,7 +255,7 @@ export function TargetBar({ onRun }: { onRun: () => void }) {
           </div>
         )}
 
-        {(chosen.includes('quantum_kernel') || chosen.includes('variational_train')) && (
+        {(chosen.includes('quantum_kernel') || chosen.includes('variational_train') || chosen.includes('classical_baseline') || chosen.includes('kernel_alignment_search') || chosen.includes('variational_qng')) && (
           <div className="lab-row" style={{ alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
             <LabField label="QML dataset" htmlFor="trainability-qml-dataset" hint="Binary, 2 features in [0, 2π)">
               <LabSelect id="trainability-qml-dataset" value={settings.qmlDataset} onChange={(e) => setSettings({ qmlDataset: e.target.value as QmlDataset })}>
@@ -261,12 +267,50 @@ export function TargetBar({ onRun }: { onRun: () => void }) {
             <LabField label="Dataset size" htmlFor="trainability-qml-samples" hint={`${QML_SAMPLES_RANGE.min}–${QML_SAMPLES_RANGE.max}`}>
               <LabNumber id="trainability-qml-samples" aria-label="Dataset size" value={settings.qmlSamples} min={QML_SAMPLES_RANGE.min} max={QML_SAMPLES_RANGE.max} onCommit={(qmlSamples) => setSettings({ qmlSamples })} />
             </LabField>
-            {chosen.includes('quantum_kernel') && (
+            {(chosen.includes('quantum_kernel') || chosen.includes('classical_baseline') || chosen.includes('kernel_alignment_search')) && (
               <LabField label="Ridge λ" htmlFor="trainability-ridge" hint="Kernel ridge regularization">
                 <LabNumber id="trainability-ridge" aria-label="Ridge lambda" value={settings.ridgeLambda} min={0} max={100} onCommit={(ridgeLambda) => setSettings({ ridgeLambda })} />
               </LabField>
             )}
-            {chosen.includes('variational_train') && (
+            {chosen.includes('classical_baseline') && (
+              <LabField label="Linear floor" htmlFor="trainability-baseline-linear" hint="Also score the linear kernel">
+                <LabButton
+                  id="trainability-baseline-linear"
+                  size="sm"
+                  variant={settings.baselineIncludeLinear ? 'secondary' : 'ghost'}
+                  aria-pressed={settings.baselineIncludeLinear}
+                  onClick={() => setSettings({ baselineIncludeLinear: !settings.baselineIncludeLinear })}
+                  style={settings.baselineIncludeLinear ? { background: 'var(--lab-quantum-soft)' } : undefined}
+                >
+                  Linear kernel
+                </LabButton>
+              </LabField>
+            )}
+            {chosen.includes('kernel_alignment_search') && (
+              <>
+                <LabField label="Alignment mode" htmlFor="trainability-align-mode" hint="What SPSA tunes">
+                  <LabSelect id="trainability-align-mode" value={settings.alignMode} onChange={(e) => setSettings({ alignMode: e.target.value as KernelAlignmentMode })}>
+                    {KERNEL_ALIGNMENT_MODES.map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </LabSelect>
+                </LabField>
+                <LabField label="Alignment steps" htmlFor="trainability-align-steps" hint={`${ALIGN_STEPS_RANGE.min}–${ALIGN_STEPS_RANGE.max} SPSA steps`}>
+                  <LabNumber id="trainability-align-steps" aria-label="Alignment steps" value={settings.alignSteps} min={ALIGN_STEPS_RANGE.min} max={ALIGN_STEPS_RANGE.max} onCommit={(alignSteps) => setSettings({ alignSteps })} />
+                </LabField>
+              </>
+            )}
+            {chosen.includes('variational_qng') && (
+              <>
+                <LabField label="Metric λ" htmlFor="trainability-qng-reg" hint={`${METRIC_REGULARIZATION_RANGE.min}–${METRIC_REGULARIZATION_RANGE.max}, (g + λI)⁻¹`}>
+                  <LabNumber id="trainability-qng-reg" aria-label="Metric regularization" value={settings.qngMetricRegularization} min={METRIC_REGULARIZATION_RANGE.min} max={METRIC_REGULARIZATION_RANGE.max} integer={false} step={0.001} onCommit={(qngMetricRegularization) => setSettings({ qngMetricRegularization })} />
+                </LabField>
+                <LabField label="Metric every" htmlFor="trainability-qng-every" hint={`Rebuild metric every ${METRIC_EVERY_RANGE.min}–${METRIC_EVERY_RANGE.max} epochs`}>
+                  <LabNumber id="trainability-qng-every" aria-label="Metric every" value={settings.qngMetricEvery} min={METRIC_EVERY_RANGE.min} max={METRIC_EVERY_RANGE.max} onCommit={(qngMetricEvery) => setSettings({ qngMetricEvery })} />
+                </LabField>
+              </>
+            )}
+            {(chosen.includes('variational_train') || chosen.includes('variational_qng')) && (
               <>
                 <LabField label="Epochs" htmlFor="trainability-epochs" hint={`${QML_EPOCHS_RANGE.min}–${QML_EPOCHS_RANGE.max}`}>
                   <LabNumber id="trainability-epochs" aria-label="Epochs" value={settings.epochs} min={QML_EPOCHS_RANGE.min} max={QML_EPOCHS_RANGE.max} onCommit={(epochs) => setSettings({ epochs })} />
@@ -274,6 +318,8 @@ export function TargetBar({ onRun }: { onRun: () => void }) {
                 <LabField label="Learning rate" htmlFor="trainability-lr" hint={settings.optimizer === 'spsa' ? 'Unused by SPSA' : 'Optimizer step size'}>
                   <LabNumber id="trainability-lr" aria-label="Learning rate" value={settings.learningRate} min={0} max={2} onCommit={(learningRate) => setSettings({ learningRate })} />
                 </LabField>
+                {chosen.includes('variational_train') && (
+                <>
                 <LabField label="Optimizer" htmlFor="trainability-optimizer" hint="Full-batch optimizer">
                   <LabSelect id="trainability-optimizer" value={settings.optimizer} onChange={(e) => setSettings({ optimizer: e.target.value as QmlOptimizer })}>
                     {QML_OPTIMIZERS.map((o) => (
@@ -310,12 +356,14 @@ export function TargetBar({ onRun }: { onRun: () => void }) {
                     </LabField>
                   </>
                 )}
+                </>
+                )}
               </>
             )}
           </div>
         )}
 
-        {(chosen.includes('gradients') || chosen.includes('quantum_kernel') || chosen.includes('variational_train')) && (
+        {(chosen.includes('gradients') || chosen.includes('quantum_kernel') || chosen.includes('variational_train') || chosen.includes('classical_baseline') || chosen.includes('kernel_alignment_search') || chosen.includes('variational_qng')) && (
           <div className="lab-stack" style={{ gap: 'var(--space-2)' }}>
             <div className="lab-row" style={{ alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-3)' }} role="group" aria-label="Noise (simulated)">
               <span className="lab-muted" style={{ flex: '0 0 auto', paddingTop: 18 }}>Noise (simulated)</span>
@@ -335,7 +383,7 @@ export function TargetBar({ onRun }: { onRun: () => void }) {
               </LabCallout>
             )}
             {isChannelNoiseActive(settings) && (
-              <span className="lab-muted">Simulated channel, not a device calibration. Applies to gradients, quantum kernel and variational training; other analyses note it as ignored.</span>
+              <span className="lab-muted">Simulated channel, not a device calibration. Applies to gradients and the QML analyses (quantum kernel, variational training, classical baseline, alignment search, QNG); other analyses note it as ignored.</span>
             )}
           </div>
         )}

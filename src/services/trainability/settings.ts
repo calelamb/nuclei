@@ -6,6 +6,7 @@ import {
   type ChannelNoiseSettings,
   type GradientInit,
   type GradientMethod,
+  type KernelAlignmentMode,
   type QmlDataset,
   type QmlOptimizer,
   type TrainabilityAnalysis,
@@ -26,12 +27,23 @@ export const QML_EPOCHS_RANGE = { min: 1, max: 500, default: 60 } as const;
 export const EARLY_STOP_RANGE = { min: 0, max: 100, default: 0 } as const;
 export const SPSA_A_RANGE = { min: 0.001, max: 2, default: 0.05 } as const;
 export const SPSA_C_RANGE = { min: 0.001, max: 2, default: 0.1 } as const;
+export const ALIGN_STEPS_RANGE = { min: 1, max: 500, default: 40 } as const;
+export const METRIC_REGULARIZATION_RANGE = { min: 1e-6, max: 1, default: 1e-3 } as const;
+export const METRIC_EVERY_RANGE = { min: 1, max: 50, default: 1 } as const;
+export const MAX_METRIC_PARAMS_RANGE = { min: 1, max: 64, default: 32 } as const;
 export const NOISE_SHOTS_MIN_FINITE = 32;
 export const NOISE_SHOTS_MAX = 100_000;
 export const NOISE_P_RANGE = { min: 0, max: 0.5, default: 0 } as const;
 
 /** Analyses that honour the simulated channel; others ignore it with a note. */
-export const NOISE_AWARE_ANALYSES: readonly TrainabilityAnalysis[] = ['gradients', 'quantum_kernel', 'variational_train'];
+export const NOISE_AWARE_ANALYSES: readonly TrainabilityAnalysis[] = [
+  'gradients',
+  'quantum_kernel',
+  'variational_train',
+  'classical_baseline',
+  'kernel_alignment_search',
+  'variational_qng',
+];
 
 export interface TargetSettings {
   samples: number;
@@ -52,6 +64,15 @@ export interface TargetSettings {
   earlyStopPatience: number;
   spsaA: number;
   spsaC: number;
+  baselineIncludeLinear: boolean;
+  alignMode: KernelAlignmentMode;
+  alignSteps: number;
+  alignLearningRate: number;
+  alignSpsaA: number;
+  alignSpsaC: number;
+  qngMetricRegularization: number;
+  qngMetricEvery: number;
+  qngMaxMetricParams: number;
   noiseShots: number;
   noiseDepolarizingP: number;
   noiseReadoutFlipP: number;
@@ -76,6 +97,15 @@ export const DEFAULT_TARGET_SETTINGS: TargetSettings = {
   earlyStopPatience: EARLY_STOP_RANGE.default,
   spsaA: SPSA_A_RANGE.default,
   spsaC: SPSA_C_RANGE.default,
+  baselineIncludeLinear: true,
+  alignMode: 'bandwidth',
+  alignSteps: ALIGN_STEPS_RANGE.default,
+  alignLearningRate: 0.1,
+  alignSpsaA: SPSA_A_RANGE.default,
+  alignSpsaC: SPSA_C_RANGE.default,
+  qngMetricRegularization: METRIC_REGULARIZATION_RANGE.default,
+  qngMetricEvery: METRIC_EVERY_RANGE.default,
+  qngMaxMetricParams: MAX_METRIC_PARAMS_RANGE.default,
   noiseShots: 0,
   noiseDepolarizingP: 0,
   noiseReadoutFlipP: 0,
@@ -178,10 +208,18 @@ export function availableAnalyses(inspection: TrainabilityInspection | null): Tr
   return TRAINABILITY_ANALYSES.filter((a) => a !== 'scaling' || hasQubitParam);
 }
 
+/** QML analyses are opt-in: they only make sense for feature-map / classifier circuits. */
+export const OPT_IN_QML_ANALYSES: readonly TrainabilityAnalysis[] = [
+  'quantum_kernel',
+  'variational_train',
+  'classical_baseline',
+  'kernel_alignment_search',
+  'variational_qng',
+];
+
 export function defaultAnalyses(inspection: TrainabilityInspection | null): TrainabilityAnalysis[] {
-  // QML analyses are opt-in: they only make sense for feature-map / classifier
-  // circuits, so a default run keeps the original six analyses.
-  return availableAnalyses(inspection).filter((a) => a !== 'quantum_kernel' && a !== 'variational_train');
+  // A default run keeps the original six analyses (see OPT_IN_QML_ANALYSES).
+  return availableAnalyses(inspection).filter((a) => !OPT_IN_QML_ANALYSES.includes(a));
 }
 
 export function toKernelSettings(
@@ -195,7 +233,7 @@ export function toKernelSettings(
     init: settings.init,
     method: settings.method,
   };
-  if (analyses.includes('quantum_kernel') || analyses.includes('variational_train')) {
+  if (analyses.some((a) => OPT_IN_QML_ANALYSES.includes(a))) {
     out.qml = {
       dataset: settings.qmlDataset,
       samples: Math.min(QML_SAMPLES_RANGE.max, Math.max(QML_SAMPLES_RANGE.min, Math.round(settings.qmlSamples))),
@@ -203,10 +241,15 @@ export function toKernelSettings(
       train_fraction: Math.min(0.9, Math.max(0.5, settings.qmlTrainFraction)),
     };
   }
-  if (analyses.includes('quantum_kernel')) {
+  if (
+    analyses.includes('quantum_kernel') ||
+    analyses.includes('classical_baseline') ||
+    analyses.includes('kernel_alignment_search')
+  ) {
     out.kernel = { ridge_lambda: Math.min(100, Math.max(1e-4, settings.ridgeLambda)) };
   }
-  if (analyses.includes('variational_train')) {
+  // variational_qng shares epochs/learning_rate/data_params with variational_train.
+  if (analyses.includes('variational_train') || analyses.includes('variational_qng')) {
     out.variational = {
       epochs: Math.min(QML_EPOCHS_RANGE.max, Math.max(QML_EPOCHS_RANGE.min, Math.round(settings.epochs))),
       learning_rate: Math.min(2, Math.max(1e-4, settings.learningRate)),
@@ -215,6 +258,31 @@ export function toKernelSettings(
       early_stop_patience: clampEarlyStopPatience(settings.earlyStopPatience),
       spsa_a: clampSpsaGain(settings.spsaA, 'a'),
       spsa_c: clampSpsaGain(settings.spsaC, 'c'),
+    };
+  }
+  if (analyses.includes('classical_baseline')) {
+    out.baseline = { include_linear: settings.baselineIncludeLinear };
+  }
+  if (analyses.includes('kernel_alignment_search')) {
+    out.align = {
+      mode: settings.alignMode,
+      steps: Math.min(ALIGN_STEPS_RANGE.max, Math.max(ALIGN_STEPS_RANGE.min, Math.round(settings.alignSteps))),
+      learning_rate: Math.min(2, Math.max(1e-4, settings.alignLearningRate)),
+      spsa_a: clampSpsaGain(settings.alignSpsaA, 'a'),
+      spsa_c: clampSpsaGain(settings.alignSpsaC, 'c'),
+    };
+  }
+  if (analyses.includes('variational_qng')) {
+    out.qng = {
+      metric_regularization: Math.min(
+        METRIC_REGULARIZATION_RANGE.max,
+        Math.max(METRIC_REGULARIZATION_RANGE.min, settings.qngMetricRegularization),
+      ),
+      metric_every: Math.min(METRIC_EVERY_RANGE.max, Math.max(METRIC_EVERY_RANGE.min, Math.round(settings.qngMetricEvery))),
+      max_metric_params: Math.min(
+        MAX_METRIC_PARAMS_RANGE.max,
+        Math.max(MAX_METRIC_PARAMS_RANGE.min, Math.round(settings.qngMaxMetricParams)),
+      ),
     };
   }
   if (analyses.some((a) => NOISE_AWARE_ANALYSES.includes(a))) {
