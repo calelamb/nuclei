@@ -24,6 +24,7 @@ export function focusAfterUnmount(
   let landedOn: Element | null = null;
   let handle = 0;
   const land = (): boolean => {
+    if (typeof document === 'undefined') return false;
     for (const selector of targets) {
       const el = document.querySelector<HTMLElement>(selector);
       if (!el) continue;
@@ -33,6 +34,8 @@ export function focusAfterUnmount(
     return false;
   };
   const tick = () => {
+    // A queued frame can outlive its document (window close, test teardown): stop quietly then.
+    if (typeof document === 'undefined') return;
     frame += 1;
     const active = document.activeElement;
     const onBody = active === null || active === document.body;
