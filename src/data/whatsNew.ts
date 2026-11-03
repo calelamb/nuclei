@@ -102,9 +102,8 @@ export const WHATS_NEW: WhatsNewEntry = {
     },
     {
       icon: 'analysis',
-      title: 'Quantum machine learning arrives',
-      text: 'Four built-in datasets (moons, circles, blobs, xor) let you train and compare quantum models end to end, locally and deterministically for a given seed.',
-      platforms: ['desktop'],
+      title: 'Quantum machine learning lands on desktop',
+      text: 'The desktop app can now train quantum classifiers and kernels locally on four built-in datasets. On the web, the editor, circuit views and simulations are unchanged.',
     },
   ],
 };
